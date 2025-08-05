@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           participatedAs: "Organizer",
         }
         break
-      case "academic-body":
+      case "academic-bodies":
         mockFormData = {
           courseTitle: "Advanced Machine Learning Techniques",
           academicBody: "Board of Studies in Computer Science",
@@ -187,6 +187,27 @@ export async function POST(request: NextRequest) {
           maintenance_fee_status: "Paid",
         }
         break
+      case "policy":
+          mockFormData = {
+            title: "Advanced Policy",
+            level: "International",
+            date: "2024-01-15",
+            organisation:"msu"
+          }
+          break
+     case "econtent":
+          mockFormData = {
+            title:"ECONTENT DUMMY DATA",	
+            typeOfEContentPlatform:"zoom",
+            briefDetails:"details anout econtent",
+            quadrant:"q1",
+            publishingDate:"2024-07-29",
+            publishingAuthorities:["Dr. Alex Thompson", "Dr. Maria Rodriguez", "Dr. James Wilson"],
+            link:"www.google.com",
+            typeOfEcontent:"educational"
+          }
+          break
+
       case "publication":
         mockFormData = {
           title: "Deep Learning Approaches for Medical Image Analysis",

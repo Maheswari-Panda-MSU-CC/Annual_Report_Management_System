@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Eye, Edit, Calendar, DollarSign, TrendingUp, User, Building2 } from "lucide-react"
+import { Search, Plus, Eye, Edit, Calendar, IndianRupee, TrendingUp, User, Building2 } from "lucide-react"
 
 export function ResearchProjectsList() {
   const router = useRouter()
@@ -264,7 +264,7 @@ export function ResearchProjectsList() {
 
                     {/* Funding */}
                     <div className="flex items-center gap-2">
-                      <DollarSign className="h-4 w-4 text-gray-500" />
+                      <IndianRupee className="h-4 w-4 text-gray-500" />
                       <div>
                         <p className="text-sm text-gray-500">Grant Sanctioned</p>
                         <p className="font-medium text-gray-900">{formatCurrency(project.grant_sanctioned)}</p>
@@ -313,7 +313,7 @@ export function ResearchProjectsList() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => router.push(`/research/${project.projid}`)}
+                    onClick={() => router.push(`/teacher/research/${project.projid}`)}
                     className="w-20"
                   >
                     <Eye className="mr-1 h-4 w-4" />
@@ -322,7 +322,7 @@ export function ResearchProjectsList() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => router.push(`/research/${project.projid}/edit`)}
+                    onClick={() => router.push(`/teacher/research/${project.projid}/edit`)}
                     className="w-20"
                   >
                     <Edit className="mr-1 h-4 w-4" />

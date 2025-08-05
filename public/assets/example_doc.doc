@@ -1,0 +1,166 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>CV - Dr. Rajesh Kumar Sharma</title>
+          <style>
+            body { 
+              font-family: Arial, sans-serif; line-height: 1.5; margin: 1in; color: #374151;
+            }
+            .header { 
+              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 30px; margin-bottom: 30px; border-radius: 8px;
+            }
+            .name { 
+              font-size: 32px; font-weight: 300; margin-bottom: 8px;
+            }
+            .title { 
+              font-size: 20px; font-weight: 500; margin-bottom: 5px; opacity: 0.9;
+            }
+            .contact { 
+              font-size: 12px; margin-top: 15px; opacity: 0.8;
+            }
+            .section { 
+              margin-bottom: 25px; page-break-inside: avoid;
+            }
+            .section-title { 
+              font-size: 16px; font-weight: 600; color: #1d4ed8; border-left: 4px solid #2563eb; padding-left: 15px; margin-bottom: 15px; text-transform: uppercase;
+            }
+            .item { 
+              margin-bottom: 15px; padding-left: 15px; border-left: 2px solid #e5e7eb;
+            }
+            .item-title { 
+              font-weight: 600; margin-bottom: 3px; color: #111827;
+            }
+            .item-subtitle { 
+              color: #2563eb; font-weight: 500; margin-bottom: 3px;
+            }
+            .item-details { 
+              font-size: 14px; margin-bottom: 5px; color: #4b5563;
+            }
+            table { 
+              width: 100%; border-collapse: collapse; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            th { 
+              background-color: #eff6ff; padding: 12px; text-left; font-weight: 600; color: #1e40af; border-bottom: 1px solid #bfdbfe;
+            }
+            td { 
+              padding: 12px; border-bottom: 1px solid #e5e7eb;
+            }
+            .publication { 
+              margin-bottom: 12px; padding-left: 15px; border-left: 1px solid #bfdbfe;
+            }
+            .page-break { 
+              page-break-before: always; 
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="name">Dr. Rajesh Kumar Sharma</div>
+            <div class="title">Professor</div>
+            <div class="title">Computer Science & Engineering</div>
+            <div class="title">Indian Institute of Technology Delhi</div>
+            <div class="contact">
+              Email: rajesh.sharma@iitd.ac.in | Phone: +91-9876543210<br>
+              Address: Block IV, Room 401, IIT Delhi, Hauz Khas, New Delhi - 110016<br>
+              ORCID: 0000-0002-1234-5678 | Date of Birth: 15th March 1975
+            </div>
+          </div>
+
+          
+          <div class="section">
+            <div class="section-title">Personal Information</div>
+            <table>
+              <tr><th>Name</th><td>Dr. Rajesh Kumar Sharma</td></tr>
+              <tr><th>Designation</th><td>Professor</td></tr>
+              <tr><th>Department</th><td>Computer Science & Engineering</td></tr>
+              <tr><th>Institution</th><td>Indian Institute of Technology Delhi</td></tr>
+              <tr><th>Email</th><td>rajesh.sharma@iitd.ac.in</td></tr>
+              <tr><th>Phone</th><td>+91-9876543210</td></tr>
+              <tr><th>Date of Birth</th><td>15th March 1975</td></tr>
+              <tr><th>Nationality</th><td>Indian</td></tr>
+              <tr><th>ORCID</th><td>0000-0002-1234-5678</td></tr>
+            </table>
+          </div>
+          
+
+          
+          <div class="section">
+            <div class="section-title">Education</div>
+            
+              <div class="item">
+                <div class="item-title">Ph.D. in Computer Science</div>
+                <div class="item-subtitle">Indian Institute of Science, Bangalore, 2005</div>
+                <div class="item-details">Thesis: Machine Learning Algorithms for Big Data Analytics</div>
+                <div class="item-details">Grade: Excellent</div>
+              </div>
+            
+              <div class="item">
+                <div class="item-title">M.Tech in Computer Science & Engineering</div>
+                <div class="item-subtitle">Indian Institute of Technology Bombay, 2000</div>
+                
+                <div class="item-details">Grade: CGPA: 9.2/10</div>
+              </div>
+            
+              <div class="item">
+                <div class="item-title">B.Tech in Computer Science & Engineering</div>
+                <div class="item-subtitle">National Institute of Technology Warangal, 1998</div>
+                
+                <div class="item-details">Grade: First Class with Distinction (85.6%)</div>
+              </div>
+            
+          </div>
+          
+
+          
+          <div class="section">
+            <div class="section-title">Professional Experience</div>
+            <table>
+              <tr>
+                <th>Position</th>
+                <th>Institution</th>
+                <th>Duration</th>
+                <th>Responsibilities</th>
+              </tr>
+              
+                <tr>
+                  <td>Professor</td>
+                  <td>Indian Institute of Technology Delhi</td>
+                  <td>2015 - Present</td>
+                  <td>Teaching graduate and undergraduate courses, Research supervision, Administrative duties</td>
+                </tr>
+              
+                <tr>
+                  <td>Associate Professor</td>
+                  <td>Indian Institute of Technology Delhi</td>
+                  <td>2010 - 2015</td>
+                  <td>Teaching, Research, PhD supervision</td>
+                </tr>
+              
+                <tr>
+                  <td>Assistant Professor</td>
+                  <td>Indian Institute of Technology Delhi</td>
+                  <td>2006 - 2010</td>
+                  <td>Teaching undergraduate courses, Research initiation</td>
+                </tr>
+              
+            </table>
+          </div>
+          
+
+          
+
+          
+
+          
+
+          <div class="section">
+            <div class="section-title">Document Information</div>
+            <p><strong>Generated on:</strong> 31/07/2025</p>
+            <p><strong>Template:</strong> Professional</p>
+            <p><strong>Sections included:</strong> 3 of 23</p>
+          </div>
+        </body>
+        </html>
+      

@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useAuth } from "./auth-provider"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
@@ -25,133 +24,490 @@ import {
   Briefcase,
   UserCheck,
   Plane,
-  DollarSign,
+  IndianRupee,
   Copyright,
   FileCheck,
   X,
+  Presentation,
+  Star,
+  Globe,
+  FileImage,
+  Medal,
+  Building,
+  UserPlus,
+  UserCog,
+  Download,
+  LogOut,
+  Shield,
+  ClipboardList,
+  Activity,
+  Settings as SettingsIcon,
 } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 
-const navigation = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Faculty Management",
-    href: "/faculty-management",
-    icon: Users,
-    roles: ["university_admin", "faculty_dean", "department_head"],
-  },
-  {
-    name: "My Profile",
-    href: "/profile",
-    icon: User,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Annual Reports",
-    href: "/reports",
-    icon: FileText,
-    roles: ["university_admin", "faculty_dean", "department_head"],
-  },
-  {
-    name: "Research Projects",
-    href: "/research",
-    icon: Award,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Publications",
-    href: "/publications",
-    icon: BookOpen,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Research & Academic Contributions",
-    href: "/research-contributions",
-    icon: GraduationCap,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-    subItems: [
-      { name: "Patents", href: "/research-contributions?tab=patents", icon: "Lightbulb" },
-      { name: "Policy Documents", href: "/research-contributions?tab=policy", icon: "FileText" },
-      { name: "E-Content", href: "/research-contributions?tab=econtent", icon: "Monitor" },
-      { name: "Consultancy", href: "/research-contributions?tab=consultancy", icon: "Briefcase" },
-      { name: "Collaborations / MoUs", href: "/research-contributions?tab=collaborations", icon: "UserCheck" },
-      { name: "Academic Visits", href: "/research-contributions?tab=visits", icon: "Plane" },
-      { name: "Financial Support", href: "/research-contributions?tab=financial", icon: "DollarSign" },
-      { name: "JRF/SRF", href: "/research-contributions?tab=jrfSrf", icon: "Users" },
-      { name: "PhD Guidance", href: "/research-contributions?tab=phd", icon: "GraduationCap" },
-      { name: "Copyrights", href: "/research-contributions?tab=copyrights", icon: "Copyright" },
-    ],
-  },
-  {
-    name: "Events & Activities",
-    href: "/talks-events",
-    icon: Calendar,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Awards & Recognition",
-    href: "/awards-recognition",
-    icon: Trophy,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Academic Recommendations",
-    href: "/academic-recommendations",
-    icon: GraduationCap,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Online Engagement Information Summary",
-    href: "/online-engagement",
-    icon: Monitor,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Publication Certificate",
-    href: "/publication-certificate",
-    icon: FileCheck,
-    roles: ["university_admin", "faculty_dean", "department_head", "teacher"],
-  },
-  {
-    name: "Analytics",
-    href: "/analytics",
-    icon: BarChart3,
-    roles: ["university_admin", "faculty_dean", "department_head"],
-  },
-  { name: "Settings", href: "/settings", icon: Settings, roles: ["university_admin"] },
-]
+// TypeScript interfaces for navigation items
+interface SubItem {
+  name: string
+  href: string
+  icon: string
+}
+
+interface NavigationItem {
+  name: string
+  href: string
+  icon: any
+  subItems?: SubItem[]
+}
+
+// Unified navigation configuration for all roles
+const navigationConfig: Record<string, NavigationItem[]> = {
+  university_admin: [
+    {
+      name: "Dashboard",
+      href: "/admin/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Profile",
+      href: "/admin/profile",
+      icon: User,
+    },
+    {
+      name: "Year Management",
+      href: "/admin/year",
+      icon: Calendar,
+    },
+    {
+      name: "Reports",
+      href: "/admin/reports",
+      icon: FileText,
+      subItems: [
+        { name: "Faculty Report", href: "/admin/reports/faculty", icon: "Users" },
+        { name: "Appendices Report", href: "/admin/reports/appendices", icon: "FileText" },
+        { name: "AQAR Report", href: "/admin/reports/aqar", icon: "Award" },
+        { name: "Academic Recommendation Report", href: "/admin/reports/academic-recommendation", icon: "BookOpen" },
+        { name: "Teachers Consolidated Report", href: "/admin/reports/teachers-consolidated", icon: "Users" },
+      ],
+    },
+    {
+      name: "User Management",
+      href: "/admin/user-management",
+      icon: UserCog,
+    },
+    {
+      name: "Registration",
+      href: "/admin/register-user",
+      icon: UserPlus,
+    },
+    {
+      name: "Additional Information",
+      href: "/admin/additional-info",
+      icon: ClipboardList,
+    },
+    {
+      name: "Academic Activities",
+      href: "/admin/academic",
+      icon: GraduationCap,
+      subItems: [
+        { name: "Paper Presented", href: "/admin/academic/paper-presented", icon: "Presentation" },
+        { name: "Activities", href: "/admin/academic/activities", icon: "Activity" },
+        { name: "Student Progression", href: "/admin/academic/student-progression", icon: "Users" },
+        { name: "Alumni", href: "/admin/academic/alumni", icon: "UserCheck" },
+        { name: "Development Programs", href: "/admin/academic/development-programs", icon: "Briefcase" },
+        { name: "Events", href: "/admin/academic/events", icon: "Calendar" },
+      ],
+    },
+    {
+      name: "Department Management",
+      href: "/admin/department",
+      icon: Building,
+      subItems: [
+        { name: "Department Introduction", href: "/admin/department/introduction", icon: "FileText" },
+        { name: "Logins", href: "/admin/department/logins", icon: "Shield" },
+      ],
+    },
+    {
+      name: "Teacher's ARMS Status",
+      href: "/admin/teachers-arms",
+      icon: FileCheck,
+    },
+    {
+      name: "Downloads Mode",
+      href: "/admin/downloads",
+      icon: Download,
+    },
+    {
+      name: "Admin Mode",
+      href: "/admin/admin-mode",
+      icon: Shield,
+    },
+  ],
+  faculty_dean: [
+    {
+      name: "Dashboard",
+      href: "/faculty/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Profile",
+      href: "/faculty/profile",
+      icon: User,
+    },
+    {
+      name: "Events",
+      href: "/faculty/events",
+      icon: Calendar,
+    },
+    {
+      name: "Visitors",
+      href: "/faculty/visitors",
+      icon: Users,
+    },
+    {
+      name: "Development Programs",
+      href: "/faculty/development-programs",
+      icon: BookOpen,
+    },
+    {
+      name: "Staff",
+      href: "/faculty/staff",
+      icon: UserCog,
+    },
+    {
+      name: "Activities",
+      href: "/faculty/activities",
+      icon: Briefcase,
+    },
+    {
+      name: "Student Progression",
+      href: "/faculty/student-progression",
+      icon: Users,
+    },
+    {
+      name: "Student Support",
+      href: "/faculty/student-support",
+      icon: UserCheck,
+    },
+    {
+      name: "Enrolled Students",
+      href: "/faculty/enrolled-student",
+      icon: GraduationCap,
+    },
+    {
+      name: "Departments",
+      href: "/faculty/departments",
+      icon: Building,
+    },
+    {
+      name: "Alumni",
+      href: "/faculty/alumni",
+      icon: Medal,
+    },
+    {
+      name: "Collaborations",
+      href: "/faculty/collaborations",
+      icon: Building,
+    },
+    {
+      name: "Curriculum",
+      href: "/faculty/curriculum",
+      icon: BookOpen,
+    },
+    {
+      name: "Report",
+      href: "/faculty/report",
+      icon: FileText,
+    },
+    {
+      name: "Infrastructure",
+      href: "/faculty/infrastructure",
+      icon: Building,
+    },
+    {
+      name: "Criterion 5",
+      href: "/faculty/criterion-5",
+      icon: Star,
+    },
+    {
+      name: "Criterion 6",
+      href: "/faculty/criterion-6",
+      icon: Globe,
+    },
+    {
+      name: "Criterion 7",
+      href: "/faculty/criterion-7",
+      icon: Lightbulb,
+    },
+    {
+      name: "AQAR Report",
+      href: "/faculty/aqar-report",
+      icon: FileCheck,
+    },
+    {
+      name: "Qualitative Matrix",
+      href: "/faculty/qualitative-matrix",
+      icon: BarChart3,
+    },
+    {
+      name: "Teachers ARMS Report",
+      href: "/faculty/teachers-arms-report",
+      icon: FileCheck,
+    },
+    {
+      name: "Departments ARMS Report",
+      href: "/faculty/departments-arms-report",
+      icon: FileText,
+    },
+    {
+      name: "Download Menu",
+      href: "/faculty/download-menu",
+      icon: Download,
+    },
+  ],
+  department_head: [
+    {
+      name: "Dashboard",
+      href: "/department/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Profile",
+      href: "/department/profile",
+      icon: User,
+    },
+    {
+      name: "Events",
+      href: "/department/events",
+      icon: Calendar,
+    },
+    {
+      name: "Visitors",
+      href: "/department/visitors",
+      icon: Users,
+    },
+    {
+      name: "Academic Programs",
+      href: "/department/academic-programs",
+      icon: GraduationCap,
+    },
+    {
+      name: "Development Programs",
+      href: "/department/development-programs",
+      icon: BookOpen,
+    },
+    {
+      name: "Staff",
+      href: "/department/staff",
+      icon: UserCog,
+    },
+    {
+      name: "Activities",
+      href: "/department/activities",
+      icon: Briefcase,
+    },
+    {
+      name: "Awards",
+      href: "/department/awards",
+      icon: Trophy,
+    },
+    {
+      name: "Student Progression",
+      href: "/department/student-progression",
+      icon: Users,
+    },
+    {
+      name: "Student Support",
+      href: "/department/student-support",
+      icon: UserCheck,
+    },
+    {
+      name: "Alumni",
+      href: "/department/alumni",
+      icon: Medal,
+    },
+    {
+      name: "Collaborations",
+      href: "/department/collaborations",
+      icon: Building,
+    },
+    {
+      name: "Curriculum Enrichment",
+      href: "/department/curriculum-enrichment",
+      icon: BookOpen,
+    },
+    {
+      name: "PhD Details",
+      href: "/department/phd-details",
+      icon: GraduationCap,
+    },
+    {
+      name: "Report",
+      href: "/department/report",
+      icon: FileText,
+    },
+    {
+      name: "Infrastructure",
+      href: "/department/infrastructure",
+      icon: Building,
+    },
+    {
+      name: "Criterion 5",
+      href: "/department/criterion-5",
+      icon: Star,
+    },
+    {
+      name: "Criterion 6",
+      href: "/department/criterion-6",
+      icon: Globe,
+    },
+    {
+      name: "Criterion 7",
+      href: "/department/criterion-7",
+      icon: Lightbulb,
+    },
+    {
+      name: "Sanctioned Teacher",
+      href: "/department/sanctioned-teacher",
+      icon: UserPlus,
+    },
+    {
+      name: "Teacher's ARMS Report",
+      href: "/department/teachers-arms-report",
+      icon: FileCheck,
+    },
+    {
+      name: "Department's Download Report",
+      href: "/department/departments-download-report",
+      icon: Download,
+    },
+    {
+      name: "Change Password",
+      href: "/change-password",
+      icon: Settings,
+    },
+  ],
+  teacher: [
+    {
+      name: "Dashboard",
+      href: "/teacher/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Profile",
+      href: "/teacher/profile",
+      icon: User,
+    },
+    // {
+    //   name: "Faculty Management",
+    //   href: "/teacher/faculty-management",
+    //   icon: Users,
+    // },
+    {
+      name: "Research Projects",
+      href: "/teacher/research",
+      icon: Award,
+    },
+    {
+      name: "Publications",
+      href: "/teacher/publication",
+      icon: BookOpen,
+      subItems: [
+        { name: "Published Articles/Papers", href: "/teacher/publication?tab=journals", icon: "FileText" },
+        { name: "Books/Book Chapters", href: "/teacher/publication?tab=books", icon: "BookOpen" },
+        { name: "Papers Presented", href: "/teacher/publication?tab=papers", icon: "Presentation" },
+      ],
+    },
+    {
+      name: "Research & Academic Contributions",
+      href: "/teacher/research-contributions",
+      icon: GraduationCap,
+      subItems: [
+        { name: "Patents", href: "/teacher/research-contributions?tab=patents", icon: "Lightbulb" },
+        { name: "Policy Documents", href: "/teacher/research-contributions?tab=policy", icon: "FileText" },
+        { name: "E-Content", href: "/teacher/research-contributions?tab=econtent", icon: "Monitor" },
+        { name: "Consultancy", href: "/teacher/research-contributions?tab=consultancy", icon: "Briefcase" },
+        { name: "Collaborations / MoUs", href: "/teacher/research-contributions?tab=collaborations", icon: "UserCheck" },
+        { name: "Academic Visits", href: "/teacher/research-contributions?tab=visits", icon: "Plane" },
+        { name: "Financial Support", href: "/teacher/research-contributions?tab=financial", icon: "IndianRupee" },
+        { name: "JRF/SRF", href: "/teacher/research-contributions?tab=jrfSrf", icon: "Users" },
+        { name: "PhD Guidance", href: "/teacher/research-contributions?tab=phd", icon: "GraduationCap" },
+        { name: "Copyrights", href: "/teacher/research-contributions?tab=copyrights", icon: "Copyright" },
+      ],
+    },
+    {
+      name: "Events & Activities",
+      href: "/teacher/talks-events",
+      icon: Calendar,
+      subItems: [
+        { name: "Refresher/Orientation", href: "/teacher/talks-events?tab=refresher", icon: "FileText" },
+        { name: "Academic Programs", href: "/teacher/talks-events?tab=academic-programs", icon: "Users" },
+        { name: "Academic Bodies", href: "/teacher/talks-events?tab=academic-bodies", icon: "Building" },
+        { name: "University Committees", href: "/teacher/talks-events?tab=committees", icon: "Users" },
+        { name: "Academic Talks", href: "/teacher/talks-events?tab=talks", icon: "Presentation" },
+      ],
+    },
+    {
+      name: "Awards & Recognition",
+      href: "/teacher/awards-recognition",
+      icon: Trophy,
+      subItems: [
+        { name: "Performance", href: "/teacher/awards-recognition?tab=performance", icon: "BarChart3" },
+        { name: "Awards Recognition", href: "/teacher/awards-recognition?tab=awards", icon: "Trophy" },
+        { name: "Extension Activities", href: "/teacher/awards-recognition?tab=extension", icon: "Users" },
+      ],
+    },
+    {
+      name: "Academic Recommendations",
+      href: "/teacher/academic-recommendations",
+      icon: GraduationCap,
+      subItems: [
+        { name: "Articles/Journals", href: "/teacher/academic-recommendations?tab=articles", icon: "FileText" },
+        { name: "Books", href: "/teacher/academic-recommendations?tab=books", icon: "BookOpen" },
+        { name: "Magazines", href: "/teacher/academic-recommendations?tab=magazines", icon: "FileImage" },
+        { name: "Technical Reports", href: "/teacher/academic-recommendations?tab=technical", icon: "FileCheck" },
+      ],
+    },
+    {
+      name: "Publication Certificate",
+      href: "/teacher/publication-certificate",
+      icon: FileCheck,
+    },
+    {
+      name: "Analytics",
+      href: "/teacher/analytics",
+      icon: BarChart3,
+    },
+    {
+      name: "Generate CV",
+      href: "/teacher/generate-cv",
+      icon: FileText,
+    },
+    {
+      name: "Online Engagement",
+      href: "/teacher/online-engagement",
+      icon: Globe,
+    },
+    {
+      name: "Change Password",
+      href: "/teacher/change-password",
+      icon: Settings,
+    },
+  ],
+}
 
 interface SidebarProps {
   isOpen?: boolean
   onClose?: () => void
 }
 
-// Map user_type to role string for navigation filtering
-const userTypeToRole = (userType: number): string => {
-  switch (userType) {
-    case 1:
-      return "teacher";
-    case 2:
-      return "faculty_dean";
-    case 3:
-      return "university_admin";
-    default:
-      return "teacher";
-  }
-};
-
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const pathname = usePathname()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
-  const filteredNavigation = navigation.filter((item) => item.roles.includes(userTypeToRole(user?.user_type || 1)))
+  // Get navigation based on user role
+  const navigation = navigationConfig[user?.role || "teacher"] || navigationConfig.teacher
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems((prev) =>
@@ -160,57 +516,89 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   }
 
   const handleLinkClick = () => {
-    // Close mobile menu when a link is clicked
     if (onClose) {
       onClose()
     }
   }
 
   const handleOverlayClick = (e: React.MouseEvent) => {
-    // Only close if clicking the overlay itself, not its children
     if (e.target === e.currentTarget && onClose) {
       onClose()
     }
   }
 
+  const getIconComponent = (iconName: string) => {
+    const iconMap: { [key: string]: any } = {
+      Lightbulb,
+      FileText,
+      Monitor,
+      Briefcase,
+      UserCheck,
+      Plane,
+      IndianRupee,
+      Users,
+      GraduationCap,
+      Copyright,
+      BookOpen,
+      Presentation,
+      FileCheck,
+      Trophy,
+      Award,
+      Star,
+      Globe,
+      FileImage,
+      Medal,
+      BarChart3,
+      Building,
+      Activity,
+      Shield,
+    }
+    return iconMap[iconName] || FileText
+  }
+
+  const getRoleDisplayName = (role: string) => {
+    const roleNames = {
+      university_admin: "University Admin",
+      faculty_dean: "Faculty Dean",
+      department_head: "Department Head",
+      teacher: "Teacher",
+    }
+    return roleNames[role as keyof typeof roleNames] || "User"
+  }
+
   return (
     <>
-      {/* Mobile overlay - positioned to not interfere with sidebar content */}
+      {/* Mobile overlay */}
       {isOpen && (
         <div className="fixed inset-0 top-16 z-30 bg-black bg-opacity-50 lg:hidden" onClick={handleOverlayClick} />
       )}
 
-      {/* Sidebar - higher z-index than overlay */}
+      {/* Sidebar */}
       <div
         className={cn(
           "fixed z-40 flex w-64 flex-col transition-transform duration-300 ease-in-out",
-          // Desktop positioning - below header
           "lg:top-16 lg:bottom-0 lg:left-0 lg:translate-x-0",
-          // Mobile positioning - full height when open
           "top-0 bottom-0 left-0",
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 shadow-lg border-r border-gray-200 custom-scrollbar">
-          {/* Mobile header - only visible on mobile */}
-          <div className="flex h-16 shrink-0 items-center justify-between lg:hidden">
-            <h1 className="text-xl font-bold text-blue-600">MSU Reports</h1>
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 shadow-lg border-r border-gray-200">
+          {/* Mobile header */}
+          <div className="flex h-16 shrink-0 items-center justify-end lg:hidden">
             <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-5 w-5" />
               <span className="sr-only">Close menu</span>
             </Button>
           </div>
 
-          {/* Desktop header - only visible on desktop, smaller height */}
-          <div className="hidden lg:flex h-12 shrink-0 items-center pt-4">
-            <h1 className="text-xl font-bold text-blue-600">MSU Reports</h1>
-          </div>
+          {/* Desktop spacing */}
+          <div className="hidden lg:block h-4 shrink-0"></div>
 
           <nav className="flex flex-1 flex-col">
             <ul role="list" className="flex flex-1 flex-col gap-y-7">
               <li>
                 <ul role="list" className="-mx-2 space-y-1">
-                  {filteredNavigation.map((item) => (
+                  {navigation.map((item) => (
                     <li key={item.name}>
                       {item.subItems ? (
                         <div>
@@ -242,20 +630,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                           {expandedItems.includes(item.name) && (
                             <ul className="ml-6 mt-1 space-y-1">
                               {item.subItems.map((subItem) => {
-                                const IconComponent =
-                                  {
-                                    Lightbulb,
-                                    FileText,
-                                    Monitor,
-                                    Briefcase,
-                                    UserCheck,
-                                    Plane,
-                                    DollarSign,
-                                    Users,
-                                    GraduationCap,
-                                    Copyright,
-                                  }[subItem.icon] || FileText
-
+                                const IconComponent = getIconComponent(subItem.icon)
                                 return (
                                   <li key={subItem.name}>
                                     <Link href={subItem.href}>
@@ -298,8 +673,32 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                   ))}
                 </ul>
               </li>
+
+              {/* Logout button at bottom */}
+              <li className="mt-auto">
+                <button
+                  onClick={logout}
+                  className="group flex w-full gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 hover:text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                >
+                  <LogOut className="h-6 w-6 shrink-0 text-gray-400 group-hover:text-red-600" />
+                  Logout
+                </button>
+              </li>
             </ul>
           </nav>
+
+          {/* User info */}
+          <div className="flex-shrink-0 border-t p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white text-sm font-medium">
+                {user?.name?.charAt(0) || "U"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{user?.name || "User"}</p>
+                <p className="text-xs text-gray-500 truncate">{getRoleDisplayName(user?.role || "teacher")}</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>

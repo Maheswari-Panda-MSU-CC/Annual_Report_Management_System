@@ -1,4 +1,6 @@
 import type React from "react"
+import { AuthProvider } from "@/components/auth-provider"
+import { Toaster } from "@/components/ui/toaster"
 
 export default function AuthLayout({
   children,
@@ -6,14 +8,9 @@ export default function AuthLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">MSU Annual Report System</h1>
-          <p className="text-gray-600">The Maharaja Sayajirao University of Baroda</p>
-        </div>
-        {children}
-      </div>
-    </div>
+    <AuthProvider>
+      <div className="min-h-screen bg-gray-50">{children}</div>
+      <Toaster />
+    </AuthProvider>
   )
 }

@@ -16,16 +16,20 @@ export const metadata: Metadata = {
   description: "Comprehensive annual report management for The Maharaja Sayajirao University of Baroda",
   keywords: ["university", "annual report", "faculty management", "research"],
   authors: [{ name: "MSU Development Team" }],
-  generator: 'v0.dev'
+    generator: 'v0.dev'
 }
 
-export const viewport = "width=device-width, initial-scale=1";
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+}; 
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  
   return (
     <html lang="en" className={inter.className}>
       <head>
@@ -34,7 +38,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <AuthProvider>
-          {children}
+            {children}
           <Toaster />
         </AuthProvider>
       </body>

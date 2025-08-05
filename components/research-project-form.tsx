@@ -15,8 +15,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
 
 interface ResearchProjectFormProps {
+  initialData?: any; 
   project?: any
   onSuccess?: () => void
+  onCancel?: () => void
 }
 
 export function ResearchProjectForm({ project, onSuccess }: ResearchProjectFormProps) {

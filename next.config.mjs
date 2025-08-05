@@ -32,11 +32,15 @@ const nextConfig = {
           },
           {
             key: 'X-Frame-Options',
-            value: 'DENY',
+            value: "ALLOWALL",
           },
           {
             key: 'X-XSS-Protection',
             value: '1; mode=block',
+          }, 
+          {
+            key: "Access-Control-Allow-Origin",
+            value: "*", // Or restrict to your domain
           },
         ],
       },
