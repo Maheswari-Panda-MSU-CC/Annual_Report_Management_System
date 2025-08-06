@@ -304,7 +304,7 @@ export default function AddAcademicRecommendations() {
               const updatedArticleData = { ...articleData }
               Object.keys(data).forEach((key) => {
                 if (key in updatedArticleData) {
-                  updatedArticleData[key as keyof ArticleData] = data[key]
+                  updatedArticleData [key as keyof ArticleData] = data[key]
                   setValue(key, data[key])
                 }
               })

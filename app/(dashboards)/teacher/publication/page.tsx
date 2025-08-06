@@ -25,6 +25,7 @@ import {
   Eye,
   TrendingUp,
 } from "lucide-react"
+import { DocumentViewer } from "@/components/document-viewer"
 
 // Sample data for each section
 const initialSampleData = {
@@ -47,7 +48,6 @@ const initialSampleData = {
       peerReviewed: "Yes",
       hIndex: "4.5",
       impactFactor: "10.048",
-      doi: "10.1109/TMI.2023.1234567",
       inScopus: "Yes",
       inUgcCare: "Yes",
       inClarivate: "Yes",
@@ -116,7 +116,6 @@ const sections = [
       "Peer Reviewed?",
       "H Index",
       "Impact Factor",
-      "DOI",
       "In Scopus?",
       "In UGC CARE?",
       "In CLARIVATE?",
@@ -422,18 +421,7 @@ export default function PublicationsPage() {
             </TableCell>
             <TableCell>{item.hIndex}</TableCell>
             <TableCell>{item.impactFactor}</TableCell>
-            <TableCell>
-              {item.doi && (
-                <a
-                  href={`https://doi.org/${item.doi}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline text-xs flex items-center gap-1"
-                >
-                  DOI <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </TableCell>
+           
             <TableCell>
               <Badge variant={item.inScopus === "Yes" ? "default" : "secondary"}>{item.inScopus}</Badge>
             </TableCell>
@@ -702,15 +690,7 @@ export default function PublicationsPage() {
                 />
               </div>
             </div>
-            <div>
-              <Label htmlFor="doi">DOI</Label>
-              <Input
-                id="doi"
-                placeholder="Enter DOI"
-                value={currentData.doi || ""}
-                onChange={(e) => setFormData({ ...formData, doi: e.target.value })}
-              />
-            </div>
+            
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="inScopus">In Scopus?</Label>
@@ -1176,10 +1156,43 @@ export default function PublicationsPage() {
                             <TableRow key={item.id}>
                               {renderTableData(section, item)}
                               <TableCell>
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
+                                  <>
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" title="View Document">
+                                          <FileText className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent
+                                        className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden"
+                                        style={{ display: "flex", flexDirection: "column" }}
+                                      >
+                                        <DialogHeader className="p-4 border-b">
+                                          <DialogTitle>View Document</DialogTitle>
+                                        </DialogHeader>
+
+                                        {/* Scrollable Content */}
+                                        <div className="flex-1 overflow-y-auto p-4">
+                                          <div className="w-full h-full">
+                                            <DocumentViewer
+                                              documentUrl={item.supportingDocument[0]}
+                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                                            />
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.supportingDocument.length} file(s)
+                                    </Badge>
+                                  </>
+                                ) : (
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm">
+                                      <Button variant="ghost" size="sm" title="Upload Document">
                                         <Upload className="h-4 w-4" />
                                       </Button>
                                     </DialogTrigger>
@@ -1196,13 +1209,9 @@ export default function PublicationsPage() {
                                       </div>
                                     </DialogContent>
                                   </Dialog>
-                                  {item.supportingDocument && item.supportingDocument.length > 0 && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {item.supportingDocument.length} file(s)
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
+                                )}
+                              </div>
+                            </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <Button variant="ghost" size="sm" onClick={() => handleView(section.id, item.id)}>

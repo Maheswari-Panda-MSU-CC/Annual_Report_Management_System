@@ -26,6 +26,7 @@ import {
   Calendar,
   ExternalLink,
 } from "lucide-react"
+import { DocumentViewer } from "@/components/document-viewer"
 
 // Sample data for each section with correct fields
 const initialSampleData = {
@@ -43,7 +44,6 @@ const initialSampleData = {
       peerReviewed: "Yes",
       hIndex: "85",
       impactFactor: "8.5",
-      doi: "10.1234/jmai.2023.15.3.45",
       inScopus: true,
       inUgcCare: true,
       inClarivate: true,
@@ -123,7 +123,6 @@ const sections = [
       "Peer Reviewed?",
       "H Index",
       "Impact Factor",
-      "DOI",
       "In Scopus?",
       "In UGC CARE?",
       "In CLARIVATE?",
@@ -338,16 +337,7 @@ export default function AcademicRecommendationsPage() {
             </TableCell>
             <TableCell>{item.hIndex}</TableCell>
             <TableCell>{item.impactFactor}</TableCell>
-            <TableCell>
-              <a
-                href={`https://doi.org/${item.doi}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline text-xs flex items-center gap-1"
-              >
-                DOI <ExternalLink className="h-3 w-3" />
-              </a>
-            </TableCell>
+           
             <TableCell>
               <Badge variant={item.inScopus ? "default" : "secondary"}>{item.inScopus ? "Yes" : "No"}</Badge>
             </TableCell>
@@ -578,15 +568,7 @@ export default function AcademicRecommendationsPage() {
                   onChange={(e) => setFormData({ ...formData, impactFactor: e.target.value })}
                 />
               </div>
-              <div>
-                <Label htmlFor="doi">DOI</Label>
-                <Input
-                  id="doi"
-                  placeholder="Enter DOI"
-                  value={currentData.doi || ""}
-                  onChange={(e) => setFormData({ ...formData, doi: e.target.value })}
-                />
-              </div>
+             
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div className="flex items-center space-x-2">
@@ -1120,7 +1102,7 @@ export default function AcademicRecommendationsPage() {
                   </CardTitle>
                   <Button
                     onClick={() => {
-                      router.push(`/add-academic-recommendations?tab=${section.id}`)
+                      router.push(`/teacher/academic-recommendations/add?tab=${section.id}`)
                     }}
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -1155,10 +1137,43 @@ export default function AcademicRecommendationsPage() {
                             <TableRow key={item.id}>
                               {renderTableData(section, item)}
                               <TableCell>
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
+                                  <>
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" title="View Document">
+                                          <FileText className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent
+                                        className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden"
+                                        style={{ display: "flex", flexDirection: "column" }}
+                                      >
+                                        <DialogHeader className="p-4 border-b">
+                                          <DialogTitle>View Document</DialogTitle>
+                                        </DialogHeader>
+
+                                        {/* Scrollable Content */}
+                                        <div className="flex-1 overflow-y-auto p-4">
+                                          <div className="w-full h-full">
+                                            <DocumentViewer
+                                              documentUrl={item.supportingDocument[0]}
+                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                                            />
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.supportingDocument.length} file(s)
+                                    </Badge>
+                                  </>
+                                ) : (
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm">
+                                      <Button variant="ghost" size="sm" title="Upload Document">
                                         <Upload className="h-4 w-4" />
                                       </Button>
                                     </DialogTrigger>
@@ -1175,13 +1190,9 @@ export default function AcademicRecommendationsPage() {
                                       </div>
                                     </DialogContent>
                                   </Dialog>
-                                  {item.supportingDocument && item.supportingDocument.length > 0 && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {item.supportingDocument.length} file(s)
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
+                                )}
+                              </div>
+                            </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>

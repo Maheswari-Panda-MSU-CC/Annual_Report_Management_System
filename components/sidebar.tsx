@@ -473,24 +473,24 @@ const navigationConfig: Record<string, NavigationItem[]> = {
       href: "/teacher/publication-certificate",
       icon: FileCheck,
     },
-    {
-      name: "Analytics",
-      href: "/teacher/analytics",
-      icon: BarChart3,
-    },
+    // {
+    //   name: "Analytics",
+    //   href: "/teacher/analytics",
+    //   icon: BarChart3,
+    // },
     {
       name: "Generate CV",
       href: "/teacher/generate-cv",
       icon: FileText,
     },
-    {
-      name: "Online Engagement",
-      href: "/teacher/online-engagement",
-      icon: Globe,
-    },
+    // {
+    //   name: "Online Engagement",
+    //   href: "/teacher/online-engagement",
+    //   icon: Globe,
+    // },
     {
       name: "Change Password",
-      href: "/teacher/change-password",
+      href: "/change-password",
       icon: Settings,
     },
   ],
@@ -688,7 +688,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </nav>
 
           {/* User info */}
-          <div className="flex-shrink-0 border-t p-4">
+          {/* <div className="flex-shrink-0 border-t p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white text-sm font-medium">
                 {user?.name?.charAt(0) || "U"}
@@ -698,7 +698,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 <p className="text-xs text-gray-500 truncate">{getRoleDisplayName(user?.role || "teacher")}</p>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </>

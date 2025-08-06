@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, Upload, BarChart3, Users, Save, Calendar, Trophy } from "lucide-react"
+import { Plus, Edit, Trash2, Upload, BarChart3, Users, Save, Calendar, Trophy, FileText } from "lucide-react"
+import { DocumentViewer } from "@/components/document-viewer"
 
 // Sample data for each section
 const initialSampleData = {
@@ -605,7 +606,7 @@ export default function AwardsRecognitionPage() {
                   </CardTitle>
                   <Button
                     onClick={() => {
-                      router.push(`/add-awards?tab=${section.id}`)
+                      router.push(`/teacher/awards-recognition/add?tab=${section.id}`)
                     }}
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -639,11 +640,44 @@ export default function AwardsRecognitionPage() {
                           data[section.id as keyof typeof data].map((item: any) => (
                             <TableRow key={item.id}>
                               {renderTableData(section, item)}
-                              <TableCell>
-                                <div className="flex items-center gap-2">
+                             <TableCell>
+                              <div className="flex items-center gap-2">
+                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
+                                  <>
+                                    <Dialog>
+                                      <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" title="View Document">
+                                          <FileText className="h-4 w-4" />
+                                        </Button>
+                                      </DialogTrigger>
+                                      <DialogContent
+                                        className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden"
+                                        style={{ display: "flex", flexDirection: "column" }}
+                                      >
+                                        <DialogHeader className="p-4 border-b">
+                                          <DialogTitle>View Document</DialogTitle>
+                                        </DialogHeader>
+
+                                        {/* Scrollable Content */}
+                                        <div className="flex-1 overflow-y-auto p-4">
+                                          <div className="w-full h-full">
+                                            <DocumentViewer
+                                              documentUrl={item.supportingDocument[0]}
+                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                                            />
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+
+                                    <Badge variant="outline" className="text-xs">
+                                      {item.supportingDocument.length} file(s)
+                                    </Badge>
+                                  </>
+                                ) : (
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm">
+                                      <Button variant="ghost" size="sm" title="Upload Document">
                                         <Upload className="h-4 w-4" />
                                       </Button>
                                     </DialogTrigger>
@@ -660,13 +694,9 @@ export default function AwardsRecognitionPage() {
                                       </div>
                                     </DialogContent>
                                   </Dialog>
-                                  {item.supportingDocument && item.supportingDocument.length > 0 && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {item.supportingDocument.length} file(s)
-                                    </Badge>
-                                  )}
-                                </div>
-                              </TableCell>
+                                )}
+                              </div>
+                            </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
                                   <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>
