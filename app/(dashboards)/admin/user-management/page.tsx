@@ -26,7 +26,7 @@ import {
   UserCheck,
   UserX,
 } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
+import { useAuth } from "@/app/api/auth/auth-provider"
 
 // Mock user data
 const mockUsers = [
@@ -102,7 +102,7 @@ export default function UserManagementPage() {
   const [isAccessDenied, setIsAccessDenied] = useState(false)
 
   useEffect(() => {
-    if (user?.role !== "university_admin") {
+    if (user?.user_type !== 1) {
       setIsAccessDenied(true)
     }
   }, [user])

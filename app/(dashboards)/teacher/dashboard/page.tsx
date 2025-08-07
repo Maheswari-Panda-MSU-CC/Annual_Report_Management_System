@@ -1,6 +1,6 @@
 "use client"
 
-import { useAuth } from "@/components/auth-provider"
+import { useAuth } from "@/app/api/auth/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink } from "lucide-react"
 import { useState, useEffect } from "react"

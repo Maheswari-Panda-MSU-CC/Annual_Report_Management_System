@@ -1,5 +1,5 @@
 import type React from "react"
-import { AuthProvider } from "@/components/auth-provider"
+import { AuthProvider } from "@/app/api/auth/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
 
 export default function AuthLayout({

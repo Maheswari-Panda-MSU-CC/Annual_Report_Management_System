@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useAuth } from "./auth-provider"
+import { useAuth } from "../app/api/auth/auth-provider"
 import { Header } from "./header"
 import { Sidebar } from "./sidebar"
 import { useState, useEffect } from "react"

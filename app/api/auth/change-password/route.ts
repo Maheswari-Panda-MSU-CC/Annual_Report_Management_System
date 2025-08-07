@@ -41,8 +41,7 @@ export async function POST(request: Request) {
       .request()
       .input('Email_Id', email)
       .input('Password_Hash', hashedPassword)
-      .input('User_Type', user_type ?? null)
-      .execute('sp_Update_Login_Details');
+      .execute('sp_UpdateLoginDetailsPassword_ByEmail');
 
     return NextResponse.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {

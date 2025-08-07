@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PublicationForm } from "@/components/publication-form"
+import { PublicationForm } from "@/components/forms/publication-form"
 import { ArrowLeft } from "lucide-react"
 
 export default function EditJournalArticlePage() {

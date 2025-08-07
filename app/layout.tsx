@@ -1,7 +1,7 @@
 import type React from "react"
 import "./globals.css"
 import { Inter } from "next/font/google"
-import { AuthProvider } from "@/components/auth-provider"
+import { AuthProvider } from "@/app/api/auth/auth-provider"
 import { Toaster } from "@/components/ui/toaster"
 import type { Metadata } from "next"
 

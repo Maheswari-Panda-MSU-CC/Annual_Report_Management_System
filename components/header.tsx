@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useAuth } from "./auth-provider"
+import { useAuth } from "../app/api/auth/auth-provider"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -34,18 +34,18 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
       .toUpperCase()
   }
 
-  const getRoleDisplay = (role: string) => {
-    switch (role) {
-      case "university_admin":
+  const getRoleDisplay = (user_type: number) => {
+    switch (user_type) {
+      case 1:
         return "University Admin"
-      case "faculty_dean":
+      case 2:
         return "Faculty Dean"
-      case "department_head":
+      case 3:
         return "Department Head"
-      case "teacher":
+      case 4:
         return "Teacher"
       default:
-        return role
+        return user_type
     }
   }
 
@@ -225,7 +225,7 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
           {user && (
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500">{getRoleDisplay(user.role)}</p>
+              <p className="text-xs text-gray-500">{getRoleDisplay(user.user_type)}</p>
             </div>
           )}
 
@@ -234,10 +234,10 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                 <Avatar className="h-10 w-10">
                   {user?.profilePicture ? (
-                    <AvatarImage src={user.profilePicture || "/placeholder.svg"} alt={user?.name || "User"} />
+                    <AvatarImage src={user.profilePicture || "/placeholder.svg"} alt={user?.email || "User"} />
                   ) : (
                     <AvatarFallback className="bg-blue-500 text-white">
-                      {user ? getInitials(user.name) : <User className="h-4 w-4" />}
+                      {user ? getInitials(user.email) : <User className="h-4 w-4" />}
                     </AvatarFallback>
                   )}
                 </Avatar>
@@ -246,9 +246,9 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             <DropdownMenuContent className="w-64" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user?.name || "Guest User"}</p>
+                  <p className="text-sm font-medium leading-none">{user?.email || "Guest User"}</p>
                   <p className="text-xs leading-none text-muted-foreground">{user?.email || ""}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{getRoleDisplay(user?.role || "")}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{getRoleDisplay(user?.user_type || 0)}</p>
                   {user?.department && <p className="text-xs leading-none text-muted-foreground">{user.department}</p>}
                   {user?.faculty && <p className="text-xs leading-none text-muted-foreground">{user.faculty}</p>}
                 </div>
@@ -256,9 +256,9 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               <DropdownMenuSeparator />
 
               {/* Role-specific menu items */}
-              {user?.role === "university_admin" && getAdminMenuItems()}
-              {user?.role === "faculty_dean" && getDeanMenuItems()}
-              {user?.role === "department_head" && getHeadMenuItems()}
+              {user?.user_type === 1 && getAdminMenuItems()}
+              {user?.user_type === 2 && getDeanMenuItems()}
+              {user?.user_type === 3 && getHeadMenuItems()}
 
               {user && <DropdownMenuSeparator />}
 

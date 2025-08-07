@@ -15,6 +15,7 @@ import { ArrowLeft, Mail, Lock, CheckCircle, AlertCircle, KeyRound } from "lucid
 
 export default function ChangePasswordPage() {
   const router = useRouter()
+  const [otpToken, setOtpToken] = useState<string>("")
   const [step, setStep] = useState(1) // 1: Email, 2: Verification, 3: New Password
   const [formData, setFormData] = useState({
     email: "",
@@ -34,53 +35,77 @@ export default function ChangePasswordPage() {
     setError("")
   }
 
-  const handleSendVerification = async (e: React.FormEvent) => {
+  const handleSendVerificationOTP = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
-
+    setSuccess("")
+  
     try {
-      // Simulate API call to send verification email
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      // Mock success response
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: formData.email }),
+      })
+  
+      const data = await res.json()
+      setOtpToken(data.otpToken);
+  
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send OTP.")
+      }
+  
       setSuccess("Verification code sent to your email address!")
       setStep(2)
-    } catch (err) {
-      setError("Failed to send verification email. Please try again.")
+    } catch (err: any) {
+      setError(err.message || "Something went wrong while sending the OTP.")
     } finally {
       setIsLoading(false)
     }
   }
+ 
 
-  const handleVerifyCode = async (e: React.FormEvent) => {
+  const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
-
+    setSuccess("")
+  
     if (!formData.verificationCode) {
       setError("Please enter the verification code")
       setIsLoading(false)
       return
     }
-
+  
     try {
-      // Simulate API call to verify code
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      // Mock verification (accept any 6-digit code for demo)
-      if (formData.verificationCode.length === 6) {
-        setSuccess("Verification successful! Please enter your new password.")
-        setStep(3)
-      } else {
-        setError("Invalid verification code. Please check and try again.")
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          otp: formData.verificationCode,
+          otpToken: otpToken, 
+        }),
+      })
+  
+      const data = await res.json()
+  
+      if (!res.ok) {
+        throw new Error(data.error || "OTP verification failed")
       }
-    } catch (err) {
-      setError("Verification failed. Please try again.")
+  
+      setSuccess("Verification successful! Please enter your new password.")
+      setStep(3)
+    } catch (err: any) {
+      setError(err.message || "Verification failed. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
+  
+  
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -107,8 +132,16 @@ export default function ChangePasswordPage() {
     }
 
     try {
-      // Simulate API call to change password
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          newPassword: formData.newPassword,
+        }),
+      })
 
       setSuccess("Password changed successfully! Redirecting to login...")
 
@@ -135,7 +168,7 @@ export default function ChangePasswordPage() {
     switch (step) {
       case 1:
         return (
-          <form onSubmit={handleSendVerification} className="space-y-6">
+          <form onSubmit={handleSendVerificationOTP} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                 Email Address
@@ -178,7 +211,7 @@ export default function ChangePasswordPage() {
 
       case 2:
         return (
-          <form onSubmit={handleVerifyCode} className="space-y-6">
+          <form onSubmit={handleVerifyOTP} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="verificationCode" className="text-sm font-medium text-gray-700">
                 Verification Code

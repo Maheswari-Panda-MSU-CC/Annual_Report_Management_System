@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/components/auth-provider"
+import { useAuth } from "@/app/api/auth/auth-provider"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

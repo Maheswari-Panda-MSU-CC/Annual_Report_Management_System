@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ResearchProjectForm } from "@/components/research-project-form"
+import { ResearchProjectForm } from "@/components/forms/research-project-form"
 import {
   AlertDialog,
   AlertDialogAction,

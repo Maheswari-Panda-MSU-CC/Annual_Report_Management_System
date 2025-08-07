@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useAuth } from "./auth-provider"
+import { useAuth } from "../app/api/auth/auth-provider"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -61,8 +61,8 @@ interface NavigationItem {
 }
 
 // Unified navigation configuration for all roles
-const navigationConfig: Record<string, NavigationItem[]> = {
-  university_admin: [
+const navigationConfig: Record<number, NavigationItem[]> = {
+  1: [
     {
       name: "Dashboard",
       href: "/admin/dashboard",
@@ -143,7 +143,7 @@ const navigationConfig: Record<string, NavigationItem[]> = {
       icon: Shield,
     },
   ],
-  faculty_dean: [
+  2: [
     {
       name: "Dashboard",
       href: "/faculty/dashboard",
@@ -265,7 +265,7 @@ const navigationConfig: Record<string, NavigationItem[]> = {
       icon: Download,
     },
   ],
-  department_head: [
+  3: [
     {
       name: "Dashboard",
       href: "/department/dashboard",
@@ -387,7 +387,7 @@ const navigationConfig: Record<string, NavigationItem[]> = {
       icon: Settings,
     },
   ],
-  teacher: [
+  4: [
     {
       name: "Dashboard",
       href: "/teacher/dashboard",
@@ -507,7 +507,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
   // Get navigation based on user role
-  const navigation = navigationConfig[user?.role || "teacher"] || navigationConfig.teacher
+  const navigation = navigationConfig[user?.user_type || 0]
 
   const toggleExpanded = (itemName: string) => {
     setExpandedItems((prev) =>
@@ -556,14 +556,14 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     return iconMap[iconName] || FileText
   }
 
-  const getRoleDisplayName = (role: string) => {
+  const getRoleDisplayName = (user_type: number) => {
     const roleNames = {
-      university_admin: "University Admin",
-      faculty_dean: "Faculty Dean",
-      department_head: "Department Head",
-      teacher: "Teacher",
+      1: "University Admin",
+      2: "Faculty Dean",
+      3: "Department Head",
+      4: "Teacher",
     }
-    return roleNames[role as keyof typeof roleNames] || "User"
+    return roleNames[user_type as keyof typeof roleNames] || "User"
   }
 
   return (

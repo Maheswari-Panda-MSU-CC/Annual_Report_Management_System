@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import Link from "next/link"
-import { useAuth } from "./auth-provider"
+import { useAuth } from "../../app/api/auth/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,13 +24,15 @@ export function LoginForm() {
     setIsLoading(true)
 
     try {
-      const success = await login(email, password)
-      if (success) {
+      const response = await login(email, password)
+      console.log(email,password,response);
+      if (response.success) {
         toast({
           title: "Login Successful",
           description: "Welcome to MSU Annual Report System",
           variant: "default",
         })
+        console.log("toast");
         // No need to manually redirect here as auth provider handles it
       } else {
         toast({
@@ -38,6 +40,8 @@ export function LoginForm() {
           description: "Invalid email or password. Please check your credentials.",
           variant: "destructive",
         })
+        
+        console.log("login failed");
         setIsLoading(false)
       }
     } catch (error) {

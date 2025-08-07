@@ -24,7 +24,7 @@ import {
   Phone,
   Loader2,
 } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
+import { useAuth } from "@/app/api/auth/auth-provider"
 import { useRouter } from "next/navigation"
 
 // Mock faculty data based on university structure

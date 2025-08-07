@@ -24,7 +24,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react"
-import { useAuth } from "@/components/auth-provider"
+import { useAuth } from "@/app/api/auth/auth-provider"
 
 // Department options
 const departments = [
@@ -80,7 +80,7 @@ export default function RegisterUserPage() {
 
   // Check if user is admin
   React.useEffect(() => {
-    if (user?.role !== "university_admin") {
+    if (user?.user_type !== 1) {
       setIsAccessDenied(true)
     }
   }, [user])
