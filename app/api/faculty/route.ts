@@ -3,8 +3,7 @@ import { connectToDatabase } from '@/lib/db';
 export async function GET(request: Request) {
   try {
     const pool = await connectToDatabase();
-    const result = await pool.request().query('SELECT * FROM Faculty');
-    console.log('Faculty Data:', result.recordset);
+    const result = await pool.request().execute('sp_GetAll_Faculty');
     return new Response(JSON.stringify(result.recordset), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },

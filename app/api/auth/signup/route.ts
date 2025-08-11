@@ -3,8 +3,8 @@ import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
   try {
-    const { email, password, user_type } = await request.json();
-    if (!email || !password || user_type === undefined) {
+    const { email,userType,password } = await request.json();
+    if (!email || !password || userType === undefined) {
       return new Response(JSON.stringify({ error: 'Email, password, and user_type are required.' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
         .request()
         .input('Email_Id', email)
         .input('Password_Hash', hashedPassword)
-        .input('User_Type', user_type)
+        .input('User_Type', userType)
         .execute('sp_Insert_Login_Details');
     } catch (err) {
       // Check for duplicate email error
