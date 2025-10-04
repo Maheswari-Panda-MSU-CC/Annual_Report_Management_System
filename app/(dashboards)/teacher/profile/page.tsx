@@ -384,22 +384,25 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-        <div className="d-flex">
-          <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
-          <p className="text-muted-foreground">View and manage your personal information</p>
-        </div>
+   <div className="space-y-6 w-full">
 
-        {/* Generate CV Button */}
-        <div className="flex justify-end">
-          <Button
-            onClick={() => router.push("/teacher/generate-cv")}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-          >
-            <FileText className="h-4 w-4" />
-            Generate CV
-          </Button>
-        </div>
+       <div className="flex items-center justify-between px-auto">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
+            <p className="text-muted-foreground">View and manage your personal information</p>
+          </div>
+
+          {/* Generate CV Button */}
+          <div className="flex justify-end">
+            <Button
+              onClick={() => router.push("/teacher/generate-cv")}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+            >
+              <FileText className="h-4 w-4" />
+              Generate CV
+            </Button>
+          </div>
+       </div>
 
         {/* Personal Information */}
         <Card>
@@ -436,8 +439,62 @@ export default function ProfilePage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-full">
               <div className="lg:col-span-3 space-y-6">
+                
+              {/* Profile Photo Section */}
+              <div className="col-span-full lg:col-span-1 flex flex-col items-center space-y-4">
+
+                <div className="relative">
+                  <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
+                    {profileImage ? (
+                      <img
+                        src={profileImage || "/placeholder.svg"}
+                        alt="Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                        <User className="h-16 w-16 text-blue-400" />
+                      </div>
+                    )}
+                  </div>
+                  {isEditingPersonal && (
+                    <>
+                      <button
+                        onClick={triggerImageUpload}
+                        disabled={isUploadingImage}
+                        className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Upload profile picture"
+                      >
+                        {isUploadingImage ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                      </button>
+                      <input
+                        id="profile-image-input"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </>
+                  )}
+                </div>
+                <div className="text-center">
+                  <p className="font-medium">{`${formData.salutation} ${formData.firstName} ${formData.lastName}`}</p>
+                  <p className="text-sm text-muted-foreground">{formData.designation}</p>
+                  <p className="text-sm text-muted-foreground">{formData.department}</p>
+                </div>
+                {isEditingPersonal && (
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 mb-2">Click the camera icon to upload a profile picture</p>
+                    <p className="text-xs text-gray-400">Supported: JPG, PNG, GIF (Max 5MB)</p>
+                  </div>
+                )}
+                </div>
                 {/* Basic Information */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="space-y-2">
@@ -959,60 +1016,6 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Profile Photo Section */}
-              <div className="lg:col-span-1 flex flex-col items-center space-y-4">
-                <div className="relative">
-                  <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                    {profileImage ? (
-                      <img
-                        src={profileImage || "/placeholder.svg"}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                        <User className="h-16 w-16 text-blue-400" />
-                      </div>
-                    )}
-                  </div>
-                  {isEditingPersonal && (
-                    <>
-                      <button
-                        onClick={triggerImageUpload}
-                        disabled={isUploadingImage}
-                        className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Upload profile picture"
-                      >
-                        {isUploadingImage ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        ) : (
-                          <Camera className="h-4 w-4" />
-                        )}
-                      </button>
-                      <input
-                        id="profile-image-input"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                    </>
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="font-medium">{`${formData.salutation} ${formData.firstName} ${formData.lastName}`}</p>
-                  <p className="text-sm text-muted-foreground">{formData.designation}</p>
-                  <p className="text-sm text-muted-foreground">{formData.teachingStatus} Faculty</p>
-                  <p className="text-sm text-muted-foreground">{formData.department}</p>
-                  <p className="text-sm text-muted-foreground">ID: {formData.employeeId}</p>
-                </div>
-                {isEditingPersonal && (
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-2">Click the camera icon to upload a profile picture</p>
-                    <p className="text-xs text-gray-400">Supported: JPG, PNG, GIF (Max 5MB)</p>
-                  </div>
-                )}
-              </div>
             </div>
           </CardContent>
         </Card>

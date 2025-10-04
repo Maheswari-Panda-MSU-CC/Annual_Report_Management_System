@@ -234,19 +234,19 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                 <Avatar className="h-10 w-10">
                   {user?.profilePicture ? (
-                    <AvatarImage src={user.profilePicture || "/placeholder.svg"} alt={user?.email || "User"} />
+                    <AvatarImage src={user.profilePicture || "/placeholder.svg"} alt={user?.name || "User"} />
                   ) : (
                     <AvatarFallback className="bg-blue-500 text-white">
                       {user ? getInitials(user.email) : <User className="h-4 w-4" />}
                     </AvatarFallback>
                   )}
-                </Avatar>
+                </Avatar> 
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-64" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user?.email || "Guest User"}</p>
+                  <p className="text-sm font-medium leading-none">{user?.name || "Guest User"}</p>
                   <p className="text-xs leading-none text-muted-foreground">{user?.email || ""}</p>
                   <p className="text-xs leading-none text-muted-foreground">{getRoleDisplay(user?.user_type || 0)}</p>
                   {user?.department && <p className="text-xs leading-none text-muted-foreground">{user.department}</p>}

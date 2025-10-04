@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { useAuth } from "@/components/auth/auth-provider"
+import { useAuth } from "@/app/api/auth/auth-provider"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
 import { Sidebar } from "./sidebar"

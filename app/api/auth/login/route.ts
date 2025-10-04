@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       .request()
       .input('Email_Id', email)
       .execute('sp_Get_Login_By_Email'); // Assume this SP returns user with hashed password
-
+ 
     const user = result.recordset[0];
     console.log(user);
     if (!user) {
@@ -37,18 +37,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
 
-    // Generate JWT
+    // Generate JWT with minimal essential fields only
     const token = jwt.sign(
       {
         id: user.id,
         email: user.email_id,
         user_type: user.user_type,
+        role_id: user.Role_Id || null,
+        faculty_id: user.Faculty_Id || null,
+        dept_id: user.Dept_Id || null,
       },
       process.env.JWT_SECRET || 'dev_secret',
       { expiresIn: '3h' } // 3 hours expiry
     );
 
-    // Set cookie for 3 hours
+    // Set cookie for 3 hours with additional cookies for essential IDs
     const response = NextResponse.json({
       success: true,
       message: 'Login successful',
@@ -56,6 +59,12 @@ export async function POST(request: Request) {
         id: user.id,
         email: user.email_id,
         user_type: user.user_type,
+        name: user.Display_Name || null,
+        department: user.Department_Name || null,
+        faculty: user.Faculty_Name || null,
+        role_id: user.Role_Id || null,
+        faculty_id: user.Faculty_Id || null,
+        dept_id: user.Dept_Id || null,
       },
     });
     response.cookies.set('session', token, {
@@ -65,6 +74,34 @@ export async function POST(request: Request) {
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
     });
+
+    // Set additional cookies for essential IDs (non-httpOnly for frontend access)
+    if (user.Role_Id) {
+      response.cookies.set('role_id', user.Role_Id.toString(), {
+        maxAge: 3 * 60 * 60, // 3 hours in seconds
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+    }
+    
+    if (user.Faculty_Id) {
+      response.cookies.set('faculty_id', user.Faculty_Id.toString(), {
+        maxAge: 3 * 60 * 60, // 3 hours in seconds
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+    }
+    
+    if (user.Dept_Id) {
+      response.cookies.set('dept_id', user.Dept_Id.toString(), {
+        maxAge: 3 * 60 * 60, // 3 hours in seconds
+        path: '/',
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+    }
 
     return response;
   } catch (err) {
@@ -92,10 +129,29 @@ export async function GET() {
 // DELETE: Logout
 export async function DELETE() {
   const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
+  
+  // Clear session cookie
   response.cookies.set('session', '', {
     httpOnly: true,
     maxAge: 0,
     path: '/',
   });
+  
+  // Clear additional ID cookies
+  response.cookies.set('role_id', '', {
+    maxAge: 0,
+    path: '/',
+  });
+  
+  response.cookies.set('faculty_id', '', {
+    maxAge: 0,
+    path: '/',
+  });
+  
+  response.cookies.set('dept_id', '', {
+    maxAge: 0,
+    path: '/',
+  });
+  
   return response;
 }

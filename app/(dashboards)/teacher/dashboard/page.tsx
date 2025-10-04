@@ -2,9 +2,10 @@
 
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink } from "lucide-react"
+import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink, Upload, Brain } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { SmartDocumentAnalyzer } from "@/components/smart-document-analyzer"
 
 interface ResearchMetrics {
   scopus: {
@@ -24,6 +25,7 @@ interface ResearchMetrics {
 export default function DashboardPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false)
   const [researchMetrics, setResearchMetrics] = useState<ResearchMetrics>({
     scopus: {
       hIndex: 12,
@@ -112,6 +114,12 @@ export default function DashboardPage() {
 
   const quickActions = [
     {
+      title: "Smart Document Upload",
+      description: "AI-powered document categorization",
+      action: () => setShowDocumentUpload(true),
+      isSpecial: true,
+    },
+    {
       title: "Generate CV",
       description: "Create your academic CV",
       href: "/teacher/generate-cv",
@@ -158,8 +166,12 @@ export default function DashboardPage() {
     router.push(href)
   }
 
-  const handleQuickActionClick = (href: string) => {
-    router.push(href)
+  const handleQuickActionClick = (action: any) => {
+    if (action.href) {
+      router.push(action.href)
+    } else if (action.action) {
+      action.action()
+    }
   }
 
   const handleActivityClick = (href: string) => {
@@ -210,10 +222,26 @@ export default function DashboardPage() {
 
   return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user?.name}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-gray-600">Welcome back, {user?.name}</p>
+          </div>
+          <button
+            onClick={() => setShowDocumentUpload(!showDocumentUpload)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Upload className="h-4 w-4" />
+            {showDocumentUpload ? 'Hide' : 'Smart'} Document Upload
+          </button>
         </div>
+
+        {/* Smart Document Analyzer */}
+        {showDocumentUpload && (
+          <div className="mb-6">
+            <SmartDocumentAnalyzer />
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {stats.map((stat, index) => (
@@ -270,10 +298,15 @@ export default function DashboardPage() {
                 {quickActions.map((action, index) => (
                   <button
                     key={index}
-                    className="w-full text-left p-3 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 border border-transparent hover:border-gray-200"
-                    onClick={() => handleQuickActionClick(action.href)}
+                    className={`w-full text-left p-3 rounded-lg hover:bg-gray-50 hover:shadow-sm transition-all duration-200 border border-transparent hover:border-gray-200 ${
+                      action.isSpecial ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200' : ''
+                    }`}
+                    onClick={() => handleQuickActionClick(action)}
                   >
-                    <div className="font-medium">{action.title}</div>
+                    <div className="flex items-center gap-2">
+                      {action.isSpecial && <Brain className="h-4 w-4 text-blue-600" />}
+                      <div className="font-medium">{action.title}</div>
+                    </div>
                     <div className="text-sm text-gray-500">{action.description}</div>
                   </button>
                 ))}
