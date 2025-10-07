@@ -8,6 +8,7 @@ export type UserRole = "university_admin" | "faculty_dean" | "department_head" |
 
 export interface User {
   id: string;
+  role_id: number;
   email: string;
   user_type: number;
   name?: string;
@@ -23,6 +24,7 @@ interface LoginResponse {
     id: string;
     name: string;
     email: string;
+    role_id: number;
   };
   message?: string;
 }

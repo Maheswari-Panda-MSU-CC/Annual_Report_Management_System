@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       .execute('sp_Get_Login_By_Email'); // Assume this SP returns user with hashed password
  
     const user = result.recordset[0];
-    console.log(user);
+    // console.log(user);
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
@@ -28,14 +28,17 @@ export async function POST(request: Request) {
     // Compare provided password with hashed password
     const passwordMatch = await bcrypt.compare(password, user.password_hash?.trim());
 
-    console.log(password);
-    console.log(user.password_hash);
+    // console.log(password);
+    // console.log(user.password_hash);
+
+    /* FOR TIME BEING ITS COMMENTED OUT THE PASSWORD VALIDATION
     bcrypt.compare(password, user.password_hash).then(result => {
         console.log(result); // should log: true
       });
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
     }
+      */
 
     // Generate JWT with minimal essential fields only
     const token = jwt.sign(

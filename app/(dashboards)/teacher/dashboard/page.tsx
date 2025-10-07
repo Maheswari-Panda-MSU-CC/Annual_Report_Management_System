@@ -23,202 +23,100 @@ interface ResearchMetrics {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth()
-  const router = useRouter()
-  const [showDocumentUpload, setShowDocumentUpload] = useState(false)
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const [showDocumentUpload, setShowDocumentUpload] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [researchMetrics, setResearchMetrics] = useState<ResearchMetrics>({
-    scopus: {
-      hIndex: 12,
-      citations: 1340,
-      documents: 45,
-      coAuthors: 28,
-    },
-    googleScholar: {
-      hIndex: 15,
-      i10Index: 18,
-      citations: 1580,
-      citationsLast5Years: 890,
-    },
-  })
-  const [loading, setLoading] = useState(false)
+    scopus: { hIndex: 0, citations: 0, documents: 0, coAuthors: 0 },
+    googleScholar: { hIndex: 0, i10Index: 0, citations: 0, citationsLast5Years: 0 },
+  });
+  const [stats, setStats] = useState<any[]>([]);
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [quickCounts, setQuickCounts] = useState<any>({});
+  const [researchSummary, setResearchSummary] =  useState<any>({});
 
-  const stats = [
-    {
-      title: "Research Projects",
-      value: "12",
-      description: "Active research projects",
-      icon: Award,
-      color: "text-purple-600",
-      href: "/teacher/research",
-    },
-    {
-      title: "Books Published",
-      value: "8",
-      description: "Books published this year",
-      icon: BookOpen,
-      color: "text-green-600",
-      href: "/teacher/publication?tab=books",
-    },
-    {
-      title: "Journal Articles",
-      value: "24",
-      description: "Journal papers published",
-      icon: FileText,
-      color: "text-blue-600",
-      href: "/teacher/publication?tab=journals",
-    },
-    {
-      title: "Total Publications",
-      value: "45",
-      description: "All publications this year",
-      icon: TrendingUp,
-      color: "text-orange-600",
-      href: "/teacher/publication",
-    },
-  ]
-
-  const recentActivities = [
-    {
-      id: 1,
-      title: "Research project updated",
-      description: "IoT Security Research - Progress report submitted",
-      color: "bg-purple-500",
-      time: "2 hours ago",
-      href: "/teacher/research",
-    },
-    {
-      id: 2,
-      title: "Publication accepted",
-      description: "Machine Learning in Healthcare - IEEE Journal",
-      color: "bg-green-500",
-      time: "4 hours ago",
-      href: "/teacher/publication?tab=books",
-    },
-    {
-      id: 3,
-      title: "Grant application submitted",
-      description: "SERB Core Research Grant - Rs. 25,00,000",
-      color: "bg-blue-500",
-      time: "6 hours ago",
-      href: "/teacher/research-contributions",
-    },
-    {
-      id: 4,
-      title: "Conference presentation",
-      description: "AI in Education - International Conference",
-      color: "bg-orange-500",
-      time: "1 day ago",
-      href: "/teacher/talks-events",
-    },
-  ]
-
+  // Quick actions
   const quickActions = [
-    {
-      title: "Smart Document Upload",
-      description: "AI-powered document categorization",
-      action: () => setShowDocumentUpload(true),
-      isSpecial: true,
-    },
-    {
-      title: "Generate CV",
-      description: "Create your academic CV",
-      href: "/teacher/generate-cv",
-    },
-    {
-      title: "Update Profile",
-      description: "Modify your information",
-      href: "/teacher/profile",
-    },
-    {
-      title: "Add Publication",
-      description: "Submit new publication",
-      href: "/teacher/publication?tab=books",
-    },
-    {
-      title: "Add Research Project",
-      description: "Register new research project",
-      href: "/teacher/add-research",
-    },
-    {
-      title: "Add Patent",
-      description: "Register new patent",
-      href: "/teacher/add-patents",
-    },
-    {
-      title: "Add Event/Talk",
-      description: "Add conference or talk",
-      href: "/teacher/add-event",
-    },
-    {
-      title: "Add Award",
-      description: "Add recognition or award",
-      href: "/teacher/add-awards",
-    },
-    {
-      title: "Add Recommendation",
-      description: "Add academic recommendation",
-      href: "/teacher/add-academic-recommendations",
-    },
-  ]
+    { title: "Smart Document Upload", description: "AI-powered document categorization", action: () => setShowDocumentUpload(true), isSpecial: true },
+    { title: "Generate CV", description: "Create your academic CV", href: "/teacher/generate-cv" },
+    { title: "Update Profile", description: "Modify your information", href: "/teacher/profile" },
+    { title: "Add Publication", description: "Submit new publication", href: "/teacher/publication?tab=books" },
+    { title: "Add Research Project", description: "Register new research project", href: "/teacher/add-research" },
+    { title: "Add Patent", description: "Register new patent", href: "/teacher/add-patents" },
+    { title: "Add Event/Talk", description: "Add conference or talk", href: "/teacher/add-event" },
+    { title: "Add Award", description: "Add recognition or award", href: "/teacher/add-awards" },
+    { title: "Add Recommendation", description: "Add academic recommendation", href: "/teacher/add-academic-recommendations" },
+  ];
 
-  // Navigation handlers
-  const handleStatClick = (href: string) => {
-    router.push(href)
-  }
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) return;
 
-  const handleQuickActionClick = (action: any) => {
-    if (action.href) {
-      router.push(action.href)
-    } else if (action.action) {
-      action.action()
-    }
-  }
+      setLoading(true);
+      try {
+        const teacherId = user?.role_id || user?.id;
+        if (!teacherId) return;
 
-  const handleActivityClick = (href: string) => {
-    router.push(href)
-  }
+        const response = await fetch(`/api/teacher/dashboard?teacherId=${teacherId}`);
+        if (!response.ok) throw new Error("Failed to fetch dashboard data");
 
-  const handleExternalLinkClick = (type: "scopus" | "scholar") => {
-    if (type === "scopus") {
-      window.open("https://www.scopus.com", "_blank")
-    } else {
-      window.open("https://scholar.google.com", "_blank")
-    }
-  }
+        const data = await response.json();
 
-  // Simulate API calls to fetch research metrics
+        setStats([
+          { title: "Books Published", value: data.booksPublished ?? 0, description: "Books published this year", icon: BookOpen, color: "text-green-600", href: "/teacher/publication?tab=books" },
+          { title: "Journal Articles", value: data.journalArticles ?? 0, description: "Journal papers published", icon: FileText, color: "text-blue-600", href: "/teacher/publication?tab=journals" },
+          { title: "Papers Presented", value: data.PapersPresented ?? 0, description: "Papers Presented", icon: Award, color: "text-purple-600", href: "/teacher/publication?tab=papers" },
+          { title: "Total Publications", value: data.totalPublications ?? 0, description: "All publications this year", icon: TrendingUp, color: "text-orange-600", href: "/teacher/publication" },
+        ]);
+
+        setRecentActivities(data.recentActivities || []);
+        setQuickCounts(data.quickCounts || {});
+        setResearchSummary(data.researchSummary || {});
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [user]);
+
+  // Fetch research metrics (mocked)
   useEffect(() => {
     const fetchResearchMetrics = async () => {
-      setLoading(true)
+      setLoading(true);
       try {
-        // Simulate API calls to Scopus and Google Scholar
-        // In real implementation, these would be actual API calls
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        // Mock data - replace with actual API calls
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // simulate API call
         setResearchMetrics({
-          scopus: {
-            hIndex: 12,
-            citations: 1340,
-            documents: 45,
-            coAuthors: 28,
-          },
-          googleScholar: {
-            hIndex: 15,
-            i10Index: 18,
-            citations: 1580,
-            citationsLast5Years: 890,
-          },
-        })
-      } catch (error) {
-        console.error("Error fetching research metrics:", error)
+          scopus: { hIndex: 12, citations: 1340, documents: 45, coAuthors: 28 },
+          googleScholar: { hIndex: 15, i10Index: 18, citations: 1580, citationsLast5Years: 890 },
+        });
+      } catch (err) {
+        console.error("Error fetching research metrics:", err);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
-    fetchResearchMetrics()
-  }, [])
+    fetchResearchMetrics();
+  }, []);
+
+  // Navigation handlers
+  const handleStatClick = (href: string) => router.push(href);
+  const handleQuickActionClick = (action: any) => action.href ? router.push(action.href) : action.action?.();
+  const handleActivityClick = (href: string) => router.push(href);
+  const handleExternalLinkClick = (type: "scopus" | "scholar") => {
+    const url = type === "scopus" ? "https://www.scopus.com" : "https://scholar.google.com";
+    window.open(url, "_blank");
+  };
+
+  if (loading) {
+    return <div className="text-center text-gray-500 mt-10">Loading dashboard...</div>;
+  }
 
   return (
       <div className="space-y-6">
@@ -270,18 +168,17 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentActivities.map((activity) => (
+                {recentActivities.map((activity, index)=> (
                   <div
-                    key={activity.id}
+                    key={activity.id ?? index}
                     className="flex items-center space-x-4 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleActivityClick(activity.href)}
                   >
-                    <div className={`w-2 h-2 ${activity.color} rounded-full`}></div>
+                    <div className={`w-2 h-2 bg-blue-500 rounded-full`}></div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{activity.title}</p>
-                      <p className="text-xs text-gray-500">{activity.description}</p>
+                      <p className="text-sm font-medium">{activity.ActivityType}</p>
+                      <p className="text-xs text-gray-500">{activity.Title}</p>
                     </div>
-                    <div className="text-xs text-gray-400">{activity.time}</div>
+                    <div className="text-xs text-gray-400">{activity.TimeAgo}</div>
                   </div>
                 ))}
               </div>
@@ -429,29 +326,29 @@ export default function DashboardPage() {
                   className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => handleStatClick("/teacher/research")}
                 >
-                  <div className="text-2xl font-bold text-green-600">12</div>
-                  <div className="text-sm text-muted-foreground">Active Projects</div>
+                  <div className="text-2xl font-bold text-green-600">{researchSummary.CompletedProjects}</div>
+                  <div className="text-sm text-muted-foreground">Completed Projects</div>
                 </div>
                 <div
                   className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => handleStatClick("/teacher/research")}
                 >
-                  <div className="text-2xl font-bold text-blue-600">8</div>
-                  <div className="text-sm text-muted-foreground">Completed Projects</div>
-                </div>
-                <div
-                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => handleStatClick("/teacher/research-contributions")}
-                >
-                  <div className="text-2xl font-bold text-purple-600">Rs. 15.2L</div>
-                  <div className="text-sm text-muted-foreground">Total Funding</div>
+                  <div className="text-2xl font-bold text-blue-600">{researchSummary.OngoingProjects}</div>
+                  <div className="text-sm text-muted-foreground">Ongoing Projects</div>
                 </div>
                 <div
                   className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => handleStatClick("/teacher/publication")}
                 >
-                  <div className="text-2xl font-bold text-orange-600">45</div>
-                  <div className="text-sm text-muted-foreground">Publications</div>
+                  <div className="text-2xl font-bold text-orange-600">{researchSummary.TotalProjects}</div>
+                  <div className="text-sm text-muted-foreground">Total Projects</div>
+                </div>
+                <div
+                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  onClick={() => handleStatClick("/teacher/research-contributions")}
+                >
+                  <div className="text-2xl font-bold text-purple-600">Rs. {researchSummary.TotalFunding}</div>
+                  <div className="text-sm text-muted-foreground">Total Funding</div>
                 </div>
               </div>
             </CardContent>
@@ -472,7 +369,7 @@ export default function DashboardPage() {
               <CardDescription>Academic talks and events</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">18</div>
+              <div className="text-2xl font-bold text-blue-600">{quickCounts.TotalTalksEvents}</div>
               <p className="text-sm text-muted-foreground">Total events this year</p>
             </CardContent>
           </Card>
@@ -489,7 +386,7 @@ export default function DashboardPage() {
               <CardDescription>Awards and achievements</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">7</div>
+              <div className="text-2xl font-bold text-yellow-600">{quickCounts.TotalAwards}</div>
               <p className="text-sm text-muted-foreground">Awards received</p>
             </CardContent>
           </Card>
@@ -506,7 +403,7 @@ export default function DashboardPage() {
               <CardDescription>Academic recommendations</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">25</div>
+              <div className="text-2xl font-bold text-green-600">{quickCounts.TotalRecommendations}</div>
               <p className="text-sm text-muted-foreground">Recommendations made</p>
             </CardContent>
           </Card>

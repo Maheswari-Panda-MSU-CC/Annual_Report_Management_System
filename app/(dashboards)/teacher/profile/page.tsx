@@ -384,7 +384,7 @@ export default function ProfilePage() {
   }
 
   return (
-   <div className="space-y-6 w-full">
+   <div className="space-y-6 w-full max-w-full overflow-x-hidden">
 
        <div className="flex items-center justify-between px-auto">
         <div>
