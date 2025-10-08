@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       recentActivities: recordsets?.[5] ?? [],
       quickCounts: recordsets?.[6]?.[0] ?? {},
       researchSummary: recordsets?.[7]?.[0] ?? {},
+      researchIndexes: recordsets?.[8]?.[0] ?? {},
     };
 
     return new Response(JSON.stringify(response), {

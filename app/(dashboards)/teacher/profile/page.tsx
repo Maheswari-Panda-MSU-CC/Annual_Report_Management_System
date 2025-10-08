@@ -7,45 +7,152 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText } from "lucide-react"
+import { TeacherInfo,ExperienceEntry,PostDocEntry,EducationEntry, TeacherData, Faculty, Department, Designation } from "@/types/interfaces"
 
-interface ExperienceEntry {
+// Dropdown data interfaces
+interface DropdownOption {
   id: number
-  employer: string
-  currentlyEmployed: boolean
+  name: string
+}
+
+interface FacultyOption {
+  Fid: number
+  Fname: string
+}
+
+interface DepartmentOption {
+  Deptid: number
+  name: string
+}
+
+interface DesignationOption {
+  id: number
+  name: string
+}
+
+interface DegreeTypeOption {
+  id: number
+  name: string
+}
+
+// Utility function to format dates for HTML date inputs
+const formatDateForInput = (dateString: string | null | undefined): string => {
+  if (!dateString) return "";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "";
+  }
+}
+
+// ICT labels used in UI and for storing in ICT_Details (comma-separated)
+const ICT_LABELS = {
+  smartBoard: 'Smart Board',
+  powerPoint: 'PowerPoint Presentation',
+  ictTools: 'ICT Tools',
+  eLearningTools: 'E-Learning Tools',
+  onlineCourse: 'Online Course',
+  others: 'Others',
+} as const;
+
+// Editing data type
+type EditingData = {
+  // Personal Information
+  salutation: string
+  firstName: string
+  middleName: string
+  lastName: string
+  email: string
+  phone: string
+  dateOfBirth: string
+  panNo: string
+  // Academic Information
   designation: string
+  faculty: string
+  department: string
   dateOfJoining: string
-  dateOfRelieving: string
-  natureOfJob: string
-  typeOfTeaching: string
+  teachingStatus: string
+  // Qualification Information
+  netQualified: boolean
+  netYear: string
+  gateQualified: boolean
+  gateYear: string
+  // Registration Information
+  registeredGuide: boolean
+  registrationYear: string
+  // ICT Information
+  ictSmartBoard: boolean
+  ictPowerPoint: boolean
+  ictTools: boolean
+  ictELearningTools: boolean
+  ictOnlineCourse: boolean
+  ictOthers: boolean
+  ictOthersSpecify: string
 }
 
-interface PostDocEntry {
-  id: number
-  institute: string
-  startDate: string
-  endDate: string
-  sponsoredBy: string
-  ranking: string
-  supportingDocument: string
-}
+// Build a comma separated ICT_Details string from current editingData
+const buildIctDetails = (state: EditingData): string => {
+  const parts: string[] = [];
+  if (state.ictSmartBoard) parts.push(ICT_LABELS.smartBoard);
+  if (state.ictPowerPoint) parts.push(ICT_LABELS.powerPoint);
+  if (state.ictTools) parts.push(ICT_LABELS.ictTools);
+  if (state.ictELearningTools) parts.push(ICT_LABELS.eLearningTools);
+  if (state.ictOnlineCourse) parts.push(ICT_LABELS.onlineCourse);
+  if (state.ictOthers) {
+    parts.push(`${ICT_LABELS.others}${state.ictOthersSpecify ? `: ${state.ictOthersSpecify}` : ''}`.trim());
+  }
+  return parts.join(', ');
+};
 
-interface EducationEntry {
-  id: number
-  degree: string
-  degreeType: string // Add this field
-  institution: string
-  university: string
-  state: string // Add this field
-  yearOfPassing: string
-  percentage: string
-  specialization: string
-}
+// Helper to create the default editing data structure
+const initialEditingData: EditingData = {
+  // Personal Information
+  salutation: "",
+  firstName: "",
+  middleName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  dateOfBirth: "",
+  panNo: "",
+  
+  // Academic Information
+  designation: "",
+  faculty: "",
+  department: "",
+  dateOfJoining: "",
+  teachingStatus: "",
+  
+  // Qualification Information
+  netQualified: false,
+  netYear: "",
+  gateQualified: false,
+  gateYear: "",
+  
+  // Registration Information
+  registeredGuide: false,
+  registrationYear: "",
+  
+  // ICT Information
+  ictSmartBoard: false,
+  ictPowerPoint: false,
+  ictTools: false,
+  ictELearningTools: false,
+  ictOnlineCourse: false,
+  ictOthers: false,
+  ictOthersSpecify: "",
+};
+
 
 export default function ProfilePage() {
   const { user } = useAuth()
@@ -55,175 +162,259 @@ export default function ProfilePage() {
   const [isEditingPersonal, setIsEditingPersonal] = useState(false) // Only for personal details
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [teacherInfo,setTeacherInfo] = useState<TeacherInfo|null>(null);
+  const [facultyData,setFacultyData] = useState<Faculty|null>(null);
+  const [departmentData,setDepartmentData] = useState<Department|null>(null);
+  const [designationData,setDesignationData] = useState<Designation|null>(null);
+  
+  // Dropdown data states
+  const [facultyOptions, setFacultyOptions] = useState<FacultyOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
+  const [permanentDesignationOptions, setPermanentDesignationOptions] = useState<DesignationOption[]>([]);
+  const [temporaryDesignationOptions, setTemporaryDesignationOptions] = useState<DesignationOption[]>([]);
+  const [degreeTypeOptions, setDegreeTypeOptions] = useState<DegreeTypeOption[]>([]);
+  const [selectedFacultyId, setSelectedFacultyId] = useState<number | null>(null);
+  // Row-level edit state for tables
+  const [experienceEditingIds, setExperienceEditingIds] = useState<Set<number>>(new Set());
+  const [postDocEditingIds, setPostDocEditingIds] = useState<Set<number>>(new Set());
+  const [educationEditingIds, setEducationEditingIds] = useState<Set<number>>(new Set());
 
-  // Personal Information based on database schema
-  const [formData, setFormData] = useState({
-    // From faculty table
-    facultyId: "FAC001",
-    salutation: "Dr.",
-    firstName: "Viral",
-    middleName: "",
-    lastName: "Kapadiya",
-    email: "rajesh.sharma@msu.edu.in",
-    phone: "+91 9876543210",
-    alternatePhone: "+91 9876543211",
-    address: "123, University Campus, Vadodara",
-    city: "Vadodara",
-    state: "Gujarat",
-    pincode: "390001",
-    dateOfBirth: "1980-05-15",
-    gender: "Male",
-    category: "General",
-    religion: "Hindu",
-    nationality: "Indian",
-    maritalStatus: "Married",
-
-    // Academic Information
-    employeeId: "EMP001",
-    designation: "Associate Professor",
-    teachingStatus: "Tenured", // Add this line
-    department: "Computer Science",
-    faculty: "Faculty of Science & Technology",
-    dateOfJoining: "2015-07-01",
-    employmentType: "Permanent",
-
-    // Qualification Information
-    netQualified: true,
-    netYear: "2010",
-    netSubject: "Computer Science",
-    gateQualified: false,
-    gateYear: "",
-    gateSpecialization: "",
-
-    // Additional Information
-    panNo: "ABCDE1234F",
-    aadharNo: "123456789012",
-    registeredGuide: true,
-    registrationYear: "2018",
-    researchAreas: "Machine Learning, Data Mining",
-
-    // Bank Details
-    bankName: "State Bank of India",
-    accountNumber: "12345678901234",
-    ifscCode: "SBIN0001234",
-
-    // Emergency Contact
-    emergencyContactName: "Priya Sharma",
-    emergencyContactRelation: "Spouse",
-    emergencyContactPhone: "+91 9876543212",
-
-    // ICT in Teaching
-    ictSmartBoard: false,
-    ictPowerPoint: true,
-    ictTools: true,
-    ictELearningTools: false,
-    ictOnlineCourse: true,
-    ictOthers: false,
-    ictOthersSpecify: "",
-
-    // Add these fields to the formData state
-    // Academic Year Information Availability
-    noInfoAY201617: false,
-    noInfoAY201718: false,
-    noInfoAY201819: false,
-    noInfoAY201920: false,
-    noInfoAY202021: false,
-    noInfoAY202122: false,
-    noInfoAY202223: false,
-    noInfoAY202324: false,
-  })
+  // Form data for editing (only used for temporary editing state)
+  const [editingData, setEditingData] = useState({ ...initialEditingData })
 
   // Experience Details - Always editable
   const [experienceData, setExperienceData] = useState<ExperienceEntry[]>([
     {
-      id: 1,
-      employer: "ABC University",
-      currentlyEmployed: false,
-      designation: "Assistant Professor",
-      dateOfJoining: "2012-07-01",
-      dateOfRelieving: "2015-06-30",
-      natureOfJob: "Teaching & Research",
-      typeOfTeaching: "UG & PG",
+      Id: 1,
+      Tid:1,
+      upload:null,
+      Employeer: "ABC University",
+      currente: false,
+      desig: "Assistant Professor",
+      Start_Date: "2012-07-01",
+      End_Date: "2015-06-30",
+      Nature: "Teaching & Research",
+      UG_PG: "UG & PG",
     },
     {
-      id: 2,
-      employer: "MSU",
-      currentlyEmployed: true,
-      designation: "Associate Professor",
-      dateOfJoining: "2015-07-01",
-      dateOfRelieving: "",
-      natureOfJob: "Teaching & Research",
-      typeOfTeaching: "UG, PG & PhD",
+      Id: 2,
+      Tid:1,
+      upload:null,
+      Employeer: "ABC University",
+      currente: false,
+      desig: "Assistant Professor",
+      Start_Date: "2012-07-01",
+      End_Date: "2015-06-30",
+      Nature: "Teaching & Research",
+      UG_PG: "UG & PG",
     },
   ])
 
   // Post Doctoral Research Experience - Always editable
   const [postDocData, setPostDocData] = useState<PostDocEntry[]>([
     {
-      id: 1,
-      institute: "IIT Bombay",
-      startDate: "2011-01-01",
-      endDate: "2012-06-30",
-      sponsoredBy: "UGC",
-      ranking: "QS Ranking: 172",
-      supportingDocument: "postdoc_certificate.pdf",
+      Id: 1,
+      Tid:1,
+      Institute: "IIT Bombay",
+      Start_Date: "2011-01-01",
+      End_Date: "2012-06-30",
+      SponsoredBy: "UGC",
+      QS_THE: "QS Ranking: 172",
+      doc: "postdoc_certificate.pdf",
     },
   ])
 
   // Education Details - Always editable
   const [educationData, setEducationData] = useState<EducationEntry[]>([
     {
-      id: 1,
-      degree: "Ph.D",
-      degreeType: "Post Graduate",
-      institution: "IIT Delhi",
-      university: "IIT Delhi",
+      gid: 1,
+      tid:1,
+      degree_name: "Ph.D",
+      degree_type: 1,
+      university_name: "IIT Delhi",
       state: "Delhi",
-      yearOfPassing: "2011",
-      percentage: "8.5 CGPA",
-      specialization: "Computer Science",
+      year_of_passing: "2011",
+      subject: "Computer Science",
+      Image: null,
+      QS_Ranking: ""
     },
     {
-      id: 2,
-      degree: "M.Tech",
-      degreeType: "Post Graduate",
-      institution: "NIT Surat",
-      university: "NIT Surat",
-      state: "Gujarat",
-      yearOfPassing: "2008",
-      percentage: "85%",
-      specialization: "Computer Science & Engineering",
+      gid: 2,
+      tid:1,
+      degree_name: "Ph.D",
+      degree_type: 1,
+      university_name: "IIT Delhi",
+      state: "Delhi",
+      year_of_passing: "2011",
+      subject: "Computer Science",
+      Image: null,
+      QS_Ranking: ""
     },
     {
-      id: 3,
-      degree: "B.Tech",
-      degreeType: "Graduate",
-      institution: "Gujarat University",
-      university: "Gujarat University",
-      state: "Gujarat",
-      yearOfPassing: "2006",
-      percentage: "78%",
-      specialization: "Computer Engineering",
+      gid: 3,
+      tid:1,
+      degree_name: "Ph.D",
+      degree_type: 1,
+      university_name: "IIT Delhi",
+      state: "Delhi",
+      year_of_passing: "2011",
+      subject: "Computer Science",
+      Image: null,
+      QS_Ranking: ""
     },
   ])
 
+  // useEffect(() => {
+  //   if (isAuthenticated === false) {
+  //     router.push("/teacher/dashboard")
+  //   } else {
+  //     setIsLoading(false)
+  //   }
+  // }, [isAuthenticated, router])
+
+  // Fetch dropdown data
+  const fetchDropdownData = async () => {
+    try {
+      // Fetch faculty options
+      const facultyRes = await fetch('/api/shared/dropdown/faculty');
+      if (facultyRes.ok) {
+        const facultyData = await facultyRes.json();
+        setFacultyOptions(facultyData.faculties || []);
+      }
+
+      // Departments are fetched based on faculty id; handled by fetchDepartmentsByFaculty
+
+      // Fetch permanent designation options
+      const permDesigRes = await fetch('/api/shared/dropdown/designation?type=permanent');
+      if (permDesigRes.ok) {
+        const permDesigData = await permDesigRes.json();
+        setPermanentDesignationOptions(permDesigData.designations || []);
+      }
+
+      // Fetch temporary designation options
+      const tempDesigRes = await fetch('/api/shared/dropdown/designation?type=temporary');
+      if (tempDesigRes.ok) {
+        const tempDesigData = await tempDesigRes.json();
+        setTemporaryDesignationOptions(tempDesigData.designations || []);
+      }
+
+      // Fetch degree type options
+      const degreeTypeRes = await fetch('/api/shared/dropdown/degreeType');
+      if (degreeTypeRes.ok) {
+        const degreeTypeData = await degreeTypeRes.json();
+        setDegreeTypeOptions(degreeTypeData.degreeTypes || []);
+      }
+    } catch (error) {
+      console.error("Error fetching dropdown data:", error);
+      // Set dummy data as fallback
+      setFacultyOptions([
+        { Fid: 1, Fname: "Faculty of Science & Technology" },
+        { Fid: 2, Fname: "Faculty of Arts" },
+        { Fid: 3, Fname: "Faculty of Commerce" }
+      ]);
+      setDepartmentOptions([
+        { Deptid: 1, name: "Computer Science" },
+        { Deptid: 2, name: "Mathematics" },
+        { Deptid: 3, name: "Physics" }
+      ]);
+      setPermanentDesignationOptions([
+        { id: 1, name: "Professor" },
+        { id: 2, name: "Associate Professor" },
+        { id: 3, name: "Assistant Professor" }
+      ]);
+      setTemporaryDesignationOptions([
+        { id: 1, name: "Assistant Professor (Contract)" },
+        { id: 2, name: "Lecturer" },
+        { id: 3, name: "Visiting Faculty" }
+      ]);
+      setDegreeTypeOptions([
+        { id: 1, name: "Post Graduate" },
+        { id: 2, name: "Graduate" },
+        { id: 3, name: "Diploma" }
+      ]);
+    }
+  };
+
+  // Fetch departments by faculty id
+  const fetchDepartmentsByFaculty = async (fid: number) => {
+    try {
+      const res = await fetch(`/api/shared/dropdown/department?fid=${fid}`);
+      if (!res.ok) throw new Error('Failed to fetch departments');
+      const data = await res.json();
+      setDepartmentOptions(data.departments || []);
+    } catch (error) {
+      console.error('Error fetching departments by faculty:', error);
+      // Fallback dummy departments
+      setDepartmentOptions([
+        { Deptid: 1, name: 'Computer Science' },
+        { Deptid: 2, name: 'Mathematics' },
+        { Deptid: 3, name: 'Physics' },
+      ]);
+    }
+  };
+
   useEffect(() => {
+    const fetchTeacherData = async () => {
+      try {
+        const teacherId = user?.role_id || 1 // Replace with actual user id or fallback
+        const res = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (!res.ok) throw new Error("Failed to fetch teacher data")
+  
+        const data:TeacherData = await res.json()
+        console.log(data)
+        setTeacherInfo(data.teacherInfo) // setTeacherData is your state hook for storing fetched data
+        setEducationData(data.graduationDetails)
+        setExperienceData(data.teacherExperience)
+        setPostDocData(data.postDoctoralExp)
+        setFacultyData(data.faculty)
+        setSelectedFacultyId(data.faculty?.Fid ?? null)
+        setDepartmentData(data.department)
+        setDesignationData(data.designation)
+        // Initialize ICT selection from teacherInfo.ICT_Details
+        const details = (data.teacherInfo?.ICT_Details || '').split(',').map(s => s.trim()).filter(Boolean)
+        const othersEntry = details.find(d => d.toLowerCase().startsWith('others'))
+        setEditingData(prev => ({
+          ...prev,
+          ictSmartBoard: details.includes(ICT_LABELS.smartBoard),
+          ictPowerPoint: details.includes(ICT_LABELS.powerPoint),
+          ictTools: details.includes(ICT_LABELS.ictTools),
+          ictELearningTools: details.includes(ICT_LABELS.eLearningTools),
+          ictOnlineCourse: details.includes(ICT_LABELS.onlineCourse),
+          ictOthers: Boolean(othersEntry),
+          ictOthersSpecify: othersEntry?.split(':')?.[1]?.trim() || '',
+        }))
+      } catch (error) {
+        console.error("Error fetching teacher profile:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  
     if (isAuthenticated === false) {
       router.push("/teacher/dashboard")
     } else {
-      setIsLoading(false)
+      fetchTeacherData()
+      fetchDropdownData()
     }
   }, [isAuthenticated, router])
 
+  // When faculty selection changes, fetch departments for that faculty
+  useEffect(() => {
+    if (selectedFacultyId && !Number.isNaN(selectedFacultyId)) {
+      fetchDepartmentsByFaculty(selectedFacultyId)
+    }
+  }, [selectedFacultyId])
+  
+
   const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({
+    setEditingData((prev) => ({
       ...prev,
       [field]: value,
     }))
   }
 
   const handleCheckboxChange = (field: string, checked: boolean) => {
-    setFormData((prev) => ({
+    setEditingData((prev) => ({
       ...prev,
       [field]: checked,
     }))
@@ -231,68 +422,95 @@ export default function ProfilePage() {
 
   const addExperienceEntry = () => {
     const newEntry: ExperienceEntry = {
-      id: Date.now(),
-      employer: "",
-      currentlyEmployed: false,
-      designation: "",
-      dateOfJoining: "",
-      dateOfRelieving: "",
-      natureOfJob: "",
-      typeOfTeaching: "",
+      Id: Date.now(),
+      Tid:1,
+      upload:null,
+      Employeer: "",
+      currente: false,
+      desig: "",
+      Start_Date: "",
+      End_Date: "",
+      Nature: "",
+      UG_PG: "",
     }
     setExperienceData([...experienceData, newEntry])
   }
 
   const updateExperienceEntry = (id: number, field: string, value: any) => {
-    setExperienceData((prev) => prev.map((entry) => (entry.id === id ? { ...entry, [field]: value } : entry)))
+    setExperienceData((prev) => prev.map((entry) => (entry.Id === id ? { ...entry, [field]: value } : entry)))
   }
 
   const removeExperienceEntry = (id: number) => {
-    setExperienceData((prev) => prev.filter((entry) => entry.id !== id))
+    setExperienceData((prev) => prev.filter((entry) => entry.Id !== id))
   }
 
   const addPostDocEntry = () => {
     const newEntry: PostDocEntry = {
-      id: Date.now(),
-      institute: "",
-      startDate: "",
-      endDate: "",
-      sponsoredBy: "",
-      ranking: "",
-      supportingDocument: "",
+      Id: Date.now(),
+      Tid:1,
+      Institute: "",
+      Start_Date: "",
+      End_Date: "",
+      SponsoredBy: "",
+      QS_THE: "",
+      doc: "",
     }
     setPostDocData([...postDocData, newEntry])
   }
 
   const updatePostDocEntry = (id: number, field: string, value: string) => {
-    setPostDocData((prev) => prev.map((entry) => (entry.id === id ? { ...entry, [field]: value } : entry)))
+    setPostDocData((prev) => prev.map((entry) => (entry.Id === id ? { ...entry, [field]: value } : entry)))
   }
 
   const removePostDocEntry = (id: number) => {
-    setPostDocData((prev) => prev.filter((entry) => entry.id !== id))
+    setPostDocData((prev) => prev.filter((entry) => entry.Id !== id))
   }
 
   const addEducationEntry = () => {
     const newEntry: EducationEntry = {
-      id: Date.now(),
-      degree: "",
-      degreeType: "",
-      institution: "",
-      university: "",
+      gid: Date.now(),
+      tid:1,
+      Image:null,
+      QS_Ranking:"",
+      degree_name: "",
+      degree_type: 1,
+      university_name: "",
       state: "",
-      yearOfPassing: "",
-      percentage: "",
-      specialization: "",
+      year_of_passing: "",
+      subject: "",
     }
     setEducationData([...educationData, newEntry])
   }
 
   const updateEducationEntry = (id: number, field: string, value: string) => {
-    setEducationData((prev) => prev.map((entry) => (entry.id === id ? { ...entry, [field]: value } : entry)))
+    setEducationData((prev) => prev.map((entry) => (entry.gid === id ? { ...entry, [field]: value } : entry)))
+  }
+
+  // Row-level edit toggles
+  const toggleExperienceRowEdit = (id: number) => {
+    setExperienceEditingIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  const togglePostDocRowEdit = (id: number) => {
+    setPostDocEditingIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  const toggleEducationRowEdit = (id: number) => {
+    setEducationEditingIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   }
 
   const removeEducationEntry = (id: number) => {
-    setEducationData((prev) => prev.filter((entry) => entry.id !== id))
+    setEducationData((prev) => prev.filter((entry) => entry.gid !== id))
   }
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -320,7 +538,7 @@ export default function ProfilePage() {
 
       // Here you would typically upload to your server
       // const formData = new FormData()
-      // formData.append('profileImage', file)
+      // teacherInfo.append('profileImage', file)
       // await uploadProfileImage(formData)
 
       console.log("Image uploaded:", file.name)
@@ -338,7 +556,13 @@ export default function ProfilePage() {
   }
 
   const handleSavePersonal = () => {
-    console.log("Saving personal data:", formData)
+    // Build ICT_Details string from selections
+    const newIctDetails = buildIctDetails(editingData)
+    console.log("Saving personal data:", { ...editingData, ICT_Details: newIctDetails })
+    // Typically send to API here
+    if (teacherInfo) {
+      setTeacherInfo({ ...teacherInfo, ICT_Details: newIctDetails })
+    }
     setIsEditingPersonal(false)
   }
 
@@ -363,15 +587,18 @@ export default function ProfilePage() {
 
   const handleSaveAcademicYears = () => {
     console.log("Saving academic years data:", {
-      noInfoAY201617: formData.noInfoAY201617,
-      noInfoAY201718: formData.noInfoAY201718,
-      noInfoAY201819: formData.noInfoAY201819,
-      noInfoAY201920: formData.noInfoAY201920,
-      noInfoAY202021: formData.noInfoAY202021,
-      noInfoAY202122: formData.noInfoAY202122,
-      noInfoAY202223: formData.noInfoAY202223,
-      noInfoAY202324: formData.noInfoAY202324,
+      NILL2016_17: teacherInfo?.NILL2016_17,
+      NILL2017_18: teacherInfo?.NILL2017_18,
+      NILL2018_19: teacherInfo?.NILL2018_19,
+      NILL2019_20: teacherInfo?.NILL2019_20,
+      NILL2020_21: teacherInfo?.NILL2020_21,
+      NILL2021_22: teacherInfo?.NILL2021_22,
+      NILL2022_23: teacherInfo?.NILL2022_23,
+      NILL2023_24: teacherInfo?.NILL2023_24,
+      NILL2024_25: teacherInfo?.NILL2024_25,
+      NILL2025_26: teacherInfo?.NILL2025_26,
     })
+    // Here you would typically make an API call to save the data
     // Show success message
   }
 
@@ -484,9 +711,9 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div className="text-center">
-                  <p className="font-medium">{`${formData.salutation} ${formData.firstName} ${formData.lastName}`}</p>
-                  <p className="text-sm text-muted-foreground">{formData.designation}</p>
-                  <p className="text-sm text-muted-foreground">{formData.department}</p>
+                  <p className="font-medium">{`${teacherInfo?.Abbri} ${teacherInfo?.fname} ${teacherInfo?.lname}`}</p>
+                  <p className="text-sm text-muted-foreground">{designationData?.name}</p>
+                  <p className="text-sm text-muted-foreground">{departmentData?.name}</p>
                 </div>
                 {isEditingPersonal && (
                   <div className="text-center">
@@ -500,11 +727,10 @@ export default function ProfilePage() {
                   <div className="space-y-2">
                     <Label htmlFor="salutation">Salutation</Label>
                     <Select
-                      value={formData.salutation}
+                      value={teacherInfo?.Abbri}
                       onValueChange={(value) => handleInputChange("salutation", value)}
-                      disabled={!isEditingPersonal}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -513,6 +739,8 @@ export default function ProfilePage() {
                         <SelectItem value="Mr.">Mr.</SelectItem>
                         <SelectItem value="Ms.">Ms.</SelectItem>
                         <SelectItem value="Mrs.">Mrs.</SelectItem>
+                        <SelectItem value="Shri.">Shri.</SelectItem>
+                        <SelectItem value="Er.">Er.</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -520,27 +748,27 @@ export default function ProfilePage() {
                     <Label htmlFor="firstName">First Name</Label>
                     <Input
                       id="firstName"
-                      value={formData.firstName}
+                      value={teacherInfo?.fname || ""}
                       onChange={(e) => handleInputChange("firstName", e.target.value)}
-                      disabled={!isEditingPersonal}
+                      readOnly={!isEditingPersonal}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="middleName">Middle Name</Label>
                     <Input
                       id="middleName"
-                      value={formData.middleName}
+                      value={teacherInfo?.mname || ""}
                       onChange={(e) => handleInputChange("middleName", e.target.value)}
-                      disabled={!isEditingPersonal}
+                      readOnly={!isEditingPersonal}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="lastName">Last Name</Label>
                     <Input
                       id="lastName"
-                      value={formData.lastName}
+                      value={teacherInfo?.lname || ""}
                       onChange={(e) => handleInputChange("lastName", e.target.value)}
-                      disabled={!isEditingPersonal}
+                      readOnly={!isEditingPersonal}
                     />
                   </div>
                 </div>
@@ -552,38 +780,21 @@ export default function ProfilePage() {
                     <Input
                       id="email"
                       type="email"
-                      value={formData.email}
+                      value={teacherInfo?.email_id || ""}
                       onChange={(e) => handleInputChange("email", e.target.value)}
-                      disabled={!isEditingPersonal}
+                      readOnly={!isEditingPersonal}
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone Number</Label>
                     <Input
                       id="phone"
-                      value={formData.phone}
+                      value={teacherInfo?.phone_no?.toString() || ""}
                       onChange={(e) => handleInputChange("phone", e.target.value)}
-                      disabled={!isEditingPersonal}
+                      readOnly={!isEditingPersonal}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="alternatePhone">Alternate Phone</Label>
-                    <Input
-                      id="alternatePhone"
-                      value={formData.alternatePhone}
-                      onChange={(e) => handleInputChange("alternatePhone", e.target.value)}
-                      disabled={!isEditingPersonal}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="employeeId">Employee ID</Label>
-                    <Input
-                      id="employeeId"
-                      value={formData.employeeId}
-                      onChange={(e) => handleInputChange("employeeId", e.target.value)}
-                      disabled={!isEditingPersonal}
-                    />
-                  </div>
+                  
                 </div>
 
                 {/* Additional Personal Information */}
@@ -595,9 +806,9 @@ export default function ProfilePage() {
                       <Input
                         id="dateOfBirth"
                         type="date"
-                        value={formData.dateOfBirth}
+                        value={formatDateForInput(teacherInfo?.DOB)}
                         onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
-                        disabled={!isEditingPersonal}
+                        readOnly={!isEditingPersonal}
                       />
                     </div>
                     <div className="space-y-2">
@@ -605,18 +816,18 @@ export default function ProfilePage() {
                       <Input
                         id="dateOfJoining"
                         type="date"
-                        value={formData.dateOfJoining}
+                        value={formatDateForInput(teacherInfo?.recruit_date)}
                         onChange={(e) => handleInputChange("dateOfJoining", e.target.value)}
-                        disabled={!isEditingPersonal}
+                        readOnly={!isEditingPersonal}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="panNo">PAN Number</Label>
                       <Input
                         id="panNo"
-                        value={formData.panNo}
+                        value={teacherInfo?.PAN_No || ""}
                         onChange={(e) => handleInputChange("panNo", e.target.value)}
-                        disabled={!isEditingPersonal}
+                        readOnly={!isEditingPersonal}
                         placeholder="ABCDE1234F"
                         maxLength={10}
                       />
@@ -631,15 +842,25 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label htmlFor="teachingStatus">Teaching Status</Label>
                       <Select
-                        value={formData.teachingStatus}
+                        value={teacherInfo?.desig_perma ? "Permanent" : "Tenured"} // Default selection
                         onValueChange={(value) => {
-                          handleInputChange("teachingStatus", value)
+                          // Update teaching status in teacherInfo
+                          if (teacherInfo) {
+                            setTeacherInfo({
+                              ...teacherInfo,
+                              perma_or_tenure: value === "Permanent",
+                              desig_perma: value === "Permanent" ? teacherInfo?.desig_perma : 0,
+                            });
+                          }
+
                           // Reset designation when teaching status changes
-                          handleInputChange("designation", "")
+                          handleInputChange("designation", "");
+
+                          // Optional: if you also store teachingStatus separately
+                          handleInputChange("teachingStatus", value);
                         }}
-                        disabled={!isEditingPersonal}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
                           <SelectValue placeholder="Select teaching status" />
                         </SelectTrigger>
                         <SelectContent>
@@ -658,35 +879,27 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label htmlFor="designation">Designation</Label>
                       <Select
-                        value={formData.designation}
+                        value={designationData?.id?.toString() || ""}
                         onValueChange={(value) => handleInputChange("designation", value)}
-                        disabled={!isEditingPersonal || !formData.teachingStatus}
                       >
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              !formData.teachingStatus ? "Select teaching status first" : "Select designation"
-                            }
-                          />
+                        <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                          <SelectValue placeholder="Select designation" />
                         </SelectTrigger>
                         <SelectContent>
-                          {formData.teachingStatus === "Tenured" && (
-                            <>
-                              <SelectItem value="Professor">Professor</SelectItem>
-                              <SelectItem value="Associate Professor">Associate Professor</SelectItem>
-                              <SelectItem value="Assistant Professor">Assistant Professor</SelectItem>
-                            </>
-                          )}
-                          {formData.teachingStatus === "Permanent" && (
-                            <>
-                              <SelectItem value="Assistant Professor (Contract)">
-                                Assistant Professor (Contract)
+                          {teacherInfo?.desig_perma ? (
+                            // Show permanent designations
+                            permanentDesignationOptions.map((desig) => (
+                              <SelectItem key={desig.id} value={desig.id.toString()}>
+                                {desig.name}
                               </SelectItem>
-                              <SelectItem value="Lecturer">Lecturer</SelectItem>
-                              <SelectItem value="Visiting Faculty">Visiting Faculty</SelectItem>
-                              <SelectItem value="Adjunct Professor">Adjunct Professor</SelectItem>
-                              <SelectItem value="Guest Faculty">Guest Faculty</SelectItem>
-                            </>
+                            ))
+                          ) : (
+                            // Show temporary designations
+                            temporaryDesignationOptions.map((desig) => (
+                              <SelectItem key={desig.id} value={desig.id.toString()}>
+                                {desig.name}
+                              </SelectItem>
+                            ))
                           )}
                         </SelectContent>
                       </Select>
@@ -694,20 +907,25 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label htmlFor="faculty">Faculty</Label>
                       <Select
-                        value={formData.faculty}
-                        onValueChange={(value) => handleInputChange("faculty", value)}
-                        disabled={!isEditingPersonal}
+                        value={(selectedFacultyId ?? facultyData?.Fid)?.toString() || ""}
+                        onValueChange={(value) => {
+                          handleInputChange("faculty", value)
+                          const fidNum = Number(value)
+                          setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
+                          // Reset selected department when faculty changes
+                          handleInputChange("department", "")
+                          setDepartmentData(null)
+                        }}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
+                        <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                          <SelectValue placeholder="Select faculty" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Faculty of Science & Technology">
-                            Faculty of Science & Technology
-                          </SelectItem>
-                          <SelectItem value="Faculty of Arts">Faculty of Arts</SelectItem>
-                          <SelectItem value="Faculty of Commerce">Faculty of Commerce</SelectItem>
-                          <SelectItem value="Faculty of Education">Faculty of Education</SelectItem>
+                          {facultyOptions.map((faculty) => (
+                            <SelectItem key={faculty.Fid} value={faculty.Fid.toString()}>
+                              {faculty.Fname}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -716,19 +934,18 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label htmlFor="department">Department</Label>
                       <Select
-                        value={formData.department}
+                        value={departmentData?.Deptid?.toString() || ""}
                         onValueChange={(value) => handleInputChange("department", value)}
-                        disabled={!isEditingPersonal}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
+                        <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                          <SelectValue placeholder="Select department" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Computer Science">Computer Science</SelectItem>
-                          <SelectItem value="Mathematics">Mathematics</SelectItem>
-                          <SelectItem value="Physics">Physics</SelectItem>
-                          <SelectItem value="Chemistry">Chemistry</SelectItem>
-                          <SelectItem value="Biology">Biology</SelectItem>
+                          {departmentOptions.map((dept) => (
+                            <SelectItem key={dept.Deptid} value={dept.Deptid.toString()}>
+                              {dept.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -743,43 +960,34 @@ export default function ProfilePage() {
                       <div className="space-y-2">
                         <Label>Qualified NET Exam</Label>
                         <RadioGroup
-                          value={formData.netQualified ? "yes" : "no"}
+                          value={teacherInfo?.NET ? "yes" : "no"}
                           onValueChange={(value) =>
                             handleInputChange("netQualified", value === "yes" ? "true" : "false")
                           }
-                          disabled={!isEditingPersonal}
-                          className="flex gap-6"
+                          className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                         >
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="yes" id="net-yes" disabled={!isEditingPersonal} />
+                            <RadioGroupItem value="yes" id="net-yes" />
                             <Label htmlFor="net-yes">Yes</Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="no" id="net-no" disabled={!isEditingPersonal} />
+                            <RadioGroupItem value="no" id="net-no" />
                             <Label htmlFor="net-no">No</Label>
                           </div>
                         </RadioGroup>
                       </div>
-                      {formData.netQualified && (
+                      {teacherInfo?.NET && (
                         <>
                           <div className="space-y-2">
                             <Label htmlFor="netYear">NET Qualified Year</Label>
                             <Input
                               id="netYear"
-                              value={formData.netYear}
+                              value={teacherInfo?.NET_year?.toString() || ""}
                               onChange={(e) => handleInputChange("netYear", e.target.value)}
-                              disabled={!isEditingPersonal}
+                              readOnly={!isEditingPersonal}
                             />
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="netSubject">NET Subject</Label>
-                            <Input
-                              id="netSubject"
-                              value={formData.netSubject}
-                              onChange={(e) => handleInputChange("netSubject", e.target.value)}
-                              disabled={!isEditingPersonal}
-                            />
-                          </div>
+                         
                         </>
                       )}
                     </div>
@@ -788,92 +996,35 @@ export default function ProfilePage() {
                       <div className="space-y-2">
                         <Label>Qualified GATE Exam</Label>
                         <RadioGroup
-                          value={formData.gateQualified ? "yes" : "no"}
+                          value={teacherInfo?.GATE ? "yes" : "no"}
                           onValueChange={(value) =>
                             handleInputChange("gateQualified", value === "yes" ? "true" : "false")
                           }
-                          disabled={!isEditingPersonal}
-                          className="flex gap-6"
+                          className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                         >
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="yes" id="gate-yes" disabled={!isEditingPersonal} />
+                            <RadioGroupItem value="yes" id="gate-yes" />
                             <Label htmlFor="gate-yes">Yes</Label>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="no" id="gate-no" disabled={!isEditingPersonal} />
+                            <RadioGroupItem value="no" id="gate-no" />
                             <Label htmlFor="gate-no">No</Label>
                           </div>
                         </RadioGroup>
                       </div>
-                      {formData.gateQualified && (
+                      {teacherInfo?.GATE && (
                         <>
                           <div className="space-y-2">
                             <Label htmlFor="gateYear">GATE Qualified Year</Label>
                             <Input
                               id="gateYear"
-                              value={formData.gateYear}
+                              value={teacherInfo?.GATE_year?.toString() || ""}
                               onChange={(e) => handleInputChange("gateYear", e.target.value)}
-                              disabled={!isEditingPersonal}
+                              readOnly={!isEditingPersonal}
                               placeholder="e.g., 2018"
                             />
                           </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="gateSpecialization">GATE Specialization</Label>
-                            <Select
-                              value={formData.gateSpecialization}
-                              onValueChange={(value) => handleInputChange("gateSpecialization", value)}
-                              disabled={!isEditingPersonal}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select GATE specialization" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Computer Science and Information Technology (CS)">
-                                  Computer Science and Information Technology (CS)
-                                </SelectItem>
-                                <SelectItem value="Electronics and Communication Engineering (EC)">
-                                  Electronics and Communication Engineering (EC)
-                                </SelectItem>
-                                <SelectItem value="Electrical Engineering (EE)">Electrical Engineering (EE)</SelectItem>
-                                <SelectItem value="Mechanical Engineering (ME)">Mechanical Engineering (ME)</SelectItem>
-                                <SelectItem value="Civil Engineering (CE)">Civil Engineering (CE)</SelectItem>
-                                <SelectItem value="Chemical Engineering (CH)">Chemical Engineering (CH)</SelectItem>
-                                <SelectItem value="Instrumentation Engineering (IN)">
-                                  Instrumentation Engineering (IN)
-                                </SelectItem>
-                                <SelectItem value="Biotechnology (BT)">Biotechnology (BT)</SelectItem>
-                                <SelectItem value="Aerospace Engineering (AE)">Aerospace Engineering (AE)</SelectItem>
-                                <SelectItem value="Agricultural Engineering (AG)">
-                                  Agricultural Engineering (AG)
-                                </SelectItem>
-                                <SelectItem value="Architecture and Planning (AR)">
-                                  Architecture and Planning (AR)
-                                </SelectItem>
-                                <SelectItem value="Biomedical Engineering (BM)">Biomedical Engineering (BM)</SelectItem>
-                                <SelectItem value="Engineering Sciences (XE)">Engineering Sciences (XE)</SelectItem>
-                                <SelectItem value="Ecology and Evolution (EY)">Ecology and Evolution (EY)</SelectItem>
-                                <SelectItem value="Geology and Geophysics (GG)">Geology and Geophysics (GG)</SelectItem>
-                                <SelectItem value="Mathematics (MA)">Mathematics (MA)</SelectItem>
-                                <SelectItem value="Metallurgical Engineering (MT)">
-                                  Metallurgical Engineering (MT)
-                                </SelectItem>
-                                <SelectItem value="Mining Engineering (MN)">Mining Engineering (MN)</SelectItem>
-                                <SelectItem value="Naval Architecture and Marine Engineering (NM)">
-                                  Naval Architecture and Marine Engineering (NM)
-                                </SelectItem>
-                                <SelectItem value="Petroleum Engineering (PE)">Petroleum Engineering (PE)</SelectItem>
-                                <SelectItem value="Physics (PH)">Physics (PH)</SelectItem>
-                                <SelectItem value="Production and Industrial Engineering (PI)">
-                                  Production and Industrial Engineering (PI)
-                                </SelectItem>
-                                <SelectItem value="Statistics (ST)">Statistics (ST)</SelectItem>
-                                <SelectItem value="Textile Engineering and Fibre Science (TF)">
-                                  Textile Engineering and Fibre Science (TF)
-                                </SelectItem>
-                                <SelectItem value="Life Sciences (XL)">Life Sciences (XL)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                         
                         </>
                       )}
                     </div>
@@ -886,31 +1037,30 @@ export default function ProfilePage() {
                   <div className="space-y-2">
                     <Label>Registered Guide at MSU</Label>
                     <RadioGroup
-                      value={formData.registeredGuide ? "yes" : "no"}
+                      value={teacherInfo?.PHDGuide ? "yes" : "no"}
                       onValueChange={(value) =>
                         handleInputChange("registeredGuide", value === "yes" ? "true" : "false")
                       }
-                      disabled={!isEditingPersonal}
-                      className="flex gap-6"
+                      className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                     >
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="yes" id="guide-yes" disabled={!isEditingPersonal} />
+                        <RadioGroupItem value="yes" id="guide-yes" />
                         <Label htmlFor="guide-yes">Yes</Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="no" id="guide-no" disabled={!isEditingPersonal} />
+                        <RadioGroupItem value="no" id="guide-no" />
                         <Label htmlFor="guide-no">No</Label>
                       </div>
                     </RadioGroup>
                   </div>
-                  {formData.registeredGuide && (
+                  {teacherInfo?.PHDGuide && (
                     <div className="space-y-2">
                       <Label htmlFor="registrationYear">Year of Registration</Label>
                       <Input
                         id="registrationYear"
-                        value={formData.registrationYear}
+                        value={teacherInfo?.Guide_year?.toString() || ""}
                         onChange={(e) => handleInputChange("registrationYear", e.target.value)}
-                        disabled={!isEditingPersonal}
+                        readOnly={!isEditingPersonal}
                       />
                     </div>
                   )}
@@ -926,10 +1076,9 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="smartBoard"
-                          checked={formData.ictSmartBoard}
+                          checked={editingData.ictSmartBoard}
                           onChange={(e) => handleCheckboxChange("ictSmartBoard", e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          disabled={!isEditingPersonal}
+                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="smartBoard" className="text-sm font-normal">
                           Smart Board
@@ -939,10 +1088,9 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="powerPoint"
-                          checked={formData.ictPowerPoint}
+                          checked={editingData.ictPowerPoint}
                           onChange={(e) => handleCheckboxChange("ictPowerPoint", e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          disabled={!isEditingPersonal}
+                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="powerPoint" className="text-sm font-normal">
                           PowerPoint Presentation
@@ -952,10 +1100,9 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="ictTools"
-                          checked={formData.ictTools}
+                          checked={editingData.ictTools}
                           onChange={(e) => handleCheckboxChange("ictTools", e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          disabled={!isEditingPersonal}
+                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="ictTools" className="text-sm font-normal">
                           ICT Tools
@@ -965,10 +1112,9 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="eLearningTools"
-                          checked={formData.ictELearningTools}
+                          checked={editingData.ictELearningTools}
                           onChange={(e) => handleCheckboxChange("ictELearningTools", e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          disabled={!isEditingPersonal}
+                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="eLearningTools" className="text-sm font-normal">
                           E-Learning Tools
@@ -978,10 +1124,9 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="onlineCourse"
-                          checked={formData.ictOnlineCourse}
+                          checked={editingData.ictOnlineCourse}
                           onChange={(e) => handleCheckboxChange("ictOnlineCourse", e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          disabled={!isEditingPersonal}
+                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="onlineCourse" className="text-sm font-normal">
                           Online Course
@@ -991,29 +1136,31 @@ export default function ProfilePage() {
                         <input
                           type="checkbox"
                           id="others"
-                          checked={formData.ictOthers}
+                          checked={editingData.ictOthers}
                           onChange={(e) => handleCheckboxChange("ictOthers", e.target.checked)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                          disabled={!isEditingPersonal}
+                          className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="others" className="text-sm font-normal">
                           Others
                         </Label>
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="otherIctTools">If Others, please specify:</Label>
-                      <Input
-                        id="otherIctTools"
-                        value={formData.ictOthersSpecify}
-                        onChange={(e) => handleInputChange("ictOthersSpecify", e.target.value)}
-                        placeholder="Please specify other ICT tools used..."
-                        disabled={!isEditingPersonal}
-                        className="max-w-md"
-                      />
-                    </div>
+                    {editingData.ictOthers && (
+                      <div className="space-y-2">
+                        <Label htmlFor="otherIctTools">If Others, please specify:</Label>
+                        <Input
+                          id="otherIctTools"
+                          value={editingData.ictOthersSpecify}
+                          onChange={(e) => handleInputChange("ictOthersSpecify", e.target.value)}
+                          placeholder="Please specify other ICT tools used..."
+                          readOnly={!isEditingPersonal}
+                          className="max-w-md"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
+
               </div>
 
             </div>
@@ -1062,24 +1209,27 @@ export default function ProfilePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {experienceData.map((entry, index) => (
-                    <TableRow key={entry.id}>
+                  {experienceData.map((entry, index) => {
+                    const rowEditing = experienceEditingIds.has(entry.Id);
+                    return (
+                    <TableRow key={entry.Id}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         <Input
-                          value={entry.employer}
-                          onChange={(e) => updateExperienceEntry(entry.id, "employer", e.target.value)}
+                          value={entry?.Employeer || ""}
+                          onChange={(e) => updateExperienceEntry(entry.Id, "employer", e.target.value)}
                           className="min-w-[150px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Select
-                          value={entry.currentlyEmployed ? "yes" : "no"}
+                          value={entry.currente ? "yes" : "no"}
                           onValueChange={(value) =>
-                            updateExperienceEntry(entry.id, "currentlyEmployed", value === "yes")
+                            updateExperienceEntry(entry.Id, "currentlyEmployed", value === "yes")
                           }
                         >
-                          <SelectTrigger className="min-w-[100px]">
+                          <SelectTrigger className={`min-w-[100px] ${!rowEditing ? "pointer-events-none" : ""}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1090,69 +1240,91 @@ export default function ProfilePage() {
                       </TableCell>
                       <TableCell>
                         <Input
-                          value={entry.designation}
-                          onChange={(e) => updateExperienceEntry(entry.id, "designation", e.target.value)}
+                          value={entry?.desig || ""}
+                          onChange={(e) => updateExperienceEntry(entry.Id, "designation", e.target.value)}
                           className="min-w-[150px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
                           type="date"
-                          value={entry.dateOfJoining}
-                          onChange={(e) => updateExperienceEntry(entry.id, "dateOfJoining", e.target.value)}
+                          value={formatDateForInput(entry.Start_Date)}
+                          onChange={(e) => updateExperienceEntry(entry.Id, "dateOfJoining", e.target.value)}
                           className="min-w-[150px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
                           type="date"
-                          value={entry.dateOfRelieving}
-                          onChange={(e) => updateExperienceEntry(entry.id, "dateOfRelieving", e.target.value)}
-                          disabled={entry.currentlyEmployed}
+                          value={formatDateForInput(entry.End_Date)}
+                          onChange={(e) => updateExperienceEntry(entry.Id, "dateOfRelieving", e.target.value)}
                           className="min-w-[150px]"
+                          readOnly={!rowEditing || entry.currente}
                         />
                       </TableCell>
                       <TableCell>
                         <Select
-                          value={entry.natureOfJob}
-                          onValueChange={(value) => updateExperienceEntry(entry.id, "natureOfJob", value)}
+                          value={entry.Nature}
+                          onValueChange={(value) => updateExperienceEntry(entry.Id, "natureOfJob", value)}
                         >
-                          <SelectTrigger className="min-w-[150px]">
+                          <SelectTrigger className={`min-w-[150px] ${!rowEditing ? "pointer-events-none" : ""}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Teaching">Teaching</SelectItem>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                            <SelectItem value="Industrial Work">Industrial Work</SelectItem>
+                            <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
                             <SelectItem value="Research">Research</SelectItem>
-                            <SelectItem value="Teaching & Research">Teaching & Research</SelectItem>
-                            <SelectItem value="Administrative">Administrative</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
                       <TableCell>
                         <Select
-                          value={entry.typeOfTeaching}
+                          value={entry?.UG_PG || ""}
                           onValueChange={(value) =>
-                            updateExperienceEntry(entry.id, "typeOfTeaching", value)
+                            updateExperienceEntry(entry.Id, "typeOfTeaching", value)
                           }
                         >
-                          <SelectTrigger className="min-w-[120px]">
+                          <SelectTrigger className={`min-w-[120px] ${!rowEditing ? "pointer-events-none" : ""}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="UG">UG</SelectItem>
                             <SelectItem value="PG">PG</SelectItem>
                             <SelectItem value="UG & PG">UG & PG</SelectItem>
-                            <SelectItem value="UG, PG & PhD">UG, PG & PhD</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
                       <TableCell>
-                        <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(entry.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {!rowEditing ? (
+                            <>
+                              <Button size="sm" onClick={() => toggleExperienceRowEdit(entry.Id)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(entry.Id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => toggleExperienceRowEdit(entry.Id)}>
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => toggleExperienceRowEdit(entry.Id)}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </div>
@@ -1200,55 +1372,63 @@ export default function ProfilePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {postDocData.map((entry, index) => (
-                    <TableRow key={entry.id}>
+                  {postDocData.map((entry, index) => {
+                    const rowEditing = postDocEditingIds.has(entry.Id);
+                    return (
+                    <TableRow key={entry.Id}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         <Input
-                          value={entry.institute}
-                          onChange={(e) => updatePostDocEntry(entry.id, "institute", e.target.value)}
+                          value={entry?.Institute || ""}
+                          onChange={(e) => updatePostDocEntry(entry.Id, "institute", e.target.value)}
                           className="min-w-[200px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
                           type="date"
-                          value={entry.startDate}
-                          onChange={(e) => updatePostDocEntry(entry.id, "startDate", e.target.value)}
+                          value={formatDateForInput(entry.Start_Date)}
+                          onChange={(e) => updatePostDocEntry(entry.Id, "startDate", e.target.value)}
                           className="min-w-[150px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
                           type="date"
-                          value={entry.endDate}
-                          onChange={(e) => updatePostDocEntry(entry.id, "endDate", e.target.value)}
+                          value={formatDateForInput(entry.End_Date)}
+                          onChange={(e) => updatePostDocEntry(entry.Id, "endDate", e.target.value)}
                           className="min-w-[150px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
-                          value={entry.sponsoredBy}
-                          onChange={(e) => updatePostDocEntry(entry.id, "sponsoredBy", e.target.value)}
+                          value={entry?.SponsoredBy || ""}
+                          onChange={(e) => updatePostDocEntry(entry.Id, "sponsoredBy", e.target.value)}
                           className="min-w-[150px]"
                           placeholder="e.g., UGC, CSIR"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <Input
-                          value={entry.ranking}
-                          onChange={(e) => updatePostDocEntry(entry.id, "ranking", e.target.value)}
+                          value={entry?.QS_THE || ""}
+                          onChange={(e) => updatePostDocEntry(entry.Id, "ranking", e.target.value)}
                           className="min-w-[200px]"
                           placeholder="e.g., QS Ranking: 172"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Input
-                            value={entry.supportingDocument}
-                            onChange={(e) => updatePostDocEntry(entry.id, "supportingDocument", e.target.value)}
+                            value={entry?.doc || ""}
+                            onChange={(e) => updatePostDocEntry(entry.Id, "supportingDocument", e.target.value)}
                             className="min-w-[150px]"
                             placeholder="Document name"
+                            readOnly={!rowEditing}
                           />
                           <Button size="sm" variant="outline">
                             <Upload className="h-4 w-4" />
@@ -1256,12 +1436,30 @@ export default function ProfilePage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button variant="destructive" size="sm" onClick={() => removePostDocEntry(entry.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {!rowEditing ? (
+                            <>
+                              <Button size="sm" onClick={() => togglePostDocRowEdit(entry.Id)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="destructive" size="sm" onClick={() => removePostDocEntry(entry.Id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => togglePostDocRowEdit(entry.Id)}>
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => togglePostDocRowEdit(entry.Id)}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </div>
@@ -1299,160 +1497,122 @@ export default function ProfilePage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Sr No.</TableHead>
-                    <TableHead>Degree</TableHead>
                     <TableHead>Degree Type</TableHead>
-                    <TableHead>Institution</TableHead>
                     <TableHead>University</TableHead>
                     <TableHead>State</TableHead>
                     <TableHead>Year of Passing</TableHead>
-                    <TableHead>Percentage/CGPA</TableHead>
                     <TableHead>Specialization</TableHead>
+                    <TableHead>QS Ranking</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {educationData.map((entry, index) => (
-                    <TableRow key={entry.id}>
+                  {educationData.map((entry, index) => {
+                    const rowEditing = educationEditingIds.has(entry.gid);
+                    return (
+                    <TableRow key={entry.gid}>
                       <TableCell>{index + 1}</TableCell>
+                      
                       <TableCell>
                         <Select
-                          value={entry.degree}
-                          onValueChange={(value) => updateEducationEntry(entry.id, "degree", value)}
+                          value={entry.degree_type.toString()}
+                          onValueChange={(value) => updateEducationEntry(entry.gid, "degreeType", value)}
                         >
-                          <SelectTrigger className="min-w-[120px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Ph.D">Ph.D</SelectItem>
-                            <SelectItem value="M.Tech">M.Tech</SelectItem>
-                            <SelectItem value="M.Sc">M.Sc</SelectItem>
-                            <SelectItem value="M.A">M.A</SelectItem>
-                            <SelectItem value="M.Phil">M.Phil</SelectItem>
-                            <SelectItem value="MBA">MBA</SelectItem>
-                            <SelectItem value="B.Tech">B.Tech</SelectItem>
-                            <SelectItem value="B.E">B.E</SelectItem>
-                            <SelectItem value="B.Sc">B.Sc</SelectItem>
-                            <SelectItem value="B.A">B.A</SelectItem>
-                            <SelectItem value="B.Com">B.Com</SelectItem>
-                            <SelectItem value="BBA">BBA</SelectItem>
-                            <SelectItem value="Diploma">Diploma</SelectItem>
-                            <SelectItem value="12th">12th</SelectItem>
-                            <SelectItem value="10th">10th</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={entry.degreeType}
-                          onValueChange={(value) => updateEducationEntry(entry.id, "degreeType", value)}
-                        >
-                          <SelectTrigger className="min-w-[140px]">
+                          <SelectTrigger className={`min-w-[140px] ${!rowEditing ? "pointer-events-none" : ""}`}>
                             <SelectValue placeholder="Select type" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Post Graduate">Post Graduate</SelectItem>
-                            <SelectItem value="Graduate">Graduate</SelectItem>
-                            <SelectItem value="Diploma">Diploma</SelectItem>
-                            <SelectItem value="Higher Secondary">Higher Secondary</SelectItem>
-                            <SelectItem value="Secondary">Secondary</SelectItem>
+                            {degreeTypeOptions.map((degreeType) => (
+                              <SelectItem key={degreeType.id} value={degreeType.id.toString()}>
+                                {degreeType.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </TableCell>
+                 
                       <TableCell>
                         <Input
-                          value={entry.institution}
-                          onChange={(e) => updateEducationEntry(entry.id, "institution", e.target.value)}
+                          value={entry.university_name}
+                          onChange={(e) => updateEducationEntry(entry.gid, "university", e.target.value)}
                           className="min-w-[200px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
+                      <input
+                        type="text"
+                        value={entry?.state || ""}
+                        onChange={(e) => updateEducationEntry(entry.gid, "state", e.target.value)}
+                        className={`min-w-[140px] border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          !rowEditing ? "pointer-events-none bg-gray-100 text-gray-500" : ""
+                        }`}
+                        placeholder="Enter state"
+                      />
+                    </TableCell>
+
+                      <TableCell>
+                      <Input
+                        type="text"
+                        value={
+                          entry.year_of_passing
+                            ? new Date(entry.year_of_passing).getFullYear().toString()
+                            : ""
+                        }
+                        onChange={(e) => {
+                          const year = e.target.value.replace(/\D/g, "").slice(0, 4);
+                          updateEducationEntry(entry.gid, "year_of_passing", `${year}-01-01`);
+                        }}
+                        className="min-w-[120px]"
+                        placeholder="YYYY"
+                        readOnly={!rowEditing}
+                      />
+
+                      </TableCell>
+                     
+                      <TableCell>
                         <Input
-                          value={entry.university}
-                          onChange={(e) => updateEducationEntry(entry.id, "university", e.target.value)}
+                          value={entry?.subject || ""}
+                          onChange={(e) => updateEducationEntry(entry.gid, "specialization", e.target.value)}
                           className="min-w-[200px]"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
-                      <TableCell>
-                        <Select
-                          value={entry.state}
-                          onValueChange={(value) => updateEducationEntry(entry.id, "state", value)}
-                        >
-                          <SelectTrigger className="min-w-[140px]">
-                            <SelectValue placeholder="Select state" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Andhra Pradesh">Andhra Pradesh</SelectItem>
-                            <SelectItem value="Arunachal Pradesh">Arunachal Pradesh</SelectItem>
-                            <SelectItem value="Assam">Assam</SelectItem>
-                            <SelectItem value="Bihar">Bihar</SelectItem>
-                            <SelectItem value="Chhattisgarh">Chhattisgarh</SelectItem>
-                            <SelectItem value="Goa">Goa</SelectItem>
-                            <SelectItem value="Gujarat">Gujarat</SelectItem>
-                            <SelectItem value="Haryana">Haryana</SelectItem>
-                            <SelectItem value="Himachal Pradesh">Himachal Pradesh</SelectItem>
-                            <SelectItem value="Jharkhand">Jharkhand</SelectItem>
-                            <SelectItem value="Karnataka">Karnataka</SelectItem>
-                            <SelectItem value="Kerala">Kerala</SelectItem>
-                            <SelectItem value="Madhya Pradesh">Madhya Pradesh</SelectItem>
-                            <SelectItem value="Maharashtra">Maharashtra</SelectItem>
-                            <SelectItem value="Manipur">Manipur</SelectItem>
-                            <SelectItem value="Meghalaya">Meghalaya</SelectItem>
-                            <SelectItem value="Mizoram">Mizoram</SelectItem>
-                            <SelectItem value="Nagaland">Nagaland</SelectItem>
-                            <SelectItem value="Odisha">Odisha</SelectItem>
-                            <SelectItem value="Punjab">Punjab</SelectItem>
-                            <SelectItem value="Rajasthan">Rajasthan</SelectItem>
-                            <SelectItem value="Sikkim">Sikkim</SelectItem>
-                            <SelectItem value="Tamil Nadu">Tamil Nadu</SelectItem>
-                            <SelectItem value="Telangana">Telangana</SelectItem>
-                            <SelectItem value="Tripura">Tripura</SelectItem>
-                            <SelectItem value="Uttar Pradesh">Uttar Pradesh</SelectItem>
-                            <SelectItem value="Uttarakhand">Uttarakhand</SelectItem>
-                            <SelectItem value="West Bengal">West Bengal</SelectItem>
-                            <SelectItem value="Delhi">Delhi</SelectItem>
-                            <SelectItem value="Chandigarh">Chandigarh</SelectItem>
-                            <SelectItem value="Puducherry">Puducherry</SelectItem>
-                            <SelectItem value="Jammu and Kashmir">Jammu and Kashmir</SelectItem>
-                            <SelectItem value="Ladakh">Ladakh</SelectItem>
-                            <SelectItem value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</SelectItem>
-                            <SelectItem value="Dadra and Nagar Haveli and Daman and Diu">
-                              Dadra and Nagar Haveli and Daman and Diu
-                            </SelectItem>
-                            <SelectItem value="Lakshadweep">Lakshadweep</SelectItem>
-                            <SelectItem value="Other Country">Other Country</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
+
                       <TableCell>
                         <Input
-                          value={entry.yearOfPassing}
-                          onChange={(e) => updateEducationEntry(entry.id, "yearOfPassing", e.target.value)}
+                          value={entry?.QS_Ranking || ""}
+                          onChange={(e) => updateEducationEntry(entry.gid, "QS_Ranking", e.target.value)}
                           className="min-w-[120px]"
                           placeholder="YYYY"
+                          readOnly={!rowEditing}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          value={entry.percentage}
-                          onChange={(e) => updateEducationEntry(entry.id, "percentage", e.target.value)}
-                          className="min-w-[120px]"
-                          placeholder="85% or 8.5 CGPA"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={entry.specialization}
-                          onChange={(e) => updateEducationEntry(entry.id, "specialization", e.target.value)}
-                          className="min-w-[200px]"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="destructive" size="sm" onClick={() => removeEducationEntry(entry.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          {!rowEditing ? (
+                            <>
+                              <Button size="sm" onClick={() => toggleEducationRowEdit(entry.gid)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="destructive" size="sm" onClick={() => removeEducationEntry(entry.gid)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => toggleEducationRowEdit(entry.gid)}>
+                                <Save className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => toggleEducationRowEdit(entry.gid)}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )})}
                 </TableBody>
               </Table>
             </div>
@@ -1490,8 +1650,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2016-17"
-                    checked={formData.noInfoAY201617 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY201617", e.target.checked)}
+                    checked={teacherInfo?.NILL2016_17 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2016_17: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2016-17" className="text-sm font-normal">
@@ -1502,8 +1666,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2017-18"
-                    checked={formData.noInfoAY201718 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY201718", e.target.checked)}
+                    checked={teacherInfo?.NILL2017_18 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2017_18: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2017-18" className="text-sm font-normal">
@@ -1514,8 +1682,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2018-19"
-                    checked={formData.noInfoAY201819 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY201819", e.target.checked)}
+                    checked={teacherInfo?.NILL2018_19 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2018_19: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2018-19" className="text-sm font-normal">
@@ -1526,8 +1698,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2019-20"
-                    checked={formData.noInfoAY201920 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY201920", e.target.checked)}
+                    checked={teacherInfo?.NILL2019_20 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2019_20: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2019-20" className="text-sm font-normal">
@@ -1538,8 +1714,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2020-21"
-                    checked={formData.noInfoAY202021 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY202021", e.target.checked)}
+                    checked={teacherInfo?.NILL2020_21 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2020_21: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2020-21" className="text-sm font-normal">
@@ -1550,8 +1730,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2021-22"
-                    checked={formData.noInfoAY202122 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY202122", e.target.checked)}
+                    checked={teacherInfo?.NILL2021_22 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2021_22: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2021-22" className="text-sm font-normal">
@@ -1562,8 +1746,12 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2022-23"
-                    checked={formData.noInfoAY202223 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY202223", e.target.checked)}
+                    checked={teacherInfo?.NILL2022_23 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2022_23: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2022-23" className="text-sm font-normal">
@@ -1574,12 +1762,48 @@ export default function ProfilePage() {
                   <input
                     type="checkbox"
                     id="ay2023-24"
-                    checked={formData.noInfoAY202324 || false}
-                    onChange={(e) => handleCheckboxChange("noInfoAY202324", e.target.checked)}
+                    checked={teacherInfo?.NILL2023_24 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2023_24: e.target.checked});
+                      }
+                    }}
                     className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <Label htmlFor="ay2023-24" className="text-sm font-normal">
                     A.Y. 2023-24
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="ay2024-25"
+                    checked={teacherInfo?.NILL2024_25 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2024_25: e.target.checked});
+                      }
+                    }}
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <Label htmlFor="ay2024-25" className="text-sm font-normal">
+                    A.Y. 2024-25
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="ay2025-26"
+                    checked={teacherInfo?.NILL2025_26 || false}
+                    onChange={(e) => {
+                      if (teacherInfo) {
+                        setTeacherInfo({...teacherInfo, NILL2025_26: e.target.checked});
+                      }
+                    }}
+                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <Label htmlFor="ay2025-26" className="text-sm font-normal">
+                    A.Y. 2025-26
                   </Label>
                 </div>
               </div>

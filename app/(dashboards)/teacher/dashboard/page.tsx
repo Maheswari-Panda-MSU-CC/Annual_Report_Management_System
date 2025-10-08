@@ -36,6 +36,7 @@ export default function DashboardPage() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [quickCounts, setQuickCounts] = useState<any>({});
   const [researchSummary, setResearchSummary] =  useState<any>({});
+  const [researchIndexes, setResearchIndexes] = useState<any>({});
 
   // Quick actions
   const quickActions = [
@@ -75,6 +76,7 @@ export default function DashboardPage() {
         setRecentActivities(data.recentActivities || []);
         setQuickCounts(data.quickCounts || {});
         setResearchSummary(data.researchSummary || {});
+        setResearchIndexes(data.researchIndexes || {});
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
       } finally {
@@ -85,25 +87,7 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, [user]);
 
-  // Fetch research metrics (mocked)
-  useEffect(() => {
-    const fetchResearchMetrics = async () => {
-      setLoading(true);
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // simulate API call
-        setResearchMetrics({
-          scopus: { hIndex: 12, citations: 1340, documents: 45, coAuthors: 28 },
-          googleScholar: { hIndex: 15, i10Index: 18, citations: 1580, citationsLast5Years: 890 },
-        });
-      } catch (err) {
-        console.error("Error fetching research metrics:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    fetchResearchMetrics();
-  }, []);
 
   // Navigation handlers
   const handleStatClick = (href: string) => router.push(href);
@@ -241,21 +225,21 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">H-Index</span>
-                    <span className="text-lg font-bold text-orange-600">{researchMetrics.scopus.hIndex}</span>
+                    <span className="text-lg font-bold text-orange-600">{researchIndexes.H_INDEX}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">i10_INDEX</span>
+                    <span className="text-lg font-bold text-green-600">{researchIndexes.i10_INDEX}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Citations</span>
                     <span className="text-lg font-bold text-blue-600">
-                      {researchMetrics.scopus.citations.toLocaleString()}
+                      {researchIndexes.CITIATIONS}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Documents</span>
-                    <span className="text-lg font-bold text-green-600">{researchMetrics.scopus.documents}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Co-Authors</span>
-                    <span className="text-lg font-bold text-purple-600">{researchMetrics.scopus.coAuthors}</span>
+                    <span className="text-sm font-medium">Researcher Id</span>
+                    <span className="text-lg font-bold text-purple-600">{researchIndexes.RESEARCHER_ID}</span>
                   </div>
                 </div>
               )}
@@ -289,22 +273,22 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">H-Index</span>
-                    <span className="text-lg font-bold text-blue-600">{researchMetrics.googleScholar.hIndex}</span>
+                    <span className="text-lg font-bold text-blue-600">{researchIndexes.H_INDEX}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">i10-Index</span>
-                    <span className="text-lg font-bold text-green-600">{researchMetrics.googleScholar.i10Index}</span>
+                    <span className="text-lg font-bold text-green-600">{researchIndexes.i10_INDEX}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Citations</span>
                     <span className="text-lg font-bold text-orange-600">
-                      {researchMetrics.googleScholar.citations.toLocaleString()}
+                      {researchIndexes.CITIATIONS}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Citations (5 years)</span>
                     <span className="text-lg font-bold text-purple-600">
-                      {researchMetrics.googleScholar.citationsLast5Years.toLocaleString()}
+                      {researchIndexes.RESEARCHER_ID}
                     </span>
                   </div>
                 </div>

@@ -2,20 +2,38 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
 
-export async function GET() {
+// GET /api/shared/dropdown/department?fid=123
+export async function GET(request: Request) {
   try {
-    // Connect to SQL Server
+    const { searchParams } = new URL(request.url);
+    const fidParam = searchParams.get('fid');
+
+    if (!fidParam) {
+      return NextResponse.json(
+        { error: 'Missing required query parameter: fid' },
+        { status: 400 }
+      );
+    }
+
+    const fid = Number(fidParam);
+    if (Number.isNaN(fid)) {
+      return NextResponse.json(
+        { error: 'Invalid fid. It must be a number.' },
+        { status: 400 }
+      );
+    }
+
     const pool = await connectToDatabase();
 
-    // Execute the stored procedure
-    const result = await pool.request().execute('sp_GetAllDepartments');
+    // Execute the stored procedure with @Fid input
+    const result = await pool
+      .request()
+      .input('Fid', sql.Int, fid)
+      .execute('sp_GetDepartmentsByFacultyId');
 
-    // Extract the recordset
     const departments = result.recordset ?? [];
 
-    // Return JSON response
     return NextResponse.json({ departments });
-
   } catch (err) {
     console.error('Error fetching departments:', err);
     return NextResponse.json(
@@ -24,3 +42,6 @@ export async function GET() {
     );
   }
 }
+
+// Note: legacy GET without fid has been removed in favor of fid-based fetching
+

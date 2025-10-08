@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import crypto from "crypto";
 
 // POST: Login and set cookie
 export async function POST(request: Request) {
@@ -26,7 +27,8 @@ export async function POST(request: Request) {
     }
 
     // Compare provided password with hashed password
-    const passwordMatch = await bcrypt.compare(password, user.password_hash?.trim());
+    const passwordMatch = await verifyPassword(password,user.password_hash,user.email_id);
+    // const passwordMatch = await bcrypt.compare(password, user.password_hash?.trim());
 
     // console.log(password);
     // console.log(user.password_hash);
@@ -157,4 +159,42 @@ export async function DELETE() {
   });
   
   return response;
+}
+
+
+// // PBKDF2 validation
+function validatePBKDF2(password:any ,storedHash:any) {
+  const [iterationsStr, saltB64, hashB64] = storedHash.split(":");
+  const iterations = parseInt(iterationsStr, 10);
+  const salt = Buffer.from(saltB64, "base64");
+  const storedHashBuffer = Buffer.from(hashB64, "base64");
+
+  const derived = crypto.pbkdf2Sync(password, salt, iterations, storedHashBuffer.length, "sha1");
+  return crypto.timingSafeEqual(storedHashBuffer, derived);
+}
+
+// Login logic
+async function verifyPassword(password:any, hashedPassword:any, email:string) {
+  if (hashedPassword.startsWith("$2")) {
+    // bcrypt
+    return await bcrypt.compare(password, hashedPassword);
+  } else if (hashedPassword.includes(":")) {
+    // old PBKDF2
+    const valid = validatePBKDF2(password, hashedPassword);
+    if (valid) {
+      // rehash and update to bcrypt
+      const newHash = await bcrypt.hash(password, 10);
+
+      // Update password in DB
+      const pool = await connectToDatabase();
+      await pool
+        .request()
+        .input('Email_Id', email)
+        .input('Password_Hash', newHash)
+        .execute('sp_UpdateLoginDetailsPassword_ByEmail');
+
+    }
+    return valid;
+  }
+  return false;
 }

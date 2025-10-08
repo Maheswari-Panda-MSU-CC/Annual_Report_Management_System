@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       .execute('sp_GetTeacherBioData');
 
     const recordsets = result.recordsets as any[][];
-
+ 
     // Flatten recordsets into meaningful keys
     const response = {
         teacherInfo: recordsets?.[0]?.[0] ?? null,       
