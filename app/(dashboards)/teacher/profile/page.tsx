@@ -14,33 +14,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText } from "lucide-react"
-import { TeacherInfo,ExperienceEntry,PostDocEntry,EducationEntry, TeacherData, Faculty, Department, Designation } from "@/types/interfaces"
+import { TeacherInfo,ExperienceEntry,PostDocEntry,EducationEntry, TeacherData, Faculty, Department, Designation,FacultyOption,DepartmentOption,DesignationOption,DegreeTypeOption } from "@/types/interfaces"
 
-// Dropdown data interfaces
-interface DropdownOption {
-  id: number
-  name: string
-}
 
-interface FacultyOption {
-  Fid: number
-  Fname: string
-}
-
-interface DepartmentOption {
-  Deptid: number
-  name: string
-}
-
-interface DesignationOption {
-  id: number
-  name: string
-}
-
-interface DegreeTypeOption {
-  id: number
-  name: string
-}
 
 // Utility function to format dates for HTML date inputs
 const formatDateForInput = (dateString: string | null | undefined): string => {
@@ -674,9 +650,9 @@ export default function ProfilePage() {
 
                 <div className="relative">
                   <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
-                    {profileImage ? (
+                    {teacherInfo?.ProfileImage ? (
                       <img
-                        src={profileImage || "/placeholder.svg"}
+                        src={teacherInfo?.ProfileImage || "/placeholder.svg"}
                         alt="Profile"
                         className="w-full h-full object-cover"
                       />

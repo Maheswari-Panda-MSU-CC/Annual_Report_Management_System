@@ -1,6 +1,8 @@
 import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
 
+// #region Profile Data get
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -46,3 +48,11 @@ export async function GET(request: Request) {
     });
   }
 }
+
+//#endregion
+
+//#region - Update Profile Data
+
+
+
+//#endregion

@@ -39,78 +39,85 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
-  const pathname = usePathname()
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    // Only check for existing session if not on login page
-    if (pathname !== "/login") {
-      const savedUser = localStorage.getItem("user")
-      if (savedUser) {
-        try {
-          const parsedUser = JSON.parse(savedUser)
-          setUser(parsedUser)
-        } catch (error) {
-          console.error("Error parsing saved user:", error)
-          localStorage.removeItem("user")
-        }
+    // Run once on mount to restore user
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error("Error parsing saved user:", error);
+        localStorage.removeItem("user");
       }
     }
-    setIsLoading(false)
-  }, [pathname])
-
+    setIsLoading(false);
+  }, []); // ✅ run only once, not on every pathname change
+  
   // Handle redirects for protected routes
   useEffect(() => {
-    if (!isLoading && !user && pathname !== "/login" && !pathname.startsWith("/(auth)")) {
-      router.replace("/login")
+    if (isLoading) return; // wait until session check finishes
+  
+    // Do not redirect if already on login page
+    if (pathname === "/login" || pathname.startsWith("/(auth)")) return;
+  
+    // If still no user after checking storage, redirect to login
+    if (!user) {
+      router.replace("/login");
     }
-  }, [user, isLoading, pathname, router])
-
+  }, [user, isLoading, pathname, router]);
+  
   const login = async (email: string, password: string): Promise<LoginResponse> => {
     const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
-
+  
     if (!response.ok) {
       return {
         success: false,
         message: "Login failed",
       };
     }
-
+  
     const data = await response.json();
-
     const { user } = data;
-
+  
     // Save user in state and localStorage
+    localStorage.setItem("user", JSON.stringify(user));
     setUser(user);
-    localStorage.setItem('user', JSON.stringify(user));
-
+  
     // Redirect based on user_type
-    let redirectPath = '/teacher/dashboard';
-
+    let redirectPath = "/teacher/dashboard";
     switch (user.user_type) {
       case 1:
-        redirectPath = '/admin/dashboard';
+        redirectPath = "/admin/dashboard";
         break;
       case 2:
-        redirectPath = '/faculty/dashboard';
+        redirectPath = "/faculty/dashboard";
         break;
       case 3:
-        redirectPath = '/department/dashboard';
+        redirectPath = "/department/dashboard";
         break;
       case 4:
-        redirectPath = '/teacher/dashboard';
+        redirectPath = "/teacher/dashboard";
         break;
     }
-
-    router.push(redirectPath);
+  
+    //  Wait a tick before pushing route (to ensure state updates)
+    setTimeout(() => {
+      router.push(redirectPath);
+    }, 50);
+  
     return data;
-  }
+  };
+  
 
   const logout = () => {
     setUser(null)

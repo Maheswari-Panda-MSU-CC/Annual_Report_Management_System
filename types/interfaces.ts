@@ -119,3 +119,29 @@ export interface TeacherInfo {
     graduationDetails: EducationEntry[]
   }
   
+
+  // Dropdown data interfaces
+export interface DropdownOption {
+  id: number
+  name: string
+}
+
+export interface FacultyOption {
+  Fid: number
+  Fname: string
+}
+
+export interface DepartmentOption {
+  Deptid: number
+  name: string
+}
+
+export interface DesignationOption {
+  id: number
+  name: string
+}
+
+export interface DegreeTypeOption {
+  id: number
+  name: string
+}
