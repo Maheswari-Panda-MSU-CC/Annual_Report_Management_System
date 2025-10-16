@@ -50,7 +50,7 @@ const initialSampleData = {
       inOldUgcList: false,
       approxPrice: "2500",
       currency: "USD",
-      supportingDocument: ["article_recommendation.pdf"],
+      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
     },
   ],
   books: [
@@ -70,7 +70,7 @@ const initialSampleData = {
       digitalMedia: "USB Drive",
       approxPrice: "150",
       currency: "USD",
-      supportingDocument: ["book_recommendation.pdf"],
+      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
     },
   ],
   magazines: [
@@ -87,7 +87,7 @@ const initialSampleData = {
       issuesPerYear: "12",
       approxPrice: "120",
       currency: "USD",
-      supportingDocument: ["magazine_recommendation.pdf"],
+      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
     },
   ],
   technical: [
@@ -101,7 +101,7 @@ const initialSampleData = {
       issuesPerYear: "4",
       approxPrice: "200",
       currency: "USD",
-      supportingDocument: ["technical_report.pdf"],
+      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
     },
   ],
 }

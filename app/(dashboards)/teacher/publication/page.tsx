@@ -184,7 +184,7 @@ function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", mult
       <div className="mt-4">
         <label htmlFor="file-upload" className="cursor-pointer">
           <span className="mt-2 block text-sm font-medium text-gray-900">Upload files or drag and drop</span>
-          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, PNG up to 10MB each</span>
+          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, PNG up to 1MB each</span>
         </label>
         <input
           id="file-upload"

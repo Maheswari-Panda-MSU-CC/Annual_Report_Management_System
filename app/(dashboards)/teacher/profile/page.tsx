@@ -15,6 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText } from "lucide-react"
 import { TeacherInfo,ExperienceEntry,PostDocEntry,EducationEntry, TeacherData, Faculty, Department, Designation,FacultyOption,DepartmentOption,DesignationOption,DegreeTypeOption } from "@/types/interfaces"
+import { toast } from "@/components/ui/use-toast"
+import { number } from "zod"
 
 
 
@@ -382,12 +384,14 @@ export default function ProfilePage() {
   }, [selectedFacultyId])
   
 
-  const handleInputChange = (field: string, value: string) => {
-    setEditingData((prev) => ({
-      ...prev,
+  const handleInputChange = <K extends keyof TeacherInfo>(field: K, value: TeacherInfo[K]) => {
+    setTeacherInfo(prev => ({
+      ...(prev || {}), // fallback if prev is null
       [field]: value,
-    }))
-  }
+    } as TeacherInfo));
+  };
+  
+  
 
   const handleCheckboxChange = (field: string, checked: boolean) => {
     setEditingData((prev) => ({
@@ -531,16 +535,44 @@ export default function ProfilePage() {
     fileInput?.click()
   }
 
-  const handleSavePersonal = () => {
-    // Build ICT_Details string from selections
-    const newIctDetails = buildIctDetails(editingData)
-    console.log("Saving personal data:", { ...editingData, ICT_Details: newIctDetails })
-    // Typically send to API here
-    if (teacherInfo) {
-      setTeacherInfo({ ...teacherInfo, ICT_Details: newIctDetails })
+  // const handleSavePersonal = () => {
+  //   // Build ICT_Details string from selections
+  //   const newIctDetails = buildIctDetails(editingData)
+  //   console.log("Saving personal data:", { ...editingData, ICT_Details: newIctDetails })
+  //   // Typically send to API here
+  //   if (teacherInfo) {
+  //     setTeacherInfo({ ...teacherInfo, ICT_Details: newIctDetails })
+  //   }
+  //   setIsEditingPersonal(false)
+  // }
+
+  const handleSavePersonal = async () => {
+    try {
+      const response = await fetch("/api/teacher/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(teacherInfo), // your state
+      });
+  
+      const result = await response.json();
+  
+      if (result.success) {
+        toast({
+          title: "Profile Updated",
+          description: "Your information has been saved successfully.",
+        });
+      } else {
+        toast({
+          title: "Update Failed",
+          description: result.error || "Something went wrong.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Save error:", error);
     }
-    setIsEditingPersonal(false)
-  }
+  };
+  
 
   const handleCancelPersonal = () => {
     setIsEditingPersonal(false)
@@ -704,7 +736,7 @@ export default function ProfilePage() {
                     <Label htmlFor="salutation">Salutation</Label>
                     <Select
                       value={teacherInfo?.Abbri}
-                      onValueChange={(value) => handleInputChange("salutation", value)}
+                      onValueChange={(value:any) => handleInputChange("Abbri", value)}
                     >
                       <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
                         <SelectValue />
@@ -725,16 +757,20 @@ export default function ProfilePage() {
                     <Input
                       id="firstName"
                       value={teacherInfo?.fname || ""}
-                      onChange={(e) => handleInputChange("firstName", e.target.value)}
+                      onChange={(e) => {handleInputChange("fname", e.target.value) 
+                        console.log(e.target.value);
+                        console.log(isEditingPersonal);
+                      }}
                       readOnly={!isEditingPersonal}
                     />
+                    
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="middleName">Middle Name</Label>
                     <Input
                       id="middleName"
                       value={teacherInfo?.mname || ""}
-                      onChange={(e) => handleInputChange("middleName", e.target.value)}
+                      onChange={(e) => handleInputChange("mname", e.target.value)}
                       readOnly={!isEditingPersonal}
                     />
                   </div>
@@ -743,7 +779,7 @@ export default function ProfilePage() {
                     <Input
                       id="lastName"
                       value={teacherInfo?.lname || ""}
-                      onChange={(e) => handleInputChange("lastName", e.target.value)}
+                      onChange={(e) => handleInputChange("lname", e.target.value)}
                       readOnly={!isEditingPersonal}
                     />
                   </div>
@@ -757,7 +793,7 @@ export default function ProfilePage() {
                       id="email"
                       type="email"
                       value={teacherInfo?.email_id || ""}
-                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      onChange={(e) => handleInputChange("email_id", e.target.value)}
                       readOnly={!isEditingPersonal}
                     />
                   </div>
@@ -765,8 +801,9 @@ export default function ProfilePage() {
                     <Label htmlFor="phone">Phone Number</Label>
                     <Input
                       id="phone"
-                      value={teacherInfo?.phone_no?.toString() || ""}
-                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      type="number"
+                      value={teacherInfo?.phone_no || ""}
+                      onChange={(e) => handleInputChange("phone_no", Number(e.target.value))}
                       readOnly={!isEditingPersonal}
                     />
                   </div>
@@ -783,7 +820,7 @@ export default function ProfilePage() {
                         id="dateOfBirth"
                         type="date"
                         value={formatDateForInput(teacherInfo?.DOB)}
-                        onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                        onChange={(e) => handleInputChange("DOB", e.target.value)}
                         readOnly={!isEditingPersonal}
                       />
                     </div>
@@ -793,7 +830,7 @@ export default function ProfilePage() {
                         id="dateOfJoining"
                         type="date"
                         value={formatDateForInput(teacherInfo?.recruit_date)}
-                        onChange={(e) => handleInputChange("dateOfJoining", e.target.value)}
+                        onChange={(e) => handleInputChange("recruit_date", e.target.value)}
                         readOnly={!isEditingPersonal}
                       />
                     </div>
@@ -802,7 +839,7 @@ export default function ProfilePage() {
                       <Input
                         id="panNo"
                         value={teacherInfo?.PAN_No || ""}
-                        onChange={(e) => handleInputChange("panNo", e.target.value)}
+                        onChange={(e) => handleInputChange("PAN_No", e.target.value)}
                         readOnly={!isEditingPersonal}
                         placeholder="ABCDE1234F"
                         maxLength={10}
@@ -819,7 +856,7 @@ export default function ProfilePage() {
                       <Label htmlFor="teachingStatus">Teaching Status</Label>
                       <Select
                         value={teacherInfo?.desig_perma ? "Permanent" : "Tenured"} // Default selection
-                        onValueChange={(value) => {
+                        onValueChange={(value:any) => {
                           // Update teaching status in teacherInfo
                           if (teacherInfo) {
                             setTeacherInfo({
@@ -830,10 +867,10 @@ export default function ProfilePage() {
                           }
 
                           // Reset designation when teaching status changes
-                          handleInputChange("designation", "");
+                          handleInputChange("desig_perma",value);
 
                           // Optional: if you also store teachingStatus separately
-                          handleInputChange("teachingStatus", value);
+                          handleInputChange("desig_perma", value);
                         }}
                       >
                         <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
@@ -856,7 +893,7 @@ export default function ProfilePage() {
                       <Label htmlFor="designation">Designation</Label>
                       <Select
                         value={designationData?.id?.toString() || ""}
-                        onValueChange={(value) => handleInputChange("designation", value)}
+                        onValueChange={(value:any) => handleInputChange("desig_perma", value)}
                       >
                         <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
                           <SelectValue placeholder="Select designation" />
@@ -884,12 +921,12 @@ export default function ProfilePage() {
                       <Label htmlFor="faculty">Faculty</Label>
                       <Select
                         value={(selectedFacultyId ?? facultyData?.Fid)?.toString() || ""}
-                        onValueChange={(value) => {
-                          handleInputChange("faculty", value)
+                        onValueChange={(value:any) => {
+                          // handleInputChange("Fid", value)
                           const fidNum = Number(value)
                           setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
                           // Reset selected department when faculty changes
-                          handleInputChange("department", "")
+                          handleInputChange("deptid", 0)
                           setDepartmentData(null)
                         }}
                       >
@@ -911,7 +948,7 @@ export default function ProfilePage() {
                       <Label htmlFor="department">Department</Label>
                       <Select
                         value={departmentData?.Deptid?.toString() || ""}
-                        onValueChange={(value) => handleInputChange("department", value)}
+                        onValueChange={(value:any) => handleInputChange("deptid", value)}
                       >
                         <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
                           <SelectValue placeholder="Select department" />
@@ -937,8 +974,8 @@ export default function ProfilePage() {
                         <Label>Qualified NET Exam</Label>
                         <RadioGroup
                           value={teacherInfo?.NET ? "yes" : "no"}
-                          onValueChange={(value) =>
-                            handleInputChange("netQualified", value === "yes" ? "true" : "false")
+                          onValueChange={(value:any) =>
+                            handleInputChange("NET", value === "yes" ? true : false)
                           }
                           className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                         >
@@ -959,7 +996,7 @@ export default function ProfilePage() {
                             <Input
                               id="netYear"
                               value={teacherInfo?.NET_year?.toString() || ""}
-                              onChange={(e) => handleInputChange("netYear", e.target.value)}
+                              onChange={(e) => handleInputChange("NET_year", Number(e.target.value))}
                               readOnly={!isEditingPersonal}
                             />
                           </div>
@@ -973,8 +1010,8 @@ export default function ProfilePage() {
                         <Label>Qualified GATE Exam</Label>
                         <RadioGroup
                           value={teacherInfo?.GATE ? "yes" : "no"}
-                          onValueChange={(value) =>
-                            handleInputChange("gateQualified", value === "yes" ? "true" : "false")
+                          onValueChange={(value:any) =>
+                            handleInputChange("GATE", value === "yes" ? true : false)
                           }
                           className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                         >
@@ -994,8 +1031,8 @@ export default function ProfilePage() {
                             <Label htmlFor="gateYear">GATE Qualified Year</Label>
                             <Input
                               id="gateYear"
-                              value={teacherInfo?.GATE_year?.toString() || ""}
-                              onChange={(e) => handleInputChange("gateYear", e.target.value)}
+                              value={teacherInfo?.GATE_year || 0}
+                              onChange={(e) => handleInputChange("GATE_year", Number(e.target.value))}
                               readOnly={!isEditingPersonal}
                               placeholder="e.g., 2018"
                             />
@@ -1014,8 +1051,8 @@ export default function ProfilePage() {
                     <Label>Registered Guide at MSU</Label>
                     <RadioGroup
                       value={teacherInfo?.PHDGuide ? "yes" : "no"}
-                      onValueChange={(value) =>
-                        handleInputChange("registeredGuide", value === "yes" ? "true" : "false")
+                      onValueChange={(value:any) =>
+                        handleInputChange("PHDGuide", value === "yes" ? true : false)
                       }
                       className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                     >
@@ -1034,8 +1071,8 @@ export default function ProfilePage() {
                       <Label htmlFor="registrationYear">Year of Registration</Label>
                       <Input
                         id="registrationYear"
-                        value={teacherInfo?.Guide_year?.toString() || ""}
-                        onChange={(e) => handleInputChange("registrationYear", e.target.value)}
+                        value={teacherInfo?.Guide_year || 0}
+                        onChange={(e) => handleInputChange("Guide_year", Number(e.target.value))}
                         readOnly={!isEditingPersonal}
                       />
                     </div>
@@ -1053,7 +1090,7 @@ export default function ProfilePage() {
                           type="checkbox"
                           id="smartBoard"
                           checked={editingData.ictSmartBoard}
-                          onChange={(e) => handleCheckboxChange("ictSmartBoard", e.target.checked)}
+                          onChange={(e:any) => handleCheckboxChange("ictSmartBoard", e.target.checked)}
                           className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="smartBoard" className="text-sm font-normal">
@@ -1065,7 +1102,7 @@ export default function ProfilePage() {
                           type="checkbox"
                           id="powerPoint"
                           checked={editingData.ictPowerPoint}
-                          onChange={(e) => handleCheckboxChange("ictPowerPoint", e.target.checked)}
+                          onChange={(e:any) => handleCheckboxChange("ictPowerPoint", e.target.checked)}
                           className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="powerPoint" className="text-sm font-normal">
@@ -1077,7 +1114,7 @@ export default function ProfilePage() {
                           type="checkbox"
                           id="ictTools"
                           checked={editingData.ictTools}
-                          onChange={(e) => handleCheckboxChange("ictTools", e.target.checked)}
+                          onChange={(e:any) => handleCheckboxChange("ictTools", e.target.checked)}
                           className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="ictTools" className="text-sm font-normal">
@@ -1089,7 +1126,7 @@ export default function ProfilePage() {
                           type="checkbox"
                           id="eLearningTools"
                           checked={editingData.ictELearningTools}
-                          onChange={(e) => handleCheckboxChange("ictELearningTools", e.target.checked)}
+                          onChange={(e:any) => handleCheckboxChange("ictELearningTools", e.target.checked)}
                           className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="eLearningTools" className="text-sm font-normal">
@@ -1101,7 +1138,7 @@ export default function ProfilePage() {
                           type="checkbox"
                           id="onlineCourse"
                           checked={editingData.ictOnlineCourse}
-                          onChange={(e) => handleCheckboxChange("ictOnlineCourse", e.target.checked)}
+                          onChange={(e:any) => handleCheckboxChange("ictOnlineCourse", e.target.checked)}
                           className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
                         />
                         <Label htmlFor="onlineCourse" className="text-sm font-normal">
@@ -1127,7 +1164,7 @@ export default function ProfilePage() {
                         <Input
                           id="otherIctTools"
                           value={editingData.ictOthersSpecify}
-                          onChange={(e) => handleInputChange("ictOthersSpecify", e.target.value)}
+                          // onChange={(e) => handleInputChange("ictOthersSpecify", e.target.value)}
                           placeholder="Please specify other ICT tools used..."
                           readOnly={!isEditingPersonal}
                           className="max-w-md"
@@ -1201,7 +1238,7 @@ export default function ProfilePage() {
                       <TableCell>
                         <Select
                           value={entry.currente ? "yes" : "no"}
-                          onValueChange={(value) =>
+                          onValueChange={(value:any) =>
                             updateExperienceEntry(entry.Id, "currentlyEmployed", value === "yes")
                           }
                         >
@@ -1243,7 +1280,7 @@ export default function ProfilePage() {
                       <TableCell>
                         <Select
                           value={entry.Nature}
-                          onValueChange={(value) => updateExperienceEntry(entry.Id, "natureOfJob", value)}
+                          onValueChange={(value:any) => updateExperienceEntry(entry.Id, "natureOfJob", value)}
                         >
                           <SelectTrigger className={`min-w-[150px] ${!rowEditing ? "pointer-events-none" : ""}`}>
                             <SelectValue />
@@ -1261,7 +1298,7 @@ export default function ProfilePage() {
                       <TableCell>
                         <Select
                           value={entry?.UG_PG || ""}
-                          onValueChange={(value) =>
+                          onValueChange={(value:any) =>
                             updateExperienceEntry(entry.Id, "typeOfTeaching", value)
                           }
                         >
@@ -1488,11 +1525,11 @@ export default function ProfilePage() {
                     return (
                     <TableRow key={entry.gid}>
                       <TableCell>{index + 1}</TableCell>
-                      
+                       
                       <TableCell>
                         <Select
                           value={entry.degree_type.toString()}
-                          onValueChange={(value) => updateEducationEntry(entry.gid, "degreeType", value)}
+                          onValueChange={(value:any) => updateEducationEntry(entry.gid, "degreeType", value)}
                         >
                           <SelectTrigger className={`min-w-[140px] ${!rowEditing ? "pointer-events-none" : ""}`}>
                             <SelectValue placeholder="Select type" />
