@@ -8,7 +8,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const teacherId = parseInt(searchParams.get('teacherId') || '', 10);
 
-    if (isNaN(teacherId)) {
+    if (isNaN(teacherId) || teacherId===0) {
       return new Response(JSON.stringify({ error: 'Invalid or missing teacherId' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },

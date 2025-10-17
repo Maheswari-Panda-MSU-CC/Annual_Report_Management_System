@@ -1,18 +1,37 @@
 import { connectToDatabase } from '@/lib/db';
-import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+
+// Legacy PBKDF2 parameters to match existing hashes
+const PBKDF2_ITERATIONS = 1000;
+const SALT_BYTE_SIZE = 48;
+const HASH_BYTE_SIZE = 48;
+const PBKDF2_DIGEST = 'sha1';
+
+function hashPasswordPBKDF2(password: string): string {
+  const salt = crypto.randomBytes(SALT_BYTE_SIZE);
+  const hash = crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, HASH_BYTE_SIZE, PBKDF2_DIGEST);
+  return `${PBKDF2_ITERATIONS}:${salt.toString('base64')}:${hash.toString('base64')}`;
+}
 
 export async function POST(request: Request) {
   try {
-    const { email,userType,password } = await request.json();
-    if (!email || !password || userType === undefined) {
+    const { email,password,user_type } = await request.json();
+    if (!email || !password || user_type === undefined) {
       return new Response(JSON.stringify({ error: 'Email, password, and user_type are required.' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Hash the password before storing
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (typeof password !== 'string' || password.length < 8) {
+      return new Response(JSON.stringify({ error: 'Password must be at least 8 characters long.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Hash the password using legacy PBKDF2 format
+    const hashedPassword = hashPasswordPBKDF2(password);
 
     const pool = await connectToDatabase();
     try {
@@ -20,7 +39,7 @@ export async function POST(request: Request) {
         .request()
         .input('Email_Id', email)
         .input('Password_Hash', hashedPassword)
-        .input('User_Type', userType)
+        .input('User_Type', user_type)
         .execute('sp_Insert_Login_Details');
     } catch (err) {
       // Check for duplicate email error

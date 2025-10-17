@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -11,101 +11,61 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft, Mail, Lock, CheckCircle, AlertCircle, KeyRound } from "lucide-react"
 
 export default function ChangePasswordPage() {
   const router = useRouter()
-  const [otpToken, setOtpToken] = useState<string>("")
-  const [step, setStep] = useState(1) // 1: Email, 2: Verification, 3: New Password
-  const [formData, setFormData] = useState({
-    email: "",
-    verificationCode: "",
-    newPassword: "",
-    confirmPassword: "",
-  })
+  const searchParams = useSearchParams()
+  const token = useMemo(() => searchParams.get("token"), [searchParams])
+  const { toast } = useToast()
+
+  const [email, setEmail] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
+  useEffect(() => {
     setError("")
-  }
+  }, [token])
 
-  const handleSendVerificationOTP = async (e: React.FormEvent) => {
+  const handleSendResetLink = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
     setSuccess("")
   
     try {
-      const res = await fetch("/api/auth/send-otp", {
+      const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: formData.email }),
+        body: JSON.stringify({ email }),
       })
   
       const data = await res.json()
-      setOtpToken(data.otpToken);
-  
       if (!res.ok) {
-        throw new Error(data.error || "Failed to send OTP.")
+        throw new Error(data.error || "Failed to send reset link.")
       }
   
-      setSuccess("Verification code sent to your email address!")
-      setStep(2)
+      setSuccess("Reset link sent to your email address. It expires in 5 minutes.")
+      toast({
+        title: "Email Sent",
+        description: "Check your inbox for the password reset link.",
+      })
     } catch (err: any) {
-      setError(err.message || "Something went wrong while sending the OTP.")
+      const message = err.message || "Something went wrong while sending the reset link."
+      setError(message)
+      toast({
+        title: "Failed to send reset link",
+        description: message,
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
- 
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError("")
-    setSuccess("")
-  
-    if (!formData.verificationCode) {
-      setError("Please enter the verification code")
-      setIsLoading(false)
-      return
-    }
-  
-    try {
-      const res = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          otp: formData.verificationCode,
-          otpToken: otpToken, 
-        }),
-      })
-  
-      const data = await res.json()
-  
-      if (!res.ok) {
-        throw new Error(data.error || "OTP verification failed")
-      }
-  
-      setSuccess("Verification successful! Please enter your new password.")
-      setStep(3)
-    } catch (err: any) {
-      setError(err.message || "Verification failed. Please try again.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-  
-  
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -113,19 +73,19 @@ export default function ChangePasswordPage() {
     setError("")
 
     // Validation
-    if (!formData.newPassword || !formData.confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       setError("Please fill in all password fields")
       setIsLoading(false)
       return
     }
 
-    if (formData.newPassword.length < 8) {
+    if (newPassword.length < 8) {
       setError("Password must be at least 8 characters long")
       setIsLoading(false)
       return
     }
 
-    if (formData.newPassword !== formData.confirmPassword) {
+    if (newPassword !== confirmPassword) {
       setError("Passwords do not match")
       setIsLoading(false)
       return
@@ -133,42 +93,47 @@ export default function ChangePasswordPage() {
 
     try {
       const res = await fetch("/api/auth/change-password", {
-        method: "POST",
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email: formData.email,
-          newPassword: formData.newPassword,
-        }),
+        body: JSON.stringify({ token, newPassword }),
       })
 
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to change password.")
+      }
+
       setSuccess("Password changed successfully! Redirecting to login...")
+      toast({
+        title: "Password Updated",
+        description: "You can now sign in with your new password.",
+      })
 
       // Redirect after success
       setTimeout(() => {
-        router.push("/teacher/dashboard")
+        router.push("/login")
       }, 2000)
-    } catch (err) {
-      setError("Failed to change password. Please try again.")
+    } catch (err: any) {
+      const message = err.message || "Failed to change password. Please try again."
+      setError(message)
+      toast({
+        title: "Password Update Failed",
+        description: message,
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleBack = () => {
-    if (step === 1) {
-      router.push("/teacher/dashboard")
-    } else {
-      setStep(step - 1)
-    }
-  }
+  const handleBack = () => router.push("/login")
 
   const renderStepContent = () => {
-    switch (step) {
-      case 1:
+    if (!token) {
         return (
-          <form onSubmit={handleSendVerificationOTP} className="space-y-6">
+          <form onSubmit={handleSendResetLink} className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                 Email Address
@@ -178,15 +143,15 @@ export default function ChangePasswordPage() {
                 <Input
                   id="email"
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email address"
                   required
                   disabled={isLoading}
                   className="pl-10 h-12 text-base border-gray-300 focus:border-primary focus:ring-primary"
                 />
               </div>
-              <p className="text-sm text-muted-foreground">We'll send a verification code to this email address</p>
+              <p className="text-sm text-muted-foreground">We'll send a password reset link to this email address</p>
             </div>
 
             <Button
@@ -197,68 +162,20 @@ export default function ChangePasswordPage() {
               {isLoading ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
-                  Sending...
+                  Sending link...
                 </>
               ) : (
                 <>
                   <Mail className="mr-2 h-4 w-4" />
-                  Send Verification Code
+                  Send Reset Link
                 </>
               )}
             </Button>
           </form>
         )
+    }
 
-      case 2:
-        return (
-          <form onSubmit={handleVerifyOTP} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="verificationCode" className="text-sm font-medium text-gray-700">
-                Verification Code
-              </Label>
-              <Input
-                id="verificationCode"
-                type="text"
-                value={formData.verificationCode}
-                onChange={(e) => handleInputChange("verificationCode", e.target.value)}
-                placeholder="Enter 6-digit verification code"
-                maxLength={6}
-                required
-                disabled={isLoading}
-                className="text-center text-lg tracking-widest h-12 border-gray-300 focus:border-primary focus:ring-primary"
-              />
-              <p className="text-sm text-muted-foreground">Check your email for the verification code</p>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleBack}
-                disabled={isLoading}
-                className="flex-1 h-12 bg-transparent"
-              >
-                Back
-              </Button>
-              <Button type="submit" className="flex-1 h-12 bg-primary hover:bg-primary/90" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
-                    Verifying...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Verify Code
-                  </>
-                )}
-              </Button>
-            </div>
-          </form>
-        )
-
-      case 3:
-        return (
+    return (
           <form onSubmit={handleChangePassword} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
@@ -270,8 +187,8 @@ export default function ChangePasswordPage() {
                   <Input
                     id="newPassword"
                     type="password"
-                    value={formData.newPassword}
-                    onChange={(e) => handleInputChange("newPassword", e.target.value)}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Enter new password"
                     required
                     disabled={isLoading}
@@ -290,8 +207,8 @@ export default function ChangePasswordPage() {
                   <Input
                     id="confirmPassword"
                     type="password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Confirm new password"
                     required
                     disabled={isLoading}
@@ -327,36 +244,16 @@ export default function ChangePasswordPage() {
             </div>
           </form>
         )
-
-      default:
-        return null
-    }
   }
 
   const getStepTitle = () => {
-    switch (step) {
-      case 1:
-        return "Reset Your Password"
-      case 2:
-        return "Enter Verification Code"
-      case 3:
-        return "Set New Password"
-      default:
-        return "Change Password"
-    }
+    if (!token) return "Reset Your Password"
+    return "Set New Password"
   }
 
   const getStepDescription = () => {
-    switch (step) {
-      case 1:
-        return "Enter your email address and we'll send you a verification code to reset your password"
-      case 2:
-        return "Enter the 6-digit verification code sent to your email"
-      case 3:
-        return "Create a new secure password for your account"
-      default:
-        return "Follow the steps to change your password securely"
-    }
+    if (!token) return "Enter your email address and we'll send you a reset link"
+    return "Create a new secure password for your account"
   }
 
   return (
@@ -401,7 +298,7 @@ export default function ChangePasswordPage() {
           {/* Back to Login Link */}
           <div className="flex items-center">
             <Link
-              href="/teacher/dashboard"
+              href="/login"
               className="flex items-center text-sm text-gray-600 hover:text-primary transition-colors duration-200"
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
@@ -413,9 +310,11 @@ export default function ChangePasswordPage() {
             <CardHeader className="space-y-1 pb-6">
               <CardTitle className="text-2xl font-bold text-center text-gray-900">{getStepTitle()}</CardTitle>
               <CardDescription className="text-center text-gray-600">{getStepDescription()}</CardDescription>
-              <div className="flex justify-center mt-4">
-                <p className="text-sm text-muted-foreground">Step {step} of 3</p>
-              </div>
+              {!token && (
+                <div className="flex justify-center mt-4">
+                  <p className="text-sm text-muted-foreground">Step 1 of 1</p>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="px-6 pb-6">
               {error && (
@@ -442,7 +341,7 @@ export default function ChangePasswordPage() {
               <div
                 key={stepNumber}
                 className={`h-2 w-8 rounded-full transition-colors duration-200 ${
-                  stepNumber <= step ? "bg-primary" : "bg-gray-300"
+                  stepNumber == stepNumber ? "bg-primary" : "bg-gray-300"
                 }`}
               />
             ))}

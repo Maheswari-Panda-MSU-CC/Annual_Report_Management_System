@@ -5,6 +5,7 @@ import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/components/ui/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -133,6 +134,7 @@ const initialEditingData: EditingData = {
 
 
 export default function ProfilePage() {
+  const { toast } = useToast()
   const { user } = useAuth()
   const isAuthenticated = user !== null;
   const router = useRouter()
@@ -569,7 +571,11 @@ export default function ProfilePage() {
         });
       }
     } catch (error) {
-      console.error("Save error:", error);
+      toast({
+        title: "Update Failed",
+        description: "Network or server error while saving your profile.",
+        variant: "destructive",
+      })
     }
   };
   
@@ -579,18 +585,30 @@ export default function ProfilePage() {
   }
 
   const handleSaveExperience = () => {
-    console.log("Saving experience data:", experienceData)
-    // Show success message
+    try {
+      // TODO: Call API to persist experienceData
+      toast({ title: "Experience Saved", description: "Experience details updated." })
+    } catch {
+      toast({ title: "Save Failed", description: "Could not save experience.", variant: "destructive" })
+    }
   }
 
   const handleSavePostDoc = () => {
-    console.log("Saving post-doc data:", postDocData)
-    // Show success message
+    try {
+      // TODO: Call API to persist postDocData
+      toast({ title: "Post-Doc Saved", description: "Post-doctoral details updated." })
+    } catch {
+      toast({ title: "Save Failed", description: "Could not save post-doc details.", variant: "destructive" })
+    }
   }
 
   const handleSaveEducation = () => {
-    console.log("Saving education data:", educationData)
-    // Show success message
+    try {
+      // TODO: Call API to persist educationData
+      toast({ title: "Education Saved", description: "Education details updated." })
+    } catch {
+      toast({ title: "Save Failed", description: "Could not save education details.", variant: "destructive" })
+    }
   }
 
   const handleSaveAcademicYears = () => {

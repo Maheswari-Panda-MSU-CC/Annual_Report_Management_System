@@ -378,7 +378,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
 import FileUpload from "@/components/shared/FileUpload"
-import { Loader2, Brain, FileText } from "lucide-react"
+import { Loader2, Brain, FileText, ArrowRight } from "lucide-react"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { useRouter } from "next/navigation"
 
 interface ClassificationData {
   category: string
@@ -401,6 +403,20 @@ export function SmartDocumentAnalyzer() {
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
   const [progress, setProgress] = useState(0)
   const { toast } = useToast()
+  const router = useRouter()
+
+  // Mappings for teacher sections with expected fields and routes
+  const teacherCategories: Array<{ key: string; label: string; route: string; fields: string[] }> = [
+    { key: "Books/Papers", label: "Books/Papers", route: "/teacher/publication", fields: ["Title", "DOI", "ISSN", "Impact Factor", "Publisher", "Year"] },
+    { key: "Books", label: "Books (Authored/Edited)", route: "/teacher/publication/books/add", fields: ["Title", "ISBN", "Publisher", "Year"] },
+    { key: "Published Articles/Papers in Journals/Edited Volumes", label: "Published Articles/Papers", route: "/teacher/publication/papers/add", fields: ["Title", "DOI", "ISSN", "Impact Factor", "Journal", "Year"] },
+    { key: "Research Projects", label: "Research Projects", route: "/teacher/research/add", fields: ["Project Title", "Funding Agency", "Sanctioned Amount", "Duration", "Start Date", "End Date"] },
+    { key: "Awards/Recognition", label: "Awards & Recognition", route: "/teacher/awards-recognition/add", fields: ["Award Name", "Awarding Body", "Year"] },
+    { key: "Talks/Events", label: "Talks & Events", route: "/teacher/talks-events/add", fields: ["Event Name", "Role", "Date", "Venue"] },
+    { key: "Online Engagement", label: "Online Engagement", route: "/teacher/online-engagement/add", fields: ["Platform", "URL", "Topic", "Date"] },
+  ]
+
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null)
 
   const handleFileSelect = (files: FileList | null) => {
     if (files && files.length > 0) {
@@ -440,24 +456,33 @@ export function SmartDocumentAnalyzer() {
         method: "POST",
         body: formData,
       })
-
-      if (!response.ok) throw new Error("Failed to analyze document")
-
       const result = await response.json()
+      
+      if (!response.ok || !result.success) {
+        console.error(result.error);
+        throw new Error(result.error.message || "Document analysis failed.");
+      }
+
       setAnalysis(result)
+      const suggested = result?.classification?.category
+      const normalized = teacherCategories.find(c => c.key.toLowerCase() === String(suggested || "").toLowerCase())
+      setSelectedCategoryKey(normalized ? normalized.key : null)
       setProgress(100)
 
       toast({
         title: "Document Analyzed Successfully",
         description: `Category: ${result.classification.category}`,
       })
-    } catch (error) {
-      console.error("Analysis error:", error)
+    } catch (error: any) {
+      console.error("Analysis error:", error);
+    
       toast({
         title: "Analysis Failed",
-        description: "Please try again.",
+        description:
+          error?.message || "The document could not be analyzed. Please try again later.",
         variant: "destructive",
-      })
+      });
+    
     } finally {
       setIsAnalyzing(false)
     }
@@ -563,6 +588,63 @@ export function SmartDocumentAnalyzer() {
                 )}
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Is this category correct?</CardTitle>
+                <CardDescription>
+                  If not, choose the correct category from teacher sections below.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup
+                  value={selectedCategoryKey ?? undefined}
+                  onValueChange={(val) => setSelectedCategoryKey(val)}
+                  className="grid gap-2 sm:grid-cols-2"
+                >
+                  {teacherCategories.map((c) => (
+                    <label key={c.key} className="flex items-center gap-2 rounded-md border p-3 hover:bg-gray-50">
+                      <RadioGroupItem value={c.key} />
+                      <span className="text-sm font-medium">{c.label}</span>
+                    </label>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end">
+              <Button
+                disabled={!selectedCategoryKey}
+                onClick={() => {
+                  try {
+                    if (!selectedCategoryKey) return
+                    const chosen = teacherCategories.find(c => c.key === selectedCategoryKey)
+                    if (!chosen) return
+                    const returnedFields = Object.keys(analysis.classification.dataFields || {})
+                    const overlap = returnedFields.filter(f => chosen.fields.map(x => x.toLowerCase()).includes(f.toLowerCase()))
+                    const matchRatio = chosen.fields.length ? overlap.length / chosen.fields.length : 0
+
+                    sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
+                    sessionStorage.setItem("arms_selected_category", chosen.key)
+
+                    if (matchRatio >= 0.5) {
+                      router.push(chosen.route)
+                    } else {
+                      toast({
+                        title: "Low field match",
+                        description: "Fields don’t seem to match well. You can proceed and map manually.",
+                      })
+                      router.push(chosen.route)
+                    }
+                  } catch (e) {
+                    toast({ title: "Navigation Failed", description: "Please try again.", variant: "destructive" })
+                  }
+                }}
+              >
+                Continue
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
 
             {/* <Card>
               <CardHeader>

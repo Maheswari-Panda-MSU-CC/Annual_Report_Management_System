@@ -199,7 +199,17 @@ export async function POST(req: Request) {
 
     if (!llmResponse.ok) {
       const errText = await llmResponse.text();
-      return NextResponse.json({ error: "LLM API failed", details: errText }, { status: 500 });
+      let errorMessage = "Document analysis failed.";
+
+      try {
+        const parsedError = JSON.parse(errText);
+        // handle shapes like { error: { message: "..." } }
+        errorMessage = parsedError?.error?.message || parsedError?.message || errorMessage;
+      } catch {
+        errorMessage = errText || errorMessage;
+      }
+
+      return NextResponse.json({ success: false, message: errorMessage }, { status: 500 });
     }
 
     const result = await llmResponse.json();
