@@ -145,3 +145,8 @@ export interface DegreeTypeOption {
   id: number
   name: string
 }
+
+export interface UserType{
+  id:number
+  name:string
+}

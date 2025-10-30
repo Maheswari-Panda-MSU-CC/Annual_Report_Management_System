@@ -25,7 +25,7 @@ import {
   EyeOff,
 } from "lucide-react"
 import { useAuth } from "@/app/api/auth/auth-provider"
-import { useFacultyDepartment } from "@/hooks/use-facultyDepartment"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function RegisterUserPage() {
@@ -47,12 +47,12 @@ export default function RegisterUserPage() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [successMessage, setSuccessMessage] = useState("")
   const [userTypes, setUserTypes] = useState<{ id: number; name: string }[]>([])
-  const { faculties, departments, fetchFaculties, fetchDepartments } = useFacultyDepartment()
+  const { facultyOptions, departmentOptions, fetchFaculties, fetchDepartments } = useDropDowns()
 
-  // const handleFacultyChange = (facultyId: string) => {
-  //   setFormData((prev) => ({ ...prev, faculty: facultyId }));
-  //   fetchDepartments(facultyId)
-  // }
+  const handleFacultyChange = (facultyId: string) => {
+    setFormData((prev) => ({ ...prev, faculty: facultyId }));
+    fetchDepartments(Number(facultyId))
+  }
 
   // Check if user is admin
   React.useEffect(() => {
@@ -79,7 +79,6 @@ export default function RegisterUserPage() {
     fetchUserTypes()
   }, [])
 
-
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {}
 
@@ -96,14 +95,14 @@ export default function RegisterUserPage() {
     }
 
     // Department validation
-    // if (!formData.department) {
-    //   newErrors.department = "Department is required"
-    // }
+    if (!formData.department) {
+      newErrors.department = "Department is required"
+    }
 
     // Faculty validation
-    // if (!formData.faculty) {
-    //   newErrors.faculty = "Faculty is required"
-    // }
+    if (!formData.faculty) {
+      newErrors.faculty = "Faculty is required"
+    }
 
     // Password validation
     if (!formData.password) {
@@ -331,27 +330,27 @@ export default function RegisterUserPage() {
                   {errors.userType && <p className="text-sm text-red-600">{errors.userType}</p>}
                 </div>
                 {/* Faculty */}
-                {/* <div className="space-y-2">
+                <div className="space-y-2">
                   <Label>Faculty</Label>
                   <Select onValueChange={handleFacultyChange}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select Faculty" />
                     </SelectTrigger>
                     <SelectContent>
-                      {faculties.map((faculty) => (
+                      {facultyOptions.map((faculty) => (
                         <SelectItem key={faculty.Fid} value={faculty.Fid.toString()}>
                           {faculty.Fname}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div> */}
+                </div>
 
                 {/* Department */}
-                {/* <div className="space-y-2">
+                <div className="space-y-2">
                   <Label>Department</Label>
                   <Select
-                    disabled={!departments.length}
+                    disabled={!departmentOptions.length}
                     onValueChange={(value) => {
                       setFormData((prev) => ({
                         ...prev,
@@ -363,14 +362,14 @@ export default function RegisterUserPage() {
                       <SelectValue placeholder="Select Department" />
                     </SelectTrigger>
                     <SelectContent>
-                      {departments.map((dept) => (
+                      {departmentOptions.map((dept) => (
                         <SelectItem key={dept.Deptid} value={dept.Deptid.toString()}>
                           {dept.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </div> */}
+                </div>
 
 
 
@@ -454,12 +453,12 @@ export default function RegisterUserPage() {
 
             <div>
               <Label className="text-sm font-medium text-gray-600">Faculty</Label>
-              <p className="text-sm">{faculties.find(item => item.Fid.toString() === formData.userType)?.Fname ||  "Not selected"}</p>
+              <p className="text-sm">{facultyOptions.find(item => item.Fid.toString() === formData.userType)?.Fname ||  "Not selected"}</p>
             </div>
 
             <div>
               <Label className="text-sm font-medium text-gray-600">Department</Label>
-              <p className="text-sm">{departments.find(item => item.Deptid.toString() === formData.department)?.name || "Not selected"}</p>
+              <p className="text-sm">{departmentOptions.find(item => item.Deptid.toString() === formData.department)?.name || "Not selected"}</p>
             </div>
 
             <div>

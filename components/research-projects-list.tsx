@@ -7,103 +7,71 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Plus, Eye, Edit, Calendar, IndianRupee, TrendingUp, User, Building2 } from "lucide-react"
+import { Search, Plus, Eye, Edit, Calendar, IndianRupee, TrendingUp, User, Building2, FileText, Upload } from "lucide-react"
+import { useAuth } from "@/app/api/auth/auth-provider"
 
 export function ResearchProjectsList() {
   const router = useRouter()
+  const { user } = useAuth()
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [levelFilter, setLevelFilter] = useState("all")
   const [agencyFilter, setAgencyFilter] = useState("all")
+  
 
   useEffect(() => {
-    // In a real implementation, fetch projects from the API
-    // For now, we'll use mock data
-    setTimeout(() => {
-      setProjects([
-        {
-          projid: "1",
-          title: "Development of Novel Nanomaterials for Sustainable Energy Applications",
-          funding_agency: 3,
-          funding_agency_name: "Department of Science and Technology",
-          grant_sanctioned: 2500000,
-          grant_received: 1800000,
-          proj_nature: 2,
-          proj_nature_name: "Applied Research",
-          duration: 36, // months
-          status: 1,
-          status_name: "Ongoing",
-          start_date: "2022-07-01",
-          proj_level: 2,
-          proj_level_name: "National",
-          progress: 65,
-          department: "Chemistry",
-          principal_investigator: "Dr. Rajesh Kumar",
-        },
-        {
-          projid: "2",
-          title: "Machine Learning Approaches for Climate Change Prediction",
-          funding_agency: 5,
-          funding_agency_name: "Council of Scientific & Industrial Research",
-          grant_sanctioned: 1800000,
-          grant_received: 1800000,
-          proj_nature: 1,
-          proj_nature_name: "Basic Research",
-          duration: 24, // months
-          status: 2,
-          status_name: "Completed",
-          start_date: "2021-04-15",
-          proj_level: 2,
-          proj_level_name: "National",
-          progress: 100,
-          department: "Computer Science",
-          principal_investigator: "Dr. Amit Patel",
-        },
-        {
-          projid: "3",
-          title: "Biodiversity Conservation in Western Ghats",
-          funding_agency: 4,
-          funding_agency_name: "University Grants Commission",
-          grant_sanctioned: 1200000,
-          grant_received: 800000,
-          proj_nature: 3,
-          proj_nature_name: "Field Study",
-          duration: 18, // months
-          status: 1,
-          status_name: "Ongoing",
-          start_date: "2023-01-10",
-          proj_level: 1,
-          proj_level_name: "Regional",
-          progress: 40,
-          department: "Environmental Science",
-          principal_investigator: "Dr. Priya Sharma",
-        },
-        {
-          projid: "4",
-          title: "Advanced Materials for Aerospace Applications",
-          funding_agency: 1,
-          funding_agency_name: "Indian Space Research Organisation",
-          grant_sanctioned: 3500000,
-          grant_received: 2100000,
-          proj_nature: 2,
-          proj_nature_name: "Applied Research",
-          duration: 48, // months
-          status: 1,
-          status_name: "Ongoing",
-          start_date: "2022-03-15",
-          proj_level: 3,
-          proj_level_name: "International",
-          progress: 55,
-          department: "Mechanical Engineering",
-          principal_investigator: "Dr. Suresh Reddy",
-        },
-      ])
-      setLoading(false)
-    }, 1000)
+    const fetchProjects = async () => {
+      try {
+        setLoading(true)
+        const teacherId = 29323 // or dynamically get from session/user context if available
+        const res = await fetch(`/api/teacher/research?teacherId=${user?.role_id}&type=projects`)
+  
+        if (!res.ok) {
+          throw new Error(`Failed to fetch research projects (${res.status})`)
+        }
+  
+        const data = await res.json()
+  
+        // Ensure consistency: sometimes API might return a single object instead of array
+        const formattedProjects = Array.isArray(data.researchProjects)
+          ? data.researchProjects
+          : [data.researchProjects]
+  
+        // Normalize key names to match your existing structure
+        const mapped = formattedProjects.map((proj: any) => ({
+          projid: proj.projid,
+          title: proj.title,
+          funding_agency: proj.funding_agency,
+          funding_agency_name: proj.FundingAgencyName || "Unknown Agency",
+          grant_sanctioned: proj.grant_sanctioned,
+          grant_received: proj.grant_received,
+          grant_year:proj.grant_year || "N/A",
+          grant_sealed:proj.grant_sealed || "N/A",
+          document:proj.Pdf,
+          proj_nature: proj.proj_nature,
+          proj_nature_name: proj.ResearchProjectNature || "N/A",
+          duration: proj.duration,
+          status: proj.status,
+          status_name: proj.ResearchProjectStatus || "Unknown",
+          start_date: proj.start_date,
+          proj_level: proj.proj_level,
+          proj_level_name: proj.ResearchProjectLevel || "Unknown Level",
+          department: user?.department || "N/A",
+        }))
+  
+        setProjects(mapped)
+      } catch (err) {
+        console.error("Error fetching research projects:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+  
+    fetchProjects()
   }, [])
-
+  
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
       project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -215,125 +183,123 @@ export function ResearchProjectsList() {
         </CardContent>
       </Card>
 
-      {/* Projects List */}
-      <div className="space-y-4">
-        {filteredProjects.map((project) => (
-          <Card
-            key={project.projid}
-            className="hover:shadow-lg transition-all duration-200 cursor-pointer border-l-4 border-l-blue-500"
+    {/* Projects List */}
+<div className="space-y-4">
+  {filteredProjects.map((project) => (
+    <Card
+      key={project.projid}
+      className="hover:shadow-lg transition-all duration-200 border-l-4 border-l-blue-500"
+    >
+      <CardContent className="p-6 space-y-6">
+        {/* HEADER: Title + Status + Level */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <h3
+            className="text-2xl font-semibold text-gray-900 hover:text-blue-600 transition cursor-pointer"
+            onClick={() => router.push(`/teacher/research/${project.projid}`)}
           >
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                {/* Left Section - Main Info */}
-                <div className="flex-1 space-y-4">
-                  {/* Title and Badges */}
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <h3
-                        className="text-xl font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer line-clamp-2"
-                        onClick={() => router.push(`/research/${project.projid}`)}
-                      >
-                        {project.title}
-                      </h3>
-                      <div className="flex gap-2 ml-4">
-                        <Badge className={getStatusColor(project.status_name)}>{project.status_name}</Badge>
-                        <Badge className={getLevelColor(project.proj_level_name)}>{project.proj_level_name}</Badge>
-                      </div>
-                    </div>
-                  </div>
+            {project.title || "Untitled Research Project"}
+          </h3>
+          <div className="flex gap-2 flex-wrap">
+            <Badge className={getStatusColor(project.status_name)}>{project.status_name}</Badge>
+            <Badge className={getLevelColor(project.proj_level_name)}>{project.proj_level_name}</Badge>
+          </div>
+        </div>
 
-                  {/* Project Details Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {/* Principal Investigator */}
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Principal Investigator</p>
-                        <p className="font-medium text-gray-900">{project.principal_investigator}</p>
-                      </div>
-                    </div>
+        {/* DETAILS GRID */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 text-sm">
+          {project.proj_nature_name && (
+            <div>
+              <p className="text-gray-500">Nature</p>
+              <p className="font-medium">{project.proj_nature_name}</p>
+            </div>
+          )}
 
-                    {/* Department */}
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Department</p>
-                        <p className="font-medium text-gray-900">{project.department}</p>
-                      </div>
-                    </div>
+          {project.funding_agency_name && (
+            <div>
+              <p className="text-gray-500">Funding Agency</p>
+              <p className="font-medium">{project.funding_agency_name}</p>
+            </div>
+          )}
 
-                    {/* Funding */}
-                    <div className="flex items-center gap-2">
-                      <IndianRupee className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Grant Sanctioned</p>
-                        <p className="font-medium text-gray-900">{formatCurrency(project.grant_sanctioned)}</p>
-                      </div>
-                    </div>
+          {project.department && (
+            <div>
+              <p className="text-gray-500">Department</p>
+              <p className="font-medium">{project.department}</p>
+            </div>
+          )}
 
-                    {/* Duration */}
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-gray-500" />
-                      <div>
-                        <p className="text-sm text-gray-500">Duration</p>
-                        <p className="font-medium text-gray-900">{project.duration} months</p>
-                      </div>
-                    </div>
-                  </div>
+          {project.start_date && (
+            <div>
+              <p className="text-gray-500">Start Date</p>
+              <p className="font-medium">
+                {new Date(project.start_date).toLocaleDateString("en-IN")}
+              </p>
+            </div>
+          )}
 
-                  {/* Progress and Funding Agency */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 max-w-md">
-                      <div className="flex items-center gap-3">
-                        <TrendingUp className="h-4 w-4 text-gray-500" />
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm text-gray-500">Progress</span>
-                            <span className="text-sm font-medium">{project.progress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${project.progress}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+          {project.duration && (
+            <div>
+              <p className="text-gray-500">Duration</p>
+              <p className="font-medium">{project.duration} months</p>
+            </div>
+          )}
 
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Funding Agency</p>
-                      <p className="font-medium text-gray-900">{project.funding_agency_name}</p>
-                    </div>
-                  </div>
-                </div>
+          {project.grant_sanctioned && (
+            <div>
+              <p className="text-gray-500">Grant Sanctioned</p>
+              <p className="font-medium">{formatCurrency(project.grant_sanctioned)}</p>
+            </div>
+          )}
 
-                {/* Right Section - Actions */}
-                <div className="flex flex-col gap-2 ml-6">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push(`/teacher/research/${project.projid}`)}
-                    className="w-20"
-                  >
-                    <Eye className="mr-1 h-4 w-4" />
-                    View
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => router.push(`/teacher/research/${project.projid}/edit`)}
-                    className="w-20"
-                  >
-                    <Edit className="mr-1 h-4 w-4" />
-                    Edit
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+          {project.grant_received && (
+            <div>
+              <p className="text-gray-500">Grant Received</p>
+              <p className="font-medium">{formatCurrency(project.grant_received)}</p>
+            </div>
+          )}
+
+          {project.grant_year && (
+            <div>
+              <p className="text-gray-500">Grant Year</p>
+              <p className="font-medium">{project.grant_year}</p>
+            </div>
+          )}
+
+          {project.grant_sealed && (
+            <div>
+              <p className="text-gray-500">Grant Sealed</p>
+              <p className="font-medium">{project.grant_sealed}</p>
+            </div>
+          )}
+         
+        </div>
+
+       
+
+        {/* ACTION BUTTONS */}
+        <div className="flex flex-wrap gap-2 mt-6">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/teacher/research/${project.projid}`)}
+          >
+            <Eye className="mr-1 h-4 w-4" />
+            View
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/teacher/research/${project.projid}/edit`)}
+          >
+            <Edit className="mr-1 h-4 w-4" />
+            Edit
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  ))}
+</div>
 
       {filteredProjects.length === 0 && (
         <Card>
