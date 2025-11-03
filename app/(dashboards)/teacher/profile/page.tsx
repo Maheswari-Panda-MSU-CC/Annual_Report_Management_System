@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
+import { useForm, Controller, useFieldArray } from "react-hook-form"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
@@ -16,6 +17,7 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText } from "lucide-react"
 import { TeacherInfo, ExperienceEntry, PostDocEntry, EducationEntry, TeacherData, Faculty, Department, Designation, FacultyOption, DepartmentOption, DesignationOption, DegreeTypeOption } from "@/types/interfaces"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
 
 
 
@@ -156,14 +158,41 @@ export default function ProfilePage() {
   // Form data for editing (only used for temporary editing state)
   const [editingData, setEditingData] = useState({ ...initialEditingData })
 
-  // Experience Details - Always editable
-  const [experienceData, setExperienceData] = useState<ExperienceEntry[]>([])
+  // react-hook-form for Personal Details
+  const { control, register, reset, handleSubmit, getValues, watch, setValue } = useForm<any>({
+    defaultValues: {},
+  })
 
-  // Post Doctoral Research Experience - Always editable
-  const [postDocData, setPostDocData] = useState<PostDocEntry[]>([])
+  // react-hook-form for Experience Details
+  const experienceForm = useForm<{ experiences: ExperienceEntry[] }>({
+    defaultValues: { experiences: [] },
+    mode: 'onChange',
+  })
+  const { fields: experienceFields, append: appendExperience, remove: removeExperience, update: updateExperience } = useFieldArray({
+    control: experienceForm.control,
+    name: 'experiences',
+  })
 
-  // Education Details - Always editable
-  const [educationData, setEducationData] = useState<EducationEntry[]>([])
+  // react-hook-form for Post-Doctoral Research
+  const postDocForm = useForm<{ researches: PostDocEntry[] }>({
+    defaultValues: { researches: [] },
+    mode: 'onChange',
+  })
+  const { fields: postDocFields, append: appendPostDoc, remove: removePostDoc, update: updatePostDoc } = useFieldArray({
+    control: postDocForm.control,
+    name: 'researches',
+  })
+
+  // react-hook-form for Education Details
+  const educationForm = useForm<{ educations: EducationEntry[] }>({
+    defaultValues: { educations: [] },
+    mode: 'onChange',
+  })
+  const { fields: educationFields, append: appendEducation, remove: removeEducation, update: updateEducationField } = useFieldArray({
+    control: educationForm.control,
+    name: 'educations',
+  })
+
 
   // Fetch dropdown data
   const fetchDropdownData = async () => {
@@ -195,15 +224,42 @@ export default function ProfilePage() {
         if (!res.ok) throw new Error("Failed to fetch teacher data")
 
         const data: TeacherData = await res.json()
-        console.log(data)
-        setTeacherInfo(data.teacherInfo) // setTeacherData is your state hook for storing fetched data
-        setEducationData(data.graduationDetails)
-        setExperienceData(data.teacherExperience)
-        setPostDocData(data.postDoctoralExp)
+        setTeacherInfo(data.teacherInfo)
+        
+        // Initialize react-hook-form arrays
+        experienceForm.reset({ experiences: data.teacherExperience || [] })
+        postDocForm.reset({ researches: data.postDoctoralExp || [] })
+        educationForm.reset({ educations: data.graduationDetails || [] })
         setFacultyData(data.faculty)
         setSelectedFacultyId(data.faculty?.Fid ?? null)
         setDepartmentData(data.department)
         setDesignationData(data.designation)
+        // Initialize react-hook-form with fetched personal details
+        reset({
+          Abbri: data.teacherInfo?.Abbri || '',
+          fname: data.teacherInfo?.fname || '',
+          mname: data.teacherInfo?.mname || '',
+          lname: data.teacherInfo?.lname || '',
+          email_id: data.teacherInfo?.email_id || '',
+          phone_no: data.teacherInfo?.phone_no || '',
+          // Dates must be in YYYY-MM-DD for <input type="date">
+          DOB: formatDateForInput(data.teacherInfo?.DOB),
+          recruit_date: formatDateForInput(data.teacherInfo?.recruit_date),
+          PAN_No: data.teacherInfo?.PAN_No || '',
+          // Teaching status and designations
+          perma_or_tenure: data.teacherInfo?.perma_or_tenure ?? false,
+          desig_perma: data.teacherInfo?.desig_perma ?? undefined,
+          desig_tenure: data.teacherInfo?.desig_tenure ?? undefined,
+          // Department
+          deptid: data.teacherInfo?.deptid ?? undefined,
+          // Exams/guide fields
+          NET: data.teacherInfo?.NET || false,
+          NET_year: data.teacherInfo?.NET_year || '',
+          GATE: data.teacherInfo?.GATE || false,
+          GATE_year: data.teacherInfo?.GATE_year || '',
+          PHDGuide: data.teacherInfo?.PHDGuide || false,
+          Guide_year: data.teacherInfo?.Guide_year || '',
+        })
         // Initialize ICT selection from teacherInfo.ICT_Details
         const details = (data.teacherInfo?.ICT_Details || '').split(',').map(s => s.trim()).filter(Boolean)
         const othersEntry = details.find(d => d.toLowerCase().startsWith('others'))
@@ -268,15 +324,32 @@ export default function ProfilePage() {
       Nature: "",
       UG_PG: "",
     }
-    setExperienceData([...experienceData, newEntry])
+    appendExperience(newEntry)
+    // Auto-enable edit mode for new entry
+    setExperienceEditingIds(prev => new Set([...prev, newEntry.Id]))
   }
 
-  const updateExperienceEntry = (id: number, field: string, value: any) => {
-    setExperienceData((prev) => prev.map((entry) => (entry.Id === id ? { ...entry, [field]: value } : entry)))
-  }
-
-  const removeExperienceEntry = (id: number) => {
-    setExperienceData((prev) => prev.filter((entry) => entry.Id !== id))
+  const removeExperienceEntry = async (index: number, id: number) => {
+    try {
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (id && id <= 2147483647) {
+        const res = await fetch(`/api/teacher/profile/experience?teacherId=${teacherId}&id=${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Delete failed' }))
+          toast({ title: "Delete Failed", description: errorData.error || "Could not delete experience.", variant: "destructive" })
+          return
+        }
+      }
+    } catch (e: any) {
+      toast({ title: "Delete Failed", description: e.message || "Could not delete experience.", variant: "destructive" })
+      return
+    }
+    removeExperience(index)
+    setExperienceEditingIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   const addPostDocEntry = () => {
@@ -290,15 +363,32 @@ export default function ProfilePage() {
       QS_THE: "",
       doc: "",
     }
-    setPostDocData([...postDocData, newEntry])
+    appendPostDoc(newEntry)
+    // Auto-enable edit mode for new entry
+    setPostDocEditingIds(prev => new Set([...prev, newEntry.Id]))
   }
 
-  const updatePostDocEntry = (id: number, field: string, value: string) => {
-    setPostDocData((prev) => prev.map((entry) => (entry.Id === id ? { ...entry, [field]: value } : entry)))
-  }
-
-  const removePostDocEntry = (id: number) => {
-    setPostDocData((prev) => prev.filter((entry) => entry.Id !== id))
+  const removePostDocEntry = async (index: number, id: number) => {
+    try {
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (id && id <= 2147483647) {
+        const res = await fetch(`/api/teacher/profile/phd-research?teacherId=${teacherId}&id=${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Delete failed' }))
+          toast({ title: "Delete Failed", description: errorData.error || "Could not delete post-doc entry.", variant: "destructive" })
+          return
+        }
+      }
+    } catch (e: any) {
+      toast({ title: "Delete Failed", description: e.message || "Could not delete post-doc entry.", variant: "destructive" })
+      return
+    }
+    removePostDoc(index)
+    setPostDocEditingIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   const addEducationEntry = () => {
@@ -314,11 +404,9 @@ export default function ProfilePage() {
       year_of_passing: "",
       subject: "",
     }
-    setEducationData([...educationData, newEntry])
-  }
-
-  const updateEducationEntry = (id: number, field: string, value: string) => {
-    setEducationData((prev) => prev.map((entry) => (entry.gid === id ? { ...entry, [field]: value } : entry)))
+    appendEducation(newEntry)
+    // Auto-enable edit mode for new entry
+    setEducationEditingIds(prev => new Set([...prev, newEntry.gid]))
   }
 
   // Row-level edit toggles
@@ -344,8 +432,27 @@ export default function ProfilePage() {
     });
   }
 
-  const removeEducationEntry = (id: number) => {
-    setEducationData((prev) => prev.filter((entry) => entry.gid !== id))
+  const removeEducationEntry = async (index: number, id: number) => {
+    try {
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (id && id <= 2147483647) {
+        const res = await fetch(`/api/teacher/profile/graduation?teacherId=${teacherId}&gid=${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Delete failed' }))
+          toast({ title: "Delete Failed", description: errorData.error || "Could not delete education entry.", variant: "destructive" })
+          return
+        }
+      }
+    } catch (e: any) {
+      toast({ title: "Delete Failed", description: e.message || "Could not delete education entry.", variant: "destructive" })
+      return
+    }
+    removeEducation(index)
+    setEducationEditingIds(prev => {
+      const next = new Set(prev)
+      next.delete(id)
+      return next
+    })
   }
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,10 +478,8 @@ export default function ProfilePage() {
       const imageUrl = URL.createObjectURL(file)
       setProfileImage(imageUrl)
 
-      // Here you would typically upload to your server
-      // const formData = new FormData()
-      // teacherInfo.append('profileImage', file)
-      // await uploadProfileImage(formData)
+      // To integrate with S3 later, use the helper below.
+      // await uploadProfileImageToS3(file)
 
       console.log("Image uploaded:", file.name)
     } catch (error) {
@@ -390,6 +495,28 @@ export default function ProfilePage() {
     fileInput?.click()
   }
 
+  // Upload to S3 via backend helper (scaffold; not active by default)
+  const uploadProfileImageToS3 = async (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const uploadRes = await fetch('/api/s3/upload', { method: 'POST', body: form });
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      const { url } = await uploadRes.json();
+      if (teacherInfo) {
+        const updated = { ...teacherInfo, ProfileImage: url };
+        setTeacherInfo(updated);
+        await fetch('/api/teacher/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated),
+        });
+      }
+    } catch (err) {
+      console.error('S3 upload failed', err);
+    }
+  }
+
   // const handleSavePersonal = () => {
   //   // Build ICT_Details string from selections
   //   const newIctDetails = buildIctDetails(editingData)
@@ -401,34 +528,31 @@ export default function ProfilePage() {
   //   setIsEditingPersonal(false)
   // }
 
-  const handleSavePersonal = async () => {
+  const onSubmitPersonal = async () => {
     try {
+      const values = getValues();
+      const newIctDetails = buildIctDetails(editingData);
+      const payload = {
+        ...(teacherInfo || {}),
+        ...values,
+        ICT_Details: newIctDetails,
+      } as TeacherInfo;
+
       const response = await fetch("/api/teacher/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(teacherInfo), // your state
+        body: JSON.stringify(payload),
       });
-
       const result = await response.json();
-
       if (result.success) {
-        toast({
-          title: "Profile Updated",
-          description: "Your information has been saved successfully.",
-        });
+        setTeacherInfo(payload);
+        toast({ title: "Profile Updated", description: "Your information has been saved successfully." });
+        setIsEditingPersonal(false)
       } else {
-        toast({
-          title: "Update Failed",
-          description: result.error || "Something went wrong.",
-          variant: "destructive",
-        });
+        toast({ title: "Update Failed", description: result.error || "Something went wrong.", variant: "destructive" });
       }
     } catch (error) {
-      toast({
-        title: "Update Failed",
-        description: "Network or server error while saving your profile.",
-        variant: "destructive",
-      })
+      toast({ title: "Update Failed", description: "Network or server error while saving your profile.", variant: "destructive" })
     }
   };
 
@@ -437,48 +561,217 @@ export default function ProfilePage() {
     setIsEditingPersonal(false)
   }
 
-  const handleSaveExperience = () => {
+  // Save single experience row
+  const handleSaveExperienceRow = async (index: number, id: number) => {
     try {
-      // TODO: Call API to persist experienceData
-      toast({ title: "Experience Saved", description: "Experience details updated." })
-    } catch {
-      toast({ title: "Save Failed", description: "Could not save experience.", variant: "destructive" })
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (!teacherId) {
+        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
+        return
+      }
+
+      // Validate only this row
+      const isValid = await experienceForm.trigger(`experiences.${index}`)
+      if (!isValid) {
+        toast({ title: "Validation Failed", description: "Please fill all required fields.", variant: "destructive" })
+        return
+      }
+
+      const entry = experienceForm.getValues(`experiences.${index}`)
+      const isNewEntry = !entry.Id || entry.Id > 2147483647
+
+      const res = await fetch('/api/teacher/profile/experience', {
+        method: isNewEntry ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId, experience: entry }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Network error' }))
+        throw new Error(errorData.error || 'Failed to save')
+      }
+
+      const result = await res.json();
+      if (result.success) {
+        // Exit edit mode
+        setExperienceEditingIds(prev => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        
+        // Refresh data after successful save
+        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (refreshRes.ok) {
+          const refreshData: TeacherData = await refreshRes.json()
+          experienceForm.reset({ experiences: refreshData.teacherExperience || [] })
+        }
+        toast({ 
+          title: "Experience Saved", 
+          description: result.message || "Experience details saved successfully." 
+        })
+      } else {
+        throw new Error(result.error || 'Failed');
+      }
+    } catch (e: any) {
+      console.error('Save experience error:', e)
+      toast({ title: "Save Failed", description: e.message || "Could not save experience.", variant: "destructive" })
     }
   }
 
-  const handleSavePostDoc = () => {
+  // Save single post-doc row
+  const handleSavePostDocRow = async (index: number, id: number) => {
     try {
-      // TODO: Call API to persist postDocData
-      toast({ title: "Post-Doc Saved", description: "Post-doctoral details updated." })
-    } catch {
-      toast({ title: "Save Failed", description: "Could not save post-doc details.", variant: "destructive" })
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (!teacherId) {
+        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
+        return
+      }
+
+      // Validate only this row
+      const isValid = await postDocForm.trigger(`researches.${index}`)
+      if (!isValid) {
+        toast({ title: "Validation Failed", description: "Please fill all required fields.", variant: "destructive" })
+        return
+      }
+
+      const entry = postDocForm.getValues(`researches.${index}`)
+      const isNewEntry = !entry.Id || entry.Id > 2147483647
+
+      const res = await fetch('/api/teacher/profile/phd-research', {
+        method: isNewEntry ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId, research: entry }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Network error' }))
+        throw new Error(errorData.error || 'Failed to save')
+      }
+
+      const result = await res.json();
+      if (result.success) {
+        // Exit edit mode
+        setPostDocEditingIds(prev => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        
+        // Refresh data after successful save
+        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (refreshRes.ok) {
+          const refreshData: TeacherData = await refreshRes.json()
+          postDocForm.reset({ researches: refreshData.postDoctoralExp || [] })
+        }
+        toast({ 
+          title: "Post-Doc Saved", 
+          description: result.message || "Post-doctoral details saved successfully." 
+        })
+      } else {
+        throw new Error(result.error || 'Failed');
+      }
+    } catch (e: any) {
+      console.error('Save post-doc error:', e)
+      toast({ title: "Save Failed", description: e.message || "Could not save post-doc details.", variant: "destructive" })
     }
   }
 
-  const handleSaveEducation = () => {
+  // Save single education row
+  const handleSaveEducationRow = async (index: number, id: number) => {
     try {
-      // TODO: Call API to persist educationData
-      toast({ title: "Education Saved", description: "Education details updated." })
-    } catch {
-      toast({ title: "Save Failed", description: "Could not save education details.", variant: "destructive" })
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (!teacherId) {
+        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
+        return
+      }
+
+      // Validate only this row
+      const isValid = await educationForm.trigger(`educations.${index}`)
+      if (!isValid) {
+        toast({ title: "Validation Failed", description: "Please fill all required fields.", variant: "destructive" })
+        return
+      }
+
+      const entry = educationForm.getValues(`educations.${index}`)
+      const isNewEntry = !entry.gid || entry.gid > 2147483647
+
+      const res = await fetch('/api/teacher/profile/graduation', {
+        method: isNewEntry ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacherId, education: entry }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Network error' }))
+        throw new Error(errorData.error || 'Failed to save')
+      }
+
+      const result = await res.json();
+      if (result.success) {
+        // Exit edit mode
+        setEducationEditingIds(prev => {
+          const next = new Set(prev)
+          next.delete(id)
+          return next
+        })
+        
+        // Refresh data after successful save
+        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (refreshRes.ok) {
+          const refreshData: TeacherData = await refreshRes.json()
+          educationForm.reset({ educations: refreshData.graduationDetails || [] })
+        }
+        toast({ 
+          title: "Education Saved", 
+          description: result.message || "Education details saved successfully." 
+        })
+      } else {
+        throw new Error(result.error || 'Failed');
+      }
+    } catch (e: any) {
+      console.error('Save education error:', e)
+      toast({ title: "Save Failed", description: e.message || "Could not save education details.", variant: "destructive" })
     }
   }
 
-  const handleSaveAcademicYears = () => {
-    console.log("Saving academic years data:", {
-      NILL2016_17: teacherInfo?.NILL2016_17,
-      NILL2017_18: teacherInfo?.NILL2017_18,
-      NILL2018_19: teacherInfo?.NILL2018_19,
-      NILL2019_20: teacherInfo?.NILL2019_20,
-      NILL2020_21: teacherInfo?.NILL2020_21,
-      NILL2021_22: teacherInfo?.NILL2021_22,
-      NILL2022_23: teacherInfo?.NILL2022_23,
-      NILL2023_24: teacherInfo?.NILL2023_24,
-      NILL2024_25: teacherInfo?.NILL2024_25,
-      NILL2025_26: teacherInfo?.NILL2025_26,
-    })
-    // Here you would typically make an API call to save the data
-    // Show success message
+  const handleSaveAcademicYears = async () => {
+    try {
+      if (!teacherInfo) {
+        toast({ title: "Error", description: "Teacher information not loaded.", variant: "destructive" });
+        return;
+      }
+
+      const payload = {
+        ...teacherInfo,
+        NILL2016_17: teacherInfo.NILL2016_17 ?? false,
+        NILL2017_18: teacherInfo.NILL2017_18 ?? false,
+        NILL2018_19: teacherInfo.NILL2018_19 ?? false,
+        NILL2019_20: teacherInfo.NILL2019_20 ?? false,
+        NILL2020_21: teacherInfo.NILL2020_21 ?? false,
+        NILL2021_22: teacherInfo.NILL2021_22 ?? false,
+        NILL2022_23: teacherInfo.NILL2022_23 ?? false,
+        NILL2023_24: teacherInfo.NILL2023_24 ?? false,
+        NILL2024_25: teacherInfo.NILL2024_25 ?? false,
+        NILL2025_26: teacherInfo.NILL2025_26 ?? false,
+      };
+
+      const response = await fetch("/api/teacher/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({ title: "Success", description: "Academic years information saved successfully." });
+      } else {
+        toast({ title: "Update Failed", description: result.error || "Something went wrong.", variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Update Failed", description: "Network or server error while saving academic years.", variant: "destructive" });
+    }
   }
 
   if (isLoading) {
@@ -528,7 +821,7 @@ export default function ProfilePage() {
               </Button>
             ) : (
               <div className="flex gap-2">
-                <Button onClick={handleSavePersonal} className="flex items-center gap-2">
+                <Button onClick={handleSubmit(onSubmitPersonal)} className="flex items-center gap-2">
                   <Save className="h-4 w-4" />
                   Save Changes
                 </Button>
@@ -605,55 +898,42 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="salutation">Salutation</Label>
-                  <Select
-                    value={teacherInfo?.Abbri}
-                    onValueChange={(value: any) => handleInputChange("Abbri", value)}
-                  >
-                    <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Dr.">Dr.</SelectItem>
-                      <SelectItem value="Prof.">Prof.</SelectItem>
-                      <SelectItem value="Mr.">Mr.</SelectItem>
-                      <SelectItem value="Ms.">Ms.</SelectItem>
-                      <SelectItem value="Mrs.">Mrs.</SelectItem>
-                      <SelectItem value="Shri.">Shri.</SelectItem>
-                      <SelectItem value="Er.">Er.</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={control}
+                    name="Abbri"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={(v: any) => field.onChange(v)}
+                      >
+                        <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Dr.">Dr.</SelectItem>
+                          <SelectItem value="Prof.">Prof.</SelectItem>
+                          <SelectItem value="Mr.">Mr.</SelectItem>
+                          <SelectItem value="Ms.">Ms.</SelectItem>
+                          <SelectItem value="Mrs.">Mrs.</SelectItem>
+                          <SelectItem value="Shri.">Shri.</SelectItem>
+                          <SelectItem value="Er.">Er.</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input
-                    id="firstName"
-                    value={teacherInfo?.fname || ""}
-                    onChange={(e) => {
-                      handleInputChange("fname", e.target.value)
-                      console.log(e.target.value);
-                      console.log(isEditingPersonal);
-                    }}
-                    readOnly={!isEditingPersonal}
-                  />
+                  <Input id="firstName" {...register('fname')} readOnly={!isEditingPersonal} />
 
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="middleName">Middle Name</Label>
-                  <Input
-                    id="middleName"
-                    value={teacherInfo?.mname || ""}
-                    onChange={(e) => handleInputChange("mname", e.target.value)}
-                    readOnly={!isEditingPersonal}
-                  />
+                  <Input id="middleName" {...register('mname')} readOnly={!isEditingPersonal} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input
-                    id="lastName"
-                    value={teacherInfo?.lname || ""}
-                    onChange={(e) => handleInputChange("lname", e.target.value)}
-                    readOnly={!isEditingPersonal}
-                  />
+                  <Input id="lastName" {...register('lname')} readOnly={!isEditingPersonal} />
                 </div>
               </div>
 
@@ -661,23 +941,11 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={teacherInfo?.email_id || ""}
-                    onChange={(e) => handleInputChange("email_id", e.target.value)}
-                    readOnly={!isEditingPersonal}
-                  />
+                  <Input id="email" type="email" {...register('email_id')} readOnly={!isEditingPersonal} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="number"
-                    value={teacherInfo?.phone_no || ""}
-                    onChange={(e) => handleInputChange("phone_no", Number(e.target.value))}
-                    readOnly={!isEditingPersonal}
-                  />
+                  <Input id="phone" type="number" {...register('phone_no')} readOnly={!isEditingPersonal} />
                 </div>
 
               </div>
@@ -688,34 +956,15 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                    <Input
-                      id="dateOfBirth"
-                      type="date"
-                      value={formatDateForInput(teacherInfo?.DOB)}
-                      onChange={(e) => handleInputChange("DOB", e.target.value)}
-                      readOnly={!isEditingPersonal}
-                    />
+                  <Input id="dateOfBirth" type="date" {...register('DOB')} readOnly={!isEditingPersonal} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dateOfJoining">Date of Joining</Label>
-                    <Input
-                      id="dateOfJoining"
-                      type="date"
-                      value={formatDateForInput(teacherInfo?.recruit_date)}
-                      onChange={(e) => handleInputChange("recruit_date", e.target.value)}
-                      readOnly={!isEditingPersonal}
-                    />
+                  <Input id="dateOfJoining" type="date" {...register('recruit_date')} readOnly={!isEditingPersonal} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="panNo">PAN Number</Label>
-                    <Input
-                      id="panNo"
-                      value={teacherInfo?.PAN_No || ""}
-                      onChange={(e) => handleInputChange("PAN_No", e.target.value)}
-                      readOnly={!isEditingPersonal}
-                      placeholder="ABCDE1234F"
-                      maxLength={10}
-                    />
+                  <Input id="panNo" {...register('PAN_No')} readOnly={!isEditingPersonal} placeholder="ABCDE1234F" maxLength={10} />
                   </div>
                 </div>
               </div>
@@ -726,23 +975,27 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="teachingStatus">Teaching Status</Label>
-                    <Select
-                      value={teacherInfo?.perma_or_tenure === false ? "Permanent" : "Tenured"} // Default selection
-                      onValueChange={(value: string) => {
-                        const isPermanent = value === "Permanent";
-                        console.log(teacherInfo?.perma_or_tenure);
-                        handleInputChange("perma_or_tenure", isPermanent === true ? false : true);
-                        console.log(teacherInfo?.perma_or_tenure);
-                      }}
-                    >
-                      <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
-                        <SelectValue placeholder="Select teaching status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tenured">Tenured</SelectItem>
-                        <SelectItem value="Permanent">Permanent</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Controller
+                      control={control}
+                      name="perma_or_tenure"
+                      render={({ field }) => (
+                        <Select
+                          value={field.value === false ? "Permanent" : "Tenured"}
+                          onValueChange={(value: string) => {
+                            const isPermanent = value === "Permanent";
+                            field.onChange(isPermanent ? false : true);
+                          }}
+                        >
+                          <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                            <SelectValue placeholder="Select teaching status" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Tenured">Tenured</SelectItem>
+                            <SelectItem value="Permanent">Permanent</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
                   </div>
                 </div>
               </div>
@@ -753,88 +1006,71 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="designation">Designation</Label>
-                    <Select
-                      value={
-                        teacherInfo?.perma_or_tenure === false
-                          ? teacherInfo?.desig_perma?.toString() || ""
-                          : teacherInfo?.desig_tenure?.toString() || ""
-                      }
-                      onValueChange={(value: any) => {
-                        if (teacherInfo?.perma_or_tenure) {
-                          handleInputChange("desig_tenure", value);
-                        } else {
-                          handleInputChange("desig_perma", value);
-                        }
+                    <Controller
+                      control={control}
+                      name={watch('perma_or_tenure') === false ? 'desig_perma' : 'desig_tenure'}
+                      render={({ field }) => {
+                        const designationOptions = watch('perma_or_tenure') === false 
+                          ? permanentDesignationOptions 
+                          : temporaryDesignationOptions
+                        return (
+                          <SearchableSelect
+                            options={designationOptions.map((desig) => ({
+                              value: desig.id,
+                              label: desig.name,
+                            }))}
+                            value={field.value}
+                            onValueChange={(v: string | number) => field.onChange(Number(v))}
+                            placeholder="Select designation"
+                            disabled={!isEditingPersonal}
+                            emptyMessage="No designation found."
+                          />
+                        )
                       }}
-                    >
-                      <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
-                        <SelectValue placeholder="Select designation" />
-                      </SelectTrigger>
-
-                      <SelectContent>
-                        {teacherInfo?.perma_or_tenure === false ? (
-                          // Permanent designations
-                          permanentDesignationOptions.map((desig) => (
-                            <SelectItem key={desig.id} value={desig.id.toString()}>
-                              {desig.name}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          // Tenured designations
-                          temporaryDesignationOptions.map((desig) => (
-                            <SelectItem key={desig.id} value={desig.id.toString()}>
-                              {desig.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                    />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="faculty">Faculty</Label>
-                    <Select
-                      value={(selectedFacultyId ?? facultyData?.Fid)?.toString() || ""}
-                      onValueChange={(value: any) => {
-                        // handleInputChange("Fid", value)
+                    <SearchableSelect
+                      options={facultyOptions.map((faculty) => ({
+                        value: faculty.Fid,
+                        label: faculty.Fname,
+                      }))}
+                      value={selectedFacultyId ?? facultyData?.Fid}
+                      onValueChange={(value: string | number) => {
                         const fidNum = Number(value)
                         setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
                         // Reset selected department when faculty changes
-                        handleInputChange("deptid", 0)
+                        setValue('deptid', 0)
                         setDepartmentData(null)
                       }}
-                    >
-                      <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
-                        <SelectValue placeholder="Select faculty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {facultyOptions.map((faculty) => (
-                          <SelectItem key={faculty.Fid} value={faculty.Fid.toString()}>
-                            {faculty.Fname}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      placeholder="Select faculty"
+                      disabled={!isEditingPersonal}
+                      emptyMessage="No faculty found."
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="department">Department</Label>
-                    <Select
-                      value={departmentData?.Deptid?.toString() || ""}
-                      onValueChange={(value: any) => handleInputChange("deptid", value)}
-                    >
-                      <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
-                        <SelectValue placeholder="Select department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {departmentOptions.map((dept) => (
-                          <SelectItem key={dept.Deptid} value={dept.Deptid.toString()}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Controller
+                      control={control}
+                      name="deptid"
+                      render={({ field }) => (
+                        <SearchableSelect
+                          options={departmentOptions.map((dept) => ({
+                            value: dept.Deptid,
+                            label: dept.name,
+                          }))}
+                          value={field.value}
+                          onValueChange={(v: string | number) => field.onChange(Number(v))}
+                          placeholder="Select department"
+                          disabled={!isEditingPersonal || !selectedFacultyId}
+                          emptyMessage={!selectedFacultyId ? "Please select a faculty first" : "No department found."}
+                        />
+                      )}
+                    />
                   </div>
                 </div>
               </div>
@@ -847,10 +1083,8 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label>Qualified NET Exam</Label>
                       <RadioGroup
-                        value={teacherInfo?.NET ? "yes" : "no"}
-                        onValueChange={(value: any) =>
-                          handleInputChange("NET", value === "yes" ? true : false)
-                        }
+                        value={watch('NET') ? "yes" : "no"}
+                        onValueChange={(value: any) => setValue('NET', value === 'yes')}
                         className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                       >
                         <div className="flex items-center space-x-2">
@@ -863,16 +1097,11 @@ export default function ProfilePage() {
                         </div>
                       </RadioGroup>
                     </div>
-                    {teacherInfo?.NET && (
+                    {watch('NET') && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="netYear">NET Qualified Year</Label>
-                          <Input
-                            id="netYear"
-                            value={teacherInfo?.NET_year?.toString() || ""}
-                            onChange={(e) => handleInputChange("NET_year", Number(e.target.value))}
-                            readOnly={!isEditingPersonal}
-                          />
+                          <Input id="netYear" {...register('NET_year')} readOnly={!isEditingPersonal} />
                         </div>
 
                       </>
@@ -883,10 +1112,8 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                       <Label>Qualified GATE Exam</Label>
                       <RadioGroup
-                        value={teacherInfo?.GATE ? "yes" : "no"}
-                        onValueChange={(value: any) =>
-                          handleInputChange("GATE", value === "yes" ? true : false)
-                        }
+                        value={watch('GATE') ? "yes" : "no"}
+                        onValueChange={(value: any) => setValue('GATE', value === 'yes')}
                         className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                       >
                         <div className="flex items-center space-x-2">
@@ -899,17 +1126,11 @@ export default function ProfilePage() {
                         </div>
                       </RadioGroup>
                     </div>
-                    {teacherInfo?.GATE && (
+                    {watch('GATE') && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="gateYear">GATE Qualified Year</Label>
-                          <Input
-                            id="gateYear"
-                            value={teacherInfo?.GATE_year || 0}
-                            onChange={(e) => handleInputChange("GATE_year", Number(e.target.value))}
-                            readOnly={!isEditingPersonal}
-                            placeholder="e.g., 2018"
-                          />
+                          <Input id="gateYear" {...register('GATE_year')} readOnly={!isEditingPersonal} placeholder="e.g., 2018" />
                         </div>
 
                       </>
@@ -924,10 +1145,8 @@ export default function ProfilePage() {
                 <div className="space-y-2">
                   <Label>Registered Guide at MSU</Label>
                   <RadioGroup
-                    value={teacherInfo?.PHDGuide ? "yes" : "no"}
-                    onValueChange={(value: any) =>
-                      handleInputChange("PHDGuide", value === "yes" ? true : false)
-                    }
+                    value={watch('PHDGuide') ? "yes" : "no"}
+                    onValueChange={(value: any) => setValue('PHDGuide', value === 'yes')}
                     className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
                   >
                     <div className="flex items-center space-x-2">
@@ -940,15 +1159,10 @@ export default function ProfilePage() {
                     </div>
                   </RadioGroup>
                 </div>
-                {teacherInfo?.PHDGuide && (
+                {watch('PHDGuide') && (
                   <div className="space-y-2">
                     <Label htmlFor="registrationYear">Year of Registration</Label>
-                    <Input
-                      id="registrationYear"
-                      value={teacherInfo?.Guide_year || 0}
-                      onChange={(e) => handleInputChange("Guide_year", Number(e.target.value))}
-                      readOnly={!isEditingPersonal}
-                    />
+                    <Input id="registrationYear" {...register('Guide_year')} readOnly={!isEditingPersonal} />
                   </div>
                 )}
               </div>
@@ -1062,21 +1276,10 @@ export default function ProfilePage() {
               <CardTitle>Experience Details</CardTitle>
               <CardDescription>Your professional work experience</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={addExperienceEntry} size="sm" className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Add Experience
-              </Button>
-              <Button
-                onClick={handleSaveExperience}
-                size="sm"
-                variant="outline"
-                className="flex items-center gap-2 bg-transparent"
-              >
-                <Save className="h-4 w-4" />
-                Save
-              </Button>
-            </div>
+            <Button onClick={addExperienceEntry} size="sm" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Experience
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -1096,115 +1299,184 @@ export default function ProfilePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {experienceData.map((entry, index) => {
-                  const rowEditing = experienceEditingIds.has(entry.Id);
+                {experienceFields.map((field, index) => {
+                  const entry = experienceForm.watch(`experiences.${index}`)
+                  const rowEditing = experienceEditingIds.has(field.Id);
                   return (
-                    <TableRow key={entry.Id}>
+                    <TableRow key={field.id}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
-                        <Input
-                          value={entry?.Employeer || ""}
-                          onChange={(e) => updateExperienceEntry(entry.Id, "employer", e.target.value)}
-                          className="min-w-[150px]"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.Employeer`}
+                          rules={{ required: rowEditing ? "Employer is required" : false }}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className="min-w-[150px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={entry.currente ? "yes" : "no"}
-                          onValueChange={(value: any) =>
-                            updateExperienceEntry(entry.Id, "currentlyEmployed", value === "yes")
-                          }
-                        >
-                          <SelectTrigger className={`min-w-[100px] ${!rowEditing ? "pointer-events-none" : ""}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="yes">Yes</SelectItem>
-                            <SelectItem value="no">No</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Input
-                          value={entry?.desig || ""}
-                          onChange={(e) => updateExperienceEntry(entry.Id, "designation", e.target.value)}
-                          className="min-w-[150px]"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.currente`}
+                          render={({ field: formField }) => (
+                            <Select
+                              value={formField.value ? "yes" : "no"}
+                              onValueChange={(value: string) => formField.onChange(value === "yes")}
+                              disabled={!rowEditing}
+                            >
+                              <SelectTrigger className={`min-w-[100px] ${!rowEditing ? "pointer-events-none" : ""}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="yes">Yes</SelectItem>
+                                <SelectItem value="no">No</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="date"
-                          value={formatDateForInput(entry.Start_Date)}
-                          onChange={(e) => updateExperienceEntry(entry.Id, "dateOfJoining", e.target.value)}
-                          className="min-w-[150px]"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.desig`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className="min-w-[150px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="date"
-                          value={formatDateForInput(entry.End_Date)}
-                          onChange={(e) => updateExperienceEntry(entry.Id, "dateOfRelieving", e.target.value)}
-                          className="min-w-[150px]"
-                          readOnly={!rowEditing || entry.currente}
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.Start_Date`}
+                          rules={{ required: rowEditing ? "Start date is required" : false }}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              type="date"
+                              value={formatDateForInput(formField.value)}
+                              onChange={(e) => formField.onChange(e.target.value)}
+                              className="min-w-[150px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={entry.Nature}
-                          onValueChange={(value: any) => updateExperienceEntry(entry.Id, "natureOfJob", value)}
-                        >
-                          <SelectTrigger className={`min-w-[150px] ${!rowEditing ? "pointer-events-none" : ""}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Teaching">Teaching</SelectItem>
-                            <SelectItem value="Administration">Administration</SelectItem>
-                            <SelectItem value="Industrial Work">Industrial Work</SelectItem>
-                            <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
-                            <SelectItem value="Research">Research</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.End_Date`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              type="date"
+                              value={formatDateForInput(formField.value)}
+                              onChange={(e) => formField.onChange(e.target.value)}
+                              className="min-w-[150px]"
+                              readOnly={!rowEditing || entry?.currente}
+                            />
+                          )}
+                        />
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={entry?.UG_PG || ""}
-                          onValueChange={(value: any) =>
-                            updateExperienceEntry(entry.Id, "typeOfTeaching", value)
-                          }
-                        >
-                          <SelectTrigger className={`min-w-[120px] ${!rowEditing ? "pointer-events-none" : ""}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="UG">UG</SelectItem>
-                            <SelectItem value="PG">PG</SelectItem>
-                            <SelectItem value="UG & PG">UG & PG</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.Nature`}
+                          rules={{ required: rowEditing ? "Nature of job is required" : false }}
+                          render={({ field: formField }) => (
+                            <Select
+                              value={formField.value || ""}
+                              onValueChange={formField.onChange}
+                              disabled={!rowEditing}
+                            >
+                              <SelectTrigger className={`min-w-[150px] ${!rowEditing ? "pointer-events-none" : ""}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Teaching">Teaching</SelectItem>
+                                <SelectItem value="Administration">Administration</SelectItem>
+                                <SelectItem value="Industrial Work">Industrial Work</SelectItem>
+                                <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
+                                <SelectItem value="Research">Research</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Controller
+                          control={experienceForm.control}
+                          name={`experiences.${index}.UG_PG`}
+                          rules={{ required: rowEditing ? "Teaching type is required" : false }}
+                          render={({ field: formField }) => (
+                            <Select
+                              value={formField.value || ""}
+                              onValueChange={formField.onChange}
+                              disabled={!rowEditing}
+                            >
+                              <SelectTrigger className={`min-w-[120px] ${!rowEditing ? "pointer-events-none" : ""}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="UG">UG</SelectItem>
+                                <SelectItem value="PG">PG</SelectItem>
+                                <SelectItem value="UG & PG">UG & PG</SelectItem>
+                                <SelectItem value="Other">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {!rowEditing ? (
                             <>
-                              <Button size="sm" onClick={() => toggleExperienceRowEdit(entry.Id)}>
+                              <Button size="sm" onClick={() => toggleExperienceRowEdit(field.Id)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(entry.Id)}>
+                              <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(index, field.Id)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </>
                           ) : (
                             <>
-                              <Button size="sm" variant="outline" onClick={() => toggleExperienceRowEdit(entry.Id)}>
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => handleSaveExperienceRow(index, field.Id)}
+                                className="flex items-center gap-1"
+                              >
                                 <Save className="h-4 w-4" />
+                                <span className="hidden sm:inline">Save</span>
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => toggleExperienceRowEdit(entry.Id)}>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => {
+                                  toggleExperienceRowEdit(field.Id)
+                                  // Reset form to original values on cancel
+                                  const teacherId = user?.role_id || teacherInfo?.Tid
+                                  if (teacherId) {
+                                    fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+                                      .then(res => res.json())
+                                      .then((data: TeacherData) => {
+                                        experienceForm.reset({ experiences: data.teacherExperience || [] })
+                                      })
+                                  }
+                                }}
+                                className="flex items-center gap-1"
+                              >
                                 <X className="h-4 w-4" />
+                                <span className="hidden sm:inline">Cancel</span>
                               </Button>
                             </>
                           )}
@@ -1227,21 +1499,10 @@ export default function ProfilePage() {
               <CardTitle>Post Doctoral Research Experience</CardTitle>
               <CardDescription>Your post-doctoral research positions</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={addPostDocEntry} size="sm" className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Add Post-Doc
-              </Button>
-              <Button
-                onClick={handleSavePostDoc}
-                size="sm"
-                variant="outline"
-                className="flex items-center gap-2 bg-transparent"
-              >
-                <Save className="h-4 w-4" />
-                Save
-              </Button>
-            </div>
+            <Button onClick={addPostDocEntry} size="sm" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Post-Doc
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -1260,65 +1521,103 @@ export default function ProfilePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {postDocData.map((entry, index) => {
-                  const rowEditing = postDocEditingIds.has(entry.Id);
+                {postDocFields.map((field, index) => {
+                  const entry = postDocForm.watch(`researches.${index}`)
+                  const rowEditing = postDocEditingIds.has(field.Id);
                   return (
-                    <TableRow key={entry.Id}>
+                    <TableRow key={field.id}>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
-                        <Input
-                          value={entry?.Institute || ""}
-                          onChange={(e) => updatePostDocEntry(entry.Id, "institute", e.target.value)}
-                          className="min-w-[200px]"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={postDocForm.control}
+                          name={`researches.${index}.Institute`}
+                          rules={{ required: rowEditing ? "Institute is required" : false }}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className="min-w-[200px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="date"
-                          value={formatDateForInput(entry.Start_Date)}
-                          onChange={(e) => updatePostDocEntry(entry.Id, "startDate", e.target.value)}
-                          className="min-w-[150px]"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={postDocForm.control}
+                          name={`researches.${index}.Start_Date`}
+                          rules={{ required: rowEditing ? "Start date is required" : false }}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              type="date"
+                              value={formatDateForInput(formField.value)}
+                              onChange={(e) => formField.onChange(e.target.value)}
+                              className="min-w-[150px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          type="date"
-                          value={formatDateForInput(entry.End_Date)}
-                          onChange={(e) => updatePostDocEntry(entry.Id, "endDate", e.target.value)}
-                          className="min-w-[150px]"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={postDocForm.control}
+                          name={`researches.${index}.End_Date`}
+                          rules={{ required: rowEditing ? "End date is required" : false }}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              type="date"
+                              value={formatDateForInput(formField.value)}
+                              onChange={(e) => formField.onChange(e.target.value)}
+                              className="min-w-[150px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          value={entry?.SponsoredBy || ""}
-                          onChange={(e) => updatePostDocEntry(entry.Id, "sponsoredBy", e.target.value)}
-                          className="min-w-[150px]"
-                          placeholder="e.g., UGC, CSIR"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={postDocForm.control}
+                          name={`researches.${index}.SponsoredBy`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className="min-w-[150px]"
+                              placeholder="e.g., UGC, CSIR"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          value={entry?.QS_THE || ""}
-                          onChange={(e) => updatePostDocEntry(entry.Id, "ranking", e.target.value)}
-                          className="min-w-[200px]"
-                          placeholder="e.g., QS Ranking: 172"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={postDocForm.control}
+                          name={`researches.${index}.QS_THE`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className="min-w-[200px]"
+                              placeholder="e.g., QS Ranking: 172"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Input
-                            value={entry?.doc || ""}
-                            onChange={(e) => updatePostDocEntry(entry.Id, "supportingDocument", e.target.value)}
-                            className="min-w-[150px]"
-                            placeholder="Document name"
-                            readOnly={!rowEditing}
+                          <Controller
+                            control={postDocForm.control}
+                            name={`researches.${index}.doc`}
+                            render={({ field: formField }) => (
+                              <Input
+                                {...formField}
+                                className="min-w-[150px]"
+                                placeholder="Document name"
+                                readOnly={!rowEditing}
+                              />
+                            )}
                           />
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" disabled={!rowEditing}>
                             <Upload className="h-4 w-4" />
                           </Button>
                         </div>
@@ -1327,20 +1626,42 @@ export default function ProfilePage() {
                         <div className="flex items-center gap-2">
                           {!rowEditing ? (
                             <>
-                              <Button size="sm" onClick={() => togglePostDocRowEdit(entry.Id)}>
+                              <Button size="sm" onClick={() => togglePostDocRowEdit(field.Id)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removePostDocEntry(entry.Id)}>
+                              <Button variant="destructive" size="sm" onClick={() => removePostDocEntry(index, field.Id)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </>
                           ) : (
                             <>
-                              <Button size="sm" variant="outline" onClick={() => togglePostDocRowEdit(entry.Id)}>
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => handleSavePostDocRow(index, field.Id)}
+                                className="flex items-center gap-1"
+                              >
                                 <Save className="h-4 w-4" />
+                                <span className="hidden sm:inline">Save</span>
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => togglePostDocRowEdit(entry.Id)}>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => {
+                                  togglePostDocRowEdit(field.Id)
+                                  const teacherId = user?.role_id || teacherInfo?.Tid
+                                  if (teacherId) {
+                                    fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+                                      .then(res => res.json())
+                                      .then((data: TeacherData) => {
+                                        postDocForm.reset({ researches: data.postDoctoralExp || [] })
+                                      })
+                                  }
+                                }}
+                                className="flex items-center gap-1"
+                              >
                                 <X className="h-4 w-4" />
+                                <span className="hidden sm:inline">Cancel</span>
                               </Button>
                             </>
                           )}
@@ -1363,21 +1684,10 @@ export default function ProfilePage() {
               <CardTitle>Education Details</CardTitle>
               <CardDescription>Your academic qualifications</CardDescription>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={addEducationEntry} size="sm" className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Add Education
-              </Button>
-              <Button
-                onClick={handleSaveEducation}
-                size="sm"
-                variant="outline"
-                className="flex items-center gap-2 bg-transparent"
-              >
-                <Save className="h-4 w-4" />
-                Save
-              </Button>
-            </div>
+            <Button onClick={addEducationEntry} size="sm" className="flex items-center gap-2">
+              <Plus className="h-4 w-4" />
+              Add Education
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -1396,104 +1706,160 @@ export default function ProfilePage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {educationData.map((entry, index) => {
-                  const rowEditing = educationEditingIds.has(entry.gid);
+                {educationFields.map((field, index) => {
+                  const entry = educationForm.watch(`educations.${index}`)
+                  const rowEditing = educationEditingIds.has(field.gid);
                   return (
-                    <TableRow key={entry.gid}>
+                    <TableRow key={field.id}>
                       <TableCell>{index + 1}</TableCell>
 
                       <TableCell>
-                        <Select
-                          value={entry.degree_type.toString()}
-                          onValueChange={(value: any) => updateEducationEntry(entry.gid, "degreeType", value)}
-                        >
-                          <SelectTrigger className={`min-w-[140px] ${!rowEditing ? "pointer-events-none" : ""}`}>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {degreeTypeOptions.map((degreeType) => (
-                              <SelectItem key={degreeType.id} value={degreeType.id.toString()}>
-                                {degreeType.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-
-                      <TableCell>
-                        <Input
-                          value={entry.university_name}
-                          onChange={(e) => updateEducationEntry(entry.gid, "university", e.target.value)}
-                          className="min-w-[200px]"
-                          readOnly={!rowEditing}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <input
-                          type="text"
-                          value={entry?.state || ""}
-                          onChange={(e) => updateEducationEntry(entry.gid, "state", e.target.value)}
-                          className={`min-w-[140px] border rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 ${!rowEditing ? "pointer-events-none bg-gray-100 text-gray-500" : ""
-                            }`}
-                          placeholder="Enter state"
+                        <Controller
+                          control={educationForm.control}
+                          name={`educations.${index}.degree_type`}
+                          rules={{ required: rowEditing ? "Degree type is required" : false }}
+                          render={({ field: formField }) => (
+                            <SearchableSelect
+                              options={degreeTypeOptions.map((degreeType) => ({
+                                value: degreeType.id,
+                                label: degreeType.name,
+                              }))}
+                              value={formField.value}
+                              onValueChange={(value: string | number) => formField.onChange(Number(value))}
+                              placeholder="Select degree type"
+                              disabled={!rowEditing}
+                              emptyMessage="No degree type found."
+                              className="min-w-[140px]"
+                            />
+                          )}
                         />
                       </TableCell>
 
                       <TableCell>
-                        <Input
-                          type="text"
-                          value={
-                            entry.year_of_passing
-                              ? new Date(entry.year_of_passing).getFullYear().toString()
+                        <Controller
+                          control={educationForm.control}
+                          name={`educations.${index}.university_name`}
+                          rules={{ required: rowEditing ? "University name is required" : false }}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className="min-w-[200px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Controller
+                          control={educationForm.control}
+                          name={`educations.${index}.state`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              className={`min-w-[140px] ${!rowEditing ? "pointer-events-none bg-gray-100 text-gray-500" : ""}`}
+                              placeholder="Enter state"
+                              readOnly={!rowEditing}
+                            />
+                          )}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Controller
+                          control={educationForm.control}
+                          name={`educations.${index}.year_of_passing`}
+                          rules={{ required: rowEditing ? "Year of passing is required" : false }}
+                          render={({ field: formField }) => {
+                            const yearValue = formField.value
+                              ? new Date(formField.value).getFullYear().toString()
                               : ""
-                          }
-                          onChange={(e) => {
-                            const year = e.target.value.replace(/\D/g, "").slice(0, 4);
-                            updateEducationEntry(entry.gid, "year_of_passing", `${year}-01-01`);
+                            return (
+                              <Input
+                                type="text"
+                                value={yearValue}
+                                onChange={(e) => {
+                                  const year = e.target.value.replace(/\D/g, "").slice(0, 4);
+                                  formField.onChange(`${year}-01-01`);
+                                }}
+                                className="min-w-[120px]"
+                                placeholder="YYYY"
+                                readOnly={!rowEditing}
+                              />
+                            )
                           }}
-                          className="min-w-[120px]"
-                          placeholder="YYYY"
-                          readOnly={!rowEditing}
-                        />
-
-                      </TableCell>
-
-                      <TableCell>
-                        <Input
-                          value={entry?.subject || ""}
-                          onChange={(e) => updateEducationEntry(entry.gid, "specialization", e.target.value)}
-                          className="min-w-[200px]"
-                          readOnly={!rowEditing}
                         />
                       </TableCell>
 
                       <TableCell>
-                        <Input
-                          value={entry?.QS_Ranking || ""}
-                          onChange={(e) => updateEducationEntry(entry.gid, "QS_Ranking", e.target.value)}
-                          className="min-w-[120px]"
-                          placeholder="YYYY"
-                          readOnly={!rowEditing}
+                        <Controller
+                          control={educationForm.control}
+                          name={`educations.${index}.subject`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              value={formField.value || ""}
+                              className="min-w-[200px]"
+                              readOnly={!rowEditing}
+                            />
+                          )}
+                        />
+                      </TableCell>
+
+                      <TableCell>
+                        <Controller
+                          control={educationForm.control}
+                          name={`educations.${index}.QS_Ranking`}
+                          render={({ field: formField }) => (
+                            <Input
+                              {...formField}
+                              value={formField.value || ""}
+                              className="min-w-[120px]"
+                              placeholder="QS Ranking"
+                              readOnly={!rowEditing}
+                            />
+                          )}
                         />
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           {!rowEditing ? (
                             <>
-                              <Button size="sm" onClick={() => toggleEducationRowEdit(entry.gid)}>
+                              <Button size="sm" onClick={() => toggleEducationRowEdit(field.gid)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removeEducationEntry(entry.gid)}>
+                              <Button variant="destructive" size="sm" onClick={() => removeEducationEntry(index, field.gid)}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </>
                           ) : (
                             <>
-                              <Button size="sm" variant="outline" onClick={() => toggleEducationRowEdit(entry.gid)}>
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => handleSaveEducationRow(index, field.gid)}
+                                className="flex items-center gap-1"
+                              >
                                 <Save className="h-4 w-4" />
+                                <span className="hidden sm:inline">Save</span>
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => toggleEducationRowEdit(entry.gid)}>
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                onClick={() => {
+                                  toggleEducationRowEdit(field.gid)
+                                  const teacherId = user?.role_id || teacherInfo?.Tid
+                                  if (teacherId) {
+                                    fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+                                      .then(res => res.json())
+                                      .then((data: TeacherData) => {
+                                        educationForm.reset({ educations: data.graduationDetails || [] })
+                                      })
+                                  }
+                                }}
+                                className="flex items-center gap-1"
+                              >
                                 <X className="h-4 w-4" />
+                                <span className="hidden sm:inline">Cancel</span>
                               </Button>
                             </>
                           )}

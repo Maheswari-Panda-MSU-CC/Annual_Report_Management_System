@@ -1,4 +1,5 @@
 import { connectToDatabase } from '@/lib/db';
+import sql from 'mssql';
 import crypto from 'crypto';
 
 // Legacy PBKDF2 parameters to match existing hashes
@@ -15,7 +16,8 @@ function hashPasswordPBKDF2(password: string): string {
 
 export async function POST(request: Request) {
   try {
-    const { email,password,user_type } = await request.json();
+    const { email, password, user_type, fid, deptid } = await request.json();
+    
     if (!email || !password || user_type === undefined) {
       return new Response(JSON.stringify({ error: 'Email, password, and user_type are required.' }), {
         status: 400,
@@ -30,22 +32,47 @@ export async function POST(request: Request) {
       });
     }
 
+    // Validate based on user type according to SP requirements
+    const userType = Number(user_type);
+    if (userType === 3 && !fid) {
+      return new Response(JSON.stringify({ error: 'Faculty ID (Fid) is required for Department account.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (userType === 4 && (!fid || !deptid)) {
+      return new Response(JSON.stringify({ error: 'Faculty ID (Fid) and Department ID (DeptId) are required for Teacher account.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Hash the password using legacy PBKDF2 format
     const hashedPassword = hashPasswordPBKDF2(password);
 
     const pool = await connectToDatabase();
+    const requestObj = pool.request()
+      .input('Email_Id', sql.NVarChar(150), email)
+      .input('Password_Hash', sql.Char(300), hashedPassword)
+      .input('User_Type', sql.Int, userType)
+      .input('DeptId', sql.Int, deptid || null)
+      .input('Fid', sql.Int, fid || null);
+
     try {
-      await pool
-        .request()
-        .input('Email_Id', email)
-        .input('Password_Hash', hashedPassword)
-        .input('User_Type', user_type)
-        .execute('sp_Insert_Login_Details');
-    } catch (err) {
+      await requestObj.execute('sp_Insert_Login_Details');
+    } catch (err: any) {
       // Check for duplicate email error
       if (err instanceof Error && err.message && err.message.includes('Email ID already exists')) {
         return new Response(JSON.stringify({ error: 'Email ID already exists.' }), {
           status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      // Check for validation errors from SP
+      if (err instanceof Error && err.message) {
+        return new Response(JSON.stringify({ error: err.message }), {
+          status: 400,
           headers: { 'Content-Type': 'application/json' },
         });
       }

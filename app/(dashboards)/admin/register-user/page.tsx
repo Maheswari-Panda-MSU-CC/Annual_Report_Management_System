@@ -1,8 +1,7 @@
 "use client"
 
 import React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -27,6 +26,7 @@ import {
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
+import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
 
 export default function RegisterUserPage() {
   const router = useRouter()
@@ -41,7 +41,7 @@ export default function RegisterUserPage() {
     userType: "",
     department: "",
     faculty: "",
-    password: "",
+    password: "test@123", // Default password
   })
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
@@ -49,35 +49,68 @@ export default function RegisterUserPage() {
   const [userTypes, setUserTypes] = useState<{ id: number; name: string }[]>([])
   const { facultyOptions, departmentOptions, fetchFaculties, fetchDepartments } = useDropDowns()
 
-  const handleFacultyChange = (facultyId: string) => {
-    setFormData((prev) => ({ ...prev, faculty: facultyId }));
-    fetchDepartments(Number(facultyId))
-  }
-
   // Check if user is admin
-  React.useEffect(() => {
+  useEffect(() => {
     if (user?.user_type !== 1) {
       setIsAccessDenied(true)
     }
-    fetchFaculties();
+    fetchFaculties()
   }, [user])
 
-
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchUserTypes = async () => {
       try {
         const res = await fetch('/api/admin/user-types')
         if (!res.ok) throw new Error('Failed to fetch user types')
-
         const data = await res.json()
         setUserTypes(data)
       } catch (error) {
         console.error(error)
       }
     }
-
     fetchUserTypes()
   }, [])
+
+  // Fetch departments when faculty changes
+  useEffect(() => {
+    if (formData.faculty) {
+      fetchDepartments(Number(formData.faculty))
+    }
+  }, [formData.faculty])
+
+  // Reset dependent fields when user type changes
+  useEffect(() => {
+    if (formData.userType) {
+      const userTypeNum = Number(formData.userType)
+      // Only reset if switching away from types that need these fields
+      if (userTypeNum !== 3 && userTypeNum !== 4) {
+        setFormData(prev => ({ ...prev, faculty: "", department: "" }))
+      }
+    }
+  }, [formData.userType])
+
+  // Determine which fields to show based on user type
+  const userTypeNum = Number(formData.userType)
+  const showFaculty = userTypeNum === 3 || userTypeNum === 4 // Department or Teacher
+  const showDepartment = userTypeNum === 3 || userTypeNum === 4 // Department or Teacher
+  const requiresFaculty = userTypeNum === 3 || userTypeNum === 4
+  const requiresDepartment = userTypeNum === 4 // Only Teacher requires department
+
+  const handleFacultyChange = (value: string | number) => {
+    const facultyId = String(value)
+    setFormData((prev) => ({ ...prev, faculty: facultyId, department: "" }))
+    if (errors.faculty) {
+      setErrors({ ...errors, faculty: "" })
+    }
+  }
+
+  const handleDepartmentChange = (value: string | number) => {
+    const deptId = String(value)
+    setFormData((prev) => ({ ...prev, department: deptId }))
+    if (errors.department) {
+      setErrors({ ...errors, department: "" })
+    }
+  }
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {}
@@ -94,14 +127,14 @@ export default function RegisterUserPage() {
       newErrors.userType = "User type is required"
     }
 
-    // Department validation
-    if (!formData.department) {
-      newErrors.department = "Department is required"
+    // Faculty validation (required for Department and Teacher)
+    if (requiresFaculty && !formData.faculty) {
+      newErrors.faculty = "Faculty is required"
     }
 
-    // Faculty validation
-    if (!formData.faculty) {
-      newErrors.faculty = "Faculty is required"
+    // Department validation (required only for Teacher)
+    if (requiresDepartment && !formData.department) {
+      newErrors.department = "Department is required"
     }
 
     // Password validation
@@ -112,7 +145,6 @@ export default function RegisterUserPage() {
     }
 
     setErrors(newErrors)
-
     return Object.keys(newErrors).length === 0
   }
 
@@ -126,70 +158,82 @@ export default function RegisterUserPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-  
+    e.preventDefault()
+
     if (!validateForm()) {
       toast({
-        title: "Error",
-        description: "Validation Failed",
+        title: "Validation Failed",
+        description: "Please fill all required fields correctly.",
         variant: "destructive",
       })
-      return;
+      return
     }
-  
-    setIsLoading(true);
-    setSuccessMessage("");
-    setErrors({});
-  
+
+    setIsLoading(true)
+    setSuccessMessage("")
+    setErrors({})
+
     try {
+      // Prepare signup payload based on user type
+      const signupPayload: any = {
+        email: formData.email,
+        password: formData.password,
+        user_type: Number(formData.userType),
+      }
+
+      // Add Fid and DeptId based on user type
+      if (userTypeNum === 3) {
+        // Department - requires Fid
+        signupPayload.fid = Number(formData.faculty)
+      } else if (userTypeNum === 4) {
+        // Teacher - requires both Fid and DeptId
+        signupPayload.fid = Number(formData.faculty)
+        signupPayload.deptid = Number(formData.department)
+      }
+
       // Step 1: Create user via signup API
       const signupRes = await fetch("/api/auth/signup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
-      });
-  
+        body: JSON.stringify(signupPayload),
+      })
+
       if (!signupRes.ok) {
-        const errorData = await signupRes.json();
+        const errorData = await signupRes.json()
         toast({
           title: "Error",
-          description: errorData.error,
+          description: errorData.error || "Failed to register user",
           variant: "destructive",
         })
-        throw new Error(errorData.error || "Failed to register user");
+        throw new Error(errorData.error || "Failed to register user")
       }
 
-      toast({
-        title: "Success",
-        description: signupRes.statusText,
-      })
-  
-      // Step 2: Prepare welcome email content
+      // Step 2: Send welcome email with credentials
+      const userTypeName = userTypes.find((item) => item.id.toString() === formData.userType)?.name || ""
       const emailContent = `
-        Welcome to MSU Baroda Annual Report System!
-  
-        Your account has been created successfully.
-  
-        Login Credentials:
-        Email: ${formData.email}
-        Temporary Password: ${formData.password}
-  
-        User Details:
-        Type: ${userTypes.find(item => item.id.toString() === formData.userType)?.name || ""}
-  
-        Please login at: ${window.location.origin}/login
-  
-        IMPORTANT: Please change your password immediately after your first login for security purposes.
-  
-        If you have any questions, please contact the system administrator.
-  
-        Best regards,
-        MSU Baroda Computer Centre
-      `;
-  
-      // Step 3: Send welcome email
+            Welcome to MSU Baroda Annual Report Management System (ARMS)!
+
+            Your account has been created successfully.
+
+            LOGIN CREDENTIALS:
+            Email: ${formData.email}
+            Temporary Password: ${formData.password}
+
+            User Type: ${userTypeName}
+
+            Please login at: ${window.location.origin}/login
+
+            ⚠️ IMPORTANT SECURITY REMINDER ⚠️
+            Please change your password immediately after your first login for security purposes.
+
+            If you have any questions, please contact the system administrator.
+
+            Best regards,
+            MSU Baroda Computer Centre
+      `.trim()
+
       const emailRes = await fetch("/api/send-mail", {
         method: "POST",
         headers: {
@@ -197,35 +241,43 @@ export default function RegisterUserPage() {
         },
         body: JSON.stringify({
           to: formData.email,
-          subject: "Welcome to MSU Baroda Annual Report System",
+          subject: "Welcome to MSU Baroda Annual Report Management System (ARMS)",
           text: emailContent,
         }),
-      });
-  
+      })
+
       if (!emailRes.ok) {
-        console.warn("User created but email sending failed");
+        console.warn("User created but email sending failed")
+        toast({
+          title: "User Created",
+          description: "User registered but email notification failed. Please notify them manually.",
+          variant: "default",
+        })
+      } else {
+        toast({
+          title: "Success",
+          description: "User registered and welcome email sent successfully!",
+        })
       }
-  
+
       setSuccessMessage(
         `User registered successfully! Welcome email with login credentials has been sent to ${formData.email}`
-      );
-  
-      // Step 4: Reset form
+      )
+
+      // Step 3: Reset form
       setFormData({
         email: "",
         userType: "",
         department: "",
         faculty: "",
-        password: "",
-      });
-  
+        password: "test@123", // Reset to default
+      })
     } catch (error: any) {
-      setErrors({ submit: error.message || "Failed to register user" });
+      setErrors({ submit: error.message || "Failed to register user" })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
-  
+  }
 
   const handleInputChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value })
@@ -233,6 +285,17 @@ export default function RegisterUserPage() {
       setErrors({ ...errors, [field]: "" })
     }
   }
+
+  // Prepare options for searchable selects
+  const facultySelectOptions: SearchableSelectOption[] = facultyOptions.map((faculty) => ({
+    value: faculty.Fid,
+    label: faculty.Fname,
+  }))
+
+  const departmentSelectOptions: SearchableSelectOption[] = departmentOptions.map((dept) => ({
+    value: dept.Deptid,
+    label: dept.name,
+  }))
 
   if (isAccessDenied) {
     return (
@@ -246,15 +309,14 @@ export default function RegisterUserPage() {
   }
 
   return (
-   
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 p-4 md:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Registration</h1>
-          <p className="text-gray-600 mt-1">Register new users for the Annual Report System</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">User Registration</h1>
+          <p className="text-gray-600 mt-1 text-sm md:text-base">Register new users for the Annual Report System</p>
         </div>
-        <Button variant="outline" onClick={() => router.push("/admin/user-management")}>
+        <Button variant="outline" onClick={() => router.push("/admin/user-management")} className="w-full md:w-auto">
           <Users className="h-4 w-4 mr-2" />
           Manage Users
         </Button>
@@ -313,7 +375,11 @@ export default function RegisterUserPage() {
                   </Label>
                   <Select
                     value={formData.userType}
-                    onValueChange={(value) => handleInputChange("userType", value)}
+                    onValueChange={(value) => {
+                      handleInputChange("userType", value)
+                      // Reset dependent fields
+                      setFormData(prev => ({ ...prev, faculty: "", department: "" }))
+                    }}
                   >
                     <SelectTrigger className={errors.userType ? "border-red-500" : ""}>
                       <SelectValue placeholder="Select user type" />
@@ -326,177 +392,188 @@ export default function RegisterUserPage() {
                       ))}
                     </SelectContent>
                   </Select>
-
                   {errors.userType && <p className="text-sm text-red-600">{errors.userType}</p>}
                 </div>
-                {/* Faculty */}
-                <div className="space-y-2">
-                  <Label>Faculty</Label>
-                  <Select onValueChange={handleFacultyChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Faculty" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {facultyOptions.map((faculty) => (
-                        <SelectItem key={faculty.Fid} value={faculty.Fid.toString()}>
-                          {faculty.Fname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                {/* Department */}
-                <div className="space-y-2">
-                  <Label>Department</Label>
-                  <Select
-                    disabled={!departmentOptions.length}
-                    onValueChange={(value) => {
-                      setFormData((prev) => ({
-                        ...prev,
-                        department: value, // store Deptid or object as needed
-                      }));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departmentOptions.map((dept) => (
-                        <SelectItem key={dept.Deptid} value={dept.Deptid.toString()}>
-                          {dept.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-
-
-              {/* Password */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="flex items-center gap-2">
-                  <Key className="h-4 w-4" />
-                  Temporary Password *
-                </Label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter temporary password"
-                      value={formData.password}
-                      onChange={(e) => handleInputChange("password", e.target.value)}
-                      className={errors.password ? "border-red-500" : ""}
+                {/* Faculty - Only show for Department (3) and Teacher (4) */}
+                {showFaculty && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Building className="h-4 w-4" />
+                      Faculty {requiresFaculty && "*"}
+                    </Label>
+                    <SearchableSelect
+                      options={facultySelectOptions}
+                      value={formData.faculty ? Number(formData.faculty) : undefined}
+                      onValueChange={handleFacultyChange}
+                      placeholder="Select Faculty"
+                      disabled={!formData.userType}
+                      className={errors.faculty ? "border-red-500" : ""}
+                      emptyMessage="No faculty found."
                     />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setShowPassword(!showPassword)}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {errors.faculty && <p className="text-sm text-red-600">{errors.faculty}</p>}
+                    <p className="text-xs text-gray-500">Type to search for a faculty</p>
+                  </div>
+                )}
+
+                {/* Department - Only show for Department (3) and Teacher (4) */}
+                {showDepartment && (
+                  <div className="space-y-2">
+                    <Label>
+                      Department {requiresDepartment && "*"}
+                    </Label>
+                    <SearchableSelect
+                      options={departmentSelectOptions}
+                      value={formData.department ? Number(formData.department) : undefined}
+                      onValueChange={handleDepartmentChange}
+                      placeholder="Select Department"
+                      disabled={!formData.faculty || !departmentSelectOptions.length}
+                      className={errors.department ? "border-red-500" : ""}
+                      emptyMessage="No department found. Please select a faculty first."
+                    />
+                    {errors.department && <p className="text-sm text-red-600">{errors.department}</p>}
+                    <p className="text-xs text-gray-500">
+                      {!formData.faculty
+                        ? "Please select a faculty first"
+                        : "Type to search for a department"}
+                    </p>
+                  </div>
+                )}
+
+                {/* Password */}
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    Temporary Password *
+                  </Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Enter temporary password"
+                        value={formData.password}
+                        onChange={(e) => handleInputChange("password", e.target.value)}
+                        className={errors.password ? "border-red-500" : ""}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <Button type="button" variant="outline" onClick={generatePassword}>
+                      <RefreshCw className="h-4 w-4" />
                     </Button>
                   </div>
-                  <Button type="button" variant="outline" onClick={generatePassword}>
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
+                  {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
+                  <p className="text-sm text-gray-500">Default password: test@123 (minimum 8 characters required)</p>
                 </div>
-                {errors.password && <p className="text-sm text-red-600">{errors.password}</p>}
-                <p className="text-sm text-gray-500">Minimum 8 characters required</p>
+
+                {/* Submit Button */}
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Registering User...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Register User & Send Email
+                    </>
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Registration Summary */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Registration Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label className="text-sm font-medium text-gray-600">Email Address</Label>
+                <p className="text-sm">{formData.email || "Not specified"}</p>
               </div>
 
-              {/* Submit Button */}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Registering User...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4 w-4 mr-2" />
-                    Register User & Send Email
-                  </>
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Registration Summary */}
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Registration Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label className="text-sm font-medium text-gray-600">Email Address</Label>
-              <p className="text-sm">{formData.email || "Not specified"}</p>
-            </div>
-
-            <div>
-              <Label className="text-sm font-medium text-gray-600">User Level</Label>
-              <div className="mt-1">
-                {formData.userType ? (
-                  <Badge variant="secondary" className="capitalize">
-                    {userTypes.find(item => item.id.toString() === formData.userType)?.name || ""}
-                  </Badge>
-                ) : (
-                  <p className="text-sm text-gray-400">Not selected</p>
-                )}
+              <div>
+                <Label className="text-sm font-medium text-gray-600">User Level</Label>
+                <div className="mt-1">
+                  {formData.userType ? (
+                    <Badge variant="secondary" className="capitalize">
+                      {userTypes.find((item) => item.id.toString() === formData.userType)?.name || ""}
+                    </Badge>
+                  ) : (
+                    <p className="text-sm text-gray-400">Not selected</p>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <div>
-              <Label className="text-sm font-medium text-gray-600">Faculty</Label>
-              <p className="text-sm">{facultyOptions.find(item => item.Fid.toString() === formData.userType)?.Fname ||  "Not selected"}</p>
-            </div>
+              {showFaculty && (
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">Faculty</Label>
+                  <p className="text-sm">
+                    {facultyOptions.find((item) => item.Fid.toString() === formData.faculty)?.Fname ||
+                      "Not selected"}
+                  </p>
+                </div>
+              )}
 
-            <div>
-              <Label className="text-sm font-medium text-gray-600">Department</Label>
-              <p className="text-sm">{departmentOptions.find(item => item.Deptid.toString() === formData.department)?.name || "Not selected"}</p>
-            </div>
+              {showDepartment && (
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">Department</Label>
+                  <p className="text-sm">
+                    {departmentOptions.find((item) => item.Deptid.toString() === formData.department)?.name ||
+                      "Not selected"}
+                  </p>
+                </div>
+              )}
 
-            <div>
-              <Label className="text-sm font-medium text-gray-600">Password Status</Label>
-              <p className="text-sm">
-                {formData.password ? (
-                  <span className="text-green-600">✓ Password set</span>
-                ) : (
-                  <span className="text-gray-400">Password required</span>
-                )}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Email Notification</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span>Welcome email will be sent automatically</span>
+              <div>
+                <Label className="text-sm font-medium text-gray-600">Password Status</Label>
+                <p className="text-sm">
+                  {formData.password ? (
+                    <span className="text-green-600">✓ Password set</span>
+                  ) : (
+                    <span className="text-gray-400">Password required</span>
+                  )}
+                </p>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span>Login credentials included</span>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Email Notification</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span>Welcome email will be sent automatically</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span>Login credentials included</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span>Password change reminder</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <span>Password change reminder</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
-      </div >
   )
 }
