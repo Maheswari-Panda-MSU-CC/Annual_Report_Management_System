@@ -11,7 +11,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Plus,
   Edit,
@@ -24,72 +28,15 @@ import {
   ExternalLink,
   Eye,
   TrendingUp,
+  Loader2,
 } from "lucide-react"
 import { DocumentViewer } from "@/components/document-viewer"
 
-// Sample data for each section
-const initialSampleData = {
-  journals: [
-    {
-      id: 1,
-      srNo: 1,
-      authors: "Dr. John Smith, Dr. Jane Doe",
-      noOfAuthors: 2,
-      authorType: "Principal Author",
-      title: "Machine Learning Applications in Healthcare Diagnostics",
-      type: "Journal Article",
-      issn: "02780062",
-      isbn: "",
-      journalBookName: "IEEE Transactions on Medical Imaging",
-      volumeNo: "42",
-      pageNo: "123-135",
-      date: "2023-05-15",
-      level: "International",
-      peerReviewed: "Yes",
-      hIndex: "4.5",
-      impactFactor: "10.048",
-      inScopus: "Yes",
-      inUgcCare: "Yes",
-      inClarivate: "Yes",
-      inOldUgcList: "No",
-      chargesPaid: "No",
-      supportingDocument: ["journal_article.pdf"],
-    },
-  ],
-  books: [
-    {
-      id: 1,
-      srNo: 1,
-      authors: "Dr. John Smith, Dr. Jane Doe",
-      title: "Fundamentals of Artificial Intelligence: Theory and Practice",
-      isbn: "9783030123456",
-      publisherName: "Springer Nature",
-      publishingDate: "2023-01-15",
-      publishingPlace: "New York, USA",
-      chargesPaid: "No",
-      edited: "No",
-      chapterCount: "15",
-      publishingLevel: "International",
-      bookType: "Textbook",
-      authorType: "Principal Author",
-      supportingDocument: ["book_cover.pdf"],
-    },
-  ],
-  papers: [
-    {
-      id: 1,
-      srNo: 1,
-      authors: "Dr. John Smith, Dr. Alice Brown",
-      presentationLevel: "International",
-      themeOfConference: "Artificial Intelligence and Machine Learning",
-      modeOfParticipation: "Physical",
-      titleOfPaper: "Deep Learning for Medical Image Analysis",
-      organizingBody: "IEEE Computer Society",
-      place: "Paris, France",
-      dateOfPresentation: "2023-10-15",
-      supportingDocument: ["conference_certificate.pdf"],
-    },
-  ],
+// Empty initial data - will be populated from API
+const initialData = {
+  journals: [],
+  books: [],
+  papers: [],
 }
 
 const sections = [
@@ -201,7 +148,7 @@ function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", mult
 }
 
 // Statistics Component
-function PublicationStats({ data }: { data: typeof initialSampleData }) {
+function PublicationStats({ data }: { data: typeof initialData }) {
   const stats = [
     {
       title: "Journal Articles",
@@ -291,13 +238,142 @@ function PublicationStats({ data }: { data: typeof initialSampleData }) {
 
 export default function PublicationsPage() {
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState("journals")
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
-  const [data, setData] = useState(initialSampleData)
-  const [editingItem, setEditingItem] = useState<any>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [formData, setFormData] = useState<any>({})
   const router = useRouter()
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState("journals")
+  const [data, setData] = useState(initialData)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
+
+  // Dropdowns
+  const {
+    journalAuthorTypeOptions,
+    journalEditedTypeOptions,
+    resPubLevelOptions,
+    bookTypeOptions,
+    fetchJournalAuthorTypes,
+    fetchJournalEditedTypes,
+    fetchResPubLevels,
+    fetchBookTypes,
+  } = useDropDowns()
+
+  // Fetch dropdowns
+  useEffect(() => {
+    fetchJournalAuthorTypes()
+    fetchJournalEditedTypes()
+    fetchResPubLevels()
+    fetchBookTypes()
+  }, [])
+
+  // Fetch publications data
+  useEffect(() => {
+    if (user?.role_id) {
+      fetchPublications()
+    }
+  }, [user?.role_id])
+
+  const fetchPublications = async () => {
+    if (!user?.role_id) return
+
+    setIsLoading(true)
+    try {
+      // Fetch all three types in parallel
+      const [journalsRes, booksRes, papersRes] = await Promise.all([
+        fetch(`/api/teacher/publication/journals?teacherId=${user.role_id}`),
+        fetch(`/api/teacher/publication/books?teacherId=${user.role_id}`),
+        fetch(`/api/teacher/publication/papers?teacherId=${user.role_id}`),
+      ])
+
+      const journalsData = await journalsRes.json()
+      const booksData = await booksRes.json()
+      const papersData = await papersRes.json()
+
+      // Map database fields to UI format
+      const mappedJournals = (journalsData.journals || []).map((item: any, index: number) => ({
+        id: item.id,
+        srNo: index + 1,
+        authors: item.authors || "",
+        noOfAuthors: item.author_num || 0,
+        authorType: item.Teacher_Journals_Author_Type_Name || "",
+        authorTypeId: item.author_type,
+        title: item.title || "",
+        type: item.Teacher_Jour_Edited_Type_Name || "",
+        typeId: item.type,
+        issn: item.issn || "",
+        isbn: item.isbn || "",
+        journalBookName: item.journal_name || "",
+        volumeNo: item.volume_num || "",
+        pageNo: item.page_num || "",
+        date: item.month_year ? new Date(item.month_year).toISOString().split('T')[0] : "",
+        level: item.Res_Pub_Level_Name || "",
+        levelId: item.level,
+        peerReviewed: item.peer_reviewed ? "Yes" : "No",
+        hIndex: item.h_index?.toString() || "",
+        impactFactor: item.impact_factor?.toString() || "",
+        inScopus: item.in_scopus ? "Yes" : "No",
+        inUgcCare: item.in_ugc ? "Yes" : "No",
+        inClarivate: item.in_clarivate ? "Yes" : "No",
+        inOldUgcList: item.in_oldUGCList ? "Yes" : "No",
+        chargesPaid: item.paid ? "Yes" : "No",
+        supportingDocument: item.Image ? [item.Image] : [],
+        Image: item.Image,
+        DOI: item.DOI || "",
+      }))
+
+      // Fetch books data - we'll resolve names later when dropdowns are loaded
+      const mappedBooks = (booksData.books || []).map((item: any, index: number) => ({
+        id: item.bid,
+        srNo: index + 1,
+        authors: item.authors || "",
+        title: item.title || "",
+        isbn: item.isbn || "",
+        publisherName: item.publisher_name || "",
+        publishingDate: item.submit_date ? new Date(item.submit_date).toISOString().split('T')[0] : "",
+        publishingPlace: item.place || "",
+        chargesPaid: item.paid ? "Yes" : "No",
+        edited: item.edited ? "Yes" : "No",
+        chapterCount: item.chap_count?.toString() || "",
+        publishingLevelId: item.publishing_level,
+        bookTypeId: item.book_type,
+        authorTypeId: item.author_type,
+        supportingDocument: item.Image ? [item.Image] : [],
+        Image: item.Image,
+        cha: item.cha || "",
+      }))
+
+      const mappedPapers = (papersData.papers || []).map((item: any, index: number) => ({
+        id: item.papid,
+        srNo: index + 1,
+        authors: item.authors || "",
+        presentationLevel: item.Res_Pub_Level_Name || "",
+        levelId: item.level,
+        themeOfConference: item.theme || "",
+        modeOfParticipation: item.mode || "",
+        titleOfPaper: item.title_of_paper || "",
+        organizingBody: item.organising_body || "",
+        place: item.place || "",
+        dateOfPresentation: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        supportingDocument: item.Image ? [item.Image] : [],
+        Image: item.Image,
+      }))
+
+      setData({
+        journals: mappedJournals,
+        books: mappedBooks,
+        papers: mappedPapers,
+      })
+    } catch (error: any) {
+      console.error("Error fetching publications:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load publications",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -315,78 +391,83 @@ export default function PublicationsPage() {
     window.history.pushState({}, "", url.toString())
   }
 
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFiles(files)
+
+  const handleDelete = (sectionId: string, itemId: number, itemName: string) => {
+    setDeleteConfirm({ sectionId, itemId, itemName })
   }
 
-  const handleDelete = (sectionId: string, itemId: number) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: prevData[sectionId as keyof typeof prevData].filter((item: any) => item.id !== itemId),
-      }))
+  const confirmDelete = async () => {
+    if (!deleteConfirm || !user?.role_id) return
+
+    setIsDeleting(true)
+    try {
+      let endpoint = ""
+      let paramName = ""
+
+      switch (deleteConfirm.sectionId) {
+        case "journals":
+          endpoint = `/api/teacher/publication/journals?journalId=${deleteConfirm.itemId}`
+          break
+        case "books":
+          endpoint = `/api/teacher/publication/books?bookId=${deleteConfirm.itemId}`
+          break
+        case "papers":
+          endpoint = `/api/teacher/publication/papers?paperId=${deleteConfirm.itemId}`
+          break
+      }
+
+      const res = await fetch(endpoint, {
+        method: "DELETE",
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to delete")
+      }
+
       toast({
         title: "Success",
         description: "Item deleted successfully!",
-        duration: 2000,
       })
+
+      // Refresh data
+      await fetchPublications()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete item",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleting(false)
+      setDeleteConfirm(null)
     }
   }
 
   const handleEdit = (sectionId: string, item: any) => {
-    setEditingItem({ ...item, sectionId })
-    setFormData({ ...item })
-    setIsEditDialogOpen(true)
+    // Redirect to edit page based on section type
+    if (sectionId === "journals") {
+      router.push(`/teacher/publication/journal-articles/${item.id}/edit`)
+    } else if (sectionId === "books") {
+      router.push(`/teacher/publication/books/${item.id}/edit`)
+    } else if (sectionId === "papers") {
+      router.push(`/teacher/publication/papers/${item.id}/edit`)
+    }
   }
 
   const handleView = (sectionId: string, itemId: number) => {
     // Navigate to the specific publication view page
     if (sectionId === "journals") {
       router.push(`/teacher/publication/journal-articles/${itemId}`)
-    } else {
-      // For now, other types will use the same pattern when implemented
-      router.push(`/teacher/publication/${sectionId}/${itemId}`)
+    } else if (sectionId === "books") {
+      router.push(`/teacher/publication/books/${itemId}`)
+    } else if (sectionId === "papers") {
+      router.push(`/teacher/publication/papers/${itemId}`)
     }
   }
 
-  const handleSaveEdit = () => {
-    if (!editingItem) return
 
-    setData((prevData) => ({
-      ...prevData,
-      [editingItem.sectionId]: prevData[editingItem.sectionId as keyof typeof prevData].map((item: any) =>
-        item.id === editingItem.id ? { ...item, ...formData } : item,
-      ),
-    }))
-
-    setIsEditDialogOpen(false)
-    setEditingItem(null)
-    setFormData({})
-    toast({
-      title: "Success",
-      description: "Item updated successfully!",
-      duration: 2000,
-    })
-  }
-
-  const handleFileUpload = (sectionId: string, itemId: number) => {
-    if (selectedFiles && selectedFiles.length > 0) {
-      const fileNames = Array.from(selectedFiles).map((f) => f.name)
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: prevData[sectionId as keyof typeof prevData].map((item: any) =>
-          item.id === itemId
-            ? { ...item, supportingDocument: [...(item.supportingDocument || []), ...fileNames] }
-            : item,
-        ),
-      }))
-      toast({
-        title: "Files Uploaded",
-        description: "Supporting documents uploaded successfully!",
-        duration: 2000,
-      })
-    }
-  }
 
   const renderTableData = (section: any, item: any) => {
     switch (section.id) {
@@ -455,7 +536,7 @@ export default function PublicationsPage() {
             </TableCell>
             <TableCell>{item.isbn}</TableCell>
             <TableCell>{item.publisherName}</TableCell>
-            <TableCell>{new Date(item.publishingDate).toLocaleDateString()}</TableCell>
+            <TableCell>{item.publishingDate ? new Date(item.publishingDate).toLocaleDateString() : ""}</TableCell>
             <TableCell>{item.publishingPlace}</TableCell>
             <TableCell>
               <Badge variant={item.chargesPaid === "Yes" ? "destructive" : "default"}>{item.chargesPaid}</Badge>
@@ -466,11 +547,11 @@ export default function PublicationsPage() {
             <TableCell>{item.chapterCount}</TableCell>
             <TableCell>
               <Badge variant={item.publishingLevel === "International" ? "default" : "secondary"}>
-                {item.publishingLevel}
+                {resPubLevelOptions.find(l => l.id === item.publishingLevelId)?.name || item.publishingLevel}
               </Badge>
             </TableCell>
-            <TableCell>{item.bookType}</TableCell>
-            <TableCell>{item.authorType}</TableCell>
+            <TableCell>{bookTypeOptions.find(b => b.id === item.bookTypeId)?.name || item.bookType}</TableCell>
+            <TableCell>{journalAuthorTypeOptions.find(a => a.id === item.authorTypeId)?.name || item.authorType}</TableCell>
           </>
         )
       case "papers":
@@ -500,7 +581,7 @@ export default function PublicationsPage() {
             </TableCell>
             <TableCell>{item.organizingBody}</TableCell>
             <TableCell>{item.place}</TableCell>
-            <TableCell>{new Date(item.dateOfPresentation).toLocaleDateString()}</TableCell>
+            <TableCell>{item.dateOfPresentation ? new Date(item.dateOfPresentation).toLocaleDateString() : ""}</TableCell>
           </>
         )
       default:
@@ -508,582 +589,16 @@ export default function PublicationsPage() {
     }
   }
 
-  const renderForm = (sectionId: string, isEdit = false) => {
-    const currentData = isEdit ? formData : {}
 
-    switch (sectionId) {
-      case "journals":
-        return (
-          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="authors">Author(s) *</Label>
-                <Input
-                  id="authors"
-                  placeholder="Enter all authors"
-                  value={currentData.authors || ""}
-                  onChange={(e) => setFormData({ ...formData, authors: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="noOfAuthors">No. of Authors</Label>
-                <Input
-                  id="noOfAuthors"
-                  type="number"
-                  placeholder="Number of authors"
-                  value={currentData.noOfAuthors || ""}
-                  onChange={(e) => setFormData({ ...formData, noOfAuthors: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="authorType">Author Type</Label>
-                <Select
-                  value={currentData.authorType || ""}
-                  onValueChange={(value) => setFormData({ ...formData, authorType: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select author type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Principal Author">Principal Author</SelectItem>
-                    <SelectItem value="Co-Author">Co-Author</SelectItem>
-                    <SelectItem value="Corresponding Author">Corresponding Author</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="type">Type</Label>
-                <Select
-                  value={currentData.type || ""}
-                  onValueChange={(value) => setFormData({ ...formData, type: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Journal Article">Journal Article</SelectItem>
-                    <SelectItem value="Book Chapter">Book Chapter</SelectItem>
-                    <SelectItem value="Review Article">Review Article</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="title">Title *</Label>
-              <Input
-                id="title"
-                placeholder="Enter article title"
-                value={currentData.title || ""}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="issn">ISSN (Without -)</Label>
-                <Input
-                  id="issn"
-                  placeholder="Enter ISSN without dashes"
-                  value={currentData.issn || ""}
-                  onChange={(e) => setFormData({ ...formData, issn: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="isbn">ISBN (Without -)</Label>
-                <Input
-                  id="isbn"
-                  placeholder="Enter ISBN without dashes"
-                  value={currentData.isbn || ""}
-                  onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="journalBookName">Journal/Book Name *</Label>
-              <Input
-                id="journalBookName"
-                placeholder="Enter journal or book name"
-                value={currentData.journalBookName || ""}
-                onChange={(e) => setFormData({ ...formData, journalBookName: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="volumeNo">Volume No.</Label>
-                <Input
-                  id="volumeNo"
-                  placeholder="Volume"
-                  value={currentData.volumeNo || ""}
-                  onChange={(e) => setFormData({ ...formData, volumeNo: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="pageNo">Page No. (Range)</Label>
-                <Input
-                  id="pageNo"
-                  placeholder="e.g., 123-135"
-                  value={currentData.pageNo || ""}
-                  onChange={(e) => setFormData({ ...formData, pageNo: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={currentData.date || ""}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="level">Level</Label>
-                <Select
-                  value={currentData.level || ""}
-                  onValueChange={(value) => setFormData({ ...formData, level: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="International">International</SelectItem>
-                    <SelectItem value="National">National</SelectItem>
-                    <SelectItem value="Regional">Regional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="peerReviewed">Peer Reviewed?</Label>
-                <Select
-                  value={currentData.peerReviewed || ""}
-                  onValueChange={(value) => setFormData({ ...formData, peerReviewed: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="hIndex">H Index</Label>
-                <Input
-                  id="hIndex"
-                  placeholder="H Index"
-                  value={currentData.hIndex || ""}
-                  onChange={(e) => setFormData({ ...formData, hIndex: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="impactFactor">Impact Factor</Label>
-                <Input
-                  id="impactFactor"
-                  placeholder="Impact Factor"
-                  value={currentData.impactFactor || ""}
-                  onChange={(e) => setFormData({ ...formData, impactFactor: e.target.value })}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="inScopus">In Scopus?</Label>
-                <Select
-                  value={currentData.inScopus || ""}
-                  onValueChange={(value) => setFormData({ ...formData, inScopus: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="inUgcCare">In UGC CARE?</Label>
-                <Select
-                  value={currentData.inUgcCare || ""}
-                  onValueChange={(value) => setFormData({ ...formData, inUgcCare: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="inClarivate">In CLARIVATE?</Label>
-                <Select
-                  value={currentData.inClarivate || ""}
-                  onValueChange={(value) => setFormData({ ...formData, inClarivate: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="inOldUgcList">In Old UGC List?</Label>
-                <Select
-                  value={currentData.inOldUgcList || ""}
-                  onValueChange={(value) => setFormData({ ...formData, inOldUgcList: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="chargesPaid">Charges Paid?</Label>
-              <Select
-                value={currentData.chargesPaid || ""}
-                onValueChange={(value) => setFormData({ ...formData, chargesPaid: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select option" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Yes">Yes</SelectItem>
-                  <SelectItem value="No">No</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Supporting Document (PDF or Image Only)</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png" />
-              {currentData.supportingDocument && currentData.supportingDocument.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current documents:</p>
-                  <ul className="text-sm text-blue-600">
-                    {currentData.supportingDocument.map((doc: string, index: number) => (
-                      <li key={index}>• {doc}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      case "books":
-        return (
-          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
-            <div>
-              <Label htmlFor="authors">Authors *</Label>
-              <Input
-                id="authors"
-                placeholder="Enter all authors"
-                value={currentData.authors || ""}
-                onChange={(e) => setFormData({ ...formData, authors: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="title">Title *</Label>
-              <Input
-                id="title"
-                placeholder="Enter book title"
-                value={currentData.title || ""}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="isbn">ISBN (Without -)</Label>
-                <Input
-                  id="isbn"
-                  placeholder="Enter ISBN without dashes"
-                  value={currentData.isbn || ""}
-                  onChange={(e) => setFormData({ ...formData, isbn: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="publisherName">Publisher Name</Label>
-                <Input
-                  id="publisherName"
-                  placeholder="Enter publisher name"
-                  value={currentData.publisherName || ""}
-                  onChange={(e) => setFormData({ ...formData, publisherName: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="publishingDate">Publishing Date</Label>
-                <Input
-                  id="publishingDate"
-                  type="date"
-                  value={currentData.publishingDate || ""}
-                  onChange={(e) => setFormData({ ...formData, publishingDate: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="publishingPlace">Publishing Place</Label>
-                <Input
-                  id="publishingPlace"
-                  placeholder="Enter publishing place"
-                  value={currentData.publishingPlace || ""}
-                  onChange={(e) => setFormData({ ...formData, publishingPlace: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="chargesPaid">Charges Paid</Label>
-                <Select
-                  value={currentData.chargesPaid || ""}
-                  onValueChange={(value) => setFormData({ ...formData, chargesPaid: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="edited">Edited</Label>
-                <Select
-                  value={currentData.edited || ""}
-                  onValueChange={(value) => setFormData({ ...formData, edited: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select option" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Yes">Yes</SelectItem>
-                    <SelectItem value="No">No</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="chapterCount">Chapter Count</Label>
-                <Input
-                  id="chapterCount"
-                  type="number"
-                  placeholder="Number of chapters"
-                  value={currentData.chapterCount || ""}
-                  onChange={(e) => setFormData({ ...formData, chapterCount: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="publishingLevel">Publishing Level</Label>
-                <Select
-                  value={currentData.publishingLevel || ""}
-                  onValueChange={(value) => setFormData({ ...formData, publishingLevel: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="International">International</SelectItem>
-                    <SelectItem value="National">National</SelectItem>
-                    <SelectItem value="Regional">Regional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="bookType">Book Type</Label>
-                <Select
-                  value={currentData.bookType || ""}
-                  onValueChange={(value) => setFormData({ ...formData, bookType: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Textbook">Textbook</SelectItem>
-                    <SelectItem value="Reference Book">Reference Book</SelectItem>
-                    <SelectItem value="Research Monograph">Research Monograph</SelectItem>
-                    <SelectItem value="Edited Volume">Edited Volume</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="authorType">Author Type</Label>
-              <Select
-                value={currentData.authorType || ""}
-                onValueChange={(value) => setFormData({ ...formData, authorType: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select author type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Principal Author">Principal Author</SelectItem>
-                  <SelectItem value="Co-Author">Co-Author</SelectItem>
-                  <SelectItem value="Editor">Editor</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Supporting Document (PDF or Image Only)</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png" />
-              {currentData.supportingDocument && currentData.supportingDocument.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current documents:</p>
-                  <ul className="text-sm text-blue-600">
-                    {currentData.supportingDocument.map((doc: string, index: number) => (
-                      <li key={index}>• {doc}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      case "papers":
-        return (
-          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
-            <div>
-              <Label htmlFor="authors">Author(s) *</Label>
-              <Input
-                id="authors"
-                placeholder="Enter all authors"
-                value={currentData.authors || ""}
-                onChange={(e) => setFormData({ ...formData, authors: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="presentationLevel">Presentation Level</Label>
-                <Select
-                  value={currentData.presentationLevel || ""}
-                  onValueChange={(value) => setFormData({ ...formData, presentationLevel: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="International">International</SelectItem>
-                    <SelectItem value="National">National</SelectItem>
-                    <SelectItem value="Regional">Regional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="modeOfParticipation">Mode of Participation</Label>
-                <Select
-                  value={currentData.modeOfParticipation || ""}
-                  onValueChange={(value) => setFormData({ ...formData, modeOfParticipation: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Physical">Physical</SelectItem>
-                    <SelectItem value="Virtual">Virtual</SelectItem>
-                    <SelectItem value="Hybrid">Hybrid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="themeOfConference">Theme Of Conference/Seminar/Symposia</Label>
-              <Input
-                id="themeOfConference"
-                placeholder="Enter conference theme"
-                value={currentData.themeOfConference || ""}
-                onChange={(e) => setFormData({ ...formData, themeOfConference: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="titleOfPaper">Title of Paper *</Label>
-              <Input
-                id="titleOfPaper"
-                placeholder="Enter paper title"
-                value={currentData.titleOfPaper || ""}
-                onChange={(e) => setFormData({ ...formData, titleOfPaper: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="organizingBody">Organizing Body</Label>
-                <Input
-                  id="organizingBody"
-                  placeholder="Enter organizing body"
-                  value={currentData.organizingBody || ""}
-                  onChange={(e) => setFormData({ ...formData, organizingBody: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="place">Place</Label>
-                <Input
-                  id="place"
-                  placeholder="Enter place"
-                  value={currentData.place || ""}
-                  onChange={(e) => setFormData({ ...formData, place: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="dateOfPresentation">Date of Presentation/Seminar</Label>
-              <Input
-                id="dateOfPresentation"
-                type="date"
-                value={currentData.dateOfPresentation || ""}
-                onChange={(e) => setFormData({ ...formData, dateOfPresentation: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Supporting Document (PDF or Image Only)</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png" />
-              {currentData.supportingDocument && currentData.supportingDocument.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current documents:</p>
-                  <ul className="text-sm text-blue-600">
-                    {currentData.supportingDocument.map((doc: string, index: number) => (
-                      <li key={index}>• {doc}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      default:
-        return (
-          <div className="grid gap-4">
-            <div>
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                placeholder="Enter title"
-                value={currentData.title || ""}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Supporting Document (PDF or Image Only)</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png" />
-            </div>
-          </div>
-        )
-    }
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading publications...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -1177,8 +692,9 @@ export default function PublicationsPage() {
                                         <div className="flex-1 overflow-y-auto p-4">
                                           <div className="w-full h-full">
                                             <DocumentViewer
-                                              documentUrl={item.supportingDocument[0]}
-                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                                              documentUrl={item.supportingDocument?.[0] || item.Image || ""}
+                                              documentName={item.title || item.titleOfPaper || "Document"}
+                                              documentType={(item.supportingDocument?.[0] || item.Image || "").split('.').pop()?.toLowerCase() || 'pdf'}
                                             />
                                           </div>
                                         </div>
@@ -1200,13 +716,7 @@ export default function PublicationsPage() {
                                       <DialogHeader>
                                         <DialogTitle>Upload Supporting Documents</DialogTitle>
                                       </DialogHeader>
-                                      <FileUpload onFileSelect={handleFileSelect} />
-                                      <div className="flex justify-end gap-2 mt-4">
-                                        <Button variant="outline">Cancel</Button>
-                                        <Button onClick={() => handleFileUpload(section.id, item.id)}>
-                                          Upload Files
-                                        </Button>
-                                      </div>
+                                      <p className="text-sm text-muted-foreground">Please edit the publication to upload documents</p>
                                     </DialogContent>
                                   </Dialog>
                                 )}
@@ -1220,7 +730,11 @@ export default function PublicationsPage() {
                                   <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => handleDelete(section.id, item.id)}>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDelete(section.id, item.id, item.title || item.titleOfPaper || "this item")}
+                                  >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -1237,28 +751,34 @@ export default function PublicationsPage() {
           ))}
         </Tabs>
 
-        {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>
-                Edit {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="overflow-y-auto max-h-[70vh] pr-2">
-              {editingItem && renderForm(editingItem.sectionId, true)}
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveEdit}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete "{deleteConfirm?.itemName}".
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
   )
 }

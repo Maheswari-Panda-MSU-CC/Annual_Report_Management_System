@@ -11,61 +11,83 @@ import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DocumentViewer } from "@/components/document-viewer"
-import { useState as useSidebarState } from "react"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 interface PaperPublication {
-  id: string
+  papid: number
+  tid: number
+  theme: string | null
+  organising_body: string | null
+  place: string | null
+  date: string | null
+  title_of_paper: string
+  level: number
   authors: string
-  presentationLevel: string
-  themeOfConference: string
-  modeOfParticipation: string
-  titleOfPaper: string
-  organizingBody: string
-  place: string
-  dateOfPresentation: string
-  supportingDocument?: string
+  Image: string | null
+  mode: string | null
+  Res_Pub_Level_Name: string
+  DocVisible: number
 }
 
 export default function PaperDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const [paper, setPaper] = useState<PaperPublication | null>(null)
   const [loading, setLoading] = useState(true)
-  const [sidebarOpen, setSidebarOpen] = useSidebarState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  
+  const {
+    resPubLevelOptions,
+    fetchResPubLevels,
+  } = useDropDowns()
 
   useEffect(() => {
-    const fetchPaper = async () => {
-      try {
-        const mockPaper: PaperPublication = {
-          id: params.id as string,
-          authors: "Dr. John Smith, Dr. Jane Doe, Dr. Mike Johnson",
-          presentationLevel: "International",
-          themeOfConference: "Artificial Intelligence and Machine Learning",
-          modeOfParticipation: "Oral Presentation",
-          titleOfPaper: "Deep Learning Approaches for Natural Language Processing",
-          organizingBody: "IEEE Computer Society",
-          place: "San Francisco, USA",
-          dateOfPresentation: "2024-03-20",
-          // Using Mozilla's PDF.js test file - reliable and won't be blocked
-          supportingDocument: "https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf",
-        }
+    fetchResPubLevels()
+  }, [])
 
-        setPaper(mockPaper)
-      } catch (error) {
-        console.error("Error fetching paper:", error)
-      } finally {
-        setLoading(false)
-      }
+  useEffect(() => {
+    if (params.id && user?.role_id) {
+      fetchPaper()
     }
+  }, [params.id, user?.role_id])
 
-    fetchPaper()
-  }, [params.id])
+  const fetchPaper = async () => {
+    if (!params.id || !user?.role_id) return
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/teacher/publication/papers?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch paper")
+      }
+
+      const foundPaper = data.papers.find((p: any) => p.papid === parseInt(params.id as string))
+
+      if (!foundPaper) {
+        throw new Error("Paper not found")
+      }
+
+      setPaper(foundPaper)
+    } catch (error) {
+      console.error("Error fetching paper:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleDownloadDocument = () => {
-    if (paper?.supportingDocument) {
+    if (paper?.Image) {
+      const documentUrl = paper.Image.startsWith('http') 
+        ? paper.Image 
+        : `/api/s3/download?path=${encodeURIComponent(paper.Image)}&userId=${user?.role_id || 0}`
+      
       const link = document.createElement("a")
-      link.href = paper.supportingDocument
-      link.download = `${paper.titleOfPaper}.pdf`
+      link.href = documentUrl
+      link.download = `${paper.title_of_paper}.pdf`
       link.target = "_blank"
       link.rel = "noopener noreferrer"
       document.body.appendChild(link)
@@ -118,6 +140,12 @@ export default function PaperDetailPage() {
     )
   }
 
+  const documentUrl = paper.Image 
+    ? (paper.Image.startsWith('http') 
+        ? paper.Image 
+        : `/api/s3/download?path=${encodeURIComponent(paper.Image)}&userId=${user?.role_id || 0}`)
+    : null
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -134,17 +162,17 @@ export default function PaperDetailPage() {
                 </Button>
                 <div>
                   <h1 className="text-2xl font-bold">Paper Presentation Details</h1>
-                  <p className="text-gray-600">Publication ID: {paper.id}</p>
+                  <p className="text-gray-600">Publication ID: {paper.papid}</p>
                 </div>
               </div>
               <div className="flex space-x-2 flex-wrap">
-                <Link href={`/teacher/publication/papers/${paper.id}/edit`}>
+                <Link href={`/teacher/publication/papers/${paper.papid}/edit`}>
                   <Button variant="outline">
                     <Edit className="w-4 h-4 mr-2" />
                     Edit
                   </Button>
                 </Link>
-                {paper.supportingDocument && (
+                {documentUrl && (
                   <Button variant="outline" onClick={handleDownloadDocument}>
                     <Download className="w-4 h-4 mr-2" />
                     Download Document
@@ -166,10 +194,10 @@ export default function PaperDetailPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
-                      <h3 className="text-lg font-semibold mb-2">{paper.titleOfPaper}</h3>
+                      <h3 className="text-lg font-semibold mb-2">{paper.title_of_paper}</h3>
                       <div className="flex flex-wrap gap-2 mb-4">
-                        <Badge variant="secondary">{paper.presentationLevel}</Badge>
-                        <Badge variant="outline">{paper.modeOfParticipation}</Badge>
+                        <Badge variant="secondary">{paper.Res_Pub_Level_Name}</Badge>
+                        {paper.mode && <Badge variant="outline">{paper.mode}</Badge>}
                       </div>
                     </div>
 
@@ -185,47 +213,57 @@ export default function PaperDetailPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-start space-x-2">
-                          <FileText className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Conference Theme</p>
-                            <p className="text-sm">{paper.themeOfConference}</p>
+                        {paper.theme && (
+                          <div className="flex items-start space-x-2">
+                            <FileText className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Conference Theme</p>
+                              <p className="text-sm">{paper.theme}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-start space-x-2">
-                          <Building className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Organizing Body</p>
-                            <p className="text-sm">{paper.organizingBody}</p>
+                        {paper.organising_body && (
+                          <div className="flex items-start space-x-2">
+                            <Building className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Organizing Body</p>
+                              <p className="text-sm">{paper.organising_body}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       <div className="space-y-3">
-                        <div className="flex items-start space-x-2">
-                          <Calendar className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Presentation Date</p>
-                            <p className="text-sm">{new Date(paper.dateOfPresentation).toLocaleDateString()}</p>
+                        {paper.date && (
+                          <div className="flex items-start space-x-2">
+                            <Calendar className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Presentation Date</p>
+                              <p className="text-sm">{new Date(paper.date).toLocaleDateString()}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-start space-x-2">
-                          <MapPin className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Venue</p>
-                            <p className="text-sm">{paper.place}</p>
+                        {paper.place && (
+                          <div className="flex items-start space-x-2">
+                            <MapPin className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Venue</p>
+                              <p className="text-sm">{paper.place}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-start space-x-2">
-                          <Presentation className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Mode of Participation</p>
-                            <p className="text-sm">{paper.modeOfParticipation}</p>
+                        {paper.mode && (
+                          <div className="flex items-start space-x-2">
+                            <Presentation className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Mode of Participation</p>
+                              <p className="text-sm">{paper.mode}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -241,31 +279,39 @@ export default function PaperDetailPage() {
                   <CardContent className="space-y-4">
                     <div>
                       <p className="text-sm font-medium text-gray-700 mb-1">Presentation Level</p>
-                      <Badge variant="outline">{paper.presentationLevel}</Badge>
+                      <Badge variant="outline">{paper.Res_Pub_Level_Name}</Badge>
                     </div>
 
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-1">Mode of Participation</p>
-                      <Badge variant="secondary">{paper.modeOfParticipation}</Badge>
-                    </div>
+                    {paper.mode && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-1">Mode of Participation</p>
+                        <Badge variant="secondary">{paper.mode}</Badge>
+                      </div>
+                    )}
 
                     <Separator />
 
-                    <div>
-                      <p className="text-sm font-medium text-gray-700 mb-2">Conference Information</p>
-                      <div className="space-y-2">
-                        <p className="text-sm">
-                          <span className="font-medium">Theme:</span> {paper.themeOfConference}
-                        </p>
-                        <p className="text-sm">
-                          <span className="font-medium">Organizer:</span> {paper.organizingBody}
-                        </p>
+                    {(paper.theme || paper.organising_body) && (
+                      <div>
+                        <p className="text-sm font-medium text-gray-700 mb-2">Conference Information</p>
+                        <div className="space-y-2">
+                          {paper.theme && (
+                            <p className="text-sm">
+                              <span className="font-medium">Theme:</span> {paper.theme}
+                            </p>
+                          )}
+                          {paper.organising_body && (
+                            <p className="text-sm">
+                              <span className="font-medium">Organizer:</span> {paper.organising_body}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
 
-                {paper.supportingDocument && (
+                {documentUrl && (
                   <Card>
                     <CardHeader>
                       <CardTitle>Supporting Documents</CardTitle>
@@ -289,11 +335,11 @@ export default function PaperDetailPage() {
             </div>
 
             {/* Document Viewer - Positioned Below Details */}
-            {paper.supportingDocument && (
+            {documentUrl && (
               <div className="mt-8">
                 <DocumentViewer
-                  documentUrl={paper.supportingDocument}
-                  documentName={`${paper.titleOfPaper}.pdf`}
+                  documentUrl={documentUrl}
+                  documentName={`${paper.title_of_paper}.pdf`}
                   documentType="pdf"
                 />
               </div>

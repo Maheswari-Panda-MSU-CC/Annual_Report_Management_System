@@ -6,91 +6,92 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Edit, Download, Calendar, Hash, User, FileText, ExternalLink, Award } from "lucide-react"
+import { ArrowLeft, Edit, Download, Calendar, Hash, User, FileText, Award } from "lucide-react"
 import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DocumentViewer } from "@/components/document-viewer"
+import { useAuth } from "@/app/api/auth/auth-provider"
 
 interface JournalArticle {
-  id: string
+  id: number
+  tid: number
   authors: string
-  noOfAuthors: number
-  authorType: string
+  author_num: number | null
+  author_type: number
   title: string
-  type: string
-  issn: string
-  isbn: string
-  journalBookName: string
-  volumeNo: string
-  pageNo: string
-  date: string
-  level: string
-  peerReviewed: boolean
-  hIndex: number
-  impactFactor: number
-  inScopus: boolean
-  inUgcCare: boolean
-  inClarivate: boolean
-  inOldUgcList: boolean
+  type: number
+  issn: string | null
+  isbn: string | null
+  journal_name: string | null
+  volume_num: number | null
+  page_num: string | null
+  month_year: string | null
+  level: number
+  peer_reviewed: boolean
+  h_index: number | null
+  impact_factor: number | null
+  in_scopus: boolean
+  in_ugc: boolean
+  in_clarivate: boolean
+  in_oldUGCList: boolean
   chargesPaid: boolean
-  supportingDocument?: string
+  paid: boolean
+  Image: string | null
+  Teacher_Journals_Author_Type_Name: string
+  Res_Pub_Level_Name: string
+  Teacher_Jour_Edited_Type_Name: string
+  DocVisible: number
 }
 
 export default function JournalArticleDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { user } = useAuth()
   const [article, setArticle] = useState<JournalArticle | null>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
-    const fetchArticle = async () => {
-      try {
-        const mockArticle: JournalArticle = {
-          id: params.id as string,
-          authors: "Dr. John Smith, Dr. Jane Doe",
-          noOfAuthors: 2,
-          authorType: "First Author",
-          title: "Machine Learning Applications in Healthcare: A Comprehensive Review",
-          type: "Research Article",
-          issn: "12345678",
-          isbn: "9781234567890",
-          journalBookName: "Journal of Medical Informatics",
-          volumeNo: "45",
-          pageNo: "123-145",
-          date: "2024-03-15",
-          level: "International",
-          peerReviewed: true,
-          hIndex: 25,
-          impactFactor: 3.45,
-          inScopus: true,
-          inUgcCare: true,
-          inClarivate: true,
-          inOldUgcList: false,
-          chargesPaid: false,
-          // Using Mozilla's PDF.js test file - reliable and won't be blocked
-          // supportingDocument: "http://localhost:3000/assets/example_doc.doc", // not supported
-          // supportingDocument: "http://localhost:3000/images/msu-logo.png",
-          supportingDocument: "http://localhost:3000/assets/demo_document.pdf",
-          // supportingDocument: "http://localhost:3000/api/document",
-        }
-
-        setArticle(mockArticle)
-      } catch (error) {
-        console.error("Error fetching article:", error)
-      } finally {
-        setLoading(false)
-      }
+    if (params.id && user?.role_id) {
+      fetchArticle()
     }
+  }, [params.id, user?.role_id])
 
-    fetchArticle()
-  }, [params.id])
+  const fetchArticle = async () => {
+    if (!params.id || !user?.role_id) return
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/teacher/publication/journals?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch journal")
+      }
+
+      const journal = data.journals.find((j: any) => j.id === parseInt(params.id as string))
+
+      if (!journal) {
+        throw new Error("Journal not found")
+      }
+
+      setArticle(journal)
+    } catch (error) {
+      console.error("Error fetching article:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleDownloadDocument = () => {
-    if (article?.supportingDocument) {
+    if (article?.Image) {
+      const documentUrl = article.Image.startsWith('http') 
+        ? article.Image 
+        : `/api/s3/download?path=${encodeURIComponent(article.Image)}&userId=${user?.role_id || 0}`
+      
       const link = document.createElement("a")
-      link.href = article.supportingDocument
+      link.href = documentUrl
       link.download = `${article.title}.pdf`
       link.target = "_blank"
       link.rel = "noopener noreferrer"
@@ -144,6 +145,12 @@ export default function JournalArticleDetailPage() {
     )
   }
 
+  const documentUrl = article.Image 
+    ? (article.Image.startsWith('http') 
+        ? article.Image 
+        : `/api/s3/download?path=${encodeURIComponent(article.Image)}&userId=${user?.role_id || 0}`)
+    : null
+
   return (
     <div className="flex h-screen bg-gray-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -170,13 +177,12 @@ export default function JournalArticleDetailPage() {
                     Edit
                   </Button>
                 </Link>
-                {article.supportingDocument && (
+                {documentUrl && (
                   <Button variant="outline" onClick={handleDownloadDocument}>
                     <Download className="w-4 h-4 mr-2" />
                     Download Document
                   </Button>
                 )}
-               
               </div>
             </div>
 
@@ -195,10 +201,10 @@ export default function JournalArticleDetailPage() {
                     <div>
                       <h3 className="text-lg font-semibold mb-2">{article.title}</h3>
                       <div className="flex flex-wrap gap-2 mb-4">
-                        <Badge variant="secondary">{article.type}</Badge>
-                        <Badge variant="outline">{article.level}</Badge>
-                        {article.peerReviewed && <Badge variant="default">Peer Reviewed</Badge>}
-                        {article.chargesPaid && <Badge variant="destructive">Charges Paid</Badge>}
+                        <Badge variant="secondary">{article.Teacher_Jour_Edited_Type_Name}</Badge>
+                        <Badge variant="outline">{article.Res_Pub_Level_Name}</Badge>
+                        {article.peer_reviewed && <Badge variant="default">Peer Reviewed</Badge>}
+                        {article.paid && <Badge variant="destructive">Charges Paid</Badge>}
                       </div>
                     </div>
 
@@ -209,83 +215,101 @@ export default function JournalArticleDetailPage() {
                         <div className="flex items-start space-x-2">
                           <User className="w-4 h-4 mt-1 text-gray-500" />
                           <div>
-                            <p className="text-sm font-medium text-gray-700">Authors ({article.noOfAuthors})</p>
+                            <p className="text-sm font-medium text-gray-700">
+                              Authors {article.author_num ? `(${article.author_num})` : ""}
+                            </p>
                             <p className="text-sm">{article.authors}</p>
-                            <p className="text-xs text-gray-500">{article.authorType}</p>
+                            <p className="text-xs text-gray-500">{article.Teacher_Journals_Author_Type_Name}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-start space-x-2">
-                          <FileText className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Journal/Book Name</p>
-                            <p className="text-sm">{article.journalBookName}</p>
+                        {article.journal_name && (
+                          <div className="flex items-start space-x-2">
+                            <FileText className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Journal Name</p>
+                              <p className="text-sm">{article.journal_name}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-start space-x-2">
-                          <Hash className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">ISSN/ISBN</p>
-                            <p className="text-sm font-mono">{article.issn || article.isbn}</p>
+                        {(article.issn || article.isbn) && (
+                          <div className="flex items-start space-x-2">
+                            <Hash className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">ISSN/ISBN</p>
+                              <p className="text-sm font-mono">{article.issn || article.isbn}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
 
                       <div className="space-y-3">
-                        <div className="flex items-start space-x-2">
-                          <Calendar className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Publication Date</p>
-                            <p className="text-sm">{new Date(article.date).toLocaleDateString()}</p>
+                        {article.month_year && (
+                          <div className="flex items-start space-x-2">
+                            <Calendar className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Publication Date</p>
+                              <p className="text-sm">{new Date(article.month_year).toLocaleDateString()}</p>
+                            </div>
                           </div>
-                        </div>
+                        )}
 
-                        <div className="flex items-start space-x-2">
-                          <FileText className="w-4 h-4 mt-1 text-gray-500" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">Volume & Pages</p>
-                            <p className="text-sm">
-                              Vol. {article.volumeNo}, pp. {article.pageNo}
-                            </p>
+                        {(article.volume_num || article.page_num) && (
+                          <div className="flex items-start space-x-2">
+                            <FileText className="w-4 h-4 mt-1 text-gray-500" />
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">Volume & Pages</p>
+                              <p className="text-sm">
+                                {article.volume_num && `Vol. ${article.volume_num}`}
+                                {article.volume_num && article.page_num && ", "}
+                                {article.page_num && `pp. ${article.page_num}`}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-
-                      
+                        )}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
                 {/* Metrics */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Award className="w-5 h-5 mr-2" />
-                      Research Metrics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-center p-3 bg-blue-50 rounded-lg">
-                        <p className="text-2xl font-bold text-blue-600">{article.hIndex}</p>
-                        <p className="text-sm text-gray-600">H-Index</p>
+                {(article.h_index || article.impact_factor) && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Award className="w-5 h-5 mr-2" />
+                        Research Metrics
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {article.h_index && (
+                          <div className="text-center p-3 bg-blue-50 rounded-lg">
+                            <p className="text-2xl font-bold text-blue-600">{article.h_index}</p>
+                            <p className="text-sm text-gray-600">H-Index</p>
+                          </div>
+                        )}
+                        {article.impact_factor && (
+                          <div className="text-center p-3 bg-green-50 rounded-lg">
+                            <p className="text-2xl font-bold text-green-600">{article.impact_factor}</p>
+                            <p className="text-sm text-gray-600">Impact Factor</p>
+                          </div>
+                        )}
+                        {article.author_num && (
+                          <div className="text-center p-3 bg-purple-50 rounded-lg">
+                            <p className="text-2xl font-bold text-purple-600">{article.author_num}</p>
+                            <p className="text-sm text-gray-600">Authors</p>
+                          </div>
+                        )}
+                        <div className="text-center p-3 bg-orange-50 rounded-lg">
+                          <p className="text-2xl font-bold text-orange-600">{article.Res_Pub_Level_Name}</p>
+                          <p className="text-sm text-gray-600">Level</p>
+                        </div>
                       </div>
-                      <div className="text-center p-3 bg-green-50 rounded-lg">
-                        <p className="text-2xl font-bold text-green-600">{article.impactFactor}</p>
-                        <p className="text-sm text-gray-600">Impact Factor</p>
-                      </div>
-                      <div className="text-center p-3 bg-purple-50 rounded-lg">
-                        <p className="text-2xl font-bold text-purple-600">{article.noOfAuthors}</p>
-                        <p className="text-sm text-gray-600">Authors</p>
-                      </div>
-                      <div className="text-center p-3 bg-orange-50 rounded-lg">
-                        <p className="text-2xl font-bold text-orange-600">{article.level}</p>
-                        <p className="text-sm text-gray-600">Level</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Sidebar Information */}
@@ -297,10 +321,10 @@ export default function JournalArticleDetailPage() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       {[
-                        ["Scopus", article.inScopus],
-                        ["UGC CARE", article.inUgcCare],
-                        ["Clarivate", article.inClarivate],
-                        ["Old UGC List", article.inOldUgcList],
+                        ["Scopus", article.in_scopus],
+                        ["UGC CARE", article.in_ugc],
+                        ["Clarivate", article.in_clarivate],
+                        ["Old UGC List", article.in_oldUGCList],
                       ].map(([label, value]) => (
                         <div key={label.toString()} className="flex items-center justify-between">
                           <span className="text-sm">{label}</span>
@@ -314,19 +338,19 @@ export default function JournalArticleDetailPage() {
                     <div>
                       <p className="text-sm font-medium text-gray-700 mb-2">Publication Status</p>
                       <div className="space-y-2">
-                        <Badge variant={article.peerReviewed ? "default" : "secondary"}>
-                          {article.peerReviewed ? "Peer Reviewed" : "Not Peer Reviewed"}
+                        <Badge variant={article.peer_reviewed ? "default" : "secondary"}>
+                          {article.peer_reviewed ? "Peer Reviewed" : "Not Peer Reviewed"}
                         </Badge>
                         <br />
-                        <Badge variant={article.chargesPaid ? "destructive" : "default"}>
-                          {article.chargesPaid ? "Charges Paid" : "No Charges"}
+                        <Badge variant={article.paid ? "destructive" : "default"}>
+                          {article.paid ? "Charges Paid" : "No Charges"}
                         </Badge>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {article.supportingDocument && (
+                {documentUrl && (
                   <Card>
                     <CardHeader>
                       <CardTitle>Supporting Documents</CardTitle>
@@ -350,12 +374,12 @@ export default function JournalArticleDetailPage() {
             </div>
 
             {/* Document Viewer - Positioned Below Details */}
-            {article.supportingDocument && (
+            {documentUrl && (
               <div className="mt-8">
                 <DocumentViewer
-                  documentUrl={article.supportingDocument}
-                  documentName={`${article.title}.${article.supportingDocument.split('.').pop()?.toLowerCase()}`}
-                  documentType={article.supportingDocument.split('.').pop()?.toLowerCase()}
+                  documentUrl={documentUrl}
+                  documentName={`${article.title}.pdf`}
+                  documentType="pdf"
                 />
               </div>
             )}

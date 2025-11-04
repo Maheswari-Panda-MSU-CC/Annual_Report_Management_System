@@ -1,88 +1,603 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PublicationForm } from "@/components/forms/publication-form"
-import { ArrowLeft } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { ArrowLeft, FileText, Loader2 } from "lucide-react"
+import { useForm, Controller } from "react-hook-form"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useToast } from "@/components/ui/use-toast"
+
+interface JournalFormData {
+  authors: string
+  author_num: number | null
+  title: string
+  isbn: string
+  journal_name: string
+  volume_num: number | null
+  page_num: string
+  month_year: string
+  author_type: number | null
+  level: number | null
+  peer_reviewed: boolean
+  h_index: number | null
+  impact_factor: number | null
+  in_scopus: boolean
+  in_ugc: boolean
+  in_clarivate: boolean
+  in_oldUGCList: boolean
+  paid: boolean
+  issn: string
+  type: number | null
+  DOI: string
+}
 
 export default function EditJournalArticlePage() {
   const router = useRouter()
-  const [publication, setPublication] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { id } = useParams()
+  const { toast } = useToast()
+  const { user } = useAuth()
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<FileList | null>(null)
 
-  const { id } = useParams();
+  const {
+    journalAuthorTypeOptions,
+    journalEditedTypeOptions,
+    resPubLevelOptions,
+    fetchJournalAuthorTypes,
+    fetchJournalEditedTypes,
+    fetchResPubLevels,
+  } = useDropDowns()
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<JournalFormData>()
 
   useEffect(() => {
-    // In a real implementation, fetch the publication data from the API
-    // For now, we'll use mock data
-    setTimeout(() => {
-      setPublication({
-        id: id,
-        title: "Advances in Machine Learning for Natural Language Processing",
-        authors: "Dr. Amit Patel, Dr. Priya Sharma, Dr. John Smith",
-        journal_name: "International Journal of Computer Science",
-        type: 1, // Journal
-        level: 2, // International
-        volume_num: 45,
-        page_num: "123-145",
-        month_year: "2023-05-15",
-        isbn: "978-3-16-148410-0",
-        issn: "2049-3630",
-        peer_reviewed: true,
-        h_index: 4.5,
-        impact_factor: 3.2,
-        in_scopus: true,
-        in_ugc: true,
-        in_clarivate: true,
-        DOI: "10.1234/ijcs.2023.45.123",
-        abstract:
-          "This paper presents a novel approach to natural language processing using advanced machine learning techniques. The proposed method demonstrates significant improvements in accuracy and efficiency compared to existing methods.",
-        keywords: ["Machine Learning", "NLP", "AI", "Deep Learning"],
-        citations: 12,
-        department: "Computer Science",
-        faculty: "Faculty of Technology",
+    fetchJournalAuthorTypes()
+    fetchJournalEditedTypes()
+    fetchResPubLevels()
+  }, [])
+
+  useEffect(() => {
+    if (id && user?.role_id) {
+      fetchJournal()
+    }
+  }, [id, user?.role_id])
+
+  const fetchJournal = async () => {
+    if (!id || !user?.role_id) return
+
+    setIsLoading(true)
+    try {
+      const res = await fetch(`/api/teacher/publication/journals?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch journal")
+      }
+
+      const journal = data.journals.find((j: any) => j.id === parseInt(id as string))
+
+      if (!journal) {
+        throw new Error("Journal not found")
+      }
+
+      // Format date for input
+      const formatDateForInput = (dateStr: string | null) => {
+        if (!dateStr) return ""
+        try {
+          return new Date(dateStr).toISOString().split("T")[0]
+        } catch {
+          return ""
+        }
+      }
+
+      // Populate form with fetched data
+      reset({
+        authors: journal.authors || "",
+        author_num: journal.author_num || null,
+        title: journal.title || "",
+        isbn: journal.isbn || "",
+        journal_name: journal.journal_name || "",
+        volume_num: journal.volume_num || null,
+        page_num: journal.page_num || "",
+        month_year: formatDateForInput(journal.month_year),
+        author_type: journal.author_type || null,
+        level: journal.level || null,
+        peer_reviewed: journal.peer_reviewed ?? false,
+        h_index: journal.h_index || null,
+        impact_factor: journal.impact_factor || null,
+        in_scopus: journal.in_scopus ?? false,
+        in_ugc: journal.in_ugc ?? false,
+        in_clarivate: journal.in_clarivate ?? false,
+        in_oldUGCList: journal.in_oldUGCList ?? false,
+        paid: journal.paid ?? false,
+        issn: journal.issn || "",
+        type: journal.type || null,
+        DOI: journal.DOI || "",
       })
-      setLoading(false)
-    }, 500)
-  }, [id])
-
-  const handleEditSuccess = () => {
-    // In a real implementation, show success message and redirect
-    router.push(`/teacher/publication/journal-articles/${id}`)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load journal",
+        variant: "destructive",
+      })
+      router.push("/teacher/publication")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleCancel = () => {
-    router.push(`/teacher/publication/journal-articles/${id}`)
+  const handleFileSelect = (files: FileList | null) => {
+    setSelectedFile(files)
   }
 
-  if (loading) {
+  const onSubmit = async (data: JournalFormData) => {
+    if (!user?.role_id || !id) {
+      toast({
+        title: "Error",
+        description: "User not authenticated or journal ID missing",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Generate dummy document URL if file selected, otherwise keep existing
+      let documentUrl: string | null = null
+      if (selectedFile && selectedFile.length > 0) {
+        const file = selectedFile[0]
+        documentUrl = `publications/${user.role_id}/${Date.now()}_${file.name}`
+      }
+
+      // Validate required fields
+      if (!data.title || !data.authors || !data.author_type || !data.level || !data.type) {
+        toast({
+          title: "Validation Error",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
+      }
+
+      const payload = {
+        journalId: parseInt(id as string),
+        teacherId: user.role_id,
+        journal: {
+          authors: data.authors,
+          author_num: data.author_num || null,
+          title: data.title,
+          isbn: data.isbn || null,
+          journal_name: data.journal_name || null,
+          volume_num: data.volume_num || null,
+          page_num: data.page_num || null,
+          month_year: data.month_year || null,
+          author_type: data.author_type,
+          level: data.level,
+          peer_reviewed: data.peer_reviewed ?? false,
+          h_index: data.h_index || null,
+          impact_factor: data.impact_factor || null,
+          in_scopus: data.in_scopus ?? false,
+          submit_date: new Date(),
+          paid: data.paid ?? false,
+          issn: data.issn || null,
+          type: data.type,
+          Image: documentUrl,
+          in_ugc: data.in_ugc ?? false,
+          in_clarivate: data.in_clarivate ?? false,
+          DOI: data.DOI || null,
+          in_oldUGCList: data.in_oldUGCList ?? false,
+        },
+      }
+
+      const res = await fetch("/api/teacher/publication/journals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to update journal")
+      }
+
+      toast({
+        title: "Success",
+        description: "Journal article updated successfully!",
+      })
+
+      setTimeout(() => {
+        router.push("/teacher/publication")
+      }, 1000)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update journal article. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (isLoading) {
     return (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading journal article...</p>
         </div>
+      </div>
     )
   }
 
   return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => router.push(`/teacher/publication/journal-articles/${id}`)}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Article
-          </Button>
-          <h1 className="text-3xl font-bold">Edit Journal Article</h1>
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="flex items-center gap-4 mb-6">
+        <Button variant="outline" size="sm" onClick={() => router.push("/teacher/publication")} className="flex items-center gap-2">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold">Edit Published Article/Paper</h1>
+          <p className="text-muted-foreground">Edit your published article or paper in journal/edited volume</p>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit Publication Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PublicationForm initialData={publication} onSuccess={handleEditSuccess} onCancel={handleCancel} />
-          </CardContent>
-        </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Edit Article/Paper Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="authors">Author(s) *</Label>
+                <Input
+                  id="authors"
+                  {...register("authors", { required: "Authors are required" })}
+                  placeholder="Enter all authors"
+                />
+                {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="author_num">No. of Authors</Label>
+                <Input
+                  id="author_num"
+                  type="number"
+                  {...register("author_num", { valueAsNumber: true })}
+                  placeholder="Number of authors"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="author_type">Author Type *</Label>
+                <Controller
+                  name="author_type"
+                  control={control}
+                  rules={{ required: "Author type is required" }}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      options={journalAuthorTypeOptions.map((a) => ({
+                        value: a.id,
+                        label: a.name,
+                      }))}
+                      value={field.value?.toString() || ""}
+                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      placeholder="Select author type"
+                      emptyMessage="No author type found"
+                    />
+                  )}
+                />
+                {errors.author_type && <p className="text-sm text-red-500 mt-1">{errors.author_type.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="type">Type *</Label>
+                <Controller
+                  name="type"
+                  control={control}
+                  rules={{ required: "Type is required" }}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      options={journalEditedTypeOptions.map((t) => ({
+                        value: t.id,
+                        label: t.name,
+                      }))}
+                      value={field.value?.toString() || ""}
+                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      placeholder="Select type"
+                      emptyMessage="No type found"
+                    />
+                  )}
+                />
+                {errors.type && <p className="text-sm text-red-500 mt-1">{errors.type.message}</p>}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                {...register("title", { required: "Title is required" })}
+                placeholder="Enter article/paper title"
+              />
+              {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="issn">ISSN (Without -)</Label>
+                <Input id="issn" {...register("issn")} placeholder="Enter ISSN without dashes" />
+              </div>
+              <div>
+                <Label htmlFor="isbn">ISBN (Without -)</Label>
+                <Input id="isbn" {...register("isbn")} placeholder="Enter ISBN without dashes" />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="journal_name">Journal/Book Name *</Label>
+              <Input
+                id="journal_name"
+                {...register("journal_name", { required: "Journal/Book Name is required" })}
+                placeholder="Enter journal or book name"
+              />
+              {errors.journal_name && <p className="text-sm text-red-500 mt-1">{errors.journal_name.message}</p>}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="volume_num">Volume No.</Label>
+                <Input
+                  id="volume_num"
+                  type="number"
+                  {...register("volume_num", { valueAsNumber: true })}
+                  placeholder="Volume number"
+                />
+              </div>
+              <div>
+                <Label htmlFor="page_num">Page No. (Range)</Label>
+                <Input id="page_num" {...register("page_num")} placeholder="e.g., 123-135" />
+              </div>
+              <div>
+                <Label htmlFor="month_year">Date</Label>
+                <Input id="month_year" type="date" {...register("month_year")} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="level">Level *</Label>
+                <Controller
+                  name="level"
+                  control={control}
+                  rules={{ required: "Level is required" }}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      options={resPubLevelOptions.map((l) => ({
+                        value: l.id,
+                        label: l.name,
+                      }))}
+                      value={field.value?.toString() || ""}
+                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      placeholder="Select level"
+                      emptyMessage="No level found"
+                    />
+                  )}
+                />
+                {errors.level && <p className="text-sm text-red-500 mt-1">{errors.level.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="peer_reviewed">Peer Reviewed?</Label>
+                <Controller
+                  name="peer_reviewed"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? "Yes" : "No"}
+                      onValueChange={(val) => field.onChange(val === "Yes")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="h_index">H Index</Label>
+                <Input
+                  id="h_index"
+                  type="number"
+                  step="0.0001"
+                  {...register("h_index", { valueAsNumber: true })}
+                  placeholder="H Index value"
+                />
+              </div>
+              <div>
+                <Label htmlFor="impact_factor">Impact Factor</Label>
+                <Input
+                  id="impact_factor"
+                  type="number"
+                  step="0.0001"
+                  {...register("impact_factor", { valueAsNumber: true })}
+                  placeholder="Impact Factor value"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="DOI">DOI</Label>
+              <Input id="DOI" {...register("DOI")} placeholder="Enter DOI" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="in_scopus">In Scopus?</Label>
+                <Controller
+                  name="in_scopus"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? "Yes" : "No"}
+                      onValueChange={(val) => field.onChange(val === "Yes")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div>
+                <Label htmlFor="in_ugc">In UGC CARE?</Label>
+                <Controller
+                  name="in_ugc"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? "Yes" : "No"}
+                      onValueChange={(val) => field.onChange(val === "Yes")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="in_clarivate">In CLARIVATE?</Label>
+                <Controller
+                  name="in_clarivate"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? "Yes" : "No"}
+                      onValueChange={(val) => field.onChange(val === "Yes")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+              <div>
+                <Label htmlFor="in_oldUGCList">In Old UGC List?</Label>
+                <Controller
+                  name="in_oldUGCList"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value ? "Yes" : "No"}
+                      onValueChange={(val) => field.onChange(val === "Yes")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select option" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Yes">Yes</SelectItem>
+                        <SelectItem value="No">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="paid">Charges Paid?</Label>
+              <Controller
+                name="paid"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ? "Yes" : "No"}
+                    onValueChange={(val) => field.onChange(val === "Yes")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select option" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Yes">Yes</SelectItem>
+                      <SelectItem value="No">No</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            <div>
+              <Label>Supporting Document (Optional - upload new to replace existing)</Label>
+              <Input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                onChange={(e) => handleFileSelect(e.target.files)}
+              />
+            </div>
+
+            <div className="flex gap-4">
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Update Article/Paper"
+                )}
+              </Button>
+              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
