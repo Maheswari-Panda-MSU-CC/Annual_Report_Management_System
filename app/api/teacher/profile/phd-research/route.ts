@@ -85,11 +85,10 @@ export async function DELETE(req: Request) {
 
     const pool = await connectToDatabase();
     const request = pool.request();
-    request.input('Tid', sql.Int, teacherId);
     request.input('Id', sql.Int, id);
 
     // TODO: update to actual stored procedure name
-    await request.execute('sp_Delete_Teacher_PhDResearch');
+    await request.execute('sp_Delete_Post_Doctoral_Exp');
 
     return Response.json({ success: true });
   } catch (error) {

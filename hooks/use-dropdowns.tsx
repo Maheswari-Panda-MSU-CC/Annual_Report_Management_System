@@ -2,6 +2,11 @@
 import { DegreeTypeOption, DepartmentOption, DesignationOption, FacultyOption, UserType } from "@/types/interfaces";
 import { useEffect, useState } from "react"
 
+export interface DropdownOption {
+  id: number;
+  name: string;
+}
+
 export function useDropDowns() {
   
   const [facultyOptions, setFacultyOptions] = useState<FacultyOption[]>([]);
@@ -10,6 +15,14 @@ export function useDropDowns() {
   const [permanentDesignationOptions, setPermanentDesignationOptions] = useState<DesignationOption[]>([]);
   const [temporaryDesignationOptions, setTemporaryDesignationOptions] = useState<DesignationOption[]>([]);
   const [degreeTypeOptions, setDegreeTypeOptions] = useState<DegreeTypeOption[]>([]);
+  const [projectStatusOptions, setProjectStatusOptions] = useState<DropdownOption[]>([]);
+  const [projectLevelOptions, setProjectLevelOptions] = useState<DropdownOption[]>([]);
+  const [fundingAgencyOptions, setFundingAgencyOptions] = useState<DropdownOption[]>([]);
+  const [projectNatureOptions, setProjectNatureOptions] = useState<DropdownOption[]>([]);
+  const [bookTypeOptions, setBookTypeOptions] = useState<DropdownOption[]>([]);
+  const [journalEditedTypeOptions, setJournalEditedTypeOptions] = useState<DropdownOption[]>([]);
+  const [resPubLevelOptions, setResPubLevelOptions] = useState<DropdownOption[]>([]);
+  const [journalAuthorTypeOptions, setJournalAuthorTypeOptions] = useState<DropdownOption[]>([]);
 
   const fetchFaculties = async () => {
     try {
@@ -92,7 +105,153 @@ export function useDropDowns() {
     }
   }
 
+  const fetchProjectStatuses = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/res-proj-status');
+      if (res.ok) {
+        const data = await res.json();
+        setProjectStatusOptions(data.statuses || []);
+      }
+    } catch (error) {
+      console.error('Error fetching project statuses:', error);
+    }
+  }
+
+  const fetchProjectLevels = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/res-proj-level');
+      if (res.ok) {
+        const data = await res.json();
+        setProjectLevelOptions(data.levels || []);
+      }
+    } catch (error) {
+      console.error('Error fetching project levels:', error);
+    }
+  }
+
+  const fetchFundingAgencies = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/funding-agency');
+      if (res.ok) {
+        const data = await res.json();
+        setFundingAgencyOptions(data.agencies || []);
+      }
+    } catch (error) {
+      console.error('Error fetching funding agencies:', error);
+    }
+  }
+
+  const fetchProjectNatures = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/res-proj-nature');
+      if (res.ok) {
+        const data = await res.json();
+        setProjectNatureOptions(data.natures || []);
+      }
+    } catch (error) {
+      console.error('Error fetching project natures:', error);
+    }
+  }
+
+  const fetchBookTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/book-type');
+      if (res.ok) {
+        const data = await res.json();
+        // Map the response to match DropdownOption format (id, name)
+        // SP returns Id and type, so we map type to name
+        const mapped = (data.bookTypes || []).map((item: any) => ({
+          id: item.Id,
+          name: item.type || item.Type || item.name || item.Name
+        }));
+        setBookTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching book types:', error);
+    }
+  }
+
+  const fetchJournalEditedTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/journal-edited-type');
+      if (res.ok) {
+        const data = await res.json();
+        // Map the response to match DropdownOption format (id, name)
+        const mapped = (data.journalEditedTypes || []).map((item: any) => ({
+          id: item.Id,
+          name: item.name || item.Name
+        }));
+        setJournalEditedTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching journal edited types:', error);
+    }
+  }
+
+  const fetchResPubLevels = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/res-pub-level');
+      if (res.ok) {
+        const data = await res.json();
+        // Map the response to match DropdownOption format (id, name)
+        const mapped = (data.resPubLevels || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setResPubLevelOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching research publication levels:', error);
+    }
+  }
+
+  const fetchJournalAuthorTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/journal-author-type');
+      if (res.ok) {
+        const data = await res.json();
+        // Map the response to match DropdownOption format (id, name)
+        const mapped = (data.journalAuthorTypes || []).map((item: any) => ({
+          id: item.Id,
+          name: item.name || item.Name
+        }));
+        setJournalAuthorTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching journal author types:', error);
+    }
+  }
+
   useEffect(() => { fetchFaculties() }, [])
 
-  return { facultyOptions, departmentOptions,userTypes,degreeTypeOptions,permanentDesignationOptions,temporaryDesignationOptions,fetchFaculties, fetchDepartments,fetchUserTypes,fetchDegreeTypes,fetchParmanentDesignations,fetchTemporaryDesignations }
+  return { 
+    facultyOptions, 
+    departmentOptions,
+    userTypes,
+    degreeTypeOptions,
+    permanentDesignationOptions,
+    temporaryDesignationOptions,
+    projectStatusOptions,
+    projectLevelOptions,
+    fundingAgencyOptions,
+    projectNatureOptions,
+    bookTypeOptions,
+    journalEditedTypeOptions,
+    resPubLevelOptions,
+    journalAuthorTypeOptions,
+    fetchFaculties, 
+    fetchDepartments,
+    fetchUserTypes,
+    fetchDegreeTypes,
+    fetchParmanentDesignations,
+    fetchTemporaryDesignations,
+    fetchProjectStatuses,
+    fetchProjectLevels,
+    fetchFundingAgencies,
+    fetchProjectNatures,
+    fetchBookTypes,
+    fetchJournalEditedTypes,
+    fetchResPubLevels,
+    fetchJournalAuthorTypes
+  }
 }

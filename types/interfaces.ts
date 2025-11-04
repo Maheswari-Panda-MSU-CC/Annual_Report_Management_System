@@ -150,3 +150,47 @@ export interface UserType{
   id:number
   name:string
 }
+
+// ---------- Research Project Interfaces ----------
+export interface ResearchProject {
+  projid: number
+  title: string
+  funding_agency: number
+  funding_agency_name?: string
+  grant_sanctioned?: number
+  grant_received?: number
+  grant_year?: number
+  grant_sealed?: boolean
+  document?: string
+  proj_nature?: number
+  proj_nature_name?: string
+  duration?: number
+  status: number
+  status_name?: string
+  start_date: string
+  proj_level?: number
+  proj_level_name?: string
+}
+
+export interface ResearchProjectFormData {
+  title: string
+  funding_agency: number | null
+  grant_sanctioned: string
+  grant_received: string
+  proj_nature: number | null
+  duration: number
+  status: number | null
+  start_date: string
+  proj_level: number | null
+  grant_year: string
+  grant_sealed: boolean
+  Pdf: string
+}
+
+export interface ResearchMetrics {
+  hIndex: number
+  i10Index: number
+  citations: number
+  orcidId: string
+  researcherId: string
+}

@@ -159,7 +159,7 @@ export default function ProfilePage() {
   const [editingData, setEditingData] = useState({ ...initialEditingData })
 
   // react-hook-form for Personal Details
-  const { control, register, reset, handleSubmit, getValues, watch, setValue } = useForm<any>({
+  const { control, register, reset, handleSubmit, getValues, watch, setValue, formState: { errors } } = useForm<any>({
     defaultValues: {},
   })
 
@@ -401,7 +401,7 @@ export default function ProfilePage() {
       degree_type: 1,
       university_name: "",
       state: "",
-      year_of_passing: "",
+      year_of_passing: "", // Empty string for new entries - will be converted to date format on input
       subject: "",
     }
     appendEducation(newEntry)
@@ -924,16 +924,67 @@ export default function ProfilePage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First Name</Label>
-                  <Input id="firstName" {...register('fname')} readOnly={!isEditingPersonal} />
-
+                  <Input 
+                    id="firstName" 
+                    {...register('fname', {
+                      required: isEditingPersonal ? "First name is required" : false,
+                      minLength: {
+                        value: 3,
+                        message: "First name must be at least 3 characters"
+                      },
+                      pattern: {
+                        value: /^[A-Za-z\s'-]+$/,
+                        message: "First name should only contain letters, spaces, hyphens, or apostrophes"
+                      }
+                    })} 
+                    readOnly={!isEditingPersonal} 
+                  />
+                  {errors.fname && isEditingPersonal && (
+                    <p className="text-sm text-red-500">{errors.fname.message as string}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="middleName">Middle Name</Label>
-                  <Input id="middleName" {...register('mname')} readOnly={!isEditingPersonal} />
+                  <Input 
+                    id="middleName" 
+                    {...register('mname', {
+                      validate: (value) => {
+                        if (!value || value.trim() === '') return true; // Optional field
+                        if (value.length < 3) {
+                          return "Middle name must be at least 3 characters if provided";
+                        }
+                        if (!/^[A-Za-z\s'-]+$/.test(value)) {
+                          return "Middle name should only contain letters, spaces, hyphens, or apostrophes";
+                        }
+                        return true;
+                      }
+                    })} 
+                    readOnly={!isEditingPersonal} 
+                  />
+                  {errors.mname && isEditingPersonal && (
+                    <p className="text-sm text-red-500">{errors.mname.message as string}</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="lastName">Last Name</Label>
-                  <Input id="lastName" {...register('lname')} readOnly={!isEditingPersonal} />
+                  <Input 
+                    id="lastName" 
+                    {...register('lname', {
+                      required: isEditingPersonal ? "Last name is required" : false,
+                      minLength: {
+                        value: 3,
+                        message: "Last name must be at least 3 characters"
+                      },
+                      pattern: {
+                        value: /^[A-Za-z\s'-]+$/,
+                        message: "Last name should only contain letters, spaces, hyphens, or apostrophes"
+                      }
+                    })} 
+                    readOnly={!isEditingPersonal} 
+                  />
+                  {errors.lname && isEditingPersonal && (
+                    <p className="text-sm text-red-500">{errors.lname.message as string}</p>
+                  )}
                 </div>
               </div>
 
@@ -941,11 +992,47 @@ export default function ProfilePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" {...register('email_id')} readOnly={!isEditingPersonal} />
+                  <Input id="email" type="email" {...register('email_id')} readOnly />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" type="number" {...register('phone_no')} readOnly={!isEditingPersonal} />
+                  <Controller
+                    control={control}
+                    name="phone_no"
+                    rules={{
+                      required: isEditingPersonal ? "Phone number is required" : false,
+                      pattern: {
+                        value: /^[0-9]{10}$/,
+                        message: "Phone number must contain exactly 10 digits"
+                      },
+                      minLength: {
+                        value: 10,
+                        message: "Phone number must be exactly 10 digits"
+                      },
+                      maxLength: {
+                        value: 10,
+                        message: "Phone number must be exactly 10 digits"
+                      }
+                    }}
+                    render={({ field }) => (
+                      <Input
+                        id="phone"
+                        type="tel"
+                        {...field}
+                        onChange={(e) => {
+                          // Only allow digits and limit to 10
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          field.onChange(value);
+                        }}
+                        readOnly={!isEditingPersonal}
+                        placeholder="Enter 10 digit phone number"
+                        maxLength={10}
+                      />
+                    )}
+                  />
+                  {errors.phone_no && isEditingPersonal && (
+                    <p className="text-sm text-red-500">{errors.phone_no.message as string}</p>
+                  )}
                 </div>
 
               </div>
@@ -1381,7 +1468,7 @@ export default function ProfilePage() {
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
                               className="min-w-[150px]"
-                              readOnly={!rowEditing || entry?.currente}
+                              readOnly={!rowEditing}
                             />
                           )}
                         />
@@ -1770,17 +1857,55 @@ export default function ProfilePage() {
                           name={`educations.${index}.year_of_passing`}
                           rules={{ required: rowEditing ? "Year of passing is required" : false }}
                           render={({ field: formField }) => {
-                            const yearValue = formField.value
-                              ? new Date(formField.value).getFullYear().toString()
-                              : ""
+                            // Extract year value: handle both date format (YYYY-MM-DD) and plain year strings
+                            let yearValue = ""
+                            if (formField.value) {
+                              const valueStr = String(formField.value)
+                              // Check if it's already a date format (contains hyphen)
+                              if (valueStr.includes('-')) {
+                                try {
+                                  const date = new Date(valueStr)
+                                  if (!isNaN(date.getTime())) {
+                                    yearValue = date.getFullYear().toString()
+                                  }
+                                } catch (e) {
+                                  yearValue = ""
+                                }
+                              } else {
+                                // It's a plain year string (1-4 digits), use it directly
+                                yearValue = valueStr.replace(/\D/g, "").slice(0, 4)
+                              }
+                            }
+                            
                             return (
                               <Input
                                 type="text"
                                 value={yearValue}
                                 onChange={(e) => {
-                                  const year = e.target.value.replace(/\D/g, "").slice(0, 4);
-                                  formField.onChange(`${year}-01-01`);
+                                  const inputValue = e.target.value
+                                  const year = inputValue.replace(/\D/g, "").slice(0, 4);
+                                  
+                                  // If user entered 4 digits, convert to date format
+                                  if (year.length === 4) {
+                                    formField.onChange(`${year}-01-01`);
+                                  } else if (year.length > 0) {
+                                    // Store partial year as plain string for editing
+                                    formField.onChange(year);
+                                  } else {
+                                    // Empty input
+                                    formField.onChange("");
+                                  }
                                 }}
+                                onBlur={(e) => {
+                                  // On blur, if we have a valid 4-digit year, ensure it's in date format
+                                  const year = e.target.value.replace(/\D/g, "").slice(0, 4);
+                                  if (year.length === 4) {
+                                    formField.onChange(`${year}-01-01`);
+                                  }
+                                  formField.onBlur();
+                                }}
+                                name={formField.name}
+                                ref={formField.ref}
                                 className="min-w-[120px]"
                                 placeholder="YYYY"
                                 readOnly={!rowEditing}

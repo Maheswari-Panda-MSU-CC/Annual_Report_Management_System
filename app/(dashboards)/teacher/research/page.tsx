@@ -3,24 +3,20 @@
 import { useState, useEffect } from "react"
 import { ResearchProjectsList } from "@/components/research-projects-list"
 import { Button } from "@/components/ui/button"
-import { Plus, BarChart3, Hash, FileText, User, BadgeIcon as IdCard, Save, Edit } from "lucide-react"
+import { Plus, BarChart3, Hash, FileText, User, BadgeIcon as IdCard, Save, Edit, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/app/api/auth/auth-provider"
-
-interface ResearchMetrics {
-  hIndex: number
-  i10Index: number
-  citations: number
-  orcidId: string
-  researcherId: string
-}
+import { useToast } from "@/hooks/use-toast"
+import { ResearchMetrics } from "@/types/interfaces"
 
 export default function ResearchProjectsPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { toast } = useToast()
   const [isEditingMetrics, setIsEditingMetrics] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
 
   // State to hold metrics data
   const [metrics, setMetrics] = useState<ResearchMetrics>({
@@ -57,17 +53,43 @@ export default function ResearchProjectsPage() {
 
   // Handle save (PUT / PATCH API call)
   const handleSaveMetrics = async () => {
+    setIsSaving(true)
     try {
-      const res = await fetch("/api/teacher/research", {
+      const res = await fetch("/api/teacher/research/research-indices", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(metrics),
+        body: JSON.stringify({
+          teacherId: user?.role_id,
+          hIndex: metrics.hIndex,
+          i10Index: metrics.i10Index,
+          citations: metrics.citations,
+          orcidId: metrics.orcidId,
+          researcherId: metrics.researcherId,
+        }),
       })
-      if (!res.ok) throw new Error("Failed to update metrics")
+      
+      const result = await res.json()
+      
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to update metrics")
+      }
+      
+      toast({
+        title: "Success",
+        description: "Research metrics updated successfully",
+      })
+      
       setIsEditingMetrics(false)
       setRefreshKey(prev => prev + 1)
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving research metrics:", err)
+      toast({
+        title: "Error",
+        description: err.message || "Failed to update research metrics",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -104,9 +126,18 @@ export default function ResearchProjectsPage() {
                   <Button variant="outline" size="sm" onClick={() => setIsEditingMetrics(false)}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleSaveMetrics}>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save
+                  <Button size="sm" onClick={handleSaveMetrics} disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save
+                      </>
+                    )}
                   </Button>
                 </>
               )}

@@ -34,3 +34,44 @@ export async function GET(request: Request) {
     })
   }
 }
+
+// Update research indices
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json()
+    const { teacherId, hIndex, i10Index, citations, orcidId, researcherId } = body
+
+    if (!teacherId) {
+      return new Response(JSON.stringify({ success: false, error: 'teacherId is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const pool = await connectToDatabase()
+    const req = pool.request()
+
+    req.input('TeacherId', sql.Int, teacherId)
+    req.input('H_INDEX', sql.Int, hIndex ?? 0)
+    req.input('i10_INDEX', sql.Int, i10Index ?? 0)
+    req.input('CITIATIONS', sql.Int, citations ?? 0)
+    req.input('ORCHID_ID', sql.VarChar(100), orcidId || '')
+    req.input('RESEARCHER_ID', sql.VarChar(100), researcherId || '')
+
+    await req.execute('sp_UpdateTeacherResearchIndices')
+    
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: 'Research indices updated successfully',
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (err: any) {
+    console.error('Error updating research indices:', err)
+    return new Response(JSON.stringify({ success: false, error: err.message || 'Failed to update research indices' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}
