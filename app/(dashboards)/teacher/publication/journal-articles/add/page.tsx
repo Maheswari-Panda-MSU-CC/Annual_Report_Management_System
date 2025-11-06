@@ -272,8 +272,8 @@ export default function AddJournalArticlePage() {
           Back
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Add Published Article/Paper</h1>
-          <p className="text-muted-foreground">Add your published article or paper in journal/edited volume</p>
+          <h1 className="text-3xl font-bold">Add Published Article/Journal/Edited Volume</h1>
+          <p className="text-muted-foreground">Add your published article or journal or volume in journal/edited volume</p>
         </div>
       </div>
 
@@ -281,7 +281,7 @@ export default function AddJournalArticlePage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5" />
-            Published Article/Paper Details
+            Published Article/Journal/Volume Details
           </CardTitle>
           <CardDescription>Upload document first to auto-extract information, then complete the form</CardDescription>
         </CardHeader>
@@ -289,7 +289,7 @@ export default function AddJournalArticlePage() {
           {/* Document Upload Section */}
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
             <Label className="text-lg font-semibold mb-3 block">
-              Step 1: Upload Article/Paper Document (Optional for extraction)
+              Step 1: Upload Article/Journal/Volume Document (Optional for extraction)
             </Label>
             <Input
               type="file"
@@ -297,7 +297,7 @@ export default function AddJournalArticlePage() {
               className="mb-3"
               onChange={(e) => handleFileSelect(e.target.files)}
             />
-            <p className="text-sm text-gray-500 mb-3">Upload article/paper document to auto-extract details</p>
+            <p className="text-sm text-gray-500 mb-3">Upload article/journal/volume document to auto-extract details</p>
             <Button
               type="button"
               variant="outline"
@@ -322,7 +322,7 @@ export default function AddJournalArticlePage() {
 
           {/* Form Section */}
           <div className="bg-gray-50 p-4 rounded-lg">
-            <Label className="text-lg font-semibold mb-4 block">Step 2: Complete Article/Paper Information</Label>
+            <Label className="text-lg font-semibold mb-4 block">Step 2: Complete Article/Journal/Volume Information</Label>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -395,7 +395,7 @@ export default function AddJournalArticlePage() {
                 <Input
                   id="title"
                   {...register("title", { required: "Title is required" })}
-                  placeholder="Enter article/paper title"
+                  placeholder="Enter article/journal/volume title"
                 />
                 {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
               </div>
@@ -412,11 +412,11 @@ export default function AddJournalArticlePage() {
               </div>
 
               <div>
-                <Label htmlFor="journal_name">Journal/Book Name *</Label>
+                <Label htmlFor="journal_name">Journal/Article/Edited Volume Name *</Label>
                 <Input
                   id="journal_name"
                   {...register("journal_name", { required: "Journal/Book Name is required" })}
-                  placeholder="Enter journal or book name"
+                  placeholder="Enter journal or article or edited volume name"
                 />
                 {errors.journal_name && <p className="text-sm text-red-500 mt-1">{errors.journal_name.message}</p>}
               </div>
@@ -634,7 +634,7 @@ export default function AddJournalArticlePage() {
                       Saving...
                     </>
                   ) : (
-                    "Save Article/Paper"
+                    "Save"
                   )}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.back()}>

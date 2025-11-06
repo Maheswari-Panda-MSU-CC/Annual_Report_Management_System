@@ -4,16 +4,34 @@ import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { PatentForm } from "@/components/forms/PatentForm"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "@/components/ui/use-toast"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useEffect } from "react"
 
 export default function AddPatentsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const form = useForm()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
+  
+  // Fetch dropdowns at page level
+  const { resPubLevelOptions, patentStatusOptions, fetchResPubLevels, fetchPatentStatuses } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (resPubLevelOptions.length === 0) {
+      fetchResPubLevels()
+    }
+    if (patentStatusOptions.length === 0) {
+      fetchPatentStatuses()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFiles(files)
@@ -46,6 +64,7 @@ export default function AddPatentsPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -53,6 +72,7 @@ export default function AddPatentsPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
@@ -60,22 +80,71 @@ export default function AddPatentsPage() {
   }
 
   const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      await new Promise((res) => setTimeout(res, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      const patentData = {
+        title: data.title,
+        level: data.level,
+        status: data.status,
+        date: data.date,
+        Tech_Licence: data.Tech_Licence || "",
+        Earnings_Generate: data.Earnings_Generate ? Number(data.Earnings_Generate) : null,
+        PatentApplicationNo: data.PatentApplicationNo || "",
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/patents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          patent: patentData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add patent")
+      }
+
       toast({
         title: "Success",
         description: "Patent added successfully!",
+        duration: 3000,
       })
-      router.push("/teacher/research-contributions?tab=patents")
-    } catch (error) {
+      
+      // Smooth transition with slight delay
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=patents")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add patent.",
+        description: error.message || "Failed to add patent. Please try again.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -108,6 +177,8 @@ export default function AddPatentsPage() {
       handleFileSelect={handleFileSelect}
       handleExtractInfo={handleExtractInfo}
       isEdit={false}
+      resPubLevelOptions={resPubLevelOptions}
+      patentStatusOptions={patentStatusOptions}
     />
     </div>
   );

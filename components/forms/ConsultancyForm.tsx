@@ -1,6 +1,6 @@
 "use client"
 
-import { UseFormReturn } from "react-hook-form"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,19 +9,7 @@ import { Save } from "lucide-react"
 import { useRouter } from "next/navigation"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
-import { useEffect } from "react"
-
-interface ConsultancyFormProps {
-  form: UseFormReturn<any>
-  onSubmit: (data: any) => void
-  isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
-  isEdit?: boolean
-  editData?: Record<string, any>
-}
+import { ConsultancyFormProps } from "@/types/interfaces"
 
 export function ConsultancyForm({
   form,
@@ -45,13 +33,30 @@ export function ConsultancyForm({
 
   const formData = watch()
 
+  // Set initial values when in edit mode - optimized to reset and set all values at once
   useEffect(() => {
-    if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
+    if (isEdit && editData && Object.keys(editData).length > 0) {
+      // Reset form first to clear any previous values
+      form.reset()
+      
+      // Prepare all form values
+      const formValues: any = {}
+      
+      if (editData.name) formValues.title = editData.name
+      if (editData.collaborating_inst) formValues.collaboratingInstitute = editData.collaborating_inst
+      if (editData.address) formValues.address = editData.address
+      if (editData.Start_Date) formValues.startDate = editData.Start_Date
+      if (editData.duration !== undefined && editData.duration !== null) formValues.duration = editData.duration
+      if (editData.amount) formValues.amount = editData.amount
+      if (editData.outcome) formValues.detailsOutcome = editData.outcome
+      if (editData.supportingDocument) formValues.supportingDocument = editData.supportingDocument
+      
+      // Set all values at once
+      Object.keys(formValues).forEach((key) => {
+        setValue(key, formValues[key], { shouldValidate: false, shouldDirty: false })
       })
     }
-  }, [isEdit, editData, setValue])
+  }, [isEdit, editData, setValue, form])
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -101,12 +106,13 @@ export function ConsultancyForm({
           </div>
 
           <div>
-            <Label htmlFor="address">Address</Label>
+            <Label htmlFor="address">Address *</Label>
             <Input
               id="address"
               placeholder="Enter address"
-              {...register("address")}
+              {...register("address", { required: "Address is required" })}
             />
+            {errors.address && <p className="text-sm text-red-600 mt-1">{errors.address.message?.toString()}</p>}
           </div>
         </div>
 
@@ -155,10 +161,16 @@ export function ConsultancyForm({
         {isEdit && (
           <div className="mt-4">
             {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-              <DocumentViewer
-                documentUrl={formData.supportingDocument[0]}
-                documentType={formData.supportingDocument[0].split(".").pop()?.toLowerCase() || ""}
-              />
+              <div className="mt-4">
+                <Label>Supporting Document</Label>
+                <div className="mt-2 border rounded-lg p-4">
+                  <DocumentViewer
+                    documentUrl={formData.supportingDocument[0]}
+                    documentType={formData.supportingDocument[0]?.split('.').pop()?.toLowerCase() || 'pdf'}
+                    documentName={formData.title || "Document"}
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}

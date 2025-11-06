@@ -1,5 +1,7 @@
 // src/types/interfaces.ts
 
+import { UseFormReturn } from "react-hook-form"
+
 // ---------- Personal Information ----------
 export interface TeacherInfo {
     Tid: number
@@ -193,4 +195,61 @@ export interface ResearchMetrics {
   citations: number
   orcidId: string
   researcherId: string
+}
+
+// ---------- Patent Form ----------
+export interface PatentFormProps {
+  form: UseFormReturn<any>
+  onSubmit: (data: any) => void
+  isSubmitting: boolean
+  isExtracting?: boolean
+  selectedFiles?: FileList | null
+  handleFileSelect?: (files: FileList | null) => void
+  handleExtractInfo?: () => void
+  isEdit?: boolean
+  editData?: Record<string, any>
+  resPubLevelOptions?: Array<{ id: number; name: string }>
+  patentStatusOptions?: Array<{ id: number; name: string }>
+}
+
+// ---------- Policy Form ----------
+export interface PolicyFormProps {
+  form: UseFormReturn<any>
+  onSubmit: (data: any) => void
+  isSubmitting: boolean
+  isExtracting?: boolean
+  selectedFiles?: FileList | null
+  handleFileSelect?: (files: FileList | null) => void
+  handleExtractInfo?: () => void
+  isEdit?: boolean
+  editData?: Record<string, any>
+  resPubLevelOptions?: Array<{ id: number; name: string }>
+}
+
+// ---------- E-Content Form ----------
+export interface EContentFormProps {
+  form: UseFormReturn<any>
+  onSubmit: (data: any) => void
+  isSubmitting: boolean
+  isExtracting?: boolean
+  selectedFiles?: FileList | null
+  handleFileSelect?: (files: FileList | null) => void
+  handleExtractInfo?: () => void
+  isEdit?: boolean
+  editData?: Record<string, any>
+  eContentTypeOptions?: Array<{ id: number; name: string }>
+  typeEcontentValueOptions?: Array<{ id: number; name: string }>
+}
+
+// ---------- Consultancy Form ----------
+export interface ConsultancyFormProps {
+  form: UseFormReturn<any>
+  onSubmit: (data: any) => void
+  isSubmitting: boolean
+  isExtracting?: boolean
+  selectedFiles?: FileList | null
+  handleFileSelect?: (files: FileList | null) => void
+  handleExtractInfo?: () => void
+  isEdit?: boolean
+  editData?: Record<string, any>
 }

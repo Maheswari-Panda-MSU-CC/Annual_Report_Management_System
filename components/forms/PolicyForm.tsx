@@ -1,33 +1,17 @@
 "use client"
 
-import { UseFormReturn } from "react-hook-form"
 import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem
-} from "@/components/ui/select"
+import { Controller } from "react-hook-form"
 import { Save } from "lucide-react"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useRouter } from "next/navigation"
-
-interface PolicyFormProps {
-  form: UseFormReturn<any>
-  onSubmit: (data: any) => void
-  isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
-  isEdit?: boolean
-  editData?: Record<string, any>
-}
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { useDropDowns } from "@/hooks/use-dropdowns"
+import { PolicyFormProps } from "@/types/interfaces"
 
 export default function PolicyForm({
   form,
@@ -38,21 +22,53 @@ export default function PolicyForm({
   handleFileSelect = () => {},
   handleExtractInfo = () => {},
   isEdit = false,
-  editData = {}
+  editData = {},
+  resPubLevelOptions: propResPubLevelOptions,
 }: PolicyFormProps) {
   const router = useRouter()
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = form
+  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
 
-  console.log("Policy Form opened for editing");
+  // Use props if provided, otherwise fetch from hook
+  const { resPubLevelOptions: hookResPubLevelOptions, fetchResPubLevels } = useDropDowns()
+  
+  const resPubLevelOptions = propResPubLevelOptions || hookResPubLevelOptions
 
+  // Only fetch if props are not provided and options are empty
   useEffect(() => {
-    if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
+    if (!propResPubLevelOptions && hookResPubLevelOptions.length === 0) {
+      fetchResPubLevels()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
+
+  // Set initial values when in edit mode - optimized to reset and set all values at once
+  useEffect(() => {
+    if (isEdit && editData && Object.keys(editData).length > 0) {
+      // Reset form first to clear any previous values
+      form.reset()
+      
+      // Prepare all form values
+      const formValues: any = {}
+      
+      if (editData.title) formValues.title = editData.title
+      if (editData.levelId !== undefined && editData.levelId !== null) {
+        formValues.level = editData.levelId
+      } else if (editData.level) {
+        // If level is a string, find matching ID
+        const levelOption = resPubLevelOptions.find(l => l.name === editData.level)
+        if (levelOption) formValues.level = levelOption.id
+      }
+      if (editData.organisation) formValues.organisation = editData.organisation
+      if (editData.date) formValues.date = editData.date
+      if (editData.supportingDocument) formValues.supportingDocument = editData.supportingDocument
+      
+      // Set all values at once
+      Object.keys(formValues).forEach((key) => {
+        setValue(key, formValues[key], { shouldValidate: false, shouldDirty: false })
       })
     }
-  }, [isEdit, editData, setValue])
+  }, [isEdit, editData, setValue, form, resPubLevelOptions])
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -81,17 +97,24 @@ export default function PolicyForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <Label htmlFor="level">Level *</Label>
-            <Select value={formData.level} onValueChange={(value) => setValue("level", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Institutional">Institutional</SelectItem>
-                <SelectItem value="State">State</SelectItem>
-                <SelectItem value="National">National</SelectItem>
-                <SelectItem value="International">International</SelectItem>
-              </SelectContent>
-            </Select>
+            <Controller
+              control={control}
+              name="level"
+              rules={{ required: "Level is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={resPubLevelOptions.map((l) => ({
+                    value: l.id,
+                    label: l.name,
+                  }))}
+                  value={field.value || ""}
+                  onValueChange={(val) => field.onChange(Number(val))}
+                  placeholder="Select level"
+                  emptyMessage="No level found"
+                />
+              )}
+            />
+            {errors.level && <p className="text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>}
           </div>
 
           <div>
@@ -108,12 +131,20 @@ export default function PolicyForm({
         </div>
 
         {/* Optional: Show document viewer in edit mode */}
-        {isEdit && Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-          <div>
-            <DocumentViewer
-              documentUrl={formData.supportingDocument[0]}
-              documentType={formData.supportingDocument[0].split('.').pop()?.toLowerCase() || ''}
-            />
+        {isEdit && (
+          <div className="mt-4">
+            {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
+              <div className="mt-4">
+                <Label>Supporting Document</Label>
+                <div className="mt-2 border rounded-lg p-4">
+                  <DocumentViewer
+                    documentUrl={formData.supportingDocument[0]}
+                    documentType={formData.supportingDocument[0]?.split('.').pop()?.toLowerCase() || 'pdf'}
+                    documentName={formData.title || "Document"}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

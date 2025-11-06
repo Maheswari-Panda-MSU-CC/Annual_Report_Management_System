@@ -1,34 +1,18 @@
 "use client"
 
 import { useEffect } from "react"
-import { UseFormReturn } from "react-hook-form"
+import { Controller } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Save } from "lucide-react"
 import { useRouter } from "next/navigation"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
-
-interface EContentFormProps {
-  form: UseFormReturn<any>
-  onSubmit: (data: any) => void
-  isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
-  isEdit?: boolean
-  editData?: Record<string, any>
-}
+import { EContentFormProps } from "@/types/interfaces"
 
 export function EContentForm({
   form,
@@ -40,18 +24,59 @@ export function EContentForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  eContentTypeOptions: propEContentTypeOptions,
+  typeEcontentValueOptions: propTypeEcontentValueOptions,
 }: EContentFormProps) {
   const router = useRouter()
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = form
+  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
 
+  // Use props if provided, otherwise fetch from hook
+  const { eContentTypeOptions: hookEContentTypeOptions, typeEcontentValueOptions: hookTypeEcontentValueOptions, fetchEContentTypes, fetchTypeEcontentValues } = useDropDowns()
+  
+  const eContentTypeOptions = propEContentTypeOptions || hookEContentTypeOptions
+  const typeEcontentValueOptions = propTypeEcontentValueOptions || hookTypeEcontentValueOptions
+
+  // Only fetch if props are not provided and options are empty
   useEffect(() => {
-    if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
+    if (!propEContentTypeOptions && hookEContentTypeOptions.length === 0) {
+      fetchEContentTypes()
+    }
+    if (!propTypeEcontentValueOptions && hookTypeEcontentValueOptions.length === 0) {
+      fetchTypeEcontentValues()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run once on mount
+
+  // Set initial values when in edit mode - optimized to reset and set all values at once
+  useEffect(() => {
+    if (isEdit && editData && Object.keys(editData).length > 0) {
+      // Reset form first to clear any previous values
+      form.reset()
+      
+      // Prepare all form values
+      const formValues: any = {}
+      
+      if (editData.title) formValues.title = editData.title
+      if (editData.Brief_Details) formValues.briefDetails = editData.Brief_Details
+      if (editData.Quadrant !== undefined && editData.Quadrant !== null) formValues.quadrant = Number(editData.Quadrant)
+      if (editData.Publishing_date) formValues.publishingDate = editData.Publishing_date
+      if (editData.Publishing_Authorities) formValues.publishingAuthorities = editData.Publishing_Authorities
+      if (editData.link) formValues.link = editData.link
+      if (editData.e_content_type !== undefined && editData.e_content_type !== null) {
+        formValues.typeOfEContentPlatform = editData.e_content_type
+      }
+      if (editData.type_econtent !== undefined && editData.type_econtent !== null) {
+        formValues.typeOfEContent = editData.type_econtent
+      }
+      if (editData.supportingDocument) formValues.supportingDocument = editData.supportingDocument
+      
+      // Set all values at once
+      Object.keys(formValues).forEach((key) => {
+        setValue(key, formValues[key], { shouldValidate: false, shouldDirty: false })
       })
     }
-  }, [isEdit, editData, setValue])
+  }, [isEdit, editData, setValue, form])
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -89,71 +114,83 @@ export function EContentForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
           <div>
-            <Label htmlFor="typeOfEContentPlatform">Platform *</Label>
-            <Select
-              value={formData.typeOfEContentPlatform}
-              onValueChange={(value) => setValue("typeOfEContentPlatform", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select platform" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="SWAYAM">SWAYAM</SelectItem>
-                <SelectItem value="NPTEL">NPTEL</SelectItem>
-                <SelectItem value="Coursera">Coursera</SelectItem>
-                <SelectItem value="edX">edX</SelectItem>
-                <SelectItem value="YouTube">YouTube</SelectItem>
-                <SelectItem value="Udemy">Udemy</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="typeOfEContentPlatform">Platform (E-Content Type) *</Label>
+            <Controller
+              control={control}
+              name="typeOfEContentPlatform"
+              rules={{ required: "Platform is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={eContentTypeOptions.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                  value={field.value || ""}
+                  onValueChange={(val) => field.onChange(Number(val))}
+                  placeholder="Select platform"
+                  emptyMessage="No platform found"
+                />
+              )}
+            />
+            {errors.typeOfEContentPlatform && <p className="text-sm text-red-600 mt-1">{errors.typeOfEContentPlatform.message?.toString()}</p>}
           </div>
 
           <div>
-            <Label htmlFor="quadrant">Quadrant</Label>
-            <Select
-              value={formData.quadrant}
-              onValueChange={(value) => setValue("quadrant", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select quadrant" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Q1">Q1</SelectItem>
-                <SelectItem value="Q2">Q2</SelectItem>
-                <SelectItem value="Q3">Q3</SelectItem>
-                <SelectItem value="Q4">Q4</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="quadrant">Quadrant *</Label>
+            <Controller
+              control={control}
+              name="quadrant"
+              rules={{ required: "Quadrant is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={[
+                    { value: 1, label: "1" },
+                    { value: 2, label: "2" },
+                    { value: 3, label: "3" },
+                    { value: 4, label: "4" },
+                    { value: 5, label: "5" },
+                    { value: 6, label: "6" },
+                  ]}
+                  value={field.value || ""}
+                  onValueChange={(val) => field.onChange(Number(val))}
+                  placeholder="Select quadrant"
+                  emptyMessage="No quadrant found"
+                />
+              )}
+            />
+            {errors.quadrant && <p className="text-sm text-red-600 mt-1">{errors.quadrant.message?.toString()}</p>}
           </div>
         </div>
 
         <div className="mt-4">
-          <Label htmlFor="briefDetails">Brief Details</Label>
+          <Label htmlFor="briefDetails">Brief Details *</Label>
           <Textarea
             id="briefDetails"
             placeholder="Enter brief details"
-            {...register("briefDetails")}
+            {...register("briefDetails", { required: "Brief details are required" })}
           />
+          {errors.briefDetails && <p className="text-sm text-red-600 mt-1">{errors.briefDetails.message?.toString()}</p>}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
           <div>
-            <Label htmlFor="publishingDate">Publishing Date</Label>
+            <Label htmlFor="publishingDate">Publishing Date *</Label>
             <Input
               id="publishingDate"
               type="date"
-              {...register("publishingDate")}
+              {...register("publishingDate", { required: "Publishing date is required" })}
             />
+            {errors.publishingDate && <p className="text-sm text-red-600 mt-1">{errors.publishingDate.message?.toString()}</p>}
           </div>
 
           <div>
-            <Label htmlFor="publishingAuthorities">Publishing Authorities</Label>
+            <Label htmlFor="publishingAuthorities">Publishing Authorities *</Label>
             <Input
               id="publishingAuthorities"
               placeholder="Enter publishing authorities"
-              {...register("publishingAuthorities")}
+              {...register("publishingAuthorities", { required: "Publishing authorities are required" })}
             />
+            {errors.publishingAuthorities && <p className="text-sm text-red-600 mt-1">{errors.publishingAuthorities.message?.toString()}</p>}
           </div>
         </div>
 
@@ -169,33 +206,40 @@ export function EContentForm({
           </div>
 
           <div>
-            <Label htmlFor="typeOfEContent">Type of E-Content</Label>
-            <Select
-              value={formData.typeOfEContent}
-              onValueChange={(value) => setValue("typeOfEContent", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Video Lectures">Video Lectures</SelectItem>
-                <SelectItem value="Interactive Content">Interactive Content</SelectItem>
-                <SelectItem value="Simulation">Simulation</SelectItem>
-                <SelectItem value="E-Book">E-Book</SelectItem>
-                <SelectItem value="Quiz/Assessment">Quiz/Assessment</SelectItem>
-                <SelectItem value="Virtual Lab">Virtual Lab</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="typeOfEContent">Type of E-Content (Type Econtent Value)</Label>
+            <Controller
+              control={control}
+              name="typeOfEContent"
+              render={({ field }) => (
+                <SearchableSelect
+                  options={typeEcontentValueOptions.map((t) => ({
+                    value: t.id,
+                    label: t.name,
+                  }))}
+                  value={field.value || ""}
+                  onValueChange={(val) => field.onChange(Number(val))}
+                  placeholder="Select type"
+                  emptyMessage="No type found"
+                />
+              )}
+            />
           </div>
         </div>
 
-        {isEdit && Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-          <div className="mt-6">
-            <Label className="text-sm font-medium">Uploaded Document Preview</Label>
-            <DocumentViewer
-              documentUrl={formData.supportingDocument[0]}
-              documentType={formData.supportingDocument[0]?.split(".").pop()?.toLowerCase() || ""}
-            />
+        {isEdit && (
+          <div className="mt-4">
+            {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
+              <div className="mt-4">
+                <Label>Supporting Document</Label>
+                <div className="mt-2 border rounded-lg p-4">
+                  <DocumentViewer
+                    documentUrl={formData.supportingDocument[0]}
+                    documentType={formData.supportingDocument[0]?.split('.').pop()?.toLowerCase() || 'pdf'}
+                    documentName={formData.title || "Document"}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 

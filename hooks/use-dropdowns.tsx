@@ -23,6 +23,9 @@ export function useDropDowns() {
   const [journalEditedTypeOptions, setJournalEditedTypeOptions] = useState<DropdownOption[]>([]);
   const [resPubLevelOptions, setResPubLevelOptions] = useState<DropdownOption[]>([]);
   const [journalAuthorTypeOptions, setJournalAuthorTypeOptions] = useState<DropdownOption[]>([]);
+  const [patentStatusOptions, setPatentStatusOptions] = useState<DropdownOption[]>([]);
+  const [eContentTypeOptions, setEContentTypeOptions] = useState<DropdownOption[]>([]);
+  const [typeEcontentValueOptions, setTypeEcontentValueOptions] = useState<DropdownOption[]>([]);
 
   const fetchFaculties = async () => {
     try {
@@ -222,6 +225,55 @@ export function useDropDowns() {
     }
   }
 
+  const fetchPatentStatuses = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/patent-status');
+      if (res.ok) {
+        const data = await res.json();
+        // Map the response to match DropdownOption format (id, name)
+        const mapped = (data.patentStatuses || []).map((item: any) => ({
+          id: item.Id || item.id,
+          name: item.name || item.Name
+        }));
+        setPatentStatusOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching patent statuses:', error);
+    }
+  }
+
+  const fetchEContentTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/e-content-type');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.eContentTypes || []).map((item: any) => ({
+          id: item.Id || item.id,
+          name: item.name || item.Name
+        }));
+        setEContentTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching e-content types:', error);
+    }
+  }
+
+  const fetchTypeEcontentValues = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/type-econtent-value');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.typeEcontentValues || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setTypeEcontentValueOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching type econtent values:', error);
+    }
+  }
+
   useEffect(() => { fetchFaculties() }, [])
 
   return { 
@@ -239,6 +291,9 @@ export function useDropDowns() {
     journalEditedTypeOptions,
     resPubLevelOptions,
     journalAuthorTypeOptions,
+    patentStatusOptions,
+    eContentTypeOptions,
+    typeEcontentValueOptions,
     fetchFaculties, 
     fetchDepartments,
     fetchUserTypes,
@@ -252,6 +307,9 @@ export function useDropDowns() {
     fetchBookTypes,
     fetchJournalEditedTypes,
     fetchResPubLevels,
-    fetchJournalAuthorTypes
+    fetchJournalAuthorTypes,
+    fetchPatentStatuses,
+    fetchEContentTypes,
+    fetchTypeEcontentValues
   }
 }

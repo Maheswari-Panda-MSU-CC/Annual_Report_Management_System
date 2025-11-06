@@ -1,24 +1,21 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { toast } from "@/hooks/use-toast"
-import { ArrowLeft, Upload, Save, FileText, Loader2 } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { ConsultancyForm } from "@/components/forms/ConsultancyForm"
 import { useForm } from "react-hook-form"
+import { useAuth } from "@/app/api/auth/auth-provider"
 
 export default function AddConsultancyPage() {
   const router = useRouter()
+  const { user } = useAuth()
+  const form = useForm()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
- 
-  const form=useForm();
-
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
 
@@ -55,6 +52,7 @@ export default function AddConsultancyPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -62,35 +60,80 @@ export default function AddConsultancyPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      const consultancyData = {
+        name: data.title,
+        collaborating_inst: data.collaboratingInstitute,
+        address: data.address,
+        duration: data.duration ? Number(data.duration) : null,
+        amount: data.amount ? data.amount.toString() : null,
+        submit_date: new Date().toISOString().split('T')[0], // Current date
+        Start_Date: data.startDate,
+        outcome: data.detailsOutcome || null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/consultancy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          consultancy: consultancyData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add consultancy")
+      }
 
       toast({
         title: "Success",
         description: "Consultancy added successfully!",
         duration: 3000,
       })
-
-      setIsLoading(true)
-      router.push("/teacher/research-contributions?tab=consultancy")
-    } catch (error) {
+      
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=consultancy")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add consultancy. Please try again.",
+        description: error.message || "Failed to add consultancy. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 

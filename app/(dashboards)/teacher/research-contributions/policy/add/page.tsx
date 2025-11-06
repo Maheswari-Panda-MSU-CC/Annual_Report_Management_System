@@ -1,16 +1,19 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "@/components/ui/use-toast"
 import PolicyForm from "@/components/forms/PolicyForm"
 import { ArrowLeft, Loader2 } from "lucide-react"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 export default function AddPolicyPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const form = useForm()
   const { setValue } = form
 
@@ -18,6 +21,17 @@ export default function AddPolicyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+
+  // Fetch dropdowns at page level
+  const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (resPubLevelOptions.length === 0) {
+      fetchResPubLevels()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleDocumentUpload = (files: FileList | null) => {
     if (files && files.length > 0) {
@@ -52,6 +66,7 @@ export default function AddPolicyPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -59,33 +74,82 @@ export default function AddPolicyPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
     }
   }
   const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate API call
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Get level name from levelId
+      let levelName = data.level
+      if (data.level && typeof data.level === 'number') {
+        const levelOption = resPubLevelOptions.find(l => l.id === data.level)
+        levelName = levelOption ? levelOption.name : data.level
+      }
+
+      const policyData = {
+        title: data.title,
+        level: levelName,
+        organisation: data.organisation,
+        date: data.date,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/policy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          policy: policyData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add policy document")
+      }
 
       toast({
         title: "Success",
         description: "Policy document added successfully!",
         duration: 3000,
       })
-
-      setIsLoading(true)
-      router.push("/teacher/research-contributions?tab=policy")
-    } catch (error) {
+      
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=policy")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add policy document. Please try again.",
+        description: error.message || "Failed to add policy document. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -129,6 +193,7 @@ export default function AddPolicyPage() {
             handleFileSelect={handleDocumentUpload}
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
+            resPubLevelOptions={resPubLevelOptions}
           />
         </CardContent>
       </Card>

@@ -413,7 +413,7 @@ const navigationConfig: Record<number, NavigationItem[]> = {
       href: "/teacher/publication",
       icon: BookOpen,
       subItems: [
-        { name: "Published Articles/Papers", href: "/teacher/publication?tab=journals", icon: "FileText" },
+        { name: "Published Articles/Journals", href: "/teacher/publication?tab=journals", icon: "FileText" },
         { name: "Books/Book Chapters", href: "/teacher/publication?tab=books", icon: "BookOpen" },
         { name: "Papers Presented", href: "/teacher/publication?tab=papers", icon: "Presentation" },
       ],

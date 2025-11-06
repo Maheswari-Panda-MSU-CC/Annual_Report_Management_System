@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { toast } from "@/hooks/use-toast"
+import { toast } from "@/components/ui/use-toast"
+import { useAuth } from "@/app/api/auth/auth-provider"
 import {
   Plus,
   Edit,
@@ -26,11 +27,13 @@ import {
   Copyright,
   Save,
   Calendar,
+  Loader2,
 } from "lucide-react"
 import { DocumentViewer } from "@/components/document-viewer"
 import { ConfirmDeleteModal } from "@/components/ui/confirm-delete-modal"
 import { PatentForm } from "@/components/forms/PatentForm"
 import { useForm } from "react-hook-form"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 import PolicyForm from "@/components/forms/PolicyForm"
 import { EContentForm } from "@/components/forms/EcontentForm"
 import { ConsultancyForm } from "@/components/forms/ConsultancyForm"
@@ -40,63 +43,14 @@ import { FinancialForm } from "@/components/forms/FinancialFom"
 import { JrfSrfForm } from "@/components/forms/JrfSrfForm"
 import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
+import { PatentFormProps } from "@/types/interfaces"
 
-// Sample data for each section
-const initialSampleData = {
-  patents: [
-    {
-      id: 1,
-      srNo: 1,
-      title: "AI-Based Medical Diagnosis System",
-      level: "National",
-      status: "Granted",
-      date: "2023-03-15",
-      transferOfTechnology: "Yes",
-      earningGenerated: "250000",
-      patentApplicationNo: "IN202301234567",
-      supportingDocument: ["http://localhost:3000/images/msu-logo.png"],
-    },
-  ],
-  policy: [
-    {
-      id: 1,
-      srNo: 1,
-      title: "Digital Education Policy Framework",
-      level: "National",
-      organisation: "Ministry of Education",
-      date: "2023-05-20",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  econtent: [
-    {
-      id: 1,
-      srNo: 1,
-      title: "Interactive Machine Learning Course",
-      typeOfEContentPlatform: "SWAYAM",
-      briefDetails: "Comprehensive course on ML fundamentals",
-      quadrant: "Q1",
-      publishingDate: "2023-04-10",
-      publishingAuthorities: "IIT Madras",
-      link: "https://swayam.gov.in/course123",
-      typeOfEContent: "Video Lectures",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  consultancy: [
-    {
-      id: 1,
-      srNo: 1,
-      title: "AI Implementation Strategy",
-      collaboratingInstitute: "Tech Solutions Pvt Ltd",
-      address: "Mumbai, Maharashtra",
-      startDate: "2023-01-15",
-      duration: "6",
-      amount: "500000",
-      detailsOutcome: "Successfully implemented AI solutions",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
+// Initial data structure
+const initialData = {
+  patents: [],
+  policy: [],
+  econtent: [],
+  consultancy: [],
   collaborations: [
     {
       id: 1,
@@ -371,18 +325,238 @@ function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", mult
 
 export default function ResearchContributionsPage() {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("patents")
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
-  const [data, setData] = useState(initialSampleData)
+  const [data, setData] = useState(initialData)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [formData, setFormData] = useState<any>({})
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   
   const form=useForm();
   const [isExtracting,setIsExtracting]=useState(false);
   
   const [isSubmitting,setIsSubmitting]=useState(false);
+  
+  // Fetch dropdowns at page level
+  const { resPubLevelOptions, patentStatusOptions, eContentTypeOptions, typeEcontentValueOptions, fetchResPubLevels, fetchPatentStatuses, fetchEContentTypes, fetchTypeEcontentValues } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (resPubLevelOptions.length === 0) {
+      fetchResPubLevels()
+    }
+    if (patentStatusOptions.length === 0) {
+      fetchPatentStatuses()
+    }
+    if (eContentTypeOptions.length === 0) {
+      fetchEContentTypes()
+    }
+    if (typeEcontentValueOptions.length === 0) {
+      fetchTypeEcontentValues()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  
+  // Fetch patents, policy, e-content, and consultancy data
+  useEffect(() => {
+    if (user?.role_id) {
+      fetchPatents()
+      fetchPolicies()
+      fetchEContent()
+      fetchConsultancy()
+    }
+  }, [user?.role_id])
+
+
+  const fetchPatents = async () => {
+    if (!user?.role_id) return
+
+    setIsLoading(true)
+    try {
+      const res = await fetch(`/api/teacher/research-contributions/patents?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch patents")
+      }
+
+      // Map database fields to UI format
+      // Note: SP returns 'name' from Patents_Level (status) and 'Expr2' from Res_Pub_Level (level)
+      const mappedPatents = (data.patents || []).map((item: any, index: number) => ({
+        id: item.Pid,
+        srNo: index + 1,
+        title: item.title || "",
+        level: item.Expr2 || "", // Res_Pub_Level.name
+        levelId: item.level,
+        status: item.name || "", // Patents_Level.name
+        statusId: item.status,
+        date: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        Tech_Licence: item.Tech_Licence || "",
+        Earnings_Generate: item.Earnings_Generate?.toString() || "",
+        PatentApplicationNo: item.PatentApplicationNo || "",
+        supportingDocument: item.doc ? [item.doc] : [],
+        doc: item.doc,
+      }))
+
+      setData((prev) => ({
+        ...prev,
+        patents: mappedPatents,
+      }))
+    } catch (error: any) {
+      console.error("Error fetching patents:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load patents",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchPolicies = async () => {
+    if (!user?.role_id) return
+
+    try {
+      const res = await fetch(`/api/teacher/research-contributions/policy?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch policy documents")
+      }
+
+      // Map database fields to UI format
+      const mappedPolicies = (data.policies || []).map((item: any, index: number) => ({
+        id: item.Id,
+        srNo: index + 1,
+        title: item.Title || "",
+        level: item.Level || "",
+        levelId: null, // Will be resolved from level name using resPubLevelOptions
+        organisation: item.Organisation || "",
+        date: item.Date ? new Date(item.Date).toISOString().split('T')[0] : "",
+        supportingDocument: item.Doc ? [item.Doc] : [],
+        doc: item.Doc,
+      }))
+
+      // Resolve level IDs from level names (use current resPubLevelOptions state)
+      setData((prev) => {
+        const policiesWithLevelIds = mappedPolicies.map((policy: any) => {
+          const levelOption = resPubLevelOptions.find(l => l.name === policy.level)
+          return {
+            ...policy,
+            levelId: levelOption ? levelOption.id : null,
+          }
+        })
+        return {
+          ...prev,
+          policy: policiesWithLevelIds,
+        }
+      })
+    } catch (error: any) {
+      console.error("Error fetching policy documents:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load policy documents",
+        variant: "destructive",
+        duration: 3000,
+      })
+    }
+  }
+
+  const fetchEContent = async () => {
+    if (!user?.role_id) return
+
+    try {
+      const res = await fetch(`/api/teacher/research-contributions/e-content?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch e-content")
+      }
+
+      // Map database fields to UI format
+      // Note: SP returns 'EcontentTypeName' from type_econtent_value.name and 'Econtent_PlatformName' from e_content_type.name
+      const mappedEContent = (data.eContent || []).map((item: any, index: number) => ({
+        id: item.Eid,
+        srNo: index + 1,
+        title: item.title || "",
+        Brief_Details: item.Brief_Details || "",
+        Quadrant: item.Quadrant,
+        Publishing_date: item.Publishing_date ? new Date(item.Publishing_date).toISOString().split('T')[0] : "",
+        Publishing_Authorities: item.Publishing_Authorities || "",
+        link: item.link || "",
+        type_econtent: item.type_econtent,
+        type_econtent_name: item.EcontentTypeName || "", // type_econtent_value.name
+        e_content_type: item.e_content_type,
+        e_content_type_name: item.Econtent_PlatformName || "", // e_content_type.name
+        supportingDocument: item.doc ? [item.doc] : [],
+        doc: item.doc,
+      }))
+
+      setData((prev) => ({
+        ...prev,
+        econtent: mappedEContent,
+      }))
+    } catch (error: any) {
+      console.error("Error fetching e-content:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load e-content",
+        variant: "destructive",
+        duration: 3000,
+      })
+    }
+  }
+
+  const fetchConsultancy = async () => {
+    if (!user?.role_id) return
+
+    try {
+      const res = await fetch(`/api/teacher/research-contributions/consultancy?teacherId=${user.role_id}`)
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch consultancy records")
+      }
+
+      // Map database fields to UI format
+      const mappedConsultancy = (data.consultancies || []).map((item: any, index: number) => ({
+        id: item.id,
+        srNo: index + 1,
+        title: item.name || "",
+        name: item.name || "",
+        collaborating_inst: item.collaborating_inst || "",
+        collaboratingInstitute: item.collaborating_inst || "",
+        address: item.address || "",
+        Start_Date: item.Start_Date ? new Date(item.Start_Date).toISOString().split('T')[0] : "",
+        startDate: item.Start_Date ? new Date(item.Start_Date).toISOString().split('T')[0] : "",
+        duration: item.duration || null,
+        amount: item.amount || "",
+        outcome: item.outcome || "",
+        detailsOutcome: item.outcome || "",
+        supportingDocument: item.doc ? [item.doc] : [],
+        doc: item.doc,
+      }))
+
+      setData((prev) => ({
+        ...prev,
+        consultancy: mappedConsultancy,
+      }))
+    } catch (error: any) {
+      console.error("Error fetching consultancy records:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load consultancy records",
+        variant: "destructive",
+        duration: 3000,
+      })
+    }
+  }
+
   // Handle URL tab parameter
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -405,23 +579,97 @@ export default function ResearchContributionsPage() {
 
   const handleDelete = async (sectionId: string, itemId: number) => {
     try {
-      // Simulate API/delete logic
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).filter((item: any) => item.id !== itemId),
-      }))
+      if (sectionId === "patents") {
+        const res = await fetch(`/api/teacher/research-contributions/patents?patentId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
 
-      toast({
-        title: "Deleted!",
-        description: "Item deleted successfully.",
-        duration: 2000,
-      })
-    } catch (error) {
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete patent")
+        }
+
+        toast({
+          title: "Success",
+          description: "Patent deleted successfully!",
+          duration: 3000,
+        })
+
+        // Refresh data
+        await fetchPatents()
+      } else if (sectionId === "policy") {
+        const res = await fetch(`/api/teacher/research-contributions/policy?policyId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete policy document")
+        }
+
+        toast({
+          title: "Success",
+          description: "Policy document deleted successfully!",
+          duration: 3000,
+        })
+
+        // Refresh data
+        await fetchPolicies()
+      } else if (sectionId === "econtent") {
+        const res = await fetch(`/api/teacher/research-contributions/e-content?eContentId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete e-content")
+        }
+
+        toast({
+          title: "Success",
+          description: "E-Content deleted successfully!",
+          duration: 3000,
+        })
+
+        // Refresh data
+        await fetchEContent()
+      } else if (sectionId === "consultancy") {
+        const res = await fetch(`/api/teacher/research-contributions/consultancy?consultancyId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete consultancy record")
+        }
+
+        toast({
+          title: "Success",
+          description: "Consultancy record deleted successfully!",
+          duration: 3000,
+        })
+
+        // Refresh data
+        await fetchConsultancy()
+      } else {
+        // For other sections, use the old logic
+        setData((prevData) => ({
+          ...prevData,
+          [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).filter((item: any) => item.id !== itemId),
+        }))
+
+        toast({
+          title: "Success",
+          description: "Item deleted successfully.",
+          duration: 3000,
+        })
+      }
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Something went wrong while deleting the item.",
+        description: error.message || "Something went wrong while deleting the item.",
         variant: "destructive",
-        duration: 2000,
+        duration: 3000,
       })
     }
   }
@@ -433,26 +681,303 @@ export default function ResearchContributionsPage() {
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveEdit = () => {
-    if (!editingItem) return
+  const handleSaveEdit = async (data?: any) => {
+    if (!editingItem) {
+      toast({
+        title: "Error",
+        description: "No item selected for editing.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
-    setData((prevData) => ({
-      ...prevData,
-      [editingItem.sectionId]: (prevData[editingItem.sectionId as keyof typeof prevData] || []).map((item: any) =>
-        item.id === editingItem.id ? { ...item, ...formData } : item,
-      ),
-    }))
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
-    setIsEditDialogOpen(false)
-    setEditingItem(null)
-    setFormData({})
-    setSelectedFiles(null)
-    form.reset();
-    toast({
-      title: "Success",
-      description: "Item updated successfully!",
-      duration: 2000,
-    })
+    // Use form data if provided, otherwise use formData state
+    const submitData = data || formData
+
+    if (editingItem.sectionId === "patents") {
+      setIsSubmitting(true)
+      try {
+        // Handle dummy document upload if files are selected
+        let docUrl = editingItem.doc
+        if (selectedFiles && selectedFiles.length > 0) {
+          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+        }
+
+        // Ensure all required fields are present
+        const patentData = {
+          title: submitData.title || editingItem.title,
+          level: submitData.level || editingItem.levelId,
+          status: submitData.status || editingItem.statusId,
+          date: submitData.date || editingItem.date,
+          Tech_Licence: submitData.Tech_Licence || editingItem.Tech_Licence || "",
+          Earnings_Generate: submitData.Earnings_Generate ? Number(submitData.Earnings_Generate) : (editingItem.Earnings_Generate ? Number(editingItem.Earnings_Generate) : null),
+          PatentApplicationNo: submitData.PatentApplicationNo || editingItem.PatentApplicationNo || "",
+          doc: docUrl || editingItem.doc || null,
+        }
+
+        const res = await fetch("/api/teacher/research-contributions/patents", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            patentId: editingItem.id,
+            teacherId: user.role_id,
+            patent: patentData,
+          }),
+        })
+
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update patent")
+        }
+        toast({
+          title: "Success",
+          description: "Patent updated successfully!",
+          duration: 3000,
+        })
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        setSelectedFiles(null)
+        form.reset()
+
+        // Refresh data
+        await fetchPatents()
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update patent. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    } else if (editingItem.sectionId === "policy") {
+      setIsSubmitting(true)
+      try {
+        // Handle dummy document upload if files are selected
+        let docUrl = editingItem.doc
+        if (selectedFiles && selectedFiles.length > 0) {
+          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+        }
+
+        // Get level name from levelId if levelId is provided, otherwise use level string
+        let levelName = submitData.level || editingItem.level
+        if (submitData.level && typeof submitData.level === 'number') {
+          const levelOption = resPubLevelOptions.find(l => l.id === submitData.level)
+          levelName = levelOption ? levelOption.name : editingItem.level
+        } else if (editingItem.levelId) {
+          const levelOption = resPubLevelOptions.find(l => l.id === editingItem.levelId)
+          levelName = levelOption ? levelOption.name : editingItem.level
+        }
+
+        // Ensure all required fields are present
+        const policyData = {
+          title: submitData.title || editingItem.title,
+          level: levelName,
+          organisation: submitData.organisation || editingItem.organisation,
+          date: submitData.date || editingItem.date,
+          doc: docUrl || editingItem.doc || null,
+        }
+
+        const res = await fetch("/api/teacher/research-contributions/policy", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            policyId: editingItem.id,
+            teacherId: user.role_id,
+            policy: policyData,
+          }),
+        })
+
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update policy document")
+        }
+
+        toast({
+          title: "Success",
+          description: "Policy document updated successfully!",
+          duration: 3000,
+        })
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        setSelectedFiles(null)
+        form.reset()
+
+        // Refresh data
+        await fetchPolicies()
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update policy document. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    } else if (editingItem.sectionId === "econtent") {
+      setIsSubmitting(true)
+      try {
+        // Handle dummy document upload if files are selected
+        let docUrl = editingItem.doc
+        if (selectedFiles && selectedFiles.length > 0) {
+          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+        }
+
+        // Ensure all required fields are present
+        const eContentData = {
+          title: submitData.title || editingItem.title,
+          Brief_Details: submitData.briefDetails || editingItem.Brief_Details,
+          Quadrant: submitData.quadrant ? Number(submitData.quadrant) : editingItem.Quadrant,
+          Publishing_date: submitData.publishingDate || editingItem.Publishing_date,
+          Publishing_Authorities: submitData.publishingAuthorities || editingItem.Publishing_Authorities,
+          link: submitData.link || editingItem.link || null,
+          type_econtent: submitData.typeOfEContent ? Number(submitData.typeOfEContent) : (editingItem.type_econtent || null),
+          e_content_type: submitData.typeOfEContentPlatform ? Number(submitData.typeOfEContentPlatform) : (editingItem.e_content_type || null),
+          doc: docUrl || editingItem.doc || null,
+        }
+
+        const res = await fetch("/api/teacher/research-contributions/e-content", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eContentId: editingItem.id,
+            teacherId: user.role_id,
+            eContent: eContentData,
+          }),
+        })
+
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update e-content")
+        }
+
+        toast({
+          title: "Success",
+          description: "E-Content updated successfully!",
+          duration: 3000,
+        })
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        setSelectedFiles(null)
+        form.reset()
+
+        // Refresh data
+        await fetchEContent()
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update e-content. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    } else if (editingItem.sectionId === "consultancy") {
+      setIsSubmitting(true)
+      try {
+        // Handle dummy document upload if files are selected
+        let docUrl = editingItem.doc
+        if (selectedFiles && selectedFiles.length > 0) {
+          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+        }
+
+        // Ensure all required fields are present
+        const consultancyData = {
+          name: submitData.title || editingItem.name || editingItem.title,
+          collaborating_inst: submitData.collaboratingInstitute || editingItem.collaborating_inst || editingItem.collaboratingInstitute,
+          address: submitData.address || editingItem.address,
+          duration: submitData.duration ? Number(submitData.duration) : (editingItem.duration || null),
+          amount: submitData.amount ? submitData.amount.toString() : (editingItem.amount || null),
+          submit_date: new Date().toISOString().split('T')[0], // Current date
+          Start_Date: submitData.startDate || editingItem.Start_Date || editingItem.startDate,
+          outcome: submitData.detailsOutcome || editingItem.outcome || editingItem.detailsOutcome || null,
+          doc: docUrl || editingItem.doc || null,
+        }
+
+        const res = await fetch("/api/teacher/research-contributions/consultancy", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            consultancyId: editingItem.id,
+            teacherId: user.role_id,
+            consultancy: consultancyData,
+          }),
+        })
+
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update consultancy record")
+        }
+
+        toast({
+          title: "Success",
+          description: "Consultancy record updated successfully!",
+          duration: 3000,
+        })
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        setSelectedFiles(null)
+        form.reset()
+
+        // Refresh data
+        await fetchConsultancy()
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update consultancy record. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    } else {
+      // For other sections, use the old logic
+      setData((prevData) => ({
+        ...prevData,
+        [editingItem.sectionId]: (prevData[editingItem.sectionId as keyof typeof prevData] || []).map((item: any) =>
+          item.id === editingItem.id ? { ...item, ...submitData } : item,
+        ),
+      }))
+
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      setFormData({})
+      setSelectedFiles(null)
+      form.reset()
+      
+      toast({
+        title: "Success",
+        description: "Item updated successfully!",
+        duration: 3000,
+      })
+    }
   }
 
   const handleFileUpload = (sectionId: string, itemId: number) => {
@@ -467,9 +992,9 @@ export default function ResearchContributionsPage() {
         ),
       }))
       toast({
-        title: "Files Uploaded",
+        title: "Success",
         description: "Supporting documents uploaded successfully!",
-        duration: 2000,
+        duration: 3000,
       })
     }
   }
@@ -483,7 +1008,7 @@ export default function ResearchContributionsPage() {
             <TableCell className="font-medium">{item.title}</TableCell>
             <TableCell>{item.level}</TableCell>
             <TableCell>
-              <Badge variant={item.status === "Granted" ? "default" : "secondary"}>{item.status}</Badge>
+              <Badge variant={item.status?.toLowerCase() === "granted" ? "default" : "secondary"}>{item.status}</Badge>
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
@@ -492,12 +1017,12 @@ export default function ResearchContributionsPage() {
               </div>
             </TableCell>
             <TableCell>
-              <Badge variant={item.transferOfTechnology === "Yes" ? "default" : "secondary"}>
-                {item.transferOfTechnology}
+              <Badge variant={item.Tech_Licence ? "default" : "secondary"}>
+                {item.Tech_Licence || "No"}
               </Badge>
             </TableCell>
-            <TableCell>₹ {Number.parseInt(item.earningGenerated || "0").toLocaleString()}</TableCell>
-            <TableCell>{item.patentApplicationNo}</TableCell>
+            <TableCell>₹ {Number.parseInt(item.Earnings_Generate || "0").toLocaleString()}</TableCell>
+            <TableCell>{item.PatentApplicationNo}</TableCell>
           </>
         )
       case "policy":
@@ -520,20 +1045,20 @@ export default function ResearchContributionsPage() {
           <>
             <TableCell>{item.srNo}</TableCell>
             <TableCell className="font-medium">{item.title}</TableCell>
-            <TableCell>{item.typeOfEContentPlatform}</TableCell>
+            <TableCell>{item.e_content_type_name || ""}</TableCell>
             <TableCell className="max-w-xs">
-              <div className="truncate" title={item.briefDetails}>
-                {item.briefDetails}
+              <div className="truncate" title={item.Brief_Details}>
+                {item.Brief_Details}
               </div>
             </TableCell>
-            <TableCell>{item.quadrant}</TableCell>
+            <TableCell>{item.Quadrant}</TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.publishingDate}</span>
+                <span className="text-sm">{item.Publishing_date}</span>
               </div>
             </TableCell>
-            <TableCell>{item.publishingAuthorities}</TableCell>
+            <TableCell>{item.Publishing_Authorities}</TableCell>
             <TableCell>
               {item.link && (
                 <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
@@ -541,27 +1066,27 @@ export default function ResearchContributionsPage() {
                 </a>
               )}
             </TableCell>
-            <TableCell>{item.typeOfEContent}</TableCell>
+            <TableCell>{item.type_econtent_name || ""}</TableCell>
           </>
         )
       case "consultancy":
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title}</TableCell>
-            <TableCell>{item.collaboratingInstitute}</TableCell>
+            <TableCell className="font-medium">{item.title || item.name}</TableCell>
+            <TableCell>{item.collaboratingInstitute || item.collaborating_inst}</TableCell>
             <TableCell>{item.address}</TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.startDate}</span>
+                <span className="text-sm">{item.startDate || item.Start_Date}</span>
               </div>
             </TableCell>
-            <TableCell>{item.duration} months</TableCell>
-            <TableCell>₹ {Number.parseInt(item.amount).toLocaleString()}</TableCell>
+            <TableCell>{item.duration ? `${item.duration} months` : "-"}</TableCell>
+            <TableCell>{item.amount ? `₹ ${Number(item.amount).toLocaleString()}` : "-"}</TableCell>
             <TableCell className="max-w-xs">
-              <div className="truncate" title={item.detailsOutcome}>
-                {item.detailsOutcome}
+              <div className="truncate" title={item.detailsOutcome || item.outcome}>
+                {item.detailsOutcome || item.outcome || "-"}
               </div>
             </TableCell>
           </>
@@ -733,6 +1258,7 @@ export default function ResearchContributionsPage() {
               title: "Error",
               description: "Please upload a document first.",
               variant: "destructive",
+              duration: 3000,
             })
             return
           }
@@ -763,6 +1289,7 @@ export default function ResearchContributionsPage() {
                 description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
                   confidence * 100
                 )}% confidence)`,
+                duration: 3000,
               })
             }
           } catch (error) {
@@ -770,34 +1297,83 @@ export default function ResearchContributionsPage() {
               title: "Error",
               description: "Failed to auto-fill form.",
               variant: "destructive",
+              duration: 3000,
             })
           } finally {
             setIsExtracting(false)
           }
         }
       
+  // This handleSubmit is only used for the edit dialog form submission
+  // For add page, use the handleSubmit in patents/add/page.tsx
   const handleSubmit = async (data: any) => {
-          setIsSubmitting(true)
-          try {
-            await new Promise((res) => setTimeout(res, 1000))
-            toast({
-              title: "Success",
-              description: "Patent added successfully!",
-            })
-            router.push("/teacher/research-contributions?tab=patents")
-          } catch (error) {
-            toast({
-              title: "Error",
-              description: "Failed to add patent.",
-              variant: "destructive",
-            })
-          } finally {
-            setIsSubmitting(false)
-                    
-            setSelectedFiles(null)
-            form.reset();
-          }
-        }
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      const patentData = {
+        title: data.title,
+        level: data.level,
+        status: data.status,
+        date: data.date,
+        Tech_Licence: data.Tech_Licence || "",
+        Earnings_Generate: data.Earnings_Generate ? Number(data.Earnings_Generate) : null,
+        PatentApplicationNo: data.PatentApplicationNo || "",
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/patents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          patent: patentData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add patent")
+      }
+
+      toast({
+        title: "Success",
+        description: "Patent added successfully!",
+        duration: 3000,
+      })
+      
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=patents")
+      }, 500)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add patent. Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
+    }
+  }
 
       
       
@@ -806,61 +1382,65 @@ export default function ResearchContributionsPage() {
         
     switch (sectionId) {
       case "patents":
-      
         return (
           <PatentForm
             form={form}
-            onSubmit={handleSubmit}
+            onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
             isExtracting={isExtracting}
             selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
-            isEdit={true}
+            isEdit={isEdit}
             editData={currentData}
+            resPubLevelOptions={resPubLevelOptions}
+            patentStatusOptions={patentStatusOptions}
           />
         )
       case "policy":
-       return (
+        return (
           <PolicyForm
-          form={form}
-          onSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          isExtracting = {isExtracting}
-          selectedFiles = {selectedFiles}
-          handleFileSelect={handleFileSelect}
-          handleExtractInfo={handleExtractInfo}
-          isEdit={true}
-          editData={currentData}
-        />
-       );
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={handleExtractInfo}
+            isEdit={isEdit}
+            editData={currentData}
+            resPubLevelOptions={resPubLevelOptions}
+          />
+        )
       case "econtent":
         return (
           <EContentForm
             form={form}
-            onSubmit={handleSubmit}
+            onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting = {isExtracting}
-            selectedFiles = {selectedFiles}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
-            isEdit={true}
+            isEdit={isEdit}
             editData={currentData}
+            eContentTypeOptions={eContentTypeOptions}
+            typeEcontentValueOptions={typeEcontentValueOptions}
           />
         )
       case "consultancy":
         return (
           <ConsultancyForm
             form={form}
-            onSubmit={handleSubmit}
+            onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting = {isExtracting}
-            selectedFiles = {selectedFiles}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
-            isEdit={true}
+            isEdit={isEdit}
             editData={currentData}
-        />
+          />
         )
       case "collaborations":
         return (
@@ -1034,7 +1614,19 @@ export default function ResearchContributionsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {!data[section.id as keyof typeof data] ||
+                      {isLoading && section.id === "patents" ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={section.columns.length}
+                            className="h-24 text-center text-muted-foreground"
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading...
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ) : !data[section.id as keyof typeof data] ||
                         data[section.id as keyof typeof data].length === 0 ? (
                         <TableRow>
                           <TableCell
@@ -1150,9 +1742,29 @@ export default function ResearchContributionsPage() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSaveEdit}>
-              <Save className="h-4 w-4 mr-2" />
-              Update {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
+            <Button 
+              onClick={async () => {
+                if (editingItem?.sectionId === "patents" || editingItem?.sectionId === "policy" || editingItem?.sectionId === "econtent" || editingItem?.sectionId === "consultancy") {
+                  // Use form.handleSubmit to trigger validation and get form data
+                  form.handleSubmit(handleSaveEdit)()
+                } else {
+                  handleSaveEdit()
+                }
+              }}
+              disabled={isSubmitting}
+              className="transition-all duration-200"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Update {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>

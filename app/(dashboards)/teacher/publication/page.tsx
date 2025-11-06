@@ -7,15 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { SearchableSelect } from "@/components/ui/searchable-select"
 import {
   Plus,
   Edit,
@@ -24,8 +20,6 @@ import {
   FileText,
   BookOpen,
   Presentation,
-  Save,
-  ExternalLink,
   Eye,
   TrendingUp,
   Loader2,
@@ -118,37 +112,9 @@ const sections = [
   },
 ]
 
-interface FileUploadProps {
-  onFileSelect: (files: FileList | null) => void
-  acceptedTypes?: string
-  multiple?: boolean
-}
-
-function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", multiple = true }: FileUploadProps) {
-  return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-      <Upload className="mx-auto h-12 w-12 text-gray-400" />
-      <div className="mt-4">
-        <label htmlFor="file-upload" className="cursor-pointer">
-          <span className="mt-2 block text-sm font-medium text-gray-900">Upload files or drag and drop</span>
-          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, PNG up to 1MB each</span>
-        </label>
-        <input
-          id="file-upload"
-          name="file-upload"
-          type="file"
-          className="sr-only"
-          accept={acceptedTypes}
-          multiple={multiple}
-          onChange={(e) => onFileSelect(e.target.files)}
-        />
-      </div>
-    </div>
-  )
-}
 
 // Statistics Component
-function PublicationStats({ data }: { data: typeof initialData }) {
+function PublicationStats({ data, onStatClick }: { data: typeof initialData; onStatClick: (sectionId: string) => void }) {
   const stats = [
     {
       title: "Journal Articles",
@@ -158,6 +124,7 @@ function PublicationStats({ data }: { data: typeof initialData }) {
       color: "text-blue-600",
       bgColor: "bg-blue-50",
       borderColor: "border-blue-200",
+      sectionId: "journals",
     },
     {
       title: "Books Published",
@@ -167,6 +134,7 @@ function PublicationStats({ data }: { data: typeof initialData }) {
       color: "text-green-600",
       bgColor: "bg-green-50",
       borderColor: "border-green-200",
+      sectionId: "books",
     },
     {
       title: "Papers Presented",
@@ -176,6 +144,7 @@ function PublicationStats({ data }: { data: typeof initialData }) {
       color: "text-purple-600",
       bgColor: "bg-purple-50",
       borderColor: "border-purple-200",
+      sectionId: "papers",
     },
   ]
 
@@ -207,7 +176,11 @@ function PublicationStats({ data }: { data: typeof initialData }) {
       {/* Individual Publication Type Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {stats.map((stat, index) => (
-          <Card key={index} className={`${stat.borderColor} border-2 hover:shadow-md transition-shadow duration-200`}>
+          <Card 
+            key={index} 
+            className={`${stat.borderColor} border-2 hover:shadow-md transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98]`}
+            onClick={() => onStatClick(stat.sectionId)}
+          >
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
@@ -611,7 +584,7 @@ export default function PublicationsPage() {
         </div>
 
         {/* Publication Statistics Section */}
-        <PublicationStats data={data} />
+        <PublicationStats data={data} onStatClick={handleTabChange} />
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
           <div className="border-b mb-4">

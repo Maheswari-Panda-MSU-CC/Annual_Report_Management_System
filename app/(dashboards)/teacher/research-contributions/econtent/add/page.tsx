@@ -1,38 +1,40 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { toast } from "@/hooks/use-toast"
-import { ArrowLeft, Upload, Save, FileText, Loader2 } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { EContentForm } from "@/components/forms/EcontentForm"
 import { useForm } from "react-hook-form"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 
 
 export default function AddEContentPage() {
   const router = useRouter()
+  const { user } = useAuth()
+  const form = useForm()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    title: "",
-    typeOfEContentPlatform: "",
-    briefDetails: "",
-    quadrant: "",
-    publishingDate: "",
-    publishingAuthorities: "",
-    link: "",
-    typeOfEContent: "",
-  })
-
   const [isExtracting, setIsExtracting] = useState(false)
-  
-  const form = useForm();
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
 
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  // Fetch dropdowns at page level
+  const { eContentTypeOptions, typeEcontentValueOptions, fetchEContentTypes, fetchTypeEcontentValues } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (eContentTypeOptions.length === 0) {
+      fetchEContentTypes()
+    }
+    if (typeEcontentValueOptions.length === 0) {
+      fetchTypeEcontentValues()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
  
   const handleDocumentUpload = (files: FileList | null) => {
@@ -68,6 +70,7 @@ export default function AddEContentPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -75,6 +78,7 @@ export default function AddEContentPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
@@ -82,29 +86,73 @@ export default function AddEContentPage() {
   }
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      const eContentData = {
+        title: data.title,
+        Brief_Details: data.briefDetails,
+        Quadrant: Number(data.quadrant),
+        Publishing_date: data.publishingDate,
+        Publishing_Authorities: data.publishingAuthorities,
+        link: data.link || null,
+        type_econtent: data.typeOfEContent ? Number(data.typeOfEContent) : null,
+        e_content_type: data.typeOfEContentPlatform ? Number(data.typeOfEContentPlatform) : null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/e-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          eContent: eContentData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add e-content")
+      }
 
       toast({
         title: "Success",
         description: "E-Content added successfully!",
         duration: 3000,
       })
-
-      setIsLoading(true)
-      router.push("/teacher/research-contributions?tab=econtent")
-    } catch (error) {
+      
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=econtent")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add e-content. Please try again.",
+        description: error.message || "Failed to add e-content. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -150,6 +198,8 @@ export default function AddEContentPage() {
               handleFileSelect={handleDocumentUpload}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
+              eContentTypeOptions={eContentTypeOptions}
+              typeEcontentValueOptions={typeEcontentValueOptions}
            />
           </CardContent>
         </Card>
