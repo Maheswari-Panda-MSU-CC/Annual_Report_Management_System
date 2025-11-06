@@ -33,6 +33,8 @@ export async function GET(request: Request) {
       quickCounts: recordsets?.[6]?.[0] ?? {},
       researchSummary: recordsets?.[7]?.[0] ?? {},
       researchIndexes: recordsets?.[8]?.[0] ?? {},
+      phdStudentsCount: recordsets?.[9]?.[0] ?? {},
+      phdStudentStatusCount: recordsets?.[10]?.[0] ?? {},
     };
 
     return new Response(JSON.stringify(response), {

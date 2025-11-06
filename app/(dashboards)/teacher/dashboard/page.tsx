@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink, Upload, Brain } from "lucide-react"
+import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink, Upload, Brain, GraduationCap } from "lucide-react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { SmartDocumentAnalyzer } from "@/components/smart-document-analyzer"
@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const [quickCounts, setQuickCounts] = useState<any>({});
   const [researchSummary, setResearchSummary] =  useState<any>({});
   const [researchIndexes, setResearchIndexes] = useState<any>({});
+  const [phdStudentsCount, setPhdStudentsCount] = useState<any>({});
+  const [phdStudentStatusCount, setPhdStudentStatusCount] = useState<any>({});
 
   // Quick actions
   const quickActions = [
@@ -77,6 +79,8 @@ export default function DashboardPage() {
         setQuickCounts(data.quickCounts || {});
         setResearchSummary(data.researchSummary || {});
         setResearchIndexes(data.researchIndexes || {});
+        setPhdStudentsCount(data.phdStudentsCount || {});
+        setPhdStudentStatusCount(data.phdStudentStatusCount || {});
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
       } finally {
@@ -333,6 +337,65 @@ export default function DashboardPage() {
                 >
                   <div className="text-2xl font-bold text-purple-600">Rs. {researchSummary.TotalFunding}</div>
                   <div className="text-sm text-muted-foreground">Total Funding</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* PhD Students Metrics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-indigo-600" />
+                PhD Students Overview
+              </CardTitle>
+              <CardDescription>Total PhD students under guidance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <div className="text-4xl font-bold text-indigo-600 mb-2">
+                  {phdStudentsCount.TotalPhDStudents || 0}
+                </div>
+                <div className="text-sm text-muted-foreground">Total PhD Students</div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <GraduationCap className="h-5 w-5 text-indigo-600" />
+                PhD Students Status
+              </CardTitle>
+              <CardDescription>Breakdown by status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {phdStudentStatusCount.Registered || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Registered</div>
+                </div>
+                <div className="text-center p-3 bg-yellow-50 rounded-lg">
+                  <div className="text-2xl font-bold text-yellow-600">
+                    {phdStudentStatusCount.SynopsisSubmitted || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Synopsis Submitted</div>
+                </div>
+                <div className="text-center p-3 bg-orange-50 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {phdStudentStatusCount.ThesisSubmitted || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Thesis Submitted</div>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">
+                    {phdStudentStatusCount.Completed || 0}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Completed</div>
                 </div>
               </div>
             </CardContent>

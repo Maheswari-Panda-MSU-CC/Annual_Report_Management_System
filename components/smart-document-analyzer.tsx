@@ -405,12 +405,120 @@ export function SmartDocumentAnalyzer() {
   const { toast } = useToast()
   const router = useRouter()
 
+  // Helper function to calculate field similarity between extracted fields and expected fields
+  const calculateFieldSimilarity = (
+    extractedFields: Record<string, string>,
+    expectedFields: string[]
+  ): number => {
+    if (!extractedFields || Object.keys(extractedFields).length === 0) return 0
+    if (!expectedFields || expectedFields.length === 0) return 0
+
+    const extractedKeys = Object.keys(extractedFields).map(k => k.toLowerCase().trim())
+    const expectedKeys = expectedFields.map(f => f.toLowerCase().trim())
+    
+    // Normalize field names (remove special characters, spaces, etc.)
+    const normalizeField = (field: string) => {
+      return field
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .trim()
+    }
+
+    const normalizedExtracted = extractedKeys.map(normalizeField)
+    const normalizedExpected = expectedKeys.map(normalizeField)
+
+    // Calculate matches
+    let matches = 0
+    normalizedExtracted.forEach(extracted => {
+      const match = normalizedExpected.some(expected => {
+        // Exact match
+        if (extracted === expected) return true
+        // Partial match (one contains the other)
+        if (extracted.includes(expected) || expected.includes(extracted)) return true
+        // Fuzzy match (similar strings)
+        const similarity = calculateStringSimilarity(extracted, expected)
+        return similarity > 0.7
+      })
+      if (match) matches++
+    })
+
+    return expectedKeys.length > 0 ? matches / expectedKeys.length : 0
+  }
+
+  // Helper function to calculate string similarity (Levenshtein distance based)
+  const calculateStringSimilarity = (str1: string, str2: string): number => {
+    const longer = str1.length > str2.length ? str1 : str2
+    const shorter = str1.length > str2.length ? str2 : str1
+    if (longer.length === 0) return 1.0
+    
+    const distance = levenshteinDistance(longer, shorter)
+    return (longer.length - distance) / longer.length
+  }
+
+  // Simple Levenshtein distance calculation
+  const levenshteinDistance = (str1: string, str2: string): number => {
+    const matrix = []
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i]
+    }
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j
+    }
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1]
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          )
+        }
+      }
+    }
+    return matrix[str2.length][str1.length]
+  }
+
+  // Helper function to get route for research contributions subcategories
+  const getResearchContributionsRoute = (subCategory: string, useAddRoute: boolean = false): string => {
+    const subCategoryMap: Record<string, string> = {
+      "patents": "patents",
+      "policy documents": "policy",
+      "policy": "policy",
+      "e-content": "econtent",
+      "econtent": "econtent",
+      "consultancy": "consultancy",
+      "collaborations": "collaborations",
+      "mous": "collaborations",
+      "academic visits": "visits",
+      "visits": "visits",
+      "financial support": "financial",
+      "financial": "financial",
+      "jrf": "jrfSrf",
+      "srf": "jrfSrf",
+      "jrfsrf": "jrfSrf",
+      "phd guidance": "phd",
+      "phd": "phd",
+      "copyrights": "copyrights",
+      "copyright": "copyrights",
+    }
+    const normalized = subCategory.toLowerCase().trim()
+    const tab = subCategoryMap[normalized] || normalized
+    
+    if (useAddRoute) {
+      return `/teacher/research-contributions/${tab}/add`
+    }
+    return `/teacher/research-contributions?tab=${tab}`
+  }
+
   // Mappings for teacher sections with expected fields and routes
   const teacherCategories: Array<{ key: string; label: string; route: string; fields: string[] }> = [
     { key: "Books/Papers", label: "Books/Papers", route: "/teacher/publication", fields: ["Title", "DOI", "ISSN", "Impact Factor", "Publisher", "Year"] },
     { key: "Books", label: "Books (Authored/Edited)", route: "/teacher/publication/books/add", fields: ["Title", "ISBN", "Publisher", "Year"] },
     { key: "Published Articles/Papers in Journals/Edited Volumes", label: "Published Articles/Papers", route: "/teacher/publication/papers/add", fields: ["Title", "DOI", "ISSN", "Impact Factor", "Journal", "Year"] },
     { key: "Research Projects", label: "Research Projects", route: "/teacher/research/add", fields: ["Project Title", "Funding Agency", "Sanctioned Amount", "Duration", "Start Date", "End Date"] },
+    { key: "Research Contributions", label: "Research Contributions", route: "/teacher/research-contributions", fields: ["Title", "Type", "Date", "Details"] },
     { key: "Awards/Recognition", label: "Awards & Recognition", route: "/teacher/awards-recognition/add", fields: ["Award Name", "Awarding Body", "Year"] },
     { key: "Talks/Events", label: "Talks & Events", route: "/teacher/talks-events/add", fields: ["Event Name", "Role", "Date", "Venue"] },
     { key: "Online Engagement", label: "Online Engagement", route: "/teacher/online-engagement/add", fields: ["Platform", "URL", "Topic", "Date"] },
@@ -573,7 +681,7 @@ export function SmartDocumentAnalyzer() {
               <CardHeader>
                 <CardTitle className="text-lg">Classification</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-4">
                 <div className="flex justify-between">
                   <span className="font-medium">Category:</span>
                   <Badge variant="outline">{analysis.classification.category}</Badge>
@@ -584,6 +692,141 @@ export function SmartDocumentAnalyzer() {
                     <Badge variant="secondary">
                       {analysis.classification["sub-category"]}
                     </Badge>
+                  </div>
+                )}
+                
+                {/* Redirect Button for Categorized Page */}
+                {analysis.classification.category && (
+                  <div className="pt-2 border-t space-y-3">
+                    {/* Field Similarity Warning */}
+                    {(() => {
+                      const category = analysis.classification.category.toLowerCase()
+                      const subCategory = analysis.classification["sub-category"]?.toLowerCase() || ""
+                      const dataFields = analysis.classification.dataFields || {}
+                      
+                      // Check if it's a research contributions category
+                      if (category.includes("research") && (category.includes("contribution") || category.includes("consultancy"))) {
+                        // Map expected fields for each subcategory
+                        const expectedFieldsMap: Record<string, string[]> = {
+                          "copyrights": ["title", "reference no", "reference number", "publication date", "link"],
+                          "copyright": ["title", "reference no", "reference number", "publication date", "link"],
+                          "patents": ["title", "level", "status", "date", "patent application", "patent number"],
+                          "policy": ["title", "level", "organisation", "date"],
+                          "econtent": ["title", "type", "platform", "date"],
+                          "consultancy": ["title", "organisation", "amount", "date"],
+                          "collaborations": ["title", "organisation", "type", "date"],
+                          "visits": ["title", "organisation", "purpose", "date"],
+                          "financial": ["title", "amount", "purpose", "date"],
+                          "jrfSrf": ["name", "type", "project title", "duration"],
+                          "phd": ["name", "reg no", "registration no", "topic", "date"],
+                        }
+                        
+                        const normalizedSubCat = subCategory || "copyrights"
+                        const expectedFields = expectedFieldsMap[normalizedSubCat] || expectedFieldsMap["copyrights"]
+                        const similarity = calculateFieldSimilarity(dataFields, expectedFields)
+                        
+                        if (similarity < 0.3 && Object.keys(dataFields).length > 0) {
+                          return (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                              <p className="text-sm text-yellow-800">
+                                <strong>Warning:</strong> Low field match ({Math.round(similarity * 100)}%). 
+                                The predicted category might not be correct. Please verify before proceeding.
+                              </p>
+                            </div>
+                          )
+                        }
+                      } else {
+                        // Check against teacher categories
+                        const matchedCategory = teacherCategories.find(
+                          c => c.key.toLowerCase() === category.toLowerCase()
+                        )
+                        if (matchedCategory) {
+                          const similarity = calculateFieldSimilarity(dataFields, matchedCategory.fields)
+                          if (similarity < 0.3 && Object.keys(dataFields).length > 0) {
+                            return (
+                              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                                <p className="text-sm text-yellow-800">
+                                  <strong>Warning:</strong> Low field match ({Math.round(similarity * 100)}%). 
+                                  The predicted category might not be correct. Please verify before proceeding.
+                                </p>
+                              </div>
+                            )
+                          }
+                        }
+                      }
+                      return null
+                    })()}
+                    
+                    <Button
+                      onClick={() => {
+                        try {
+                          const category = analysis.classification.category.toLowerCase()
+                          const subCategory = analysis.classification["sub-category"]?.toLowerCase() || ""
+                          const dataFields = analysis.classification.dataFields || {}
+                          
+                          // Handle Research & Consultancy or Research Contributions category
+                          if (category.includes("research") && (category.includes("contribution") || category.includes("consultancy"))) {
+                            // Use add route when we have dataFields
+                            const useAddRoute = Object.keys(dataFields).length > 0
+                            const route = getResearchContributionsRoute(subCategory || category, useAddRoute)
+                            
+                            // Store analysis data including dataFields for form population
+                            sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
+                            sessionStorage.setItem("arms_dataFields", JSON.stringify(dataFields))
+                            sessionStorage.setItem("arms_category", category)
+                            sessionStorage.setItem("arms_subcategory", subCategory)
+                            
+                            router.push(route)
+                            toast({
+                              title: "Redirecting...",
+                              description: `Taking you to ${subCategory || "Research Contributions"} ${useAddRoute ? "add" : ""} page`,
+                            })
+                            return
+                          }
+                          
+                          // Handle other categories
+                          const normalized = teacherCategories.find(
+                            c => c.key.toLowerCase() === category.toLowerCase()
+                          )
+                          
+                          if (normalized) {
+                            // Store analysis data including dataFields
+                            sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
+                            sessionStorage.setItem("arms_dataFields", JSON.stringify(dataFields))
+                            sessionStorage.setItem("arms_category", category)
+                            
+                            router.push(normalized.route)
+                            toast({
+                              title: "Redirecting...",
+                              description: `Taking you to ${normalized.label} page`,
+                            })
+                          } else {
+                            toast({
+                              title: "Route Not Found",
+                              description: "Could not determine the correct page. Please select manually below.",
+                              variant: "destructive",
+                            })
+                          }
+                        } catch (e) {
+                          console.error("Navigation error:", e)
+                          toast({
+                            title: "Navigation Failed",
+                            description: "Please try again or select manually below.",
+                            variant: "destructive",
+                          })
+                        }
+                      }}
+                      className="w-full sm:w-auto"
+                      variant="default"
+                    >
+                      <span className="hidden sm:inline">
+                        Go to {analysis.classification["sub-category"] || analysis.classification.category} Page
+                      </span>
+                      <span className="sm:hidden">
+                        Go to Page
+                      </span>
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
                   </div>
                 )}
               </CardContent>

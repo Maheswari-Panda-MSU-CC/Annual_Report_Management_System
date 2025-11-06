@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +18,57 @@ export default function AddCopyrightsPage() {
 
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // Auto-populate form from sessionStorage if dataFields are available
+  useEffect(() => {
+    try {
+      const storedDataFields = sessionStorage.getItem("arms_dataFields")
+      const storedAnalysis = sessionStorage.getItem("arms_last_analysis")
+      
+      if (storedDataFields && storedAnalysis) {
+        const dataFields = JSON.parse(storedDataFields)
+        const analysis = JSON.parse(storedAnalysis)
+        
+        // Map extracted fields to form fields
+        const fieldMapping: Record<string, string> = {
+          "Reference No.": "referenceNo",
+          "Reference No": "referenceNo",
+          "Reference Number": "referenceNo",
+          "ReferenceNumber": "referenceNo",
+          "Title": "title",
+          "Publication Date": "publicationDate",
+          "PublicationDate": "publicationDate",
+          "Date": "publicationDate",
+          "Link": "link",
+        }
+        
+        let fieldsPopulated = 0
+        
+        Object.entries(dataFields).forEach(([key, value]) => {
+          const mappedKey = fieldMapping[key] || key.toLowerCase().replace(/\s+/g, "")
+          if (mappedKey === "referenceNo" || mappedKey === "title" || mappedKey === "publicationDate" || mappedKey === "link") {
+            form.setValue(mappedKey, value)
+            fieldsPopulated++
+          }
+        })
+        
+        if (fieldsPopulated > 0) {
+          toast({
+            title: "Form Auto-filled",
+            description: `Populated ${fieldsPopulated} field(s) from document analysis.`,
+          })
+          
+          // Clear sessionStorage after use
+          sessionStorage.removeItem("arms_dataFields")
+          sessionStorage.removeItem("arms_last_analysis")
+          sessionStorage.removeItem("arms_category")
+          sessionStorage.removeItem("arms_subcategory")
+        }
+      }
+    } catch (error) {
+      console.error("Error auto-populating form:", error)
+    }
+  }, [form])
 
   const handleDocumentUpload = (files: FileList | null) => {
     if (files && files.length > 0) {
