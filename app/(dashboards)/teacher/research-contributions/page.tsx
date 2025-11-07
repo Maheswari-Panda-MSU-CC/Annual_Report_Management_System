@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,7 +43,9 @@ import { FinancialForm } from "@/components/forms/FinancialFom"
 import { JrfSrfForm } from "@/components/forms/JrfSrfForm"
 import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
-import { PatentFormProps } from "@/types/interfaces"
+import { fetchSectionData, deleteSectionData } from "./utils/api-helpers"
+import { SECTION_ROUTES, API_ENDPOINTS, type SectionId } from "./utils/research-contributions-config"
+import { createUpdateMapper, UPDATE_REQUEST_BODIES, UPDATE_SUCCESS_MESSAGES } from "./utils/update-mappers"
 
 // Initial data structure
 const initialData = {
@@ -51,91 +53,12 @@ const initialData = {
   policy: [],
   econtent: [],
   consultancy: [],
-  collaborations: [
-    {
-      id: 1,
-      srNo: 1,
-      category: "Research Collaboration",
-      collaboratingInstitute: "MIT, USA",
-      nameOfCollaborator: "Dr. John Smith",
-      qsTheRanking: "1",
-      address: "Cambridge, MA, USA",
-      details: "Joint research on quantum computing",
-      collaborationOutcome: "3 joint publications",
-      status: "Active",
-      startingDate: "2023-02-28",
-      duration: "36",
-      level: "International",
-      noOfBeneficiary: "25",
-      mouSigned: "Yes",
-      signingDate: "2023-02-25",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  visits: [
-    {
-      id: 1,
-      srNo: 1,
-      instituteVisited: "Stanford University",
-      durationOfVisit: "30",
-      role: "Visiting Researcher",
-      sponsoredBy: "DST",
-      remarks: "Collaborative research on AI",
-      date: "2023-07-01",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  financial: [
-    {
-      id: 1,
-      srNo: 1,
-      nameOfSupport: "SERB Core Research Grant",
-      type: "Research Grant",
-      supportingAgency: "SERB",
-      grantReceived: "2500000",
-      detailsOfEvent: "Advanced AI Research Project",
-      purposeOfGrant: "Equipment and research activities",
-      date: "2023-01-01",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  jrfSrf: [
-    {
-      id: 1,
-      srNo: 1,
-      nameOfFellow: "Rahul Kumar",
-      type: "JRF",
-      projectTitle: "Machine Learning Applications",
-      duration: "36",
-      monthlyStipend: "31000",
-      date: "2023-01-15",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  phd: [
-    {
-      id: 1,
-      srNo: 1,
-      regNo: "PHD2020001",
-      nameOfStudent: "Priya Sharma",
-      dateOfRegistration: "2020-07-01",
-      topic: "Deep Learning Applications in Healthcare",
-      status: "Ongoing",
-      yearOfCompletion: "2024",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
-  copyrights: [
-    {
-      id: 1,
-      srNo: 1,
-      title: "Educational Software for Mathematics",
-      referenceNo: "L-12345/2023",
-      publicationDate: "2023-08-15",
-      link: "https://copyright.gov.in/document123",
-      supportingDocument: ["http://localhost:3000/assets/demo_document.pdf"],
-    },
-  ],
+  collaborations: [],
+  visits: [],
+  financial: [],
+  jrfSrf: [],
+  phd: [],
+  copyrights: [],
 }
 
 const sections = [
@@ -332,7 +255,26 @@ export default function ResearchContributionsPage() {
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [formData, setFormData] = useState<any>({})
-  const [isLoading, setIsLoading] = useState(true)
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({
+    patents: false,
+    policy: false,
+    econtent: false,
+    consultancy: false,
+    collaborations: false,
+    visits: false,
+    financial: false,
+    jrfSrf: false,
+    phd: false,
+    copyrights: false,
+  })
+  // Track which sections have been fetched to avoid re-fetching
+  const [fetchedSections, setFetchedSections] = useState<Set<SectionId>>(new Set())
+  // Use ref to track sections currently being fetched to prevent duplicate requests
+  const fetchingRef = useRef<Set<SectionId>>(new Set())
+  // Track which dropdowns have been fetched to prevent re-fetching
+  const fetchedDropdownsRef = useRef<Set<string>>(new Set())
+  // Track dropdowns currently being fetched to prevent duplicate requests
+  const fetchingDropdownsRef = useRef<Set<string>>(new Set())
   const router = useRouter()
   
   const form=useForm();
@@ -341,223 +283,205 @@ export default function ResearchContributionsPage() {
   const [isSubmitting,setIsSubmitting]=useState(false);
   
   // Fetch dropdowns at page level
-  const { resPubLevelOptions, patentStatusOptions, eContentTypeOptions, typeEcontentValueOptions, fetchResPubLevels, fetchPatentStatuses, fetchEContentTypes, fetchTypeEcontentValues } = useDropDowns()
+  const { 
+    resPubLevelOptions, 
+    patentStatusOptions, 
+    eContentTypeOptions, 
+    typeEcontentValueOptions,
+    collaborationsLevelOptions,
+    collaborationsOutcomeOptions,
+    collaborationsTypeOptions,
+    academicVisitRoleOptions,
+    financialSupportTypeOptions,
+    jrfSrfTypeOptions,
+    phdGuidanceStatusOptions,
+    fetchResPubLevels, 
+    fetchPatentStatuses, 
+    fetchEContentTypes, 
+    fetchTypeEcontentValues,
+    fetchCollaborationsLevels,
+    fetchCollaborationsOutcomes,
+    fetchCollaborationsTypes,
+    fetchAcademicVisitRoles,
+    fetchFinancialSupportTypes,
+    fetchJrfSrfTypes,
+    fetchPhdGuidanceStatuses
+  } = useDropDowns()
   
+  // Mapping of tabs to their required dropdowns (memoized to prevent recreation)
+  const tabDropdownMap = useMemo<Record<string, Array<{ key: string; check: () => boolean; fetch: () => Promise<void> }>>>(() => ({
+    patents: [
+      { key: 'patentStatusOptions', check: () => patentStatusOptions.length === 0, fetch: fetchPatentStatuses },
+      { key: 'resPubLevelOptions', check: () => resPubLevelOptions.length === 0, fetch: fetchResPubLevels },
+    ],
+    policy: [
+      { key: 'resPubLevelOptions', check: () => resPubLevelOptions.length === 0, fetch: fetchResPubLevels },
+    ],
+    econtent: [
+      { key: 'eContentTypeOptions', check: () => eContentTypeOptions.length === 0, fetch: fetchEContentTypes },
+      { key: 'typeEcontentValueOptions', check: () => typeEcontentValueOptions.length === 0, fetch: fetchTypeEcontentValues },
+    ],
+    consultancy: [], // No dropdowns needed
+    collaborations: [
+      { key: 'collaborationsLevelOptions', check: () => collaborationsLevelOptions.length === 0, fetch: fetchCollaborationsLevels },
+      { key: 'collaborationsOutcomeOptions', check: () => collaborationsOutcomeOptions.length === 0, fetch: fetchCollaborationsOutcomes },
+      { key: 'collaborationsTypeOptions', check: () => collaborationsTypeOptions.length === 0, fetch: fetchCollaborationsTypes },
+    ],
+    visits: [
+      { key: 'academicVisitRoleOptions', check: () => academicVisitRoleOptions.length === 0, fetch: fetchAcademicVisitRoles },
+    ],
+    financial: [
+      { key: 'financialSupportTypeOptions', check: () => financialSupportTypeOptions.length === 0, fetch: fetchFinancialSupportTypes },
+    ],
+    jrfSrf: [
+      { key: 'jrfSrfTypeOptions', check: () => jrfSrfTypeOptions.length === 0, fetch: fetchJrfSrfTypes },
+    ],
+    phd: [
+      { key: 'phdGuidanceStatusOptions', check: () => phdGuidanceStatusOptions.length === 0, fetch: fetchPhdGuidanceStatuses },
+    ],
+    copyrights: [], // No dropdowns needed
+  }), [
+    patentStatusOptions.length,
+    resPubLevelOptions.length,
+    eContentTypeOptions.length,
+    typeEcontentValueOptions.length,
+    collaborationsLevelOptions.length,
+    collaborationsOutcomeOptions.length,
+    collaborationsTypeOptions.length,
+    academicVisitRoleOptions.length,
+    financialSupportTypeOptions.length,
+    jrfSrfTypeOptions.length,
+    phdGuidanceStatusOptions.length,
+    fetchPatentStatuses,
+    fetchResPubLevels,
+    fetchEContentTypes,
+    fetchTypeEcontentValues,
+    fetchCollaborationsLevels,
+    fetchCollaborationsOutcomes,
+    fetchCollaborationsTypes,
+    fetchAcademicVisitRoles,
+    fetchFinancialSupportTypes,
+    fetchJrfSrfTypes,
+    fetchPhdGuidanceStatuses,
+  ])
+  
+  // Function to fetch dropdowns for a specific tab (memoized with useCallback)
+  const fetchDropdownsForTab = useCallback((tab: string) => {
+    const dropdowns = tabDropdownMap[tab] || []
+    
+    const dropdownsToFetch = dropdowns
+      .filter(d => {
+        // Only fetch if not already fetched and not currently fetching
+        const isNotFetched = !fetchedDropdownsRef.current.has(d.key)
+        const isNotFetching = !fetchingDropdownsRef.current.has(d.key)
+        const needsFetch = d.check()
+        return isNotFetched && isNotFetching && needsFetch
+      })
+      .map(d => {
+        // Mark as currently fetching
+        fetchingDropdownsRef.current.add(d.key)
+        return d.fetch()
+          .then(() => {
+            // Mark as fetched after successful load
+            fetchedDropdownsRef.current.add(d.key)
+          })
+          .catch(error => {
+            console.error(`Error fetching dropdown ${d.key}:`, error)
+          })
+          .finally(() => {
+            // Remove from fetching set
+            fetchingDropdownsRef.current.delete(d.key)
+          })
+      })
+    
+    if (dropdownsToFetch.length > 0) {
+      Promise.all(dropdownsToFetch).catch(error => {
+        console.error(`Error fetching dropdowns for tab ${tab}:`, error)
+      })
+    }
+  }, [tabDropdownMap])
+  
+  // Fetch dropdowns for active tab on initial load and when activeTab changes
   useEffect(() => {
-    // Fetch dropdowns once when page loads
-    if (resPubLevelOptions.length === 0) {
-      fetchResPubLevels()
-    }
-    if (patentStatusOptions.length === 0) {
-      fetchPatentStatuses()
-    }
-    if (eContentTypeOptions.length === 0) {
-      fetchEContentTypes()
-    }
-    if (typeEcontentValueOptions.length === 0) {
-      fetchTypeEcontentValues()
+    if (activeTab) {
+      fetchDropdownsForTab(activeTab)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [activeTab])
   
-  // Fetch patents, policy, e-content, and consultancy data
+  // Fetch active tab data on initial load and when activeTab changes
   useEffect(() => {
-    if (user?.role_id) {
-      fetchPatents()
-      fetchPolicies()
-      fetchEContent()
-      fetchConsultancy()
+    if (user?.role_id && activeTab) {
+      const sectionId = activeTab as SectionId
+      
+      // Only fetch if not already fetched and not currently fetching
+      if (!fetchedSections.has(sectionId) && !fetchingRef.current.has(sectionId)) {
+        // Mark as currently fetching to prevent duplicate requests
+        fetchingRef.current.add(sectionId)
+        setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
+        
+        fetchSectionData(sectionId, user.role_id, setData, toast, resPubLevelOptions)
+          .then(() => {
+            // Mark as fetched after successful load
+            setFetchedSections(prev => new Set([...prev, sectionId]))
+          })
+          .catch(error => {
+            console.error(`Error fetching ${sectionId}:`, error)
+          })
+          .finally(() => {
+            // Remove from fetching set and update loading state
+            fetchingRef.current.delete(sectionId)
+            setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
+          })
+      }
     }
-  }, [user?.role_id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role_id, activeTab, resPubLevelOptions])
 
-
+  // Individual fetch functions for refresh after operations
+  // These also update the fetchedSections state to mark as fetched
   const fetchPatents = async () => {
-    if (!user?.role_id) return
-
-    setIsLoading(true)
-    try {
-      const res = await fetch(`/api/teacher/research-contributions/patents?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch patents")
-      }
-
-      // Map database fields to UI format
-      // Note: SP returns 'name' from Patents_Level (status) and 'Expr2' from Res_Pub_Level (level)
-      const mappedPatents = (data.patents || []).map((item: any, index: number) => ({
-        id: item.Pid,
-        srNo: index + 1,
-        title: item.title || "",
-        level: item.Expr2 || "", // Res_Pub_Level.name
-        levelId: item.level,
-        status: item.name || "", // Patents_Level.name
-        statusId: item.status,
-        date: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
-        Tech_Licence: item.Tech_Licence || "",
-        Earnings_Generate: item.Earnings_Generate?.toString() || "",
-        PatentApplicationNo: item.PatentApplicationNo || "",
-        supportingDocument: item.doc ? [item.doc] : [],
-        doc: item.doc,
-      }))
-
-      setData((prev) => ({
-        ...prev,
-        patents: mappedPatents,
-      }))
-    } catch (error: any) {
-      console.error("Error fetching patents:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load patents",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsLoading(false)
-    }
+    await fetchSectionData('patents', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'patents']))
   }
-
   const fetchPolicies = async () => {
-    if (!user?.role_id) return
-
-    try {
-      const res = await fetch(`/api/teacher/research-contributions/policy?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch policy documents")
-      }
-
-      // Map database fields to UI format
-      const mappedPolicies = (data.policies || []).map((item: any, index: number) => ({
-        id: item.Id,
-        srNo: index + 1,
-        title: item.Title || "",
-        level: item.Level || "",
-        levelId: null, // Will be resolved from level name using resPubLevelOptions
-        organisation: item.Organisation || "",
-        date: item.Date ? new Date(item.Date).toISOString().split('T')[0] : "",
-        supportingDocument: item.Doc ? [item.Doc] : [],
-        doc: item.Doc,
-      }))
-
-      // Resolve level IDs from level names (use current resPubLevelOptions state)
-      setData((prev) => {
-        const policiesWithLevelIds = mappedPolicies.map((policy: any) => {
-          const levelOption = resPubLevelOptions.find(l => l.name === policy.level)
-          return {
-            ...policy,
-            levelId: levelOption ? levelOption.id : null,
-          }
-        })
-        return {
-          ...prev,
-          policy: policiesWithLevelIds,
-        }
-      })
-    } catch (error: any) {
-      console.error("Error fetching policy documents:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load policy documents",
-        variant: "destructive",
-        duration: 3000,
-      })
-    }
+    await fetchSectionData('policy', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'policy']))
   }
-
   const fetchEContent = async () => {
-    if (!user?.role_id) return
-
-    try {
-      const res = await fetch(`/api/teacher/research-contributions/e-content?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch e-content")
-      }
-
-      // Map database fields to UI format
-      // Note: SP returns 'EcontentTypeName' from type_econtent_value.name and 'Econtent_PlatformName' from e_content_type.name
-      const mappedEContent = (data.eContent || []).map((item: any, index: number) => ({
-        id: item.Eid,
-        srNo: index + 1,
-        title: item.title || "",
-        Brief_Details: item.Brief_Details || "",
-        Quadrant: item.Quadrant,
-        Publishing_date: item.Publishing_date ? new Date(item.Publishing_date).toISOString().split('T')[0] : "",
-        Publishing_Authorities: item.Publishing_Authorities || "",
-        link: item.link || "",
-        type_econtent: item.type_econtent,
-        type_econtent_name: item.EcontentTypeName || "", // type_econtent_value.name
-        e_content_type: item.e_content_type,
-        e_content_type_name: item.Econtent_PlatformName || "", // e_content_type.name
-        supportingDocument: item.doc ? [item.doc] : [],
-        doc: item.doc,
-      }))
-
-      setData((prev) => ({
-        ...prev,
-        econtent: mappedEContent,
-      }))
-    } catch (error: any) {
-      console.error("Error fetching e-content:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load e-content",
-        variant: "destructive",
-        duration: 3000,
-      })
-    }
+    await fetchSectionData('econtent', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'econtent']))
   }
-
   const fetchConsultancy = async () => {
-    if (!user?.role_id) return
-
-    try {
-      const res = await fetch(`/api/teacher/research-contributions/consultancy?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch consultancy records")
-      }
-
-      // Map database fields to UI format
-      const mappedConsultancy = (data.consultancies || []).map((item: any, index: number) => ({
-        id: item.id,
-        srNo: index + 1,
-        title: item.name || "",
-        name: item.name || "",
-        collaborating_inst: item.collaborating_inst || "",
-        collaboratingInstitute: item.collaborating_inst || "",
-        address: item.address || "",
-        Start_Date: item.Start_Date ? new Date(item.Start_Date).toISOString().split('T')[0] : "",
-        startDate: item.Start_Date ? new Date(item.Start_Date).toISOString().split('T')[0] : "",
-        duration: item.duration || null,
-        amount: item.amount || "",
-        outcome: item.outcome || "",
-        detailsOutcome: item.outcome || "",
-        supportingDocument: item.doc ? [item.doc] : [],
-        doc: item.doc,
-      }))
-
-      setData((prev) => ({
-        ...prev,
-        consultancy: mappedConsultancy,
-      }))
-    } catch (error: any) {
-      console.error("Error fetching consultancy records:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load consultancy records",
-        variant: "destructive",
-        duration: 3000,
-      })
-    }
+    await fetchSectionData('consultancy', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'consultancy']))
+  }
+  const fetchCollaborations = async () => {
+    await fetchSectionData('collaborations', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'collaborations']))
+  }
+  const fetchVisits = async () => {
+    await fetchSectionData('visits', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'visits']))
+  }
+  const fetchFinancialSupport = async () => {
+    await fetchSectionData('financial', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'financial']))
+  }
+  const fetchJrfSrf = async () => {
+    await fetchSectionData('jrfSrf', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'jrfSrf']))
+  }
+  const fetchPhdGuidance = async () => {
+    await fetchSectionData('phd', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'phd']))
+  }
+  const fetchCopyrights = async () => {
+    await fetchSectionData('copyrights', user?.role_id || 0, setData, toast, resPubLevelOptions)
+    setFetchedSections(prev => new Set([...prev, 'copyrights']))
   }
 
-  // Handle URL tab parameter
+  // Handle URL tab parameter on initial load
   useEffect(() => {
     const tab = searchParams.get("tab")
     if (tab && sections.find((s) => s.id === tab)) {
@@ -565,99 +489,70 @@ export default function ResearchContributionsPage() {
     }
   }, [searchParams])
 
-  // Update URL when tab changes
+  // Update URL when tab changes and fetch data if not already fetched
   const handleTabChange = (value: string) => {
     setActiveTab(value)
     const url = new URL(window.location.href)
     url.searchParams.set("tab", value)
     window.history.pushState({}, "", url.toString())
+    
+    // Fetch dropdowns for the new tab
+    fetchDropdownsForTab(value)
+    
+    // Fetch data for the new tab if not already fetched and not currently fetching
+    const sectionId = value as SectionId
+    if (user?.role_id && !fetchedSections.has(sectionId) && !fetchingRef.current.has(sectionId)) {
+      // Mark as currently fetching to prevent duplicate requests
+      fetchingRef.current.add(sectionId)
+      setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
+      
+      fetchSectionData(sectionId, user.role_id, setData, toast, resPubLevelOptions)
+        .then(() => {
+          // Mark as fetched after successful load
+          setFetchedSections(prev => new Set([...prev, sectionId]))
+        })
+        .catch(error => {
+          console.error(`Error fetching ${sectionId}:`, error)
+        })
+        .finally(() => {
+          // Remove from fetching set and update loading state
+          fetchingRef.current.delete(sectionId)
+          setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
+        })
+    }
   }
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFiles(files)
   }
 
+  // Refresh functions map for delete operations
+  const refreshFunctions: Record<SectionId, () => Promise<void>> = {
+    patents: fetchPatents,
+    policy: fetchPolicies,
+    econtent: fetchEContent,
+    consultancy: fetchConsultancy,
+    collaborations: fetchCollaborations,
+    visits: fetchVisits,
+    financial: fetchFinancialSupport,
+    jrfSrf: fetchJrfSrf,
+    phd: fetchPhdGuidance,
+    copyrights: fetchCopyrights,
+  }
+
   const handleDelete = async (sectionId: string, itemId: number) => {
     try {
-      if (sectionId === "patents") {
-        const res = await fetch(`/api/teacher/research-contributions/patents?patentId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete patent")
-        }
-
-        toast({
-          title: "Success",
-          description: "Patent deleted successfully!",
-          duration: 3000,
-        })
-
-        // Refresh data
-        await fetchPatents()
-      } else if (sectionId === "policy") {
-        const res = await fetch(`/api/teacher/research-contributions/policy?policyId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete policy document")
-        }
-
-        toast({
-          title: "Success",
-          description: "Policy document deleted successfully!",
-          duration: 3000,
-        })
-
-        // Refresh data
-        await fetchPolicies()
-      } else if (sectionId === "econtent") {
-        const res = await fetch(`/api/teacher/research-contributions/e-content?eContentId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete e-content")
-        }
-
-        toast({
-          title: "Success",
-          description: "E-Content deleted successfully!",
-          duration: 3000,
-        })
-
-        // Refresh data
-        await fetchEContent()
-      } else if (sectionId === "consultancy") {
-        const res = await fetch(`/api/teacher/research-contributions/consultancy?consultancyId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete consultancy record")
-        }
-
-        toast({
-          title: "Success",
-          description: "Consultancy record deleted successfully!",
-          duration: 3000,
-        })
-
-        // Refresh data
-        await fetchConsultancy()
+      const section = sectionId as SectionId
+      const refreshFn = refreshFunctions[section]
+      
+      if (refreshFn) {
+        await deleteSectionData(section, itemId, refreshFn, toast)
       } else {
-        // For other sections, use the old logic
+        // Fallback for unknown sections
         setData((prevData) => ({
           ...prevData,
           [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).filter((item: any) => item.id !== itemId),
         }))
-
         toast({
           title: "Success",
           description: "Item deleted successfully.",
@@ -665,12 +560,7 @@ export default function ResearchContributionsPage() {
         })
       }
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Something went wrong while deleting the item.",
-        variant: "destructive",
-        duration: 3000,
-      })
+      // Error is already handled in deleteSectionData
     }
   }
 
@@ -702,281 +592,88 @@ export default function ResearchContributionsPage() {
       return
     }
 
-    // Use form data if provided, otherwise use formData state
     const submitData = data || formData
+    const sectionId = editingItem.sectionId as SectionId
+    const refreshFn = refreshFunctions[sectionId]
 
-    if (editingItem.sectionId === "patents") {
-      setIsSubmitting(true)
-      try {
-        // Handle dummy document upload if files are selected
-        let docUrl = editingItem.doc
-        if (selectedFiles && selectedFiles.length > 0) {
-          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
-        }
-
-        // Ensure all required fields are present
-        const patentData = {
-          title: submitData.title || editingItem.title,
-          level: submitData.level || editingItem.levelId,
-          status: submitData.status || editingItem.statusId,
-          date: submitData.date || editingItem.date,
-          Tech_Licence: submitData.Tech_Licence || editingItem.Tech_Licence || "",
-          Earnings_Generate: submitData.Earnings_Generate ? Number(submitData.Earnings_Generate) : (editingItem.Earnings_Generate ? Number(editingItem.Earnings_Generate) : null),
-          PatentApplicationNo: submitData.PatentApplicationNo || editingItem.PatentApplicationNo || "",
-          doc: docUrl || editingItem.doc || null,
-        }
-
-        const res = await fetch("/api/teacher/research-contributions/patents", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            patentId: editingItem.id,
-            teacherId: user.role_id,
-            patent: patentData,
-          }),
-        })
-
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update patent")
-        }
-        toast({
-          title: "Success",
-          description: "Patent updated successfully!",
-          duration: 3000,
-        })
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        setSelectedFiles(null)
-        form.reset()
-
-        // Refresh data
-        await fetchPatents()
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update patent. Please try again.",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else if (editingItem.sectionId === "policy") {
-      setIsSubmitting(true)
-      try {
-        // Handle dummy document upload if files are selected
-        let docUrl = editingItem.doc
-        if (selectedFiles && selectedFiles.length > 0) {
-          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
-        }
-
-        // Get level name from levelId if levelId is provided, otherwise use level string
-        let levelName = submitData.level || editingItem.level
-        if (submitData.level && typeof submitData.level === 'number') {
-          const levelOption = resPubLevelOptions.find(l => l.id === submitData.level)
-          levelName = levelOption ? levelOption.name : editingItem.level
-        } else if (editingItem.levelId) {
-          const levelOption = resPubLevelOptions.find(l => l.id === editingItem.levelId)
-          levelName = levelOption ? levelOption.name : editingItem.level
-        }
-
-        // Ensure all required fields are present
-        const policyData = {
-          title: submitData.title || editingItem.title,
-          level: levelName,
-          organisation: submitData.organisation || editingItem.organisation,
-          date: submitData.date || editingItem.date,
-          doc: docUrl || editingItem.doc || null,
-        }
-
-        const res = await fetch("/api/teacher/research-contributions/policy", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            policyId: editingItem.id,
-            teacherId: user.role_id,
-            policy: policyData,
-          }),
-        })
-
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update policy document")
-        }
-
-        toast({
-          title: "Success",
-          description: "Policy document updated successfully!",
-          duration: 3000,
-        })
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        setSelectedFiles(null)
-        form.reset()
-
-        // Refresh data
-        await fetchPolicies()
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update policy document. Please try again.",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else if (editingItem.sectionId === "econtent") {
-      setIsSubmitting(true)
-      try {
-        // Handle dummy document upload if files are selected
-        let docUrl = editingItem.doc
-        if (selectedFiles && selectedFiles.length > 0) {
-          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
-        }
-
-        // Ensure all required fields are present
-        const eContentData = {
-          title: submitData.title || editingItem.title,
-          Brief_Details: submitData.briefDetails || editingItem.Brief_Details,
-          Quadrant: submitData.quadrant ? Number(submitData.quadrant) : editingItem.Quadrant,
-          Publishing_date: submitData.publishingDate || editingItem.Publishing_date,
-          Publishing_Authorities: submitData.publishingAuthorities || editingItem.Publishing_Authorities,
-          link: submitData.link || editingItem.link || null,
-          type_econtent: submitData.typeOfEContent ? Number(submitData.typeOfEContent) : (editingItem.type_econtent || null),
-          e_content_type: submitData.typeOfEContentPlatform ? Number(submitData.typeOfEContentPlatform) : (editingItem.e_content_type || null),
-          doc: docUrl || editingItem.doc || null,
-        }
-
-        const res = await fetch("/api/teacher/research-contributions/e-content", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            eContentId: editingItem.id,
-            teacherId: user.role_id,
-            eContent: eContentData,
-          }),
-        })
-
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update e-content")
-        }
-
-        toast({
-          title: "Success",
-          description: "E-Content updated successfully!",
-          duration: 3000,
-        })
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        setSelectedFiles(null)
-        form.reset()
-
-        // Refresh data
-        await fetchEContent()
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update e-content. Please try again.",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else if (editingItem.sectionId === "consultancy") {
-      setIsSubmitting(true)
-      try {
-        // Handle dummy document upload if files are selected
-        let docUrl = editingItem.doc
-        if (selectedFiles && selectedFiles.length > 0) {
-          docUrl = `https://dummy-document-url-${Date.now()}.pdf`
-        }
-
-        // Ensure all required fields are present
-        const consultancyData = {
-          name: submitData.title || editingItem.name || editingItem.title,
-          collaborating_inst: submitData.collaboratingInstitute || editingItem.collaborating_inst || editingItem.collaboratingInstitute,
-          address: submitData.address || editingItem.address,
-          duration: submitData.duration ? Number(submitData.duration) : (editingItem.duration || null),
-          amount: submitData.amount ? submitData.amount.toString() : (editingItem.amount || null),
-          submit_date: new Date().toISOString().split('T')[0], // Current date
-          Start_Date: submitData.startDate || editingItem.Start_Date || editingItem.startDate,
-          outcome: submitData.detailsOutcome || editingItem.outcome || editingItem.detailsOutcome || null,
-          doc: docUrl || editingItem.doc || null,
-        }
-
-        const res = await fetch("/api/teacher/research-contributions/consultancy", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            consultancyId: editingItem.id,
-            teacherId: user.role_id,
-            consultancy: consultancyData,
-          }),
-        })
-
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update consultancy record")
-        }
-
-        toast({
-          title: "Success",
-          description: "Consultancy record updated successfully!",
-          duration: 3000,
-        })
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        setSelectedFiles(null)
-        form.reset()
-
-        // Refresh data
-        await fetchConsultancy()
-      } catch (error: any) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update consultancy record. Please try again.",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else {
-      // For other sections, use the old logic
+    if (!refreshFn) {
+      // Fallback for unknown sections
       setData((prevData) => ({
         ...prevData,
-        [editingItem.sectionId]: (prevData[editingItem.sectionId as keyof typeof prevData] || []).map((item: any) =>
+        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).map((item: any) =>
           item.id === editingItem.id ? { ...item, ...submitData } : item,
         ),
       }))
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      setFormData({})
+      setSelectedFiles(null)
+      form.reset()
+      toast({
+        title: "Success",
+        description: "Item updated successfully!",
+        duration: 3000,
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Create update payload using mapper
+      const updateData = createUpdateMapper(
+        sectionId,
+        submitData,
+        editingItem,
+        selectedFiles,
+        {
+          resPubLevelOptions,
+          collaborationsTypeOptions,
+        }
+      )
+
+      // Get request body using configuration
+      const requestBody = UPDATE_REQUEST_BODIES[sectionId](
+        editingItem.id,
+        user.role_id,
+        updateData
+      )
+
+      // Make API call
+      const res = await fetch(API_ENDPOINTS[sectionId], {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || `Failed to update ${sectionId} record`)
+      }
+
+      toast({
+        title: "Success",
+        description: UPDATE_SUCCESS_MESSAGES[sectionId],
+        duration: 3000,
+      })
 
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
       setSelectedFiles(null)
       form.reset()
-      
+
+      // Refresh data
+      await refreshFn()
+    } catch (error: any) {
       toast({
-        title: "Success",
-        description: "Item updated successfully!",
+        title: "Error",
+        description: error.message || `Failed to update ${sectionId} record. Please try again.`,
+        variant: "destructive",
         duration: 3000,
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1097,38 +794,38 @@ export default function ResearchContributionsPage() {
             <TableCell>{item.srNo}</TableCell>
             <TableCell>{item.category}</TableCell>
             <TableCell className="font-medium">{item.collaboratingInstitute}</TableCell>
-            <TableCell>{item.nameOfCollaborator}</TableCell>
-            <TableCell>{item.qsTheRanking}</TableCell>
-            <TableCell>{item.address}</TableCell>
+            <TableCell>{item.nameOfCollaborator || item.collab_name || "-"}</TableCell>
+            <TableCell>{item.qsTheRanking || item.collab_rank || "-"}</TableCell>
+            <TableCell>{item.address || "-"}</TableCell>
             <TableCell className="max-w-xs">
               <div className="truncate" title={item.details}>
-                {item.details}
+                {item.details || "-"}
               </div>
             </TableCell>
             <TableCell className="max-w-xs">
               <div className="truncate" title={item.collaborationOutcome}>
-                {item.collaborationOutcome}
+                {item.collaborationOutcome || "-"}
               </div>
             </TableCell>
             <TableCell>
-              <Badge variant={item.status === "Active" ? "default" : "secondary"}>{item.status}</Badge>
+              <Badge variant={item.status === "Active" ? "default" : "secondary"}>{item.status || "-"}</Badge>
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.startingDate}</span>
+                <span className="text-sm">{item.startingDate || "-"}</span>
               </div>
             </TableCell>
-            <TableCell>{item.duration} months</TableCell>
-            <TableCell>{item.level}</TableCell>
-            <TableCell>{item.noOfBeneficiary}</TableCell>
+            <TableCell>{item.duration ? `${item.duration} months` : "-"}</TableCell>
+            <TableCell>{item.levelName || "-"}</TableCell>
+            <TableCell>{item.noOfBeneficiary || item.beneficiary_num || "-"}</TableCell>
             <TableCell>
-              <Badge variant={item.mouSigned === "Yes" ? "default" : "secondary"}>{item.mouSigned}</Badge>
+              <Badge variant={item.mouSigned === "Yes" ? "default" : "secondary"}>{item.mouSigned || "No"}</Badge>
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.signingDate}</span>
+                <span className="text-sm">{item.signingDate || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -1137,19 +834,19 @@ export default function ResearchContributionsPage() {
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.instituteVisited}</TableCell>
-            <TableCell>{item.durationOfVisit} days</TableCell>
-            <TableCell>{item.role}</TableCell>
-            <TableCell>{item.sponsoredBy}</TableCell>
+            <TableCell className="font-medium">{item.instituteVisited || item.Institute_visited || "-"}</TableCell>
+            <TableCell>{item.durationOfVisit || item.duration ? `${item.durationOfVisit || item.duration} days` : "-"}</TableCell>
+            <TableCell>{item.roleName || "-"}</TableCell>
+            <TableCell>{item.sponsoredBy || item.Sponsored_by || "-"}</TableCell>
             <TableCell className="max-w-xs">
               <div className="truncate" title={item.remarks}>
-                {item.remarks}
+                {item.remarks || "-"}
               </div>
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date}</span>
+                <span className="text-sm">{item.date || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -1158,24 +855,24 @@ export default function ResearchContributionsPage() {
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfSupport}</TableCell>
-            <TableCell>{item.type}</TableCell>
-            <TableCell>{item.supportingAgency}</TableCell>
-            <TableCell>₹ {Number.parseInt(item.grantReceived).toLocaleString()}</TableCell>
+            <TableCell className="font-medium">{item.nameOfSupport || item.name || "-"}</TableCell>
+            <TableCell>{item.typeName || "-"}</TableCell>
+            <TableCell>{item.supportingAgency || item.support || "-"}</TableCell>
+            <TableCell>{item.grantReceived || item.grant_received ? `₹ ${Number(item.grantReceived || item.grant_received).toLocaleString()}` : "-"}</TableCell>
             <TableCell className="max-w-xs">
-              <div className="truncate" title={item.detailsOfEvent}>
-                {item.detailsOfEvent}
+              <div className="truncate" title={item.detailsOfEvent || item.details}>
+                {item.detailsOfEvent || item.details || "-"}
               </div>
             </TableCell>
             <TableCell className="max-w-xs">
-              <div className="truncate" title={item.purposeOfGrant}>
-                {item.purposeOfGrant}
+              <div className="truncate" title={item.purposeOfGrant || item.purpose}>
+                {item.purposeOfGrant || item.purpose || "-"}
               </div>
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date}</span>
+                <span className="text-sm">{item.date || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -1184,21 +881,21 @@ export default function ResearchContributionsPage() {
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfFellow}</TableCell>
+            <TableCell className="font-medium">{item.nameOfFellow || item.name || "-"}</TableCell>
             <TableCell>
-              <Badge variant="outline">{item.type}</Badge>
+              <Badge variant="outline">{item.typeName || "-"}</Badge>
             </TableCell>
             <TableCell className="max-w-xs">
-              <div className="truncate" title={item.projectTitle}>
-                {item.projectTitle}
+              <div className="truncate" title={item.projectTitle || item.title}>
+                {item.projectTitle || item.title || "-"}
               </div>
             </TableCell>
-            <TableCell>{item.duration} months</TableCell>
-            <TableCell>₹ {Number.parseInt(item.monthlyStipend).toLocaleString()}</TableCell>
+            <TableCell>{item.duration ? `${item.duration} months` : "-"}</TableCell>
+            <TableCell>{item.monthlyStipend || item.stipend ? `₹ ${Number(item.monthlyStipend || item.stipend).toLocaleString()}` : "-"}</TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date}</span>
+                <span className="text-sm">{item.date || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -1207,50 +904,57 @@ export default function ResearchContributionsPage() {
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell>{item.regNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfStudent}</TableCell>
+            <TableCell>{item.regNo || item.regno || "-"}</TableCell>
+            <TableCell className="font-medium">{item.nameOfStudent || item.name || "-"}</TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.dateOfRegistration}</span>
+                <span className="text-sm">{item.dateOfRegistration || item.start_date || "-"}</span>
               </div>
             </TableCell>
             <TableCell className="max-w-xs">
               <div className="truncate" title={item.topic}>
-                {item.topic}
+                {item.topic || "-"}
               </div>
             </TableCell>
             <TableCell>
-              <Badge variant={item.status === "Ongoing" ? "default" : "secondary"}>{item.status}</Badge>
+              <Badge variant="outline">{item.statusName || "-"}</Badge>
             </TableCell>
-            <TableCell>{item.yearOfCompletion}</TableCell>
+            <TableCell>{item.yearOfCompletion || item.year_of_completion || "-"}</TableCell>
           </>
         )
       case "copyrights":
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title}</TableCell>
-            <TableCell>{item.referenceNo}</TableCell>
+            <TableCell className="font-medium">{item.title || item.Title || "-"}</TableCell>
+            <TableCell>{item.referenceNo || item.RefNo || "-"}</TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.publicationDate}</span>
+                <span className="text-sm">{item.publicationDate || item.PublicationDate || "-"}</span>
               </div>
             </TableCell>
             <TableCell>
-              {item.link && (
-                <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              {item.link || item.Link ? (
+                <a 
+                  href={item.link || item.Link} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-blue-600 hover:underline"
+                >
                   Link
                 </a>
+              ) : (
+                "-"
               )}
             </TableCell>
           </>
         )
-        default:
-          return null
-        }
-      }
+      default:
+        return null
+    }
+  }
 
   const handleExtractInfo = async () => {
           if (!selectedFiles || selectedFiles.length === 0) {
@@ -1357,10 +1061,8 @@ export default function ResearchContributionsPage() {
         duration: 3000,
       })
       
-      // Smooth transition
-      setTimeout(() => {
-        router.push("/teacher/research-contributions?tab=patents")
-      }, 500)
+      // Navigate back to main page
+      router.push("/teacher/research-contributions?tab=patents")
     } catch (error: any) {
       toast({
         title: "Error",
@@ -1446,79 +1148,92 @@ export default function ResearchContributionsPage() {
         return (
           <CollaborationForm
             form={form}
-            onSubmit={handleSubmit}
+            onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting = {isExtracting}
-            selectedFiles = {selectedFiles}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
             isEdit={true}
-            editData={currentData}/>
-          )
+            editData={currentData}
+            collaborationsLevelOptions={collaborationsLevelOptions}
+            collaborationsOutcomeOptions={collaborationsOutcomeOptions}
+            collaborationsTypeOptions={collaborationsTypeOptions}
+          />
+        )
       case "visits":
         return (
           <AcademicVisitForm
             form={form}
-            onSubmit={handleSubmit}
+            onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting = {isExtracting}
-            selectedFiles = {selectedFiles}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
             isEdit={true}
-            editData={currentData}/>
-          )
+            editData={currentData}
+            academicVisitRoleOptions={academicVisitRoleOptions}
+          />
+        )
       case "financial":
         return (
           <FinancialForm
-          form={form}
-          onSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          isExtracting = {isExtracting}
-          selectedFiles = {selectedFiles}
-          handleFileSelect={handleFileSelect}
-          handleExtractInfo={handleExtractInfo}
-          isEdit={true}
-          editData={currentData}/>
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={handleExtractInfo}
+            isEdit={true}
+            editData={currentData}
+            financialSupportTypeOptions={financialSupportTypeOptions}
+          />
         )
       case "jrfSrf":
         return (
-            <JrfSrfForm
-              form={form}
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-              isExtracting = {isExtracting}
-              selectedFiles = {selectedFiles}
-              handleFileSelect={handleFileSelect}
-              handleExtractInfo={handleExtractInfo}
-              isEdit={true}
-              editData={currentData}/>
+          <JrfSrfForm
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={handleExtractInfo}
+            isEdit={true}
+            editData={currentData}
+            jrfSrfTypeOptions={jrfSrfTypeOptions}
+          />
         )
       case "phd":
         return (
           <PhdGuidanceForm
-              form={form}
-              onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-              isExtracting = {isExtracting}
-              selectedFiles = {selectedFiles}
-              handleFileSelect={handleFileSelect}
-              handleExtractInfo={handleExtractInfo}
-              isEdit={true}
-              editData={currentData}/>
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={handleExtractInfo}
+            isEdit={true}
+            editData={currentData}
+            phdGuidanceStatusOptions={phdGuidanceStatusOptions}
+          />
         )
       case "copyrights":
         return (
           <CopyrightForm
-          form={form}
-          onSubmit={handleSubmit}
-          isSubmitting={isSubmitting}
-          isExtracting = {isExtracting}
-          selectedFiles = {selectedFiles}
-          handleFileSelect={handleFileSelect}
-          handleExtractInfo={handleExtractInfo}
-          isEdit={true}
-          editData={currentData}/>
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={handleExtractInfo}
+            isEdit={true}
+            editData={currentData}
+          />
         )
       default:
         return null
@@ -1560,41 +1275,8 @@ export default function ResearchContributionsPage() {
                 </CardTitle>
                 <Button
                   onClick={() => {
-                    switch (section.id) {
-                      case "patents":
-                        router.push("/teacher/research-contributions/patents/add")
-                        break
-                      case "policy":
-                        router.push("/teacher/research-contributions/policy/add")
-                        break
-                      case "econtent":
-                        router.push("/teacher/research-contributions/econtent/add")
-                        break
-                      case "consultancy":
-                        router.push("/teacher/research-contributions/consultancy/add")
-                        break
-                      case "collaborations":
-                        router.push("/teacher/research-contributions/collaborations/add")
-                        break
-                      case "visits":
-                        router.push("/teacher/research-contributions/visits/add")
-                        break
-                      case "financial":
-                        router.push("/teacher/research-contributions/financial/add")
-                        break
-                      case "jrfSrf":
-                        router.push("/teacher/research-contributions/jrf-srf/add")
-                        break
-                      case "phd":
-                        router.push("/teacher/research-contributions/phd/add")
-                        break
-                      case "copyrights":
-                        router.push("/teacher/research-contributions/copyrights/add")
-                        break
-                      default:
-                        router.push("/teacher/research-contributions")
-                        break
-                    }
+                    const route = SECTION_ROUTES[section.id as SectionId]
+                    router.push(route || "/teacher/research-contributions")
                   }}
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -1614,7 +1296,7 @@ export default function ResearchContributionsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoading && section.id === "patents" ? (
+                      {loadingStates[section.id] ? (
                         <TableRow>
                           <TableCell
                             colSpan={section.columns.length}
@@ -1744,7 +1426,7 @@ export default function ResearchContributionsPage() {
             </Button>
             <Button 
               onClick={async () => {
-                if (editingItem?.sectionId === "patents" || editingItem?.sectionId === "policy" || editingItem?.sectionId === "econtent" || editingItem?.sectionId === "consultancy") {
+                if (editingItem?.sectionId === "patents" || editingItem?.sectionId === "policy" || editingItem?.sectionId === "econtent" || editingItem?.sectionId === "consultancy" || editingItem?.sectionId === "collaborations" || editingItem?.sectionId === "visits" || editingItem?.sectionId === "financial" || editingItem?.sectionId === "jrfSrf" || editingItem?.sectionId === "phd" || editingItem?.sectionId === "copyrights") {
                   // Use form.handleSubmit to trigger validation and get form data
                   form.handleSubmit(handleSaveEdit)()
                 } else {
@@ -1772,3 +1454,4 @@ export default function ResearchContributionsPage() {
     </div>
   )
 }
+

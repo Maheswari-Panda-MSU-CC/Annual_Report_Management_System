@@ -1,152 +1,161 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "@/hooks/use-toast"
 import { useForm } from "react-hook-form"
 import { JrfSrfForm } from "@/components/forms/JrfSrfForm"
-
-interface JrfSrfForm {
-  nameOfFellow: string
-  fellowshipType: string
-  projectTitle: string
-  duration: string
-  monthlyStipend: string
-  date: string
-  supportingDocument: File | null
-}
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 export default function AddJrfSrfPage() {
   const router = useRouter()
-  const { toast } = useToast()
-  const [isLoading, setIsLoading] = useState(false)
-  
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
-  const form=useForm();
+  const form = useForm()
 
-  const {
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<JrfSrfForm>()
+  // Fetch dropdowns at page level
+  const { 
+    jrfSrfTypeOptions,
+    fetchJrfSrfTypes
+  } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (jrfSrfTypeOptions.length === 0) {
+      fetchJrfSrfTypes()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFiles(files)
   }
 
-  const handleExtractInfo = useCallback(async () => {
+  const handleExtractInfo = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload a document first.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsExtracting(true)
     try {
-      const categoryResponse = await fetch("/api/llm/get-category", {
+      const res = await fetch("/api/llm/get-category", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "jrf_srf" }),
       })
+      const { category } = await res.json()
 
-      if (!categoryResponse.ok) {
-        throw new Error("Failed to get category")
-      }
-
-      const categoryData = await categoryResponse.json()
-
-      const formFieldsResponse = await fetch("/api/llm/get-formfields", {
+      const res2 = await fetch("/api/llm/get-formfields", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          category: categoryData.category,
-          type: "jrf_srf",
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, type: "jrf_srf" }),
       })
+      const { data, success, extracted_fields, confidence } = await res2.json()
 
-      if (!formFieldsResponse.ok) {
-        throw new Error("Failed to get form fields")
-      }
-
-      const formFieldsData = await formFieldsResponse.json()
-
-      if (formFieldsData.success && formFieldsData.data) {
-        const data = formFieldsData.data
-
-        Object.keys(data).forEach((key) => {
-          if (key in form) {
-            setValue(key as keyof JrfSrfForm, data[key])
-          }
+      if (success) {
+        Object.entries(data).forEach(([key, value]) => {
+          form.setValue(key, value)
         })
 
         toast({
           title: "Success",
-          description: `Form auto-filled with ${formFieldsData.extracted_fields} fields (${Math.round(formFieldsData.confidence * 100)}% confidence)`,
+          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
+            confidence * 100
+          )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to auto-fill form. Please try again.",
+        description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
     }
-  }, [setValue, toast])
+  }
 
-  const onSubmit = async (data: JrfSrfForm) => {
-    setIsSubmitting(true);
-    setIsLoading(true)
-
-    try {
-      // Validate required fields
-      const requiredFields = [
-        "name",
-        "rollNumber",
-        "fellowshipType",
-        "subject",
-        "supervisorName",
-        "department",
-        "university",
-        "startDate",
-        "mobileNumber",
-        "emailAddress",
-      ]
-      const missingFields = requiredFields.filter((field) => !data[field as keyof JrfSrfForm])
-
-      if (missingFields.length > 0) {
-        toast({
-          title: "Missing required fields",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        })
-        setIsLoading(false)
-        return
-      }
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      toast({
-        title: "Success!",
-        description: "JRF/SRF record has been added successfully.",
-      })
-
-      // Redirect back to academic recommendations page
-      router.push("/teacher/academic-recommendations")
-    } catch (error) {
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
       toast({
         title: "Error",
-        description: "Failed to add JRF/SRF record. Please try again.",
+        description: "User information not available. Please refresh the page.",
         variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Map form data to API format
+      const jrfSrfData = {
+        name: data.nameOfFellow,
+        type: data.type ? Number(data.type) : null,
+        title: data.projectTitle,
+        duration: data.duration ? Number(data.duration) : null,
+        stipend: data.monthlyStipend ? Number(data.monthlyStipend) : null,
+        date: data.date || null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/jrf-srf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          jrfSrf: jrfSrfData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add JRF/SRF record")
+      }
+
+      toast({
+        title: "Success",
+        description: "JRF/SRF record added successfully!",
+        duration: 3000,
+      })
+
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=jrfSrf")
+      }, 500)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add JRF/SRF record. Please try again.",
+        variant: "destructive",
+        duration: 3000,
       })
     } finally {
-      setIsLoading(false)
+      setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -178,13 +187,14 @@ export default function AddJrfSrfPage() {
           <CardContent>
           <JrfSrfForm
             form={form}
-            onSubmit={onSubmit}
+            onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
-            isExtracting = {isExtracting}
-            selectedFiles = {selectedFiles}
+            isExtracting={isExtracting}
+            selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
+            jrfSrfTypeOptions={jrfSrfTypeOptions}
           />
           </CardContent>
         </Card>

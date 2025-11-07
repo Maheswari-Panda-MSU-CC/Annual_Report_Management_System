@@ -7,14 +7,16 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/hooks/use-toast"
-import { ArrowLeft, Upload, Save, FileText, Copyright } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
+import { useAuth } from "@/app/api/auth/auth-provider"
 
 export default function AddCopyrightsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const form = useForm();
+  const form = useForm()
 
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -116,28 +118,68 @@ export default function AddCopyrightsPage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Map form data to API format
+      const copyrightData = {
+        Title: data.title,
+        RefNo: data.referenceNo,
+        PublicationDate: data.publicationDate || null,
+        Link: data.link || null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/copyrights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          copyright: copyrightData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add copyright record")
+      }
 
       toast({
         title: "Success",
-        description: "Copyright added successfully!",
+        description: "Copyright record added successfully!",
         duration: 3000,
       })
 
+      // Navigate back to main page
       router.push("/teacher/research-contributions?tab=copyrights")
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add copyright. Please try again.",
+        description: error.message || "Failed to add copyright record. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 

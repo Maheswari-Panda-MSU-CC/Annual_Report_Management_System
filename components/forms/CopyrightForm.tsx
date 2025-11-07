@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Save } from "lucide-react"
+import { Save, Loader2 } from "lucide-react"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 
@@ -46,9 +46,16 @@ export function CopyrightForm({
 
   useEffect(() => {
     if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
-      })
+      // Map database fields to form fields
+      if (editData.Title) setValue("title", editData.Title)
+      if (editData.RefNo) setValue("referenceNo", editData.RefNo)
+      if (editData.PublicationDate) {
+        const date = new Date(editData.PublicationDate)
+        setValue("publicationDate", date.toISOString().split('T')[0])
+      }
+      if (editData.Link) setValue("link", editData.Link)
+      if (editData.doc) setValue("doc", editData.doc)
+      if (editData.supportingDocument) setValue("supportingDocument", editData.supportingDocument)
     }
   }, [isEdit, editData, setValue])
 
@@ -81,7 +88,13 @@ export function CopyrightForm({
           <Input
             id="title"
             placeholder="Enter copyright title"
-            {...register("title", { required: "Copyright title is required" })}
+            {...register("title", { 
+              required: "Copyright title is required",
+              minLength: {
+                value: 3,
+                message: "Title must be at least 3 characters long"
+              }
+            })}
           />
           {errors.title && (
             <p className="text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>
@@ -94,7 +107,13 @@ export function CopyrightForm({
             <Input
               id="referenceNo"
               placeholder="Enter reference number"
-              {...register("referenceNo", { required: "Reference number is required" })}
+              {...register("referenceNo", { 
+                required: "Reference number is required",
+                minLength: {
+                  value: 2,
+                  message: "Reference number must be at least 2 characters long"
+                }
+              })}
             />
             {errors.referenceNo && (
               <p className="text-sm text-red-600 mt-1">{errors.referenceNo.message?.toString()}</p>
@@ -102,11 +121,19 @@ export function CopyrightForm({
           </div>
 
           <div>
-            <Label htmlFor="publicationDate">Publication Date *</Label>
+            <Label htmlFor="publicationDate">Publication Date</Label>
             <Input
               id="publicationDate"
               type="date"
-              {...register("publicationDate", { required: "Publication date is required" })}
+              max={new Date().toISOString().split('T')[0]}
+              {...register("publicationDate", {
+                validate: (value) => {
+                  if (value && new Date(value) > new Date()) {
+                    return "Publication date cannot be in the future"
+                  }
+                  return true
+                }
+              })}
             />
             {errors.publicationDate && (
               <p className="text-sm text-red-600 mt-1">{errors.publicationDate.message?.toString()}</p>
@@ -120,8 +147,23 @@ export function CopyrightForm({
             id="link"
             type="url"
             placeholder="Enter registry link (optional)"
-            {...register("link")}
+            {...register("link", {
+              validate: (value) => {
+                if (value && value.trim() !== "") {
+                  try {
+                    new URL(value)
+                    return true
+                  } catch {
+                    return "Please enter a valid URL"
+                  }
+                }
+                return true
+              }
+            })}
           />
+          {errors.link && (
+            <p className="text-sm text-red-600 mt-1">{errors.link.message?.toString()}</p>
+          )}
         </div>
 
         {isEdit && Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
@@ -143,7 +185,12 @@ export function CopyrightForm({
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? "Submitting..." : (
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
                   Add Copyright

@@ -3,20 +3,16 @@
 import { UseFormReturn } from "react-hook-form"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { Controller } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Save } from "lucide-react"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Save, Loader2 } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 interface FinancialFormProps {
   form: UseFormReturn<any>
@@ -28,6 +24,7 @@ interface FinancialFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  financialSupportTypeOptions?: Array<{ id: number; name: string }>
 }
 
 export function FinancialForm({
@@ -40,6 +37,7 @@ export function FinancialForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  financialSupportTypeOptions: propFinancialSupportTypeOptions,
 }: FinancialFormProps) {
   const router = useRouter()
   const {
@@ -47,15 +45,41 @@ export function FinancialForm({
     handleSubmit,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = form
   const formData = watch()
 
+  // Use props if provided, otherwise fetch from hook
+  const { 
+    financialSupportTypeOptions: hookFinancialSupportTypeOptions,
+    fetchFinancialSupportTypes
+  } = useDropDowns()
+  
+  const financialSupportTypeOptions = propFinancialSupportTypeOptions || hookFinancialSupportTypeOptions
+
+  // Only fetch if props are not provided and options are empty
+  useEffect(() => {
+    if (!propFinancialSupportTypeOptions && hookFinancialSupportTypeOptions.length === 0) {
+      fetchFinancialSupportTypes()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Set initial values when in edit mode
   useEffect(() => {
     if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
-      })
+      // Map database fields to form fields
+      if (editData.name) setValue("nameOfSupport", editData.name)
+      if (editData.type) setValue("type", editData.type)
+      if (editData.Financial_Support_Type_Id) setValue("type", editData.Financial_Support_Type_Id)
+      if (editData.support) setValue("supportingAgency", editData.support)
+      if (editData.grant_received) setValue("grantReceived", editData.grant_received)
+      if (editData.details) setValue("detailsOfEvent", editData.details)
+      if (editData.purpose) setValue("purposeOfGrant", editData.purpose)
+      if (editData.date) setValue("date", editData.date)
+      if (editData.doc) setValue("doc", editData.doc)
+      if (editData.supportingDocument) setValue("supportingDocument", editData.supportingDocument)
     }
   }, [isEdit, editData, setValue])
 
@@ -106,23 +130,23 @@ export function FinancialForm({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
           <div>
             <Label htmlFor="type">Type *</Label>
-            <Select
-              value={formData.type}
-              onValueChange={(value) => setValue("type", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Research Grant">Research Grant</SelectItem>
-                <SelectItem value="Travel Grant">Travel Grant</SelectItem>
-                <SelectItem value="Equipment Grant">Equipment Grant</SelectItem>
-                <SelectItem value="Fellowship">Fellowship</SelectItem>
-                <SelectItem value="Conference Grant">Conference Grant</SelectItem>
-                <SelectItem value="Publication Grant">Publication Grant</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <Controller
+              name="type"
+              control={control}
+              rules={{ required: "Type is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={financialSupportTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select type"
+                  emptyMessage="No type found"
+                />
+              )}
+            />
+            {errors.type && (
+              <p className="text-sm text-red-600 mt-1">{errors.type.message?.toString()}</p>
+            )}
           </div>
 
           <div>
@@ -149,8 +173,17 @@ export function FinancialForm({
               id="grantReceived"
               type="number"
               placeholder="Enter amount"
+              min="0"
+              step="0.01"
               {...register("grantReceived", {
                 required: "Grant amount is required",
+                min: { value: 0, message: "Grant amount must be positive" },
+                validate: (value) => {
+                  if (value && isNaN(Number(value))) {
+                    return "Please enter a valid number"
+                  }
+                  return true
+                }
               })}
             />
             {errors.grantReceived && (
@@ -165,7 +198,16 @@ export function FinancialForm({
             <Input
               id="date"
               type="date"
-              {...register("date", { required: "Date is required" })}
+              max={new Date().toISOString().split('T')[0]}
+              {...register("date", { 
+                required: "Date is required",
+                validate: (value) => {
+                  if (value && new Date(value) > new Date()) {
+                    return "Date cannot be in the future"
+                  }
+                  return true
+                }
+              })}
             />
             {errors.date && (
               <p className="text-sm text-red-600 mt-1">
@@ -176,11 +218,11 @@ export function FinancialForm({
         </div>
 
         <div className="mt-4">
-          <Label htmlFor="detailsOfEvent">Details of Event</Label>
+          <Label htmlFor="detailsOfEvent">Details</Label>
           <Textarea
             id="detailsOfEvent"
             rows={3}
-            placeholder="Enter event or project details"
+            placeholder="Enter details"
             {...register("detailsOfEvent")}
           />
         </div>
@@ -220,7 +262,10 @@ export function FinancialForm({
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (
-                "Submitting..."
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />

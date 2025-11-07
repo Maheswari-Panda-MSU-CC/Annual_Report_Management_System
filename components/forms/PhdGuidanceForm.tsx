@@ -4,19 +4,15 @@ import { UseFormReturn } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Save, FileText } from "lucide-react"
+import { Controller } from "react-hook-form"
+import { Save, Loader2 } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useRouter } from "next/navigation"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 import { Textarea } from "@/components/ui/textarea"
 import { useEffect } from "react"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 interface PhdGuidanceFormProps {
   form: UseFormReturn<any>
@@ -28,6 +24,7 @@ interface PhdGuidanceFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  phdGuidanceStatusOptions?: Array<{ id: number; name: string }>
 }
 
 export function PhdGuidanceForm({
@@ -40,6 +37,7 @@ export function PhdGuidanceForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  phdGuidanceStatusOptions: propPhdGuidanceStatusOptions,
 }: PhdGuidanceFormProps) {
   const router = useRouter()
   const {
@@ -47,15 +45,40 @@ export function PhdGuidanceForm({
     handleSubmit,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = form
   const formData = watch()
 
+  // Use props if provided, otherwise fetch from hook
+  const { 
+    phdGuidanceStatusOptions: hookPhdGuidanceStatusOptions,
+    fetchPhdGuidanceStatuses
+  } = useDropDowns()
+  
+  const phdGuidanceStatusOptions = propPhdGuidanceStatusOptions || hookPhdGuidanceStatusOptions
+
+  // Only fetch if props are not provided and options are empty
+  useEffect(() => {
+    if (!propPhdGuidanceStatusOptions && hookPhdGuidanceStatusOptions.length === 0) {
+      fetchPhdGuidanceStatuses()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Set initial values when in edit mode
   useEffect(() => {
     if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
-      })
+      // Map database fields to form fields
+      if (editData.regno) setValue("regNo", editData.regno)
+      if (editData.name) setValue("nameOfStudent", editData.name)
+      if (editData.start_date) setValue("dateOfRegistration", editData.start_date)
+      if (editData.year_of_completion) setValue("yearOfCompletion", editData.year_of_completion)
+      if (editData.topic) setValue("topic", editData.topic)
+      if (editData.status) setValue("status", editData.status)
+      if (editData.Res_Proj_Other_Details_Status_Id) setValue("status", editData.Res_Proj_Other_Details_Status_Id)
+      if (editData.doc) setValue("doc", editData.doc)
+      if (editData.supportingDocument) setValue("supportingDocument", editData.supportingDocument)
     }
   }, [isEdit, editData, setValue])
 
@@ -105,7 +128,16 @@ export function PhdGuidanceForm({
             <Input
               id="dateOfRegistration"
               type="date"
-              {...register("dateOfRegistration", { required: "Date of registration is required" })}
+              max={new Date().toISOString().split('T')[0]}
+              {...register("dateOfRegistration", { 
+                required: "Date of registration is required",
+                validate: (value) => {
+                  if (value && new Date(value) > new Date()) {
+                    return "Date cannot be in the future"
+                  }
+                  return true
+                }
+              })}
             />
             {errors.dateOfRegistration && <p className="text-sm text-red-600 mt-1">{errors.dateOfRegistration.message?.toString()}</p>}
           </div>
@@ -114,9 +146,23 @@ export function PhdGuidanceForm({
             <Label htmlFor="yearOfCompletion">Year of Completion</Label>
             <Input
               id="yearOfCompletion"
-              placeholder="Enter year of completion"
-              {...register("yearOfCompletion")}
+              type="number"
+              placeholder="Enter year (e.g., 2024)"
+              min="1900"
+              max={new Date().getFullYear() + 10}
+              {...register("yearOfCompletion", {
+                validate: (value) => {
+                  if (value) {
+                    const year = Number(value)
+                    if (isNaN(year) || year < 1900 || year > new Date().getFullYear() + 10) {
+                      return "Please enter a valid year"
+                    }
+                  }
+                  return true
+                }
+              })}
             />
+            {errors.yearOfCompletion && <p className="text-sm text-red-600 mt-1">{errors.yearOfCompletion.message?.toString()}</p>}
           </div>
         </div>
 
@@ -133,21 +179,21 @@ export function PhdGuidanceForm({
 
         <div className="mt-4">
           <Label htmlFor="status">Status *</Label>
-          <Select
-            value={formData.status}
-            onValueChange={(value) => setValue("status", value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Ongoing">Ongoing</SelectItem>
-              <SelectItem value="Completed">Completed</SelectItem>
-              <SelectItem value="Submitted">Submitted</SelectItem>
-              <SelectItem value="Awarded">Awarded</SelectItem>
-              <SelectItem value="Discontinued">Discontinued</SelectItem>
-            </SelectContent>
-          </Select>
+          <Controller
+            name="status"
+            control={control}
+            rules={{ required: "Status is required" }}
+            render={({ field }) => (
+              <SearchableSelect
+                options={phdGuidanceStatusOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                value={field.value}
+                onValueChange={field.onChange}
+                placeholder="Select status"
+                emptyMessage="No status found"
+              />
+            )}
+          />
+          {errors.status && <p className="text-sm text-red-600 mt-1">{errors.status.message?.toString()}</p>}
         </div>
 
         {isEdit && Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
@@ -159,22 +205,26 @@ export function PhdGuidanceForm({
           </div>
         )}
 
-       {
-        !isEdit && 
-        <div className="flex justify-end gap-4 mt-6">
-        <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=phd")}>
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Submitting..." : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              {isEdit ? "Update PhD Guidance" : "Add PhD Guidance"}
-            </>
-          )}
-        </Button>
-      </div>
-       }
+        {!isEdit && (
+          <div className="flex justify-end gap-4 mt-6">
+            <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=phd")}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Add PhD Guidance
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </div>
     </form>
   )

@@ -3,13 +3,16 @@
 import { UseFormReturn } from "react-hook-form"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { Controller } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Loader2, Save } from "lucide-react"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 interface AcademicVisitFormProps {
   form: UseFormReturn<any>
@@ -21,6 +24,7 @@ interface AcademicVisitFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  academicVisitRoleOptions?: Array<{ id: number; name: string }>
 }
 
 export function AcademicVisitForm({
@@ -33,16 +37,41 @@ export function AcademicVisitForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  academicVisitRoleOptions: propAcademicVisitRoleOptions,
 }: AcademicVisitFormProps) {
   const router = useRouter()
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = form
+  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
 
+  // Use props if provided, otherwise fetch from hook
+  const { 
+    academicVisitRoleOptions: hookAcademicVisitRoleOptions,
+    fetchAcademicVisitRoles
+  } = useDropDowns()
+  
+  const academicVisitRoleOptions = propAcademicVisitRoleOptions || hookAcademicVisitRoleOptions
+
+  // Only fetch if props are not provided and options are empty
+  useEffect(() => {
+    if (!propAcademicVisitRoleOptions && hookAcademicVisitRoleOptions.length === 0) {
+      fetchAcademicVisitRoles()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Set initial values when in edit mode
   useEffect(() => {
     if (isEdit && editData) {
-      Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
-      })
+      // Map database fields to form fields
+      if (editData.Institute_visited) setValue("instituteVisited", editData.Institute_visited)
+      if (editData.duration) setValue("durationOfVisit", editData.duration)
+      if (editData.role) setValue("role", editData.role)
+      if (editData.Acad_research_Role_Id) setValue("role", editData.Acad_research_Role_Id)
+      if (editData.Sponsored_by) setValue("sponsoredBy", editData.Sponsored_by)
+      if (editData.remarks) setValue("remarks", editData.remarks)
+      if (editData.date) setValue("date", editData.date)
+      if (editData.doc) setValue("doc", editData.doc)
+      if (editData.supportingDocument) setValue("supportingDocument", editData.supportingDocument)
     }
   }, [isEdit, editData, setValue])
 
@@ -83,18 +112,34 @@ export function AcademicVisitForm({
               id="durationOfVisit"
               type="number"
               placeholder="Enter duration"
-              {...register("durationOfVisit", { required: "Duration is required" })}
+              min="1"
+              {...register("durationOfVisit", { 
+                required: "Duration is required",
+                min: { value: 1, message: "Duration must be at least 1 day" }
+              })}
             />
             {errors.durationOfVisit && <p className="text-sm text-red-600 mt-1">{errors.durationOfVisit.message?.toString()}</p>}
           </div>
 
           <div>
-            <Label htmlFor="role">Role</Label>
-            <Input
-              id="role"
-              placeholder="e.g., Visiting Researcher"
-              {...register("role")}
+            <Label htmlFor="role">Role *</Label>
+            <Controller
+              name="role"
+              control={control}
+              rules={{ required: "Role is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={academicVisitRoleOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select role"
+                  emptyMessage="No role found"
+                />
+              )}
             />
+            {errors.role && (
+              <p className="text-sm text-red-600 mt-1">{errors.role.message?.toString()}</p>
+            )}
           </div>
         </div>
 
@@ -113,7 +158,16 @@ export function AcademicVisitForm({
             <Input
               id="date"
               type="date"
-              {...register("date", { required: "Visit date is required" })}
+              max={new Date().toISOString().split('T')[0]}
+              {...register("date", { 
+                required: "Visit date is required",
+                validate: (value) => {
+                  if (value && new Date(value) > new Date()) {
+                    return "Visit date cannot be in the future"
+                  }
+                  return true
+                }
+              })}
             />
             {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
           </div>

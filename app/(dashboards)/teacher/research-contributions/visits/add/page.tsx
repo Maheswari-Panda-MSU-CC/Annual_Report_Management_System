@@ -2,29 +2,57 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { toast } from "@/hooks/use-toast"
-import { ArrowLeft } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { AcademicVisitForm } from "@/components/forms/AcademicVisitForm"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 
 
 export default function AddVisitsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [selectedFile, setSelectedFile] = useState<FileList | null>(null)
-  const form =useForm();
+  const form = useForm()
+
+  // Fetch dropdowns at page level
+  const { 
+    academicVisitRoleOptions,
+    fetchAcademicVisitRoles
+  } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (academicVisitRoleOptions.length === 0) {
+      fetchAcademicVisitRoles()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFile(files)
   }
 
   const handleExtractInfo = async () => {
+    if (!selectedFile || selectedFile.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload a document first.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -51,6 +79,7 @@ export default function AddVisitsPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -58,34 +87,79 @@ export default function AddVisitsPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFile && selectedFile.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Map form data to API format
+      const visitData = {
+        Institute_visited: data.instituteVisited,
+        duration: data.durationOfVisit ? Number(data.durationOfVisit) : null,
+        role: data.role ? Number(data.role) : null,
+        Sponsored_by: data.sponsoredBy || null,
+        remarks: data.remarks || null,
+        date: data.date || null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/visits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          visit: visitData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add academic research visit")
+      }
 
       toast({
         title: "Success",
-        description: "Academic/Research visit added successfully!",
+        description: "Academic research visit added successfully!",
         duration: 3000,
       })
 
-      router.push("/teacher/research-contributions?tab=visits")
-    } catch (error) {
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=visits")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add visit. Please try again.",
+        description: error.message || "Failed to add academic research visit. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFile(null)
+      form.reset()
     }
   }
 
@@ -123,6 +197,7 @@ export default function AddVisitsPage() {
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
+            academicVisitRoleOptions={academicVisitRoleOptions}
           />
           </CardContent>
         </Card>

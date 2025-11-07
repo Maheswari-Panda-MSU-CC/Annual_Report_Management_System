@@ -3,36 +3,68 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { toast } from "@/hooks/use-toast"
-import { ArrowLeft, Upload, Save, FileText, Loader2 } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { CollaborationForm } from "@/components/forms/CollaborationForm"
 import { useForm } from "react-hook-form"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 export default function AddCollaborationsPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const form =useForm();
+  const form = useForm()
 
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
 
+  // Fetch dropdowns at page level
+  const { 
+    collaborationsLevelOptions, 
+    collaborationsOutcomeOptions, 
+    collaborationsTypeOptions,
+    fetchCollaborationsLevels,
+    fetchCollaborationsOutcomes,
+    fetchCollaborationsTypes
+  } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (collaborationsLevelOptions.length === 0) {
+      fetchCollaborationsLevels()
+    }
+    if (collaborationsOutcomeOptions.length === 0) {
+      fetchCollaborationsOutcomes()
+    }
+    if (collaborationsTypeOptions.length === 0) {
+      fetchCollaborationsTypes()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const handleDocumentUpload = (files: FileList | null) => {
     if (files && files.length > 0) {
-      setSelectedFiles(files);
+      setSelectedFiles(files)
     }
   }
 
-
   const handleExtractInfo = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload a document first.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -59,6 +91,7 @@ export default function AddCollaborationsPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -66,18 +99,72 @@ export default function AddCollaborationsPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Get category name from type ID
+      const categoryTypeId = data.category
+      const categoryName = categoryTypeId 
+        ? (collaborationsTypeOptions.find(opt => opt.id === categoryTypeId)?.name || null)
+        : null
+
+      // Map form data to API format
+      const collaborationData = {
+        collaborating_inst: data.collaboratingInstitute,
+        collab_name: data.collabName || null,
+        category: categoryName,
+        collab_rank: data.collabRank || null,
+        address: data.address || null,
+        details: data.details || null,
+        collab_outcome: data.collabOutcome || null,
+        collab_status: data.status || null,
+        starting_date: data.startingDate || null,
+        duration: (data.status === "Completed" && data.duration) ? Number(data.duration) : null,
+        level: data.level || null,
+        type: categoryTypeId ? Number(categoryTypeId) : null, // category is now the type ID
+        beneficiary_num: data.noOfBeneficiary ? Number(data.noOfBeneficiary) : null,
+        MOU_signed: data.mouSigned !== undefined ? data.mouSigned : null,
+        signing_date: (data.mouSigned === true && data.signingDate) ? data.signingDate : null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/collaborations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          collaboration: collaborationData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add collaboration")
+      }
 
       toast({
         title: "Success",
@@ -85,17 +172,21 @@ export default function AddCollaborationsPage() {
         duration: 3000,
       })
 
-      setIsLoading(true)
-      router.push("/teacher/research-contributions?tab=collaborations")
-    } catch (error) {
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=collaborations")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add collaboration. Please try again.",
+        description: error.message || "Failed to add collaboration. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -139,6 +230,9 @@ export default function AddCollaborationsPage() {
             handleFileSelect={handleDocumentUpload}
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
+            collaborationsLevelOptions={collaborationsLevelOptions}
+            collaborationsOutcomeOptions={collaborationsOutcomeOptions}
+            collaborationsTypeOptions={collaborationsTypeOptions}
           />
           </CardContent>
         </Card>

@@ -26,6 +26,13 @@ export function useDropDowns() {
   const [patentStatusOptions, setPatentStatusOptions] = useState<DropdownOption[]>([]);
   const [eContentTypeOptions, setEContentTypeOptions] = useState<DropdownOption[]>([]);
   const [typeEcontentValueOptions, setTypeEcontentValueOptions] = useState<DropdownOption[]>([]);
+  const [collaborationsLevelOptions, setCollaborationsLevelOptions] = useState<DropdownOption[]>([]);
+  const [collaborationsOutcomeOptions, setCollaborationsOutcomeOptions] = useState<DropdownOption[]>([]);
+  const [collaborationsTypeOptions, setCollaborationsTypeOptions] = useState<DropdownOption[]>([]);
+  const [academicVisitRoleOptions, setAcademicVisitRoleOptions] = useState<DropdownOption[]>([]);
+  const [financialSupportTypeOptions, setFinancialSupportTypeOptions] = useState<DropdownOption[]>([]);
+  const [jrfSrfTypeOptions, setJrfSrfTypeOptions] = useState<DropdownOption[]>([]);
+  const [phdGuidanceStatusOptions, setPhdGuidanceStatusOptions] = useState<DropdownOption[]>([]);
 
   const fetchFaculties = async () => {
     try {
@@ -274,6 +281,118 @@ export function useDropDowns() {
     }
   }
 
+  const fetchCollaborationsLevels = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/collaborations-level');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.collaborationsLevels || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setCollaborationsLevelOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching collaborations levels:', error);
+    }
+  }
+
+  const fetchCollaborationsOutcomes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/collaborations-outcome');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.collaborationsOutcomes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setCollaborationsOutcomeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching collaborations outcomes:', error);
+    }
+  }
+
+  const fetchCollaborationsTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/collaborations-type');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.collaborationsTypes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setCollaborationsTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching collaborations types:', error);
+    }
+  }
+
+  const fetchAcademicVisitRoles = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/academic-visit-role');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.academicVisitRoles || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setAcademicVisitRoleOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching academic visit roles:', error);
+    }
+  }
+
+  const fetchFinancialSupportTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/financial-support-types');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.financialSupportTypes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setFinancialSupportTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching financial support types:', error);
+    }
+  }
+
+  const fetchJrfSrfTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/jrf-srf-type');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.jrfSrfTypes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setJrfSrfTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching JRF/SRF types:', error);
+    }
+  }
+
+  const fetchPhdGuidanceStatuses = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/phd-guidance-status');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.phdGuidanceStatuses || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setPhdGuidanceStatusOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching PhD guidance statuses:', error);
+    }
+  }
+
   useEffect(() => { fetchFaculties() }, [])
 
   return { 
@@ -294,6 +413,13 @@ export function useDropDowns() {
     patentStatusOptions,
     eContentTypeOptions,
     typeEcontentValueOptions,
+    collaborationsLevelOptions,
+    collaborationsOutcomeOptions,
+    collaborationsTypeOptions,
+    academicVisitRoleOptions,
+    financialSupportTypeOptions,
+    jrfSrfTypeOptions,
+    phdGuidanceStatusOptions,
     fetchFaculties, 
     fetchDepartments,
     fetchUserTypes,
@@ -310,6 +436,13 @@ export function useDropDowns() {
     fetchJournalAuthorTypes,
     fetchPatentStatuses,
     fetchEContentTypes,
-    fetchTypeEcontentValues
+    fetchTypeEcontentValues,
+    fetchCollaborationsLevels,
+    fetchCollaborationsOutcomes,
+    fetchCollaborationsTypes,
+    fetchAcademicVisitRoles,
+    fetchFinancialSupportTypes,
+    fetchJrfSrfTypes,
+    fetchPhdGuidanceStatuses
   }
 }

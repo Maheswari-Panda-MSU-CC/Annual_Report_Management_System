@@ -2,24 +2,52 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/hooks/use-toast"
-import { ArrowLeft} from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { FinancialForm } from "@/components/forms/FinancialFom"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 
 export default function AddFinancialPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
-  const form = useForm();
+  const [isLoading, setIsLoading] = useState(false)
+  const form = useForm()
+
+  // Fetch dropdowns at page level
+  const { 
+    financialSupportTypeOptions,
+    fetchFinancialSupportTypes
+  } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (financialSupportTypeOptions.length === 0) {
+      fetchFinancialSupportTypes()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleExtractInfo = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload a document first.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -46,6 +74,7 @@ export default function AddFinancialPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -53,6 +82,7 @@ export default function AddFinancialPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
@@ -63,28 +93,73 @@ export default function AddFinancialPage() {
     setSelectedFiles(files)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Map form data to API format
+      const financialSupportData = {
+        name: data.nameOfSupport,
+        type: data.type ? Number(data.type) : null,
+        support: data.supportingAgency,
+        grant_received: data.grantReceived ? Number(data.grantReceived) : null,
+        details: data.detailsOfEvent || null,
+        purpose: data.purposeOfGrant || null,
+        date: data.date || null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/financial-support", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          financialSupport: financialSupportData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add financial support record")
+      }
 
       toast({
         title: "Success",
-        description: "Financial support added successfully!",
+        description: "Financial support record added successfully!",
         duration: 3000,
       })
 
-      router.push("/teacher/research-contributions?tab=financial")
-    } catch (error) {
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=financial")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add financial support. Please try again.",
+        description: error.message || "Failed to add financial support record. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -123,6 +198,7 @@ export default function AddFinancialPage() {
             handleFileSelect={handleFileSelect}
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
+            financialSupportTypeOptions={financialSupportTypeOptions}
           />
           </CardContent>
         </Card>

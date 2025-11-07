@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,27 +10,49 @@ import { toast } from "@/hooks/use-toast"
 import { ArrowLeft } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
 
 
 
 
 export default function AddPhdPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
-  const form = useForm();
+  const form = useForm()
+
+  // Fetch dropdowns at page level
+  const { 
+    phdGuidanceStatusOptions,
+    fetchPhdGuidanceStatuses
+  } = useDropDowns()
+  
+  useEffect(() => {
+    // Fetch dropdowns once when page loads
+    if (phdGuidanceStatusOptions.length === 0) {
+      fetchPhdGuidanceStatuses()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFiles(files)
-    if (files && files.length > 0) {
-      setUploadedFile(files[0])
-    }
   }
 
-
   const handleExtractInfo = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please upload a document first.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -57,6 +79,7 @@ export default function AddPhdPage() {
           description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
             confidence * 100
           )}% confidence)`,
+          duration: 3000,
         })
       }
     } catch (error) {
@@ -64,34 +87,79 @@ export default function AddPhdPage() {
         title: "Error",
         description: "Failed to auto-fill form.",
         variant: "destructive",
+        duration: 3000,
       })
     } finally {
       setIsExtracting(false)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    setIsSubmitting(true)
+  const handleSubmit = async (data: any) => {
+    if (!user?.role_id) {
+      toast({
+        title: "Error",
+        description: "User information not available. Please refresh the page.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
 
+    setIsSubmitting(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Handle dummy document upload
+      let docUrl = null
+      if (selectedFiles && selectedFiles.length > 0) {
+        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      }
+
+      // Map form data to API format
+      const phdStudentData = {
+        regno: data.regNo,
+        name: data.nameOfStudent,
+        start_date: data.dateOfRegistration,
+        topic: data.topic,
+        status: data.status ? Number(data.status) : null,
+        year_of_completion: data.yearOfCompletion ? Number(data.yearOfCompletion) : null,
+        doc: docUrl,
+      }
+
+      const res = await fetch("/api/teacher/research-contributions/phd-guidance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacherId: user.role_id,
+          phdStudent: phdStudentData,
+        }),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to add PhD student record")
+      }
 
       toast({
         title: "Success",
-        description: "PhD guidance added successfully!",
+        description: "PhD student record added successfully!",
         duration: 3000,
       })
 
-      router.push("/teacher/research-contributions?tab=phd")
-    } catch (error) {
+      // Smooth transition
+      setTimeout(() => {
+        router.push("/teacher/research-contributions?tab=phd")
+      }, 500)
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to add PhD guidance. Please try again.",
+        description: error.message || "Failed to add PhD student record. Please try again.",
         variant: "destructive",
         duration: 3000,
       })
     } finally {
       setIsSubmitting(false)
+      setSelectedFiles(null)
+      form.reset()
     }
   }
 
@@ -129,6 +197,7 @@ export default function AddPhdPage() {
               handleFileSelect={handleFileSelect}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
+              phdGuidanceStatusOptions={phdGuidanceStatusOptions}
             />
           </CardContent>
         </Card>
