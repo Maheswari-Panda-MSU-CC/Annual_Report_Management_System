@@ -2,21 +2,17 @@
 
 import { UseFormReturn } from "react-hook-form"
 import { useEffect } from "react"
+import { Controller } from "react-hook-form"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 import { Save, Brain, Loader2 } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DropdownOption } from "@/hooks/use-dropdowns"
 
 interface AcademicProgramFormProps {
   form: UseFormReturn<any>
@@ -28,6 +24,9 @@ interface AcademicProgramFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  academicProgrammeOptions?: DropdownOption[]
+  participantTypeOptions?: DropdownOption[]
+  reportYearsOptions?: DropdownOption[]
 }
 
 export function AcademicProgramForm({
@@ -40,9 +39,12 @@ export function AcademicProgramForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  academicProgrammeOptions = [],
+  participantTypeOptions = [],
+  reportYearsOptions = [],
 }: AcademicProgramFormProps) {
   const router = useRouter()
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = form
+  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
 
   useEffect(() => {
@@ -97,60 +99,124 @@ export function AcademicProgramForm({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name *</Label>
-            <Input id="name" placeholder="Enter name" {...register("name", { required: "Name is required" })} />
-            {errors.name && <p className="text-sm text-red-600">{errors.name.message?.toString()}</p>}
+            <Input 
+              id="name" 
+              placeholder="Enter name" 
+              maxLength={150}
+              {...register("name", { 
+                required: "Name is required",
+                minLength: { value: 2, message: "Name must be at least 2 characters" },
+                maxLength: { value: 150, message: "Name must not exceed 150 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Name cannot be only whitespace"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="programme">Programme *</Label>
-            <Select value={formData.programme} onValueChange={(value) => setValue("programme", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select programme type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Conference">Conference</SelectItem>
-                <SelectItem value="Workshop">Workshop</SelectItem>
-                <SelectItem value="Seminar">Seminar</SelectItem>
-                <SelectItem value="Symposium">Symposium</SelectItem>
-                <SelectItem value="Training Program">Training Program</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <Controller
+              name="programme"
+              control={control}
+              rules={{ required: "Programme is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={academicProgrammeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select programme type"
+                  emptyMessage="No programme type found"
+                />
+              )}
+            />
+            {errors.programme && <p className="text-sm text-red-600 mt-1">{errors.programme.message?.toString()}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="place">Place *</Label>
-            <Input id="place" placeholder="Enter location" {...register("place", { required: "Place is required" })} />
-            {errors.place && <p className="text-sm text-red-600">{errors.place.message?.toString()}</p>}
+            <Input 
+              id="place" 
+              placeholder="Enter location" 
+              maxLength={150}
+              {...register("place", { 
+                required: "Place is required",
+                minLength: { value: 2, message: "Place must be at least 2 characters" },
+                maxLength: { value: 150, message: "Place must not exceed 150 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Place cannot be only whitespace"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.place && <p className="text-sm text-red-600 mt-1">{errors.place.message?.toString()}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="date">Date *</Label>
-            <Input id="date" type="date" {...register("date", { required: "Date is required" })} />
-            {errors.date && <p className="text-sm text-red-600">{errors.date.message?.toString()}</p>}
+            <Input 
+              id="date" 
+              type="date" 
+              max={new Date().toISOString().split('T')[0]}
+              {...register("date", { 
+                required: "Date is required",
+                validate: (value) => {
+                  if (value && new Date(value) > new Date()) {
+                    return "Date cannot be in the future"
+                  }
+                  // Check if date is too old (before 1900)
+                  if (value && new Date(value).getFullYear() < 1900) {
+                    return "Date must be after 1900"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="year">Year *</Label>
-            <Input id="year" type="number" min="1900" max="2100" {...register("year", { required: "Year is required" })} />
-            {errors.year && <p className="text-sm text-red-600">{errors.year.message?.toString()}</p>}
+            <Label htmlFor="year_name">Year *</Label>
+            <Controller
+              name="year_name"
+              control={control}
+              rules={{ required: "Year is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={reportYearsOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select year"
+                  emptyMessage="No year found"
+                />
+              )}
+            />
+            {errors.year_name && <p className="text-sm text-red-600 mt-1">{errors.year_name.message?.toString()}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="participatedAs">Participated As *</Label>
-            <Select value={formData.participatedAs} onValueChange={(value) => setValue("participatedAs", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Organizer">Organizer</SelectItem>
-                <SelectItem value="Co-organizer">Co-organizer</SelectItem>
-                <SelectItem value="Coordinator">Coordinator</SelectItem>
-                <SelectItem value="Convener">Convener</SelectItem>
-                <SelectItem value="Committee Member">Committee Member</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="participated_as">Participated As *</Label>
+            <Controller
+              name="participated_as"
+              control={control}
+              rules={{ required: "Participated As is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={participantTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select role"
+                  emptyMessage="No role found"
+                />
+              )}
+            />
+            {errors.participated_as && <p className="text-sm text-red-600 mt-1">{errors.participated_as.message?.toString()}</p>}
           </div>
         </div>
 

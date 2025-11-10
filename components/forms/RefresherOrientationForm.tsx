@@ -2,20 +2,16 @@
 
 import { UseFormReturn } from "react-hook-form"
 import { useEffect } from "react"
+import { Controller } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select"
 import { Save, Loader2, Brain } from "lucide-react"
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useRouter } from "next/navigation"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DropdownOption } from "@/hooks/use-dropdowns"
 
 interface RefresherOrientationFormProps {
   form: UseFormReturn<any>
@@ -27,6 +23,7 @@ interface RefresherOrientationFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  refresherTypeOptions?: DropdownOption[]
 }
 
 export function RefresherOrientationForm({
@@ -38,10 +35,11 @@ export function RefresherOrientationForm({
   handleFileSelect = () => {},
   handleExtractInfo = () => {},
   isEdit = false,
-  editData = {}
+  editData = {},
+  refresherTypeOptions = []
 }: RefresherOrientationFormProps) {
   const router = useRouter()
-  const { register, handleSubmit, setValue, watch, formState: { errors } } = form
+  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
 
   useEffect(() => {
@@ -95,49 +93,115 @@ export function RefresherOrientationForm({
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" {...register("name", { required: true })} />
+            <Label htmlFor="name">Name *</Label>
+            <Input 
+              id="name" 
+              {...register("name", { 
+                required: "Name is required",
+                minLength: { value: 2, message: "Name must be at least 2 characters" }
+              })} 
+            />
+            {errors.name && (
+              <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="courseType">Course Type</Label>
-            <Select value={formData.courseType} onValueChange={(value) => setValue("courseType", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select course type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Refresher Course">Refresher Course</SelectItem>
-                <SelectItem value="Orientation Course">Orientation Course</SelectItem>
-                <SelectItem value="Faculty Development Program">Faculty Development Program</SelectItem>
-                <SelectItem value="Short Term Course">Short Term Course</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label htmlFor="refresher_type">Course Type *</Label>
+            <Controller
+              name="refresher_type"
+              control={control}
+              rules={{ required: "Course type is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={refresherTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select course type"
+                  emptyMessage="No course type found"
+                />
+              )}
+            />
+            {errors.refresher_type && (
+              <p className="text-sm text-red-600 mt-1">{errors.refresher_type.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="startDate">Start Date</Label>
-            <Input id="startDate" type="date" {...register("startDate", { required: true })} />
+            <Label htmlFor="startdate">Start Date *</Label>
+            <Input 
+              id="startdate" 
+              type="date" 
+              {...register("startdate", { 
+                required: "Start date is required"
+              })} 
+            />
+            {errors.startdate && (
+              <p className="text-sm text-red-600 mt-1">{errors.startdate.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="endDate">End Date</Label>
-            <Input id="endDate" type="date" {...register("endDate", { required: true })} />
+            <Label htmlFor="enddate">End Date</Label>
+            <Input 
+              id="enddate" 
+              type="date" 
+              {...register("enddate", {
+                validate: (value) => {
+                  if (!value) return true
+                  const startDate = formData.startdate
+                  if (startDate && value < startDate) {
+                    return "End date must be after start date"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.enddate && (
+              <p className="text-sm text-red-600 mt-1">{errors.enddate.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="organizingUniversity">Organizing University</Label>
-            <Input id="organizingUniversity" {...register("organizingUniversity", { required: true })} />
+            <Label htmlFor="university">Organizing University *</Label>
+            <Input 
+              id="university" 
+              {...register("university", { 
+                required: "Organizing University is required",
+                minLength: { value: 2, message: "University name must be at least 2 characters" }
+              })} 
+            />
+            {errors.university && (
+              <p className="text-sm text-red-600 mt-1">{errors.university.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="organizingInstitute">Organizing Institute</Label>
-            <Input id="organizingInstitute" {...register("organizingInstitute", { required: true })} />
+            <Label htmlFor="institute">Organizing Institute *</Label>
+            <Input 
+              id="institute" 
+              {...register("institute", { 
+                required: "Organizing Institute is required",
+                minLength: { value: 2, message: "Institute name must be at least 2 characters" }
+              })} 
+            />
+            {errors.institute && (
+              <p className="text-sm text-red-600 mt-1">{errors.institute.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="organizingDepartment">Organizing Department</Label>
-            <Input id="organizingDepartment" {...register("organizingDepartment", { required: true })} />
+            <Label htmlFor="department">Organizing Department *</Label>
+            <Input 
+              id="department" 
+              {...register("department", { 
+                required: "Organizing Department is required",
+                minLength: { value: 2, message: "Department name must be at least 2 characters" }
+              })} 
+            />
+            {errors.department && (
+              <p className="text-sm text-red-600 mt-1">{errors.department.message?.toString()}</p>
+            )}
           </div>
 
           <div className="space-y-2">

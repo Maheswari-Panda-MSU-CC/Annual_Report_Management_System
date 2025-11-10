@@ -1,23 +1,19 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
+import { Controller } from "react-hook-form"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
 
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 import { Save, Brain, Loader2 } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DropdownOption } from "@/hooks/use-dropdowns"
 
 interface AcademicTalkFormProps {
     form: UseFormReturn<any>
@@ -29,6 +25,8 @@ interface AcademicTalkFormProps {
     handleExtractInfo?: () => void
     isEdit?: boolean
     editData?: Record<string, any>
+    talksProgrammeTypeOptions?: DropdownOption[]
+    talksParticipantTypeOptions?: DropdownOption[]
 }
 
 export function AcademicTalkForm({
@@ -41,9 +39,11 @@ export function AcademicTalkForm({
     handleExtractInfo = () => { },
     isEdit = false,
     editData = {},
+    talksProgrammeTypeOptions = [],
+    talksParticipantTypeOptions = [],
 }: AcademicTalkFormProps) {
     const router = useRouter()
-    const { register, handleSubmit, setValue, watch, formState: { errors } } = form
+    const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
     const formData = watch()
 
     useEffect(() => {
@@ -92,84 +92,121 @@ export function AcademicTalkForm({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="name">Name *</Label>
-                        <Input
-                            id="name"
+                        <Input 
+                            id="name" 
                             placeholder="Enter your name"
-                            {...register("name", { required: "Name is required" })}
+                            {...register("name", { 
+                                required: "Name is required",
+                                minLength: { value: 2, message: "Name must be at least 2 characters" },
+                                validate: (value) => {
+                                    if (value && value.trim().length < 2) {
+                                        return "Name cannot be only whitespace"
+                                    }
+                                    return true
+                                }
+                            })} 
                         />
-                        {errors.name && <p className="text-sm text-red-600">{errors.name.message?.toString()}</p>}
+                        {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="programme">Programme *</Label>
-                        <Select
-                            value={formData.programme}
-                            onValueChange={(value) => setValue("programme", value)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select programme type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Guest Lecture">Guest Lecture</SelectItem>
-                                <SelectItem value="Keynote Speech">Keynote Speech</SelectItem>
-                                <SelectItem value="Invited Talk">Invited Talk</SelectItem>
-                                <SelectItem value="Panel Discussion">Panel Discussion</SelectItem>
-                                <SelectItem value="Workshop">Workshop</SelectItem>
-                                <SelectItem value="Seminar">Seminar</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <Controller
+                            name="programme"
+                            control={control}
+                            rules={{ required: "Programme is required" }}
+                            render={({ field }) => (
+                                <SearchableSelect
+                                    options={talksProgrammeTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                    placeholder="Select programme type"
+                                    emptyMessage="No programme type found"
+                                />
+                            )}
+                        />
+                        {errors.programme && <p className="text-sm text-red-600 mt-1">{errors.programme.message?.toString()}</p>}
                     </div>
 
                     <div className="space-y-2">
                         <Label htmlFor="place">Place *</Label>
-                        <Input
-                            id="place"
+                        <Input 
+                            id="place" 
                             placeholder="Enter place of talk"
-                            {...register("place", { required: "Place is required" })}
+                            maxLength={1000}
+                            {...register("place", { 
+                                required: "Place is required",
+                                minLength: { value: 2, message: "Place must be at least 2 characters" },
+                                maxLength: { value: 1000, message: "Place must not exceed 1000 characters" },
+                                validate: (value) => {
+                                    if (value && value.trim().length < 2) {
+                                        return "Place cannot be only whitespace"
+                                    }
+                                    return true
+                                }
+                            })} 
                         />
-                        {errors.place && <p className="text-sm text-red-600">{errors.place.message?.toString()}</p>}
+                        {errors.place && <p className="text-sm text-red-600 mt-1">{errors.place.message?.toString()}</p>}
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="talkDate">Talk Date *</Label>
-                        <Input
-                            id="talkDate"
-                            type="date"
-                            {...register("talkDate", { required: "Talk date is required" })}
+                        <Label htmlFor="date">Talk Date *</Label>
+                        <Input 
+                            id="date" 
+                            type="date" 
+                            max={new Date().toISOString().split('T')[0]}
+                            {...register("date", { 
+                                required: "Talk date is required",
+                                validate: (value) => {
+                                    if (value && new Date(value) > new Date()) {
+                                        return "Talk date cannot be in the future"
+                                    }
+                                    if (value && new Date(value).getFullYear() < 1900) {
+                                        return "Talk date must be after 1900"
+                                    }
+                                    return true
+                                }
+                            })} 
                         />
-                        {errors.talkDate && <p className="text-sm text-red-600">{errors.talkDate.message?.toString()}</p>}
+                        {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="titleOfEvent">Title of Event/Talk *</Label>
-                        <Input
-                            id="titleOfEvent"
+                        <Label htmlFor="title">Title of Event/Talk *</Label>
+                        <Input 
+                            id="title" 
                             placeholder="Enter title"
-                            {...register("titleOfEvent", { required: "Title is required" })}
+                            {...register("title", { 
+                                required: "Title is required",
+                                minLength: { value: 2, message: "Title must be at least 2 characters" },
+                                validate: (value) => {
+                                    if (value && value.trim().length < 2) {
+                                        return "Title cannot be only whitespace"
+                                    }
+                                    return true
+                                }
+                            })} 
                         />
-                        {errors.titleOfEvent && <p className="text-sm text-red-600">{errors.titleOfEvent.message?.toString()}</p>}
+                        {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="participatedAs">Participated As *</Label>
-                        <Select
-                            value={formData.participatedAs}
-                            onValueChange={(value) => setValue("participatedAs", value)}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Speaker">Speaker</SelectItem>
-                                <SelectItem value="Keynote Speaker">Keynote Speaker</SelectItem>
-                                <SelectItem value="Guest Speaker">Guest Speaker</SelectItem>
-                                <SelectItem value="Invited Speaker">Invited Speaker</SelectItem>
-                                <SelectItem value="Panelist">Panelist</SelectItem>
-                                <SelectItem value="Moderator">Moderator</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <Label htmlFor="participated_as">Participated As *</Label>
+                        <Controller
+                            name="participated_as"
+                            control={control}
+                            rules={{ required: "Participated As is required" }}
+                            render={({ field }) => (
+                                <SearchableSelect
+                                    options={talksParticipantTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                    placeholder="Select role"
+                                    emptyMessage="No role found"
+                                />
+                            )}
+                        />
+                        {errors.participated_as && <p className="text-sm text-red-600 mt-1">{errors.participated_as.message?.toString()}</p>}
                     </div>
                 </div>
 

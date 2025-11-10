@@ -33,6 +33,13 @@ export function useDropDowns() {
   const [financialSupportTypeOptions, setFinancialSupportTypeOptions] = useState<DropdownOption[]>([]);
   const [jrfSrfTypeOptions, setJrfSrfTypeOptions] = useState<DropdownOption[]>([]);
   const [phdGuidanceStatusOptions, setPhdGuidanceStatusOptions] = useState<DropdownOption[]>([]);
+  const [refresherTypeOptions, setRefresherTypeOptions] = useState<DropdownOption[]>([]);
+  const [academicProgrammeOptions, setAcademicProgrammeOptions] = useState<DropdownOption[]>([]);
+  const [participantTypeOptions, setParticipantTypeOptions] = useState<DropdownOption[]>([]);
+  const [reportYearsOptions, setReportYearsOptions] = useState<DropdownOption[]>([]);
+  const [committeeLevelOptions, setCommitteeLevelOptions] = useState<DropdownOption[]>([]);
+  const [talksProgrammeTypeOptions, setTalksProgrammeTypeOptions] = useState<DropdownOption[]>([]);
+  const [talksParticipantTypeOptions, setTalksParticipantTypeOptions] = useState<DropdownOption[]>([]);
 
   const fetchFaculties = async () => {
     try {
@@ -393,6 +400,118 @@ export function useDropDowns() {
     }
   }
 
+  const fetchRefresherTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/refresher-types');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.refresherTypes || []).map((item: any) => ({
+          id: item.Id || item.id,
+          name: item.name || item.Name
+        }));
+        setRefresherTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching refresher types:', error);
+    }
+  }
+
+  const fetchAcademicProgrammes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/acad-programm');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.programmes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setAcademicProgrammeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching academic programmes:', error);
+    }
+  }
+
+  const fetchParticipantTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/acad-participent-type');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.participantTypes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setParticipantTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching participant types:', error);
+    }
+  }
+
+  const fetchReportYears = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/report-years');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.reportYears || []).map((item: any) => ({
+          id: item.Id || item.id,
+          name: item.year_name?.toString() || item.name || item.year_name
+        }));
+        setReportYearsOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching report years:', error);
+    }
+  }
+
+  const fetchCommitteeLevels = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/parti-commi-level');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.committeeLevels || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setCommitteeLevelOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching committee levels:', error);
+    }
+  }
+
+  const fetchTalksProgrammeTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/talks-prog-type');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.talksProgrammeTypes || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setTalksProgrammeTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching talks programme types:', error);
+    }
+  }
+
+  const fetchTalksParticipantTypes = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/talks-parti-type');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.talksParticipantTypes || []).map((item: any) => ({
+          id: item.Id || item.id,
+          name: item.name || item.Name
+        }));
+        setTalksParticipantTypeOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching talks participant types:', error);
+    }
+  }
+
   useEffect(() => { fetchFaculties() }, [])
 
   return { 
@@ -420,6 +539,13 @@ export function useDropDowns() {
     financialSupportTypeOptions,
     jrfSrfTypeOptions,
     phdGuidanceStatusOptions,
+    refresherTypeOptions,
+    academicProgrammeOptions,
+    participantTypeOptions,
+    reportYearsOptions,
+    committeeLevelOptions,
+    talksProgrammeTypeOptions,
+    talksParticipantTypeOptions,
     fetchFaculties, 
     fetchDepartments,
     fetchUserTypes,
@@ -443,6 +569,13 @@ export function useDropDowns() {
     fetchAcademicVisitRoles,
     fetchFinancialSupportTypes,
     fetchJrfSrfTypes,
-    fetchPhdGuidanceStatuses
+    fetchPhdGuidanceStatuses,
+    fetchRefresherTypes,
+    fetchAcademicProgrammes,
+    fetchParticipantTypes,
+    fetchReportYears,
+    fetchCommitteeLevels,
+    fetchTalksProgrammeTypes,
+    fetchTalksParticipantTypes
   }
 }

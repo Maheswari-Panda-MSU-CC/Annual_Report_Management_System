@@ -1,23 +1,20 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
+import { Controller } from "react-hook-form"
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import FileUpload from "../shared/FileUpload"
 import { DocumentViewer } from "../document-viewer"
 import { Save, Brain, Loader2 } from "lucide-react"
+import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DropdownOption } from "@/hooks/use-dropdowns"
 
 interface CommitteeFormProps {
   form: UseFormReturn<any>
@@ -29,6 +26,8 @@ interface CommitteeFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  committeeLevelOptions?: DropdownOption[]
+  reportYearsOptions?: DropdownOption[]
 }
 
 export function UniversityCommitteeParticipationForm({
@@ -41,6 +40,8 @@ export function UniversityCommitteeParticipationForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  committeeLevelOptions = [],
+  reportYearsOptions = [],
 }: CommitteeFormProps) {
   const router = useRouter()
   const {
@@ -48,6 +49,7 @@ export function UniversityCommitteeParticipationForm({
     handleSubmit,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = form
 
@@ -99,73 +101,175 @@ export function UniversityCommitteeParticipationForm({
         <Label className="text-lg font-semibold mb-4 block">Step 2: Verify/Complete Details</Label>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="name">Name *</Label>
-            <Input
-              id="name"
-              {...register("name", { required: "Name is required" })}
+            <Input 
+              id="name" 
+              placeholder="Enter name"
+              maxLength={100}
+              {...register("name", { 
+                required: "Name is required",
+                minLength: { value: 2, message: "Name must be at least 2 characters" },
+                maxLength: { value: 100, message: "Name must not exceed 100 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Name cannot be only whitespace"
+                  }
+                  return true
+                }
+              })} 
             />
-            {errors.name && <p className="text-sm text-red-600">{errors.name.message?.toString()}</p>}
+            {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
           </div>
 
-          <div>
-            <Label htmlFor="committeeName">Committee Name *</Label>
-            <Input
-              id="committeeName"
-              {...register("committeeName", { required: "Committee name is required" })}
+          <div className="space-y-2">
+            <Label htmlFor="committee_name">Committee Name *</Label>
+            <Input 
+              id="committee_name" 
+              placeholder="Enter committee name"
+              maxLength={500}
+              {...register("committee_name", { 
+                required: "Committee name is required",
+                minLength: { value: 2, message: "Committee name must be at least 2 characters" },
+                maxLength: { value: 500, message: "Committee name must not exceed 500 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Committee name cannot be only whitespace"
+                  }
+                  return true
+                }
+              })} 
             />
-            {errors.committeeName && <p className="text-sm text-red-600">{errors.committeeName.message?.toString()}</p>}
+            {errors.committee_name && <p className="text-sm text-red-600 mt-1">{errors.committee_name.message?.toString()}</p>}
           </div>
 
-          <div>
+          <div className="space-y-2">
             <Label htmlFor="level">Level *</Label>
-            <Select
-              value={formData.level}
-              onValueChange={(value) => setValue("level", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select level" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="University">University</SelectItem>
-                <SelectItem value="Faculty">Faculty</SelectItem>
-                <SelectItem value="Department">Department</SelectItem>
-                <SelectItem value="Institute">Institute</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="participatedAs">Participated As *</Label>
-            <Select
-              value={formData.participatedAs}
-              onValueChange={(value) => setValue("participatedAs", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Chairman">Chairman</SelectItem>
-                <SelectItem value="Vice-Chairman">Vice-Chairman</SelectItem>
-                <SelectItem value="Member">Member</SelectItem>
-                <SelectItem value="Secretary">Secretary</SelectItem>
-                <SelectItem value="Convener">Convener</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="year">Year *</Label>
-            <Input
-              id="year"
-              type="number"
-              min="1900"
-              max="2100"
-              {...register("year", { required: "Year is required" })}
+            <Controller
+              name="level"
+              control={control}
+              rules={{ required: "Level is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={committeeLevelOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select level"
+                  emptyMessage="No level found"
+                />
+              )}
             />
-            {errors.year && <p className="text-sm text-red-600">{errors.year.message?.toString()}</p>}
+            {errors.level && <p className="text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="participated_as">Participated As *</Label>
+            <Input 
+              id="participated_as" 
+              placeholder="e.g., Member, Chairman, Secretary"
+              maxLength={100}
+              {...register("participated_as", { 
+                required: "Participated As is required",
+                minLength: { value: 2, message: "Participated As must be at least 2 characters" },
+                maxLength: { value: 100, message: "Participated As must not exceed 100 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Participated As cannot be only whitespace"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.participated_as && <p className="text-sm text-red-600 mt-1">{errors.participated_as.message?.toString()}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="submit_date">Submit Date *</Label>
+            <Input 
+              id="submit_date" 
+              type="date" 
+              max={new Date().toISOString().split('T')[0]}
+              {...register("submit_date", { 
+                required: "Submit date is required",
+                validate: (value) => {
+                  if (value && new Date(value) > new Date()) {
+                    return "Submit date cannot be in the future"
+                  }
+                  if (value && new Date(value).getFullYear() < 1900) {
+                    return "Submit date must be after 1900"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.submit_date && <p className="text-sm text-red-600 mt-1">{errors.submit_date.message?.toString()}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="year_name">Year *</Label>
+            <Controller
+              name="year_name"
+              control={control}
+              rules={{ required: "Year is required" }}
+              render={({ field }) => (
+                <SearchableSelect
+                  options={reportYearsOptions.map(opt => ({ value: opt.id, label: opt.name }))}
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  placeholder="Select year"
+                  emptyMessage="No year found"
+                />
+              )}
+            />
+            {errors.year_name && <p className="text-sm text-red-600 mt-1">{errors.year_name.message?.toString()}</p>}
+          </div>
+        </div>
+
+        {/* Checkboxes for BOS, FB, CDC */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="flex items-center space-x-2">
+            <Controller
+              name="BOS"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="BOS"
+                  checked={field.value || false}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <Label htmlFor="BOS" className="font-normal cursor-pointer">BOS</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Controller
+              name="FB"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="FB"
+                  checked={field.value || false}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <Label htmlFor="FB" className="font-normal cursor-pointer">FB</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Controller
+              name="CDC"
+              control={control}
+              render={({ field }) => (
+                <Checkbox
+                  id="CDC"
+                  checked={field.value || false}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+            <Label htmlFor="CDC" className="font-normal cursor-pointer">CDC</Label>
           </div>
         </div>
 
