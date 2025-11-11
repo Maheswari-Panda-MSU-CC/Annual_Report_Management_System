@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,9 +8,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { FileText, Download, ArrowLeft, CheckSquare, Square, Eye, Settings, AlertCircle } from "lucide-react"
+import { FileText, Download, ArrowLeft, CheckSquare, Square, Eye, Settings, AlertCircle, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, AlignmentType } from "docx"
+import { saveAs } from "file-saver"
 
 interface CVSection {
   id: string
@@ -60,127 +63,44 @@ const cvSections: CVSection[] = [
   { id: "talks", label: "Talk Detail", description: "Academic and research talks" },
 ]
 
-// Comprehensive dummy data for CV generation
-const dummyData = {
-  personal: {
-    name: "Dr. Rajesh Kumar Sharma",
-    designation: "Professor",
-    department: "Computer Science & Engineering",
-    institution: "Indian Institute of Technology Delhi",
-    email: "rajesh.sharma@iitd.ac.in",
-    phone: "+91-9876543210",
-    address: "Block IV, Room 401, IIT Delhi, Hauz Khas, New Delhi - 110016",
-    dateOfBirth: "15th March 1975",
-    nationality: "Indian",
-    orcid: "0000-0002-1234-5678",
-    googleScholar: "https://scholar.google.com/citations?user=abc123",
-    researchGate: "https://www.researchgate.net/profile/Rajesh-Sharma-123",
-  },
-  education: [
-    {
-      degree: "Ph.D. in Computer Science",
-      institution: "Indian Institute of Science, Bangalore",
-      year: "2005",
-      thesis: "Machine Learning Algorithms for Big Data Analytics",
-      grade: "Excellent",
-    },
-    {
-      degree: "M.Tech in Computer Science & Engineering",
-      institution: "Indian Institute of Technology Bombay",
-      year: "2000",
-      grade: "CGPA: 9.2/10",
-    },
-    {
-      degree: "B.Tech in Computer Science & Engineering",
-      institution: "National Institute of Technology Warangal",
-      year: "1998",
-      grade: "First Class with Distinction (85.6%)",
-    },
-  ],
-  experience: [
-    {
-      position: "Professor",
-      institution: "Indian Institute of Technology Delhi",
-      duration: "2015 - Present",
-      responsibilities: "Teaching graduate and undergraduate courses, Research supervision, Administrative duties",
-    },
-    {
-      position: "Associate Professor",
-      institution: "Indian Institute of Technology Delhi",
-      duration: "2010 - 2015",
-      responsibilities: "Teaching, Research, PhD supervision",
-    },
-    {
-      position: "Assistant Professor",
-      institution: "Indian Institute of Technology Delhi",
-      duration: "2006 - 2010",
-      responsibilities: "Teaching undergraduate courses, Research initiation",
-    },
-  ],
-  research: [
-    {
-      title: "AI-Driven Healthcare Analytics Platform",
-      agency: "Department of Science & Technology",
-      amount: "₹45,00,000",
-      duration: "2022-2025",
-      role: "Principal Investigator",
-      status: "Ongoing",
-    },
-    {
-      title: "Machine Learning for Smart Cities",
-      agency: "Ministry of Electronics & IT",
-      amount: "₹32,00,000",
-      duration: "2020-2023",
-      role: "Co-Principal Investigator",
-      status: "Completed",
-    },
-  ],
-  publications: [
-    {
-      title: "Deep Learning Approaches for Medical Image Analysis: A Comprehensive Survey",
-      journal: "IEEE Transactions on Medical Imaging",
-      year: "2023",
-      impact: "IF: 11.037",
-      authors: "R.K. Sharma, A. Patel, S. Singh",
-      doi: "10.1109/TMI.2023.1234567",
-    },
-    {
-      title: "Federated Learning in Healthcare: Challenges and Opportunities",
-      journal: "Nature Machine Intelligence",
-      year: "2023",
-      impact: "IF: 25.898",
-      authors: "R.K. Sharma, M. Kumar, P. Gupta",
-      doi: "10.1038/s42256-023-00123-4",
-    },
-    {
-      title: "Blockchain-based Secure Data Sharing in IoT Networks",
-      journal: "IEEE Internet of Things Journal",
-      year: "2022",
-      impact: "IF: 10.238",
-      authors: "S. Verma, R.K. Sharma, N. Agarwal",
-      doi: "10.1109/JIOT.2022.1234567",
-    },
-  ],
-  awards: [
-    {
-      title: "Excellence in Teaching Award",
-      organization: "IIT Delhi",
-      year: "2023",
-      description: "Recognized for outstanding contribution to undergraduate education",
-    },
-    {
-      title: "Best Paper Award",
-      organization: "International Conference on Machine Learning",
-      year: "2022",
-      description: "For the paper on Federated Learning in Healthcare",
-    },
-    {
-      title: "Young Scientist Award",
-      organization: "Indian National Science Academy",
-      year: "2018",
-      description: "For significant contributions to AI and Machine Learning research",
-    },
-  ],
+// Data interfaces
+interface PersonalInfo {
+  name: string
+  designation: string
+  department: string
+  institution: string
+  email: string
+  phone: string
+  address: string
+  dateOfBirth: string
+  nationality: string
+  orcid: string
+  googleScholar?: string
+  researchGate?: string
+}
+
+interface CVData {
+  personal: PersonalInfo | null
+  education: any[]
+  postdoc: any[]
+  experience: any[]
+  research: any[]
+  patents: any[]
+  econtent: any[]
+  consultancy: any[]
+  collaborations: any[]
+  phdguidance: any[]
+  books: any[]
+  papers: any[]
+  articles: any[]
+  awards: any[]
+  talks: any[]
+  academic_contribution: any[]
+  academic_participation: any[]
+  committees: any[]
+  performance: any[]
+  extension: any[]
+  orientation: any[]
 }
 
 // Template styling configurations for documents
@@ -332,6 +252,7 @@ const templateStyles = {
 export default function GenerateCVPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
   const previewRef = useRef<HTMLDivElement>(null)
   const [selectedSections, setSelectedSections] = useState<string[]>(["personal", "education", "experience"])
   const [downloadFormat, setDownloadFormat] = useState("word")
@@ -339,6 +260,210 @@ export default function GenerateCVPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
+  const [isLoadingData, setIsLoadingData] = useState(false)
+  const [cvData, setCvData] = useState<CVData>({
+    personal: null,
+    education: [],
+    postdoc: [],
+    experience: [],
+    research: [],
+    patents: [],
+    econtent: [],
+    consultancy: [],
+    collaborations: [],
+    phdguidance: [],
+    books: [],
+    papers: [],
+    articles: [],
+    awards: [],
+    talks: [],
+    academic_contribution: [],
+    academic_participation: [],
+    committees: [],
+    performance: [],
+    extension: [],
+    orientation: [],
+  })
+
+  // Fetch all CV data
+  const fetchCVData = useCallback(async () => {
+    if (!user?.role_id) return
+
+    setIsLoadingData(true)
+    try {
+      const teacherId = user.role_id
+
+      // Fetch all data in parallel
+      // Note: graduation, experience, and postdoc data come from profile route
+      const [
+        profileRes,
+        researchRes,
+        patentsRes,
+        econtentRes,
+        consultancyRes,
+        collaborationsRes,
+        phdguidanceRes,
+        booksRes,
+        papersRes,
+        journalsRes,
+        awardsRes,
+        talksRes,
+        academicContriRes,
+        academicPartiRes,
+        committeesRes,
+        performanceRes,
+        extensionRes,
+        orientationRes,
+      ] = await Promise.allSettled([
+        fetch(`/api/teacher/profile?teacherId=${teacherId}`),
+        fetch(`/api/teacher/research?teacherId=${teacherId}`),
+        fetch(`/api/teacher/research-contributions/patents?teacherId=${teacherId}`),
+        fetch(`/api/teacher/research-contributions/e-content?teacherId=${teacherId}`),
+        fetch(`/api/teacher/research-contributions/consultancy?teacherId=${teacherId}`),
+        fetch(`/api/teacher/research-contributions/collaborations?teacherId=${teacherId}`),
+        fetch(`/api/teacher/research-contributions/phd-guidance?teacherId=${teacherId}`),
+        fetch(`/api/teacher/publication/books?teacherId=${teacherId}`),
+        fetch(`/api/teacher/publication/papers?teacherId=${teacherId}`),
+        fetch(`/api/teacher/publication/journals?teacherId=${teacherId}`),
+        fetch(`/api/teacher/awards-recognition/awards-fellow?teacherId=${teacherId}`),
+        fetch(`/api/teacher/talks-events/teacher-talks?teacherId=${teacherId}`),
+        fetch(`/api/teacher/talks-events/academic-contri?teacherId=${teacherId}`),
+        fetch(`/api/teacher/talks-events/acad-bodies-parti?teacherId=${teacherId}`),
+        fetch(`/api/teacher/talks-events/parti-university-committes?teacherId=${teacherId}`),
+        fetch(`/api/teacher/awards-recognition/performance-teacher?teacherId=${teacherId}`),
+        fetch(`/api/teacher/awards-recognition/extensions?teacherId=${teacherId}`),
+        fetch(`/api/teacher/talks-events/refresher-details?teacherId=${teacherId}`),
+      ])
+
+      // Process profile data
+      if (profileRes.status === "fulfilled" && profileRes.value.ok) {
+        const profileData = await profileRes.value.json()
+        if (profileData.teacherInfo) {
+          const parts = [
+            profileData.teacherInfo.fname,
+            profileData.teacherInfo.mname,
+            profileData.teacherInfo.lname,
+          ].filter(Boolean)
+          const fullName = parts.length > 0 ? `Dr. ${parts.join(" ")}` : user?.name || ""
+
+          setCvData((prev) => ({
+            ...prev,
+            personal: {
+              name: fullName,
+              designation: profileData.designation?.name || "",
+              department: profileData.department?.name || "",
+              institution: "Maharaja Sayajirao University of Baroda",
+              email: profileData.teacherInfo?.email_id || profileData.teacherInfo?.email || "",
+              phone: profileData.teacherInfo?.phone_no?.toString() || profileData.teacherInfo?.phone || "",
+              address: profileData.teacherInfo?.address || profileData.teacherInfo?.Address || "",
+              dateOfBirth: profileData.teacherInfo?.DOB
+                ? new Date(profileData.teacherInfo.DOB).toLocaleDateString()
+                : profileData.teacherInfo?.dob
+                  ? new Date(profileData.teacherInfo.dob).toLocaleDateString()
+                  : "",
+              nationality: profileData.teacherInfo?.nationality || "Indian",
+              orcid: profileData.teacherInfo?.ORCHID_ID || profileData.teacherInfo?.orcid || "",
+            },
+            education: profileData.graduationDetails || [],
+            experience: profileData.teacherExperience || [],
+            postdoc: profileData.postDoctoralExp || [],
+          }))
+        }
+      }
+
+      // Process other data - map API responses to CVData keys
+      const processResponse = async (res: PromiseSettledResult<Response>, key: keyof CVData) => {
+        if (res.status === "fulfilled" && res.value.ok) {
+          try {
+            const data = await res.value.json()
+            
+            // Handle different response structures based on actual API responses
+            if (data.success) {
+              // Most routes return { success: true, [dataKey]: [...] }
+              if (key === "research" && data.researchProjects) {
+                setCvData((prev) => ({ ...prev, research: data.researchProjects || [] }))
+              } else if (key === "patents" && data.patents) {
+                setCvData((prev) => ({ ...prev, patents: data.patents || [] }))
+              } else if (key === "econtent" && data.eContent) {
+                setCvData((prev) => ({ ...prev, econtent: data.eContent || [] }))
+              } else if (key === "consultancy" && data.consultancies) {
+                setCvData((prev) => ({ ...prev, consultancy: data.consultancies || [] }))
+              } else if (key === "collaborations" && data.collaborations) {
+                setCvData((prev) => ({ ...prev, collaborations: data.collaborations || [] }))
+              } else if (key === "phdguidance" && data.phdStudents) {
+                setCvData((prev) => ({ ...prev, phdguidance: data.phdStudents || [] }))
+              } else if (key === "books" && data.books) {
+                setCvData((prev) => ({ ...prev, books: data.books || [] }))
+              } else if (key === "papers" && data.papers) {
+                setCvData((prev) => ({ ...prev, papers: data.papers || [] }))
+              } else if (key === "articles" && data.journals) {
+                setCvData((prev) => ({ ...prev, articles: data.journals || [] }))
+              } else if (key === "awards" && data.awardsFellows) {
+                setCvData((prev) => ({ ...prev, awards: data.awardsFellows || [] }))
+              } else if (key === "talks" && data.teacherTalks) {
+                setCvData((prev) => ({ ...prev, talks: data.teacherTalks || [] }))
+              } else if (key === "academic_contribution" && data.academicContributions) {
+                setCvData((prev) => ({ ...prev, academic_contribution: data.academicContributions || [] }))
+              } else if (key === "academic_participation" && data.academicBodiesParticipation) {
+                setCvData((prev) => ({ ...prev, academic_participation: data.academicBodiesParticipation || [] }))
+              } else if (key === "committees" && data.universityCommittees) {
+                setCvData((prev) => ({ ...prev, committees: data.universityCommittees || [] }))
+              } else if (key === "performance" && data.performanceTeacher) {
+                setCvData((prev) => ({ ...prev, performance: data.performanceTeacher || [] }))
+              } else if (key === "extension" && data.extensionActivities) {
+                setCvData((prev) => ({ ...prev, extension: data.extensionActivities || [] }))
+              } else if (key === "orientation" && data.refresherDetails) {
+                setCvData((prev) => ({ ...prev, orientation: data.refresherDetails || [] }))
+              }
+            } else if (data.researchProjects) {
+              // Research route returns { researchProjects: [...] } without success flag
+              setCvData((prev) => ({ ...prev, research: data.researchProjects || [] }))
+            } else if (Array.isArray(data)) {
+              // Some routes might return arrays directly
+              setCvData((prev) => ({ ...prev, [key]: data }))
+            }
+          } catch (error) {
+            console.error(`Error processing response for ${key}:`, error)
+          }
+        }
+      }
+
+      await Promise.all([
+        processResponse(researchRes, "research"),
+        processResponse(patentsRes, "patents"),
+        processResponse(econtentRes, "econtent"),
+        processResponse(consultancyRes, "consultancy"),
+        processResponse(collaborationsRes, "collaborations"),
+        processResponse(phdguidanceRes, "phdguidance"),
+        processResponse(booksRes, "books"),
+        processResponse(papersRes, "papers"),
+        processResponse(journalsRes, "articles"),
+        processResponse(awardsRes, "awards"),
+        processResponse(talksRes, "talks"),
+        processResponse(academicContriRes, "academic_contribution"),
+        processResponse(academicPartiRes, "academic_participation"),
+        processResponse(committeesRes, "committees"),
+        processResponse(performanceRes, "performance"),
+        processResponse(extensionRes, "extension"),
+        processResponse(orientationRes, "orientation"),
+      ])
+    } catch (error: any) {
+      console.error("Error fetching CV data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load some CV data. Some sections may be empty.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoadingData(false)
+    }
+  }, [user?.role_id, toast])
+
+  useEffect(() => {
+    if (user?.role_id) {
+      fetchCVData()
+    }
+  }, [user?.role_id, fetchCVData])
 
   const handleSectionToggle = (sectionId: string) => {
     setSelectedSections((prev) =>
@@ -354,269 +479,1339 @@ export default function GenerateCVPage() {
     }
   }
 
-  const generateWordDocument = async () => {
-    try {
-      // Get current template styles
-      const currentTemplate = templateStyles[cvTemplate as keyof typeof templateStyles]
-      const styles = currentTemplate.documentStyles
+  // Helper function to escape HTML to prevent XSS and ensure proper rendering
+  const escapeHtml = (text: string | number | null | undefined): string => {
+    if (text === null || text === undefined) return ""
+    const div = document.createElement("div")
+    div.textContent = String(text)
+    return div.innerHTML
+  }
 
-      // Create a comprehensive HTML structure for Word document with template styling
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>CV - ${dummyData.personal.name}</title>
-          <style>
-            body { 
-              ${styles.body}
-            }
-            .header { 
-              ${styles.header}
-            }
-            .name { 
-              ${styles.name}
-            }
-            .title { 
-              ${styles.title}
-            }
-            .contact { 
-              ${styles.contact}
-            }
-            .section { 
-              ${styles.section}
-            }
-            .section-title { 
-              ${styles.sectionTitle}
-            }
-            .item { 
-              ${styles.item}
-            }
-            .item-title { 
-              ${styles.itemTitle}
-            }
-            .item-subtitle { 
-              ${styles.itemSubtitle}
-            }
-            .item-details { 
-              ${styles.itemDetails}
-            }
-            table { 
-              ${styles.table}
-            }
-            th { 
-              ${styles.th}
-            }
-            td { 
-              ${styles.td}
-            }
-            .publication { 
-              ${styles.publication}
-            }
-            .page-break { 
-              page-break-before: always; 
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="name">${dummyData.personal.name}</div>
-            <div class="title">${dummyData.personal.designation}</div>
-            <div class="title">${dummyData.personal.department}</div>
-            <div class="title">${dummyData.personal.institution}</div>
-            <div class="contact">
-              Email: ${dummyData.personal.email} | Phone: ${dummyData.personal.phone}<br>
-              Address: ${dummyData.personal.address}<br>
-              ORCID: ${dummyData.personal.orcid} | Date of Birth: ${dummyData.personal.dateOfBirth}
-            </div>
-          </div>
+  // Helper function to format CV sections for document generation
+  const formatCVSection = (sectionId: string, data: CVData, styles: any): string => {
+    if (!data.personal) return ""
 
-          ${
-            selectedSections.includes("personal")
-              ? `
+    switch (sectionId) {
+      case "personal":
+        return `
           <div class="section">
             <div class="section-title">Personal Information</div>
             <table>
-              <tr><th>Name</th><td>${dummyData.personal.name}</td></tr>
-              <tr><th>Designation</th><td>${dummyData.personal.designation}</td></tr>
-              <tr><th>Department</th><td>${dummyData.personal.department}</td></tr>
-              <tr><th>Institution</th><td>${dummyData.personal.institution}</td></tr>
-              <tr><th>Email</th><td>${dummyData.personal.email}</td></tr>
-              <tr><th>Phone</th><td>${dummyData.personal.phone}</td></tr>
-              <tr><th>Date of Birth</th><td>${dummyData.personal.dateOfBirth}</td></tr>
-              <tr><th>Nationality</th><td>${dummyData.personal.nationality}</td></tr>
-              <tr><th>ORCID</th><td>${dummyData.personal.orcid}</td></tr>
+              <tr><th>Name</th><td>${escapeHtml(data.personal.name || "")}</td></tr>
+              <tr><th>Designation</th><td>${escapeHtml(data.personal.designation || "")}</td></tr>
+              <tr><th>Department</th><td>${escapeHtml(data.personal.department || "")}</td></tr>
+              <tr><th>Institution</th><td>${escapeHtml(data.personal.institution || "")}</td></tr>
+              <tr><th>Email</th><td>${escapeHtml(data.personal.email || "")}</td></tr>
+              <tr><th>Phone</th><td>${escapeHtml(data.personal.phone || "")}</td></tr>
+              <tr><th>Date of Birth</th><td>${escapeHtml(data.personal.dateOfBirth || "")}</td></tr>
+              <tr><th>Nationality</th><td>${escapeHtml(data.personal.nationality || "")}</td></tr>
+              <tr><th>ORCID</th><td>${escapeHtml(data.personal.orcid || "")}</td></tr>
             </table>
           </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("education")
-              ? `
+        `
+      case "education":
+        return data.education.length > 0
+          ? `
           <div class="section">
             <div class="section-title">Education</div>
-            ${dummyData.education
+            ${data.education
               .map(
-                (edu) => `
+                (edu: any) => `
               <div class="item">
-                <div class="item-title">${edu.degree}</div>
-                <div class="item-subtitle">${edu.institution}, ${edu.year}</div>
-                ${edu.thesis ? `<div class="item-details">Thesis: ${edu.thesis}</div>` : ""}
-                ${edu.grade ? `<div class="item-details">Grade: ${edu.grade}</div>` : ""}
+                <div class="item-title">${escapeHtml(edu.degree_name || edu.degree_type_name || edu.degree || "")}</div>
+                <div class="item-subtitle">${escapeHtml(edu.university_name || edu.institution || "")}${edu.year_of_passing ? `, ${new Date(edu.year_of_passing).getFullYear()}` : edu.year ? `, ${escapeHtml(String(edu.year))}` : ""}</div>
+                ${edu.subject ? `<div class="item-details">Subject: ${escapeHtml(edu.subject)}</div>` : ""}
+                ${edu.state ? `<div class="item-details">State: ${escapeHtml(edu.state)}</div>` : ""}
+                ${edu.QS_Ranking ? `<div class="item-details">QS Ranking: ${escapeHtml(edu.QS_Ranking)}</div>` : ""}
               </div>
             `,
               )
               .join("")}
           </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("experience")
-              ? `
+        `
+          : ""
+      case "experience":
+        return data.experience.length > 0
+          ? `
           <div class="section">
             <div class="section-title">Professional Experience</div>
-            <table>
-              <tr>
-                <th>Position</th>
-                <th>Institution</th>
-                <th>Duration</th>
-                <th>Responsibilities</th>
-              </tr>
-              ${dummyData.experience
-                .map(
-                  (exp) => `
-                <tr>
-                  <td>${exp.position}</td>
-                  <td>${exp.institution}</td>
-                  <td>${exp.duration}</td>
-                  <td>${exp.responsibilities}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </table>
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("research")
-              ? `
-          <div class="section">
-            <div class="section-title">Research Projects</div>
-            <table>
-              <tr>
-                <th>Project Title</th>
-                <th>Funding Agency</th>
-                <th>Amount</th>
-                <th>Duration</th>
-                <th>Role</th>
-                <th>Status</th>
-              </tr>
-              ${dummyData.research
-                .map(
-                  (proj) => `
-                <tr>
-                  <td>${proj.title}</td>
-                  <td>${proj.agency}</td>
-                  <td>${proj.amount}</td>
-                  <td>${proj.duration}</td>
-                  <td>${proj.role}</td>
-                  <td>${proj.status}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </table>
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("articles")
-              ? `
-          <div class="section">
-            <div class="section-title">Publications</div>
-            ${dummyData.publications
+            ${data.experience
               .map(
-                (pub, index) => `
-              <div class="publication">
-                <strong>${index + 1}.</strong> ${pub.authors}. "${pub.title}". 
-                <em>${pub.journal}</em>, ${pub.year}. ${pub.impact}. 
-                DOI: ${pub.doi}
+                (exp: any) => `
+              <div class="item">
+                <div class="item-title">${exp.desig || exp.designation || exp.position || ""}</div>
+                <div class="item-subtitle">${exp.Employeer || exp.institution || ""}</div>
+                <div class="item-details">${exp.Start_Date ? new Date(exp.Start_Date).getFullYear() : exp.from_date ? new Date(exp.from_date).getFullYear() : ""} - ${exp.End_Date ? new Date(exp.End_Date).getFullYear() : exp.to_date ? new Date(exp.to_date).getFullYear() : exp.currente ? "Present" : ""}</div>
+                ${exp.Nature ? `<div class="item-details">Nature: ${exp.Nature}</div>` : ""}
               </div>
             `,
               )
               .join("")}
           </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("awards")
-              ? `
+        `
+          : ""
+      case "research":
+        return data.research.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Research Projects</div>
+            ${data.research
+              .map(
+                (proj: any) => `
+              <div class="item">
+                <div class="item-title">${proj.title || ""}</div>
+                <div class="item-details">Funding Agency: ${proj.funding_agency_name || proj.funding_agency || ""}</div>
+                <div class="item-details">Amount: ${proj.grant_sanctioned ? `₹${proj.grant_sanctioned.toLocaleString()}` : ""} | Duration: ${proj.duration || ""} years</div>
+                <div class="item-details">Status: ${proj.status_name || proj.status || ""}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "articles":
+        return data.articles.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Publications</div>
+            ${data.articles
+              .map(
+                (pub: any, index: number) => `
+              <div class="publication">
+                <strong>${index + 1}.</strong> ${pub.authors || ""}. "${pub.title || ""}". 
+                <em>${pub.journal_name || ""}</em>, ${pub.month_year ? new Date(pub.month_year).getFullYear() : ""}. 
+                ${pub.impact_factor ? `IF: ${pub.impact_factor}` : ""}. 
+                ${pub.DOI ? `DOI: ${pub.DOI}` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "postdoc":
+        return data.postdoc.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Post Doctoral Research Experience</div>
+            ${data.postdoc
+              .map(
+                (postdoc: any) => `
+              <div class="item">
+                <div class="item-title">${postdoc.Institute || ""}</div>
+                <div class="item-subtitle">${postdoc.Start_Date ? new Date(postdoc.Start_Date).getFullYear() : ""} - ${postdoc.End_Date ? new Date(postdoc.End_Date).getFullYear() : "Present"}</div>
+                ${postdoc.SponsoredBy ? `<div class="item-details">Sponsored By: ${postdoc.SponsoredBy}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "patents":
+        return data.patents.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Patents</div>
+            ${data.patents
+              .map(
+                (patent: any) => `
+              <div class="item">
+                <div class="item-title">${patent.title || ""}</div>
+                <div class="item-subtitle">${patent.date ? new Date(patent.date).getFullYear() : ""}</div>
+                ${patent.PatentApplicationNo ? `<div class="item-details">Application No: ${patent.PatentApplicationNo}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "econtent":
+        return data.econtent.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">E-Contents</div>
+            ${data.econtent
+              .map(
+                (econtent: any) => `
+              <div class="item">
+                <div class="item-title">${econtent.title || ""}</div>
+                <div class="item-subtitle">${econtent.Publishing_Authorities || ""}</div>
+                ${econtent.Publishing_date ? `<div class="item-details">Published: ${new Date(econtent.Publishing_date).getFullYear()}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "consultancy":
+        return data.consultancy.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Consultancy Undertaken</div>
+            ${data.consultancy
+              .map(
+                (consult: any) => `
+              <div class="item">
+                <div class="item-title">${consult.name || ""}</div>
+                <div class="item-subtitle">${consult.collaborating_inst || ""}</div>
+                ${consult.Start_Date ? `<div class="item-details">${new Date(consult.Start_Date).getFullYear()}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "collaborations":
+        return data.collaborations.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Collaborations</div>
+            ${data.collaborations
+              .map(
+                (collab: any) => `
+              <div class="item">
+                <div class="item-title">${collab.collaborating_inst || collab.collab_name || ""}</div>
+                <div class="item-subtitle">${collab.category || ""}</div>
+                ${collab.starting_date ? `<div class="item-details">Started: ${new Date(collab.starting_date).getFullYear()}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "phdguidance":
+        return data.phdguidance.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Ph.D. Guidance</div>
+            ${data.phdguidance
+              .map(
+                (phd: any) => `
+              <div class="item">
+                <div class="item-title">${phd.name || ""}</div>
+                <div class="item-subtitle">Registration: ${phd.regno || ""}</div>
+                <div class="item-details">Topic: ${phd.topic || ""}</div>
+                ${phd.start_date ? `<div class="item-details">Started: ${new Date(phd.start_date).getFullYear()}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "books":
+        return data.books.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Books Published</div>
+            ${data.books
+              .map(
+                (book: any, index: number) => `
+              <div class="publication">
+                <strong>${index + 1}.</strong> ${book.authors || ""}. "${book.title || ""}". ${book.publisher_name || ""}${book.submit_date ? `, ${new Date(book.submit_date).getFullYear()}` : ""}${book.isbn ? `. ISBN: ${book.isbn}` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "papers":
+        return data.papers.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Papers Presented</div>
+            ${data.papers
+              .map(
+                (paper: any, index: number) => `
+              <div class="publication">
+                <strong>${index + 1}.</strong> ${paper.authors || ""}. "${paper.title_of_paper || ""}". ${paper.organising_body || ""}${paper.place ? `, ${paper.place}` : ""}${paper.date ? `, ${new Date(paper.date).getFullYear()}` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "talks":
+        return data.talks.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Talks</div>
+            ${data.talks
+              .map(
+                (talk: any) => `
+              <div class="item">
+                <div class="item-title">${talk.title || talk.name || ""}</div>
+                <div class="item-subtitle">${talk.place || ""}${talk.date ? `, ${new Date(talk.date).getFullYear()}` : ""}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "academic_contribution":
+        return data.academic_contribution.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Contribution in Academic Programme</div>
+            ${data.academic_contribution
+              .map(
+                (contri: any) => `
+              <div class="item">
+                <div class="item-title">${contri.name || ""}</div>
+                <div class="item-subtitle">${contri.place || ""}${contri.date ? `, ${new Date(contri.date).getFullYear()}` : ""}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "academic_participation":
+        return data.academic_participation.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Participation in Academic Programme</div>
+            ${data.academic_participation
+              .map(
+                (parti: any) => `
+              <div class="item">
+                <div class="item-title">${parti.name || ""}</div>
+                <div class="item-subtitle">${parti.acad_body || ""}, ${parti.place || ""}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "committees":
+        return data.committees.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Participation in Academic Committee</div>
+            ${data.committees
+              .map(
+                (committee: any) => `
+              <div class="item">
+                <div class="item-title">${committee.committee_name || committee.name || ""}</div>
+                <div class="item-subtitle">${committee.participated_as || ""}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "performance":
+        return data.performance.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Performance by Individual/Group</div>
+            ${data.performance
+              .map(
+                (perf: any) => `
+              <div class="item">
+                <div class="item-title">${perf.name || ""}</div>
+                <div class="item-subtitle">${perf.place || ""}${perf.date ? `, ${new Date(perf.date).getFullYear()}` : ""}</div>
+                ${perf.perf_nature ? `<div class="item-details">Nature: ${perf.perf_nature}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "extension":
+        return data.extension.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Extension Activities</div>
+            ${data.extension
+              .map(
+                (ext: any) => `
+              <div class="item">
+                <div class="item-title">${ext.name_of_activity || ext.names || ""}</div>
+                <div class="item-subtitle">${ext.place || ""}${ext.date ? `, ${new Date(ext.date).getFullYear()}` : ""}</div>
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "orientation":
+        return data.orientation.length > 0
+          ? `
+          <div class="section">
+            <div class="section-title">Orientation Course</div>
+            ${data.orientation
+              .map(
+                (orient: any) => `
+              <div class="item">
+                <div class="item-title">${orient.name || ""}</div>
+                <div class="item-subtitle">${orient.institute || orient.university || ""}</div>
+                ${orient.startdate ? `<div class="item-details">${new Date(orient.startdate).getFullYear()}${orient.enddate ? ` - ${new Date(orient.enddate).getFullYear()}` : ""}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
+          </div>
+        `
+          : ""
+      case "awards":
+        return data.awards.length > 0
+          ? `
           <div class="section">
             <div class="section-title">Awards & Honors</div>
-            <table>
-              <tr>
-                <th>Award</th>
-                <th>Organization</th>
-                <th>Year</th>
-                <th>Description</th>
-              </tr>
-              ${dummyData.awards
-                .map(
-                  (award) => `
-                <tr>
-                  <td>${award.title}</td>
-                  <td>${award.organization}</td>
-                  <td>${award.year}</td>
-                  <td>${award.description}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </table>
+            ${data.awards
+              .map(
+                (award: any) => `
+              <div class="item">
+                <div class="item-title">${award.name || ""}</div>
+                <div class="item-subtitle">${award.organization || ""}, ${award.date_of_award ? new Date(award.date_of_award).getFullYear() : ""}</div>
+                ${award.details ? `<div class="item-details">${award.details}</div>` : ""}
+              </div>
+            `,
+              )
+              .join("")}
           </div>
-          `
-              : ""
-          }
+        `
+          : ""
+      default:
+        return ""
+    }
+  }
 
-          <div class="section">
-            <div class="section-title">Document Information</div>
-            <p><strong>Generated on:</strong> ${new Date().toLocaleDateString()}</p>
-            <p><strong>Template:</strong> ${cvTemplate.charAt(0).toUpperCase() + cvTemplate.slice(1)}</p>
-            <p><strong>Sections included:</strong> ${selectedSections.length} of ${cvSections.length}</p>
-          </div>
-        </body>
-        </html>
-      `
+  // Helper function to create Word document sections
+  const createWordSection = (sectionId: string, data: CVData): Paragraph[] => {
+    const sections: Paragraph[] = []
 
-      // Create a proper Word document using HTML
-      const blob = new Blob([htmlContent], {
-        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    switch (sectionId) {
+      case "personal":
+        sections.push(
+          new Paragraph({
+            text: "Personal Information",
+            heading: HeadingLevel.HEADING_1,
+            spacing: { after: 200 },
+          }),
+          ...Object.entries({
+            Name: data.personal?.name || "",
+            Designation: data.personal?.designation || "",
+            Department: data.personal?.department || "",
+            Institution: data.personal?.institution || "",
+            Email: data.personal?.email || "",
+            Phone: data.personal?.phone || "",
+            "Date of Birth": data.personal?.dateOfBirth || "",
+            Nationality: data.personal?.nationality || "",
+            ORCID: data.personal?.orcid || "",
+            Address: data.personal?.address || "",
+          })
+            .filter(([_, value]) => value)
+            .map(
+              ([key, value]) =>
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: `${key}: `, bold: true }),
+                    new TextRun({ text: String(value) }),
+                  ],
+                  spacing: { after: 100 },
+                }),
+            ),
+        )
+        break
+
+      case "education":
+        if (data.education.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Education",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.education.forEach((edu: any) => {
+            sections.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: edu.degree_name || edu.degree_type_name || edu.degree || "",
+                    bold: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${edu.university_name || edu.institution || ""}${
+                      edu.year_of_passing
+                        ? `, ${new Date(edu.year_of_passing).getFullYear()}`
+                        : edu.year
+                          ? `, ${edu.year}`
+                          : ""
+                    }`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (edu.subject) {
+              sections.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `Subject: ${edu.subject}` })],
+                  spacing: { after: 50 },
+                }),
+              )
+            }
+            if (edu.state) {
+              sections.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `State: ${edu.state}` })],
+                  spacing: { after: 50 },
+                }),
+              )
+            }
+            sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+          })
+        }
+        break
+
+      case "experience":
+        if (data.experience.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Professional Experience",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.experience.forEach((exp: any) => {
+            sections.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: exp.desig || exp.designation || exp.position || "",
+                    bold: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: exp.Employeer || exp.institution || "",
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${
+                      exp.Start_Date
+                        ? new Date(exp.Start_Date).getFullYear()
+                        : exp.from_date
+                          ? new Date(exp.from_date).getFullYear()
+                          : ""
+                    } - ${
+                      exp.End_Date
+                        ? new Date(exp.End_Date).getFullYear()
+                        : exp.to_date
+                          ? new Date(exp.to_date).getFullYear()
+                          : exp.currente
+                            ? "Present"
+                            : ""
+                    }`,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (exp.Nature) {
+              sections.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `Nature: ${exp.Nature}` })],
+                  spacing: { after: 50 },
+                }),
+              )
+            }
+            sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+          })
+        }
+        break
+
+      case "research":
+        if (data.research.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Research Projects",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.research.forEach((proj: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: proj.title || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Funding Agency: ${proj.funding_agency_name || proj.funding_agency || ""}`,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Amount: ${
+                      proj.grant_sanctioned ? `₹${proj.grant_sanctioned.toLocaleString()}` : ""
+                    } | Duration: ${proj.duration || ""} years`,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Status: ${proj.status_name || proj.status || ""}`,
+                  }),
+                ],
+                spacing: { after: 150 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "articles":
+        if (data.articles.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Published Articles/Journals",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.articles.forEach((pub: any, index: number) => {
+            const pubText = `${index + 1}. ${pub.authors || ""}. "${pub.title || ""}". ${
+              pub.journal_name || ""
+            }, ${pub.month_year ? new Date(pub.month_year).getFullYear() : ""}. ${
+              pub.impact_factor ? `IF: ${pub.impact_factor}` : ""
+            }. ${pub.DOI ? `DOI: ${pub.DOI}` : ""}`
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: pubText })],
+                spacing: { after: 100 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "awards":
+        if (data.awards.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Awards & Honors",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.awards.forEach((award: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: award.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${award.organization || ""}, ${
+                      award.date_of_award ? new Date(award.date_of_award).getFullYear() : ""
+                    }`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (award.details) {
+              sections.push(
+                new Paragraph({
+                  children: [new TextRun({ text: award.details })],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "postdoc":
+        if (data.postdoc.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Post Doctoral Research Experience",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.postdoc.forEach((postdoc: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: postdoc.Institute || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${
+                      postdoc.Start_Date ? new Date(postdoc.Start_Date).getFullYear() : ""
+                    } - ${postdoc.End_Date ? new Date(postdoc.End_Date).getFullYear() : "Present"}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (postdoc.SponsoredBy) {
+              sections.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `Sponsored By: ${postdoc.SponsoredBy}` })],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "patents":
+        if (data.patents.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Patents",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.patents.forEach((patent: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: patent.title || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: patent.date ? new Date(patent.date).getFullYear().toString() : "",
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (patent.PatentApplicationNo) {
+              sections.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({ text: `Application No: ${patent.PatentApplicationNo}` }),
+                  ],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "books":
+        if (data.books.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Books Published",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.books.forEach((book: any, index: number) => {
+            const bookText = `${index + 1}. ${book.authors || ""}. "${book.title || ""}". ${
+              book.publisher_name || ""
+            }${book.submit_date ? `, ${new Date(book.submit_date).getFullYear()}` : ""}${
+              book.isbn ? `. ISBN: ${book.isbn}` : ""
+            }`
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: bookText })],
+                spacing: { after: 100 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "papers":
+        if (data.papers.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Papers Presented",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.papers.forEach((paper: any, index: number) => {
+            const paperText = `${index + 1}. ${paper.authors || ""}. "${paper.title_of_paper || ""}". ${
+              paper.organising_body || ""
+            }${paper.place ? `, ${paper.place}` : ""}${
+              paper.date ? `, ${new Date(paper.date).getFullYear()}` : ""
+            }`
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: paperText })],
+                spacing: { after: 100 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "talks":
+        if (data.talks.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Talks",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.talks.forEach((talk: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: talk.title || talk.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${talk.place || ""}${talk.date ? `, ${new Date(talk.date).getFullYear()}` : ""}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 150 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "econtent":
+        if (data.econtent.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "E-Contents",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.econtent.forEach((econtent: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: econtent.title || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: econtent.Publishing_Authorities || "",
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (econtent.Publishing_date) {
+              sections.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Published: ${new Date(econtent.Publishing_date).getFullYear()}`,
+                    }),
+                  ],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "consultancy":
+        if (data.consultancy.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Consultancy Undertaken",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.consultancy.forEach((consult: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: consult.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: consult.collaborating_inst || "",
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (consult.Start_Date) {
+              sections.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: new Date(consult.Start_Date).getFullYear().toString(),
+                    }),
+                  ],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "collaborations":
+        if (data.collaborations.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Collaborations",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.collaborations.forEach((collab: any) => {
+            sections.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: collab.collaborating_inst || collab.collab_name || "",
+                    bold: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: collab.category || "", italics: true })],
+                spacing: { after: 50 },
+              }),
+            )
+            if (collab.starting_date) {
+              sections.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Started: ${new Date(collab.starting_date).getFullYear()}`,
+                    }),
+                  ],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "phdguidance":
+        if (data.phdguidance.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Ph.D. Guidance",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.phdguidance.forEach((phd: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: phd.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: `Registration: ${phd.regno || ""}` })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [new TextRun({ text: `Topic: ${phd.topic || ""}` })],
+                spacing: { after: 50 },
+              }),
+            )
+            if (phd.start_date) {
+              sections.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `Started: ${new Date(phd.start_date).getFullYear()}`,
+                    }),
+                  ],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "academic_contribution":
+        if (data.academic_contribution.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Contribution in Academic Programme",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.academic_contribution.forEach((contri: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: contri.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${contri.place || ""}${contri.date ? `, ${new Date(contri.date).getFullYear()}` : ""}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 150 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "academic_participation":
+        if (data.academic_participation.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Participation in Academic Programme",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.academic_participation.forEach((parti: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: parti.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${parti.acad_body || ""}, ${parti.place || ""}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 150 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "committees":
+        if (data.committees.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Participation in Academic Committee",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.committees.forEach((committee: any) => {
+            sections.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: committee.committee_name || committee.name || "",
+                    bold: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: committee.participated_as || "",
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 150 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "performance":
+        if (data.performance.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Performance by Individual/Group",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.performance.forEach((perf: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: perf.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${perf.place || ""}${perf.date ? `, ${new Date(perf.date).getFullYear()}` : ""}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (perf.perf_nature) {
+              sections.push(
+                new Paragraph({
+                  children: [new TextRun({ text: `Nature: ${perf.perf_nature}` })],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      case "extension":
+        if (data.extension.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Extension Activities",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.extension.forEach((ext: any) => {
+            sections.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: ext.name_of_activity || ext.names || "",
+                    bold: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `${ext.place || ""}${ext.date ? `, ${new Date(ext.date).getFullYear()}` : ""}`,
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 150 },
+              }),
+            )
+          })
+        }
+        break
+
+      case "orientation":
+        if (data.orientation.length > 0) {
+          sections.push(
+            new Paragraph({
+              text: "Orientation Course",
+              heading: HeadingLevel.HEADING_1,
+              spacing: { after: 200 },
+            }),
+          )
+          data.orientation.forEach((orient: any) => {
+            sections.push(
+              new Paragraph({
+                children: [new TextRun({ text: orient.name || "", bold: true })],
+                spacing: { after: 50 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: orient.institute || orient.university || "",
+                    italics: true,
+                  }),
+                ],
+                spacing: { after: 50 },
+              }),
+            )
+            if (orient.startdate) {
+              sections.push(
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${new Date(orient.startdate).getFullYear()}${
+                        orient.enddate ? ` - ${new Date(orient.enddate).getFullYear()}` : ""
+                      }`,
+                    }),
+                  ],
+                  spacing: { after: 150 },
+                }),
+              )
+            } else {
+              sections.push(new Paragraph({ text: "", spacing: { after: 150 } }))
+            }
+          })
+        }
+        break
+
+      default:
+        break
+    }
+
+    return sections
+  }
+
+  const generateWordDocument = async () => {
+    if (!cvData.personal) {
+      throw new Error("Personal information not available. Please wait for data to load.")
+    }
+
+    try {
+      // Build document children from selected sections
+      const children: Paragraph[] = []
+
+      // Header section
+      children.push(
+        new Paragraph({
+          children: [new TextRun({ text: cvData.personal.name, bold: true, size: 32 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 200 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: cvData.personal.designation, size: 24 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: cvData.personal.department, size: 24 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 100 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: cvData.personal.institution, size: 24 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 200 },
+        }),
+      )
+
+      // Contact information
+      const contactInfo: string[] = []
+      if (cvData.personal.email) contactInfo.push(`Email: ${cvData.personal.email}`)
+      if (cvData.personal.phone) contactInfo.push(`Phone: ${cvData.personal.phone}`)
+      if (cvData.personal.address) contactInfo.push(`Address: ${cvData.personal.address}`)
+      if (cvData.personal.orcid) contactInfo.push(`ORCID: ${cvData.personal.orcid}`)
+      if (cvData.personal.dateOfBirth) contactInfo.push(`Date of Birth: ${cvData.personal.dateOfBirth}`)
+
+      if (contactInfo.length > 0) {
+        children.push(
+          new Paragraph({
+            children: [new TextRun({ text: contactInfo.join(" | "), size: 20 })],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: 400 },
+          }),
+        )
+      }
+
+      // Add selected sections
+      selectedSections.forEach((sectionId) => {
+        const sectionContent = createWordSection(sectionId, cvData)
+        children.push(...sectionContent)
       })
 
-      // Create download link
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = `CV_${dummyData.personal.name.replace(/\s+/g, "_")}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.doc`
+      // Document information
+      children.push(
+        new Paragraph({
+          text: "Document Information",
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 },
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Generated on: ", bold: true }),
+            new TextRun({ text: new Date().toLocaleDateString() }),
+          ],
+          spacing: { after: 100 },
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Template: ", bold: true }),
+            new TextRun({ text: cvTemplate.charAt(0).toUpperCase() + cvTemplate.slice(1) }),
+          ],
+          spacing: { after: 100 },
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Sections included: ", bold: true }),
+            new TextRun({ text: `${selectedSections.length} of ${cvSections.length}` }),
+          ],
+        }),
+      )
 
-      // Trigger download
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      // Create the document
+      const doc = new Document({
+        sections: [
+          {
+            properties: {},
+            children: children,
+          },
+        ],
+      })
 
-      // Clean up
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      // Generate and download the document
+      const blob = await Packer.toBlob(doc)
+      const fileName = `CV_${cvData.personal.name.replace(/\s+/g, "_")}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.docx`
+      saveAs(blob, fileName)
 
       return true
     } catch (error) {
@@ -626,6 +1821,10 @@ export default function GenerateCVPage() {
   }
 
   const generatePDFDocument = async () => {
+    if (!cvData.personal) {
+      throw new Error("Personal information not available. Please wait for data to load.")
+    }
+
     try {
       // Get current template styles
       const currentTemplate = templateStyles[cvTemplate as keyof typeof templateStyles]
@@ -690,137 +1889,18 @@ export default function GenerateCVPage() {
         </head>
         <body>
           <div class="header">
-            <div class="name">${dummyData.personal.name}</div>
-            <div class="title">${dummyData.personal.designation}</div>
-            <div class="title">${dummyData.personal.department}</div>
-            <div class="title">${dummyData.personal.institution}</div>
+            <div class="name">${cvData.personal.name}</div>
+            <div class="title">${cvData.personal.designation}</div>
+            <div class="title">${cvData.personal.department}</div>
+            <div class="title">${cvData.personal.institution}</div>
             <div class="contact">
-              Email: ${dummyData.personal.email} | Phone: ${dummyData.personal.phone}<br>
-              Address: ${dummyData.personal.address}
+              ${cvData.personal.email ? `Email: ${cvData.personal.email}` : ""}${cvData.personal.email && cvData.personal.phone ? " | " : ""}${cvData.personal.phone ? `Phone: ${cvData.personal.phone}` : ""}<br>
+              ${cvData.personal.address ? `Address: ${cvData.personal.address}` : ""}${cvData.personal.address && cvData.personal.orcid ? "<br>" : ""}
+              ${cvData.personal.orcid ? `ORCID: ${cvData.personal.orcid}` : ""}
             </div>
           </div>
 
-          ${
-            selectedSections.includes("personal")
-              ? `
-          <div class="section">
-            <div class="section-title">Personal Information</div>
-            <table>
-              <tr><th>Name</th><td>${dummyData.personal.name}</td></tr>
-              <tr><th>Designation</th><td>${dummyData.personal.designation}</td></tr>
-              <tr><th>Email</th><td>${dummyData.personal.email}</td></tr>
-              <tr><th>Phone</th><td>${dummyData.personal.phone}</td></tr>
-              <tr><th>Date of Birth</th><td>${dummyData.personal.dateOfBirth}</td></tr>
-              <tr><th>Nationality</th><td>${dummyData.personal.nationality}</td></tr>
-            </table>
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("education")
-              ? `
-          <div class="section">
-            <div class="section-title">Education</div>
-            ${dummyData.education
-              .map(
-                (edu) => `
-              <div class="item">
-                <div class="item-title">${edu.degree}</div>
-                <div class="item-subtitle">${edu.institution}, ${edu.year}</div>
-                ${edu.grade ? `<div class="item-details">${edu.grade}</div>` : ""}
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("experience")
-              ? `
-          <div class="section">
-            <div class="section-title">Professional Experience</div>
-            ${dummyData.experience
-              .map(
-                (exp) => `
-              <div class="item">
-                <div class="item-title">${exp.position}</div>
-                <div class="item-subtitle">${exp.institution} (${exp.duration})</div>
-                <div class="item-details">${exp.responsibilities}</div>
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("research")
-              ? `
-          <div class="section">
-            <div class="section-title">Research Projects</div>
-            ${dummyData.research
-              .map(
-                (proj) => `
-              <div class="item">
-                <div class="item-title">${proj.title}</div>
-                <div class="item-details">Funding: ${proj.agency} (${proj.amount})</div>
-                <div class="item-details">Duration: ${proj.duration} | Role: ${proj.role}</div>
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("articles")
-              ? `
-          <div class="section">
-            <div class="section-title">Publications</div>
-            ${dummyData.publications
-              .map(
-                (pub, index) => `
-              <div class="publication">
-                <strong>${index + 1}.</strong> ${pub.authors}. "${pub.title}". 
-                <em>${pub.journal}</em>, ${pub.year}. ${pub.impact}
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-          `
-              : ""
-          }
-
-          ${
-            selectedSections.includes("awards")
-              ? `
-          <div class="section">
-            <div class="section-title">Awards & Honors</div>
-            ${dummyData.awards
-              .map(
-                (award) => `
-              <div class="item">
-                <div class="item-title">${award.title}</div>
-                <div class="item-subtitle">${award.organization}, ${award.year}</div>
-                <div class="item-details">${award.description}</div>
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-          `
-              : ""
-          }
+          ${selectedSections.map((sectionId) => formatCVSection(sectionId, cvData, styles)).join("")}
 
           <div class="section">
             <div class="section-title">Document Information</div>
@@ -870,6 +1950,24 @@ export default function GenerateCVPage() {
       return
     }
 
+    if (!cvData.personal) {
+      toast({
+        title: "Data not loaded",
+        description: "Please wait for your data to load before generating the CV.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (isLoadingData) {
+      toast({
+        title: "Loading data",
+        description: "Please wait for data to finish loading.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsGenerating(true)
     setGenerationError(null)
 
@@ -878,9 +1976,6 @@ export default function GenerateCVPage() {
       if (!window.Blob || !window.URL || !window.URL.createObjectURL) {
         throw new Error("Your browser does not support file generation. Please use a modern browser.")
       }
-
-      // Simulate processing time for better UX
-      await new Promise((resolve) => setTimeout(resolve, 1500))
 
       let success = false
       if (downloadFormat === "word") {
@@ -903,6 +1998,7 @@ export default function GenerateCVPage() {
         title: "Generation Failed",
         description: errorMessage,
         variant: "destructive",
+        duration: 5000,
       })
 
       console.error("CV Generation Error:", error)
@@ -1137,13 +2233,18 @@ export default function GenerateCVPage() {
                     </Button>
                     <Button
                       onClick={handleGenerateCV}
-                      disabled={isGenerating || selectedSections.length === 0}
+                      disabled={isGenerating || selectedSections.length === 0 || isLoadingData || !cvData.personal}
                       className="w-full flex items-center gap-2"
                     >
                       {isGenerating ? (
                         <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                          <Loader2 className="h-4 w-4 animate-spin" />
                           Generating CV...
+                        </>
+                      ) : isLoadingData ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading Data...
                         </>
                       ) : (
                         <>
@@ -1152,6 +2253,16 @@ export default function GenerateCVPage() {
                         </>
                       )}
                     </Button>
+                    {isLoadingData && (
+                      <p className="text-xs text-muted-foreground text-center mt-2">
+                        Please wait while we load your CV data...
+                      </p>
+                    )}
+                    {!isLoadingData && !cvData.personal && (
+                      <p className="text-xs text-muted-foreground text-center mt-2 text-amber-600">
+                        No profile data available. Please complete your profile first.
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -1211,128 +2322,490 @@ export default function GenerateCVPage() {
                 className={`p-4 sm:p-6 lg:p-8 border rounded-lg shadow-sm max-h-[600px] overflow-y-auto ${currentStyles.containerClass}`}
               >
                 <div className="space-y-6">
-                  {/* Header */}
-                  <div className={currentStyles.headerClass}>
-                    <h1 className={currentStyles.nameClass}>{dummyData.personal.name}</h1>
-                    <p className={currentStyles.titleClass}>{dummyData.personal.designation}</p>
-                    <p className={currentStyles.titleClass}>{dummyData.personal.department}</p>
-                    <p className={currentStyles.titleClass}>{dummyData.personal.institution}</p>
-                    <div className={currentStyles.contactClass}>
-                      <p>
-                        Email: {dummyData.personal.email} | Phone: {dummyData.personal.phone}
-                      </p>
+                  {isLoadingData ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                      <span className="ml-3 text-gray-600">Loading CV data...</span>
                     </div>
-                  </div>
-
-                  {/* Personal Information */}
-                  {selectedSections.includes("personal") && (
-                    <div>
-                      <h2 className={currentStyles.sectionTitleClass}>Personal Information</h2>
-                      <div className="overflow-x-auto">
-                        <table className={currentStyles.tableClass}>
-                          <tbody>
-                            <tr>
-                              <th className={currentStyles.thClass}>Date of Birth</th>
-                              <td className={currentStyles.tdClass}>{dummyData.personal.dateOfBirth}</td>
-                            </tr>
-                            <tr>
-                              <th className={currentStyles.thClass}>Nationality</th>
-                              <td className={currentStyles.tdClass}>{dummyData.personal.nationality}</td>
-                            </tr>
-                            <tr>
-                              <th className={currentStyles.thClass}>ORCID</th>
-                              <td className={currentStyles.tdClass}>{dummyData.personal.orcid}</td>
-                            </tr>
-                            <tr>
-                              <th className={currentStyles.thClass}>Address</th>
-                              <td className={currentStyles.tdClass}>{dummyData.personal.address}</td>
-                            </tr>
-                          </tbody>
-                        </table>
+                  ) : !cvData.personal ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <p>No data available. Please ensure your profile is complete.</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Header */}
+                      <div className={currentStyles.headerClass}>
+                        <h1 className={currentStyles.nameClass}>{cvData.personal.name}</h1>
+                        <p className={currentStyles.titleClass}>{cvData.personal.designation}</p>
+                        <p className={currentStyles.titleClass}>{cvData.personal.department}</p>
+                        <p className={currentStyles.titleClass}>{cvData.personal.institution}</p>
+                        <div className={currentStyles.contactClass}>
+                          {cvData.personal.email && <p>Email: {cvData.personal.email}</p>}
+                          {cvData.personal.phone && <p>Phone: {cvData.personal.phone}</p>}
+                          {cvData.personal.address && <p>Address: {cvData.personal.address}</p>}
+                          {cvData.personal.orcid && <p>ORCID: {cvData.personal.orcid}</p>}
+                        </div>
                       </div>
-                    </div>
-                  )}
 
-                  {/* Education */}
-                  {selectedSections.includes("education") && (
-                    <div>
-                      <h2 className={currentStyles.sectionTitleClass}>Education</h2>
-                      {dummyData.education.map((edu, index) => (
-                        <div key={index} className={currentStyles.itemClass}>
-                          <p className={currentStyles.itemTitleClass}>{edu.degree}</p>
-                          <p className={currentStyles.itemSubtitleClass}>
-                            {edu.institution}, {edu.year}
-                          </p>
-                          {edu.thesis && <p className={currentStyles.itemDetailsClass}>Thesis: {edu.thesis}</p>}
-                          {edu.grade && <p className={currentStyles.itemDetailsClass}>{edu.grade}</p>}
+                      {/* Personal Information */}
+                      {selectedSections.includes("personal") && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Personal Information</h2>
+                          <div className="overflow-x-auto">
+                            <table className={currentStyles.tableClass}>
+                              <tbody>
+                                <tr>
+                                  <th className={currentStyles.thClass}>Date of Birth</th>
+                                  <td className={currentStyles.tdClass}>{cvData.personal.dateOfBirth}</td>
+                                </tr>
+                                <tr>
+                                  <th className={currentStyles.thClass}>Nationality</th>
+                                  <td className={currentStyles.tdClass}>{cvData.personal.nationality}</td>
+                                </tr>
+                                <tr>
+                                  <th className={currentStyles.thClass}>ORCID</th>
+                                  <td className={currentStyles.tdClass}>{cvData.personal.orcid}</td>
+                                </tr>
+                                <tr>
+                                  <th className={currentStyles.thClass}>Address</th>
+                                  <td className={currentStyles.tdClass}>{cvData.personal.address}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )}
 
-                  {/* Experience */}
-                  {selectedSections.includes("experience") && (
-                    <div>
-                      <h2 className={currentStyles.sectionTitleClass}>Professional Experience</h2>
-                      {dummyData.experience.map((exp, index) => (
-                        <div key={index} className={currentStyles.itemClass}>
-                          <p className={currentStyles.itemTitleClass}>{exp.position}</p>
-                          <p className={currentStyles.itemSubtitleClass}>{exp.institution}</p>
-                          <p className={currentStyles.itemDetailsClass}>{exp.duration}</p>
-                          <p className={currentStyles.itemDetailsClass}>{exp.responsibilities}</p>
+                      {/* Education */}
+                      {selectedSections.includes("education") && cvData.education.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Education</h2>
+                          {cvData.education.map((edu: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>
+                                {edu.degree_name || edu.degree_type_name || edu.degree || ""}
+                              </p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {edu.university_name || edu.institution || ""}
+                                {edu.year_of_passing
+                                  ? `, ${new Date(edu.year_of_passing).getFullYear()}`
+                                  : edu.year
+                                    ? `, ${edu.year}`
+                                    : ""}
+                              </p>
+                              {edu.subject && (
+                                <p className={currentStyles.itemDetailsClass}>Subject: {edu.subject}</p>
+                              )}
+                              {edu.state && (
+                                <p className={currentStyles.itemDetailsClass}>State: {edu.state}</p>
+                              )}
+                              {edu.QS_Ranking && (
+                                <p className={currentStyles.itemDetailsClass}>QS Ranking: {edu.QS_Ranking}</p>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )}
 
-                  {/* Research */}
-                  {selectedSections.includes("research") && (
-                    <div>
-                      <h2 className={currentStyles.sectionTitleClass}>Research Projects</h2>
-                      {dummyData.research.map((proj, index) => (
-                        <div key={index} className={currentStyles.itemClass}>
-                          <p className={currentStyles.itemTitleClass}>{proj.title}</p>
-                          <p className={currentStyles.itemDetailsClass}>Funding Agency: {proj.agency}</p>
-                          <p className={currentStyles.itemDetailsClass}>
-                            Amount: {proj.amount} | Duration: {proj.duration}
-                          </p>
-                          <p className={currentStyles.itemDetailsClass}>
-                            Role: {proj.role} | Status: {proj.status}
-                          </p>
+                      {/* Experience */}
+                      {selectedSections.includes("experience") && cvData.experience.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Professional Experience</h2>
+                          {cvData.experience.map((exp: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>
+                                {exp.desig || exp.designation || exp.position || ""}
+                              </p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {exp.Employeer || exp.institution || ""}
+                              </p>
+                              <p className={currentStyles.itemDetailsClass}>
+                                {exp.Start_Date
+                                  ? new Date(exp.Start_Date).getFullYear()
+                                  : exp.from_date
+                                    ? new Date(exp.from_date).getFullYear()
+                                    : ""}{" "}
+                                -{" "}
+                                {exp.End_Date
+                                  ? new Date(exp.End_Date).getFullYear()
+                                  : exp.to_date
+                                    ? new Date(exp.to_date).getFullYear()
+                                    : exp.currente
+                                      ? "Present"
+                                      : ""}
+                              </p>
+                              {exp.Nature && (
+                                <p className={currentStyles.itemDetailsClass}>Nature: {exp.Nature}</p>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )}
 
-                  {/* Publications */}
-                  {selectedSections.includes("articles") && (
-                    <div>
-                      <h2 className={currentStyles.sectionTitleClass}>Publications</h2>
-                      {dummyData.publications.map((pub, index) => (
-                        <div key={index} className={currentStyles.publicationClass}>
-                          <p className="text-sm">
-                            <span className="font-medium">{index + 1}.</span> {pub.authors}. "{pub.title}".
-                            <em> {pub.journal}</em>, {pub.year}. {pub.impact}. DOI: {pub.doi}
-                          </p>
+                      {/* Research */}
+                      {selectedSections.includes("research") && cvData.research.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Research Projects</h2>
+                          {cvData.research.map((proj: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{proj.title || ""}</p>
+                              <p className={currentStyles.itemDetailsClass}>
+                                Funding Agency: {proj.funding_agency_name || proj.funding_agency || ""}
+                              </p>
+                              <p className={currentStyles.itemDetailsClass}>
+                                Amount:{" "}
+                                {proj.grant_sanctioned ? `₹${proj.grant_sanctioned.toLocaleString()}` : ""} |
+                                Duration: {proj.duration || ""} years
+                              </p>
+                              <p className={currentStyles.itemDetailsClass}>
+                                Status: {proj.status_name || proj.status || ""}
+                              </p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      )}
 
-                  {/* Awards */}
-                  {selectedSections.includes("awards") && (
-                    <div>
-                      <h2 className={currentStyles.sectionTitleClass}>Awards & Honors</h2>
-                      {dummyData.awards.map((award, index) => (
-                        <div key={index} className={currentStyles.itemClass}>
-                          <p className={currentStyles.itemTitleClass}>{award.title}</p>
-                          <p className={currentStyles.itemSubtitleClass}>
-                            {award.organization}, {award.year}
-                          </p>
-                          <p className={currentStyles.itemDetailsClass}>{award.description}</p>
+                      {/* Publications */}
+                      {selectedSections.includes("articles") && cvData.articles.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Publications</h2>
+                          {cvData.articles.map((pub: any, index: number) => (
+                            <div key={index} className={currentStyles.publicationClass}>
+                              <p className="text-sm">
+                                <span className="font-medium">{index + 1}.</span> {pub.authors || ""}. "{pub.title || ""}".
+                                <em> {pub.journal_name || ""}</em>,{" "}
+                                {pub.month_year ? new Date(pub.month_year).getFullYear() : ""}.{" "}
+                                {pub.impact_factor ? `IF: ${pub.impact_factor}` : ""}.{" "}
+                                {pub.DOI ? `DOI: ${pub.DOI}` : ""}
+                              </p>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      )}
+
+                      {/* Post Doctoral Research */}
+                      {selectedSections.includes("postdoc") && cvData.postdoc.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Post Doctoral Research Experience</h2>
+                          {cvData.postdoc.map((postdoc: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{postdoc.Institute || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {postdoc.Start_Date ? new Date(postdoc.Start_Date).getFullYear() : ""} -{" "}
+                                {postdoc.End_Date ? new Date(postdoc.End_Date).getFullYear() : "Present"}
+                              </p>
+                              {postdoc.SponsoredBy && (
+                                <p className={currentStyles.itemDetailsClass}>Sponsored By: {postdoc.SponsoredBy}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Patents */}
+                      {selectedSections.includes("patents") && cvData.patents.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Patents</h2>
+                          {cvData.patents.map((patent: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{patent.title || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {patent.date ? new Date(patent.date).getFullYear() : ""}
+                              </p>
+                              {patent.PatentApplicationNo && (
+                                <p className={currentStyles.itemDetailsClass}>
+                                  Application No: {patent.PatentApplicationNo}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* E-Content */}
+                      {selectedSections.includes("econtent") && cvData.econtent.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>E-Contents</h2>
+                          {cvData.econtent.map((econtent: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{econtent.title || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {econtent.Publishing_Authorities || ""}
+                              </p>
+                              {econtent.Publishing_date && (
+                                <p className={currentStyles.itemDetailsClass}>
+                                  Published: {new Date(econtent.Publishing_date).getFullYear()}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Consultancy */}
+                      {selectedSections.includes("consultancy") && cvData.consultancy.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Consultancy Undertaken</h2>
+                          {cvData.consultancy.map((consult: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{consult.name || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {consult.collaborating_inst || ""}
+                              </p>
+                              {consult.Start_Date && (
+                                <p className={currentStyles.itemDetailsClass}>
+                                  {new Date(consult.Start_Date).getFullYear()}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Collaborations */}
+                      {selectedSections.includes("collaborations") && cvData.collaborations.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Collaborations</h2>
+                          {cvData.collaborations.map((collab: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>
+                                {collab.collaborating_inst || collab.collab_name || ""}
+                              </p>
+                              <p className={currentStyles.itemSubtitleClass}>{collab.category || ""}</p>
+                              {collab.starting_date && (
+                                <p className={currentStyles.itemDetailsClass}>
+                                  Started: {new Date(collab.starting_date).getFullYear()}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* PhD Guidance */}
+                      {selectedSections.includes("phdguidance") && cvData.phdguidance.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Ph.D. Guidance</h2>
+                          {cvData.phdguidance.map((phd: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{phd.name || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                Registration: {phd.regno || ""}
+                              </p>
+                              <p className={currentStyles.itemDetailsClass}>Topic: {phd.topic || ""}</p>
+                              {phd.start_date && (
+                                <p className={currentStyles.itemDetailsClass}>
+                                  Started: {new Date(phd.start_date).getFullYear()}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Books */}
+                      {selectedSections.includes("books") && cvData.books.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Books Published</h2>
+                          {cvData.books.map((book: any, index: number) => (
+                            <div key={index} className={currentStyles.publicationClass}>
+                              <p className="text-sm">
+                                <span className="font-medium">{index + 1}.</span> {book.authors || ""}. "
+                                {book.title || ""}". {book.publisher_name || ""}
+                                {book.submit_date ? `, ${new Date(book.submit_date).getFullYear()}` : ""}
+                                {book.isbn ? `. ISBN: ${book.isbn}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Papers */}
+                      {selectedSections.includes("papers") && cvData.papers.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Papers Presented</h2>
+                          {cvData.papers.map((paper: any, index: number) => (
+                            <div key={index} className={currentStyles.publicationClass}>
+                              <p className="text-sm">
+                                <span className="font-medium">{index + 1}.</span> {paper.authors || ""}. "
+                                {paper.title_of_paper || ""}". {paper.organising_body || ""}
+                                {paper.place ? `, ${paper.place}` : ""}
+                                {paper.date ? `, ${new Date(paper.date).getFullYear()}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Publications (Articles/Journals) */}
+                      {selectedSections.includes("articles") && cvData.articles.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Published Articles/Journals</h2>
+                          {cvData.articles.map((pub: any, index: number) => (
+                            <div key={index} className={currentStyles.publicationClass}>
+                              <p className="text-sm">
+                                <span className="font-medium">{index + 1}.</span> {pub.authors || ""}. "
+                                {pub.title || ""}". <em>{pub.journal_name || ""}</em>,{" "}
+                                {pub.month_year ? new Date(pub.month_year).getFullYear() : ""}.{" "}
+                                {pub.impact_factor ? `IF: ${pub.impact_factor}` : ""}.{" "}
+                                {pub.DOI ? `DOI: ${pub.DOI}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Talks */}
+                      {selectedSections.includes("talks") && cvData.talks.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Talks</h2>
+                          {cvData.talks.map((talk: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{talk.title || talk.name || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {talk.place || ""}
+                                {talk.date ? `, ${new Date(talk.date).getFullYear()}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Academic Contribution */}
+                      {selectedSections.includes("academic_contribution") &&
+                        cvData.academic_contribution.length > 0 && (
+                          <div>
+                            <h2 className={currentStyles.sectionTitleClass}>
+                              Contribution in Academic Programme
+                            </h2>
+                            {cvData.academic_contribution.map((contri: any, index: number) => (
+                              <div key={index} className={currentStyles.itemClass}>
+                                <p className={currentStyles.itemTitleClass}>{contri.name || ""}</p>
+                                <p className={currentStyles.itemSubtitleClass}>
+                                  {contri.place || ""}
+                                  {contri.date ? `, ${new Date(contri.date).getFullYear()}` : ""}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      {/* Academic Participation */}
+                      {selectedSections.includes("academic_participation") &&
+                        cvData.academic_participation.length > 0 && (
+                          <div>
+                            <h2 className={currentStyles.sectionTitleClass}>
+                              Participation in Academic Programme
+                            </h2>
+                            {cvData.academic_participation.map((parti: any, index: number) => (
+                              <div key={index} className={currentStyles.itemClass}>
+                                <p className={currentStyles.itemTitleClass}>{parti.name || ""}</p>
+                                <p className={currentStyles.itemSubtitleClass}>
+                                  {parti.acad_body || ""}, {parti.place || ""}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      {/* Committees */}
+                      {selectedSections.includes("committees") && cvData.committees.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>
+                            Participation in Academic Committee
+                          </h2>
+                          {cvData.committees.map((committee: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>
+                                {committee.committee_name || committee.name || ""}
+                              </p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {committee.participated_as || ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Performance */}
+                      {selectedSections.includes("performance") && cvData.performance.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>
+                            Performance by Individual/Group
+                          </h2>
+                          {cvData.performance.map((perf: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{perf.name || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {perf.place || ""}
+                                {perf.date ? `, ${new Date(perf.date).getFullYear()}` : ""}
+                              </p>
+                              {perf.perf_nature && (
+                                <p className={currentStyles.itemDetailsClass}>Nature: {perf.perf_nature}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Extension */}
+                      {selectedSections.includes("extension") && cvData.extension.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Extension Activities</h2>
+                          {cvData.extension.map((ext: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>
+                                {ext.name_of_activity || ext.names || ""}
+                              </p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {ext.place || ""}
+                                {ext.date ? `, ${new Date(ext.date).getFullYear()}` : ""}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Orientation */}
+                      {selectedSections.includes("orientation") && cvData.orientation.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Orientation Course</h2>
+                          {cvData.orientation.map((orient: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{orient.name || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {orient.institute || orient.university || ""}
+                              </p>
+                              {orient.startdate && (
+                                <p className={currentStyles.itemDetailsClass}>
+                                  {new Date(orient.startdate).getFullYear()}
+                                  {orient.enddate
+                                    ? ` - ${new Date(orient.enddate).getFullYear()}`
+                                    : ""}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Awards */}
+                      {selectedSections.includes("awards") && cvData.awards.length > 0 && (
+                        <div>
+                          <h2 className={currentStyles.sectionTitleClass}>Awards & Honors</h2>
+                          {cvData.awards.map((award: any, index: number) => (
+                            <div key={index} className={currentStyles.itemClass}>
+                              <p className={currentStyles.itemTitleClass}>{award.name || ""}</p>
+                              <p className={currentStyles.itemSubtitleClass}>
+                                {award.organization || ""},{" "}
+                                {award.date_of_award ? new Date(award.date_of_award).getFullYear() : ""}
+                              </p>
+                              {award.details && <p className={currentStyles.itemDetailsClass}>{award.details}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Document Info */}
@@ -1351,3 +2824,4 @@ export default function GenerateCVPage() {
       </div>
   )
 }
+
