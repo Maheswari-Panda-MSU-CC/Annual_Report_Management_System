@@ -1,60 +1,41 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { toast } from "@/hooks/use-toast"
-import { Plus, Edit, Trash2, Upload, BarChart3, Users, Save, Calendar, Trophy, FileText } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
+import { Plus, Edit, Trash2, Upload, BarChart3, Users, Save, Calendar, Trophy, FileText, Loader2, MapPin } from "lucide-react"
 import { DocumentViewer } from "@/components/document-viewer"
+import { useForm } from "react-hook-form"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { useDropDowns } from "@/hooks/use-dropdowns"
+import { PerformanceTeacherForm } from "@/components/forms/PerformanceTeacherForm"
+import { AwardsFellowshipForm } from "@/components/forms/AwardsFellowshipForm"
+import { ExtensionActivityForm } from "@/components/forms/ExtensionActivityForm"
 
 // Sample data for each section
 const initialSampleData = {
-  performance: [
-    {
-      id: 1,
-      srNo: 1,
-      titleOfPerformance: "Research Presentation on AI Applications",
-      place: "IEEE Conference Hall, Mumbai",
-      performanceDate: "2023-03-15",
-      natureOfPerformance: "Oral Presentation",
-      supportingDocument: ["presentation_certificate.pdf"],
-    },
-  ],
-  awards: [
-    {
-      id: 1,
-      srNo: 1,
-      nameOfAwardFellowship: "Excellence in Teaching Award",
-      details: "Awarded for innovative teaching methods and outstanding student engagement in computer science courses",
-      nameOfAwardingAgency: "University of Technology",
-      addressOfAwardingAgency: "123 University Road, Tech City, State - 400001",
-      dateOfAward: "2023-05-20",
-      level: "University",
-      supportingDocument: ["teaching_award.pdf"],
-    },
-  ],
-  extension: [
-    {
-      id: 1,
-      srNo: 1,
-      nameOfActivity: "Digital Literacy Program for Rural Communities",
-      natureOfActivity: "Community Outreach",
-      level: "State",
-      sponsoredBy: "State Government Education Department",
-      place: "Rural Development Center, District Headquarters",
-      date: "2023-07-10",
-      supportingDocument: ["outreach_report.pdf"],
-    },
-  ],
+  performance: [],
+  awards: [],
+  extension: [],
 }
 
 const sections = [
@@ -137,13 +118,36 @@ function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png,.bmp",
 
 export default function AwardsRecognitionPage() {
   const searchParams = useSearchParams()
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const router = useRouter()
   const [activeTab, setActiveTab] = useState("performance")
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [data, setData] = useState(initialSampleData)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
   const [formData, setFormData] = useState<any>({})
-  const router = useRouter()
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({
+    performance: false,
+    awards: false,
+    extension: false,
+  })
+  const [fetchedSections, setFetchedSections] = useState<Set<string>>(new Set())
+  const fetchingRef = useRef<Set<string>>(new Set())
+  const fetchedDropdownsRef = useRef<Set<string>>(new Set())
+  const fetchingDropdownsRef = useRef<Set<string>>(new Set())
+  const form = useForm()
+
+  // Fetch dropdowns
+  const { 
+    awardFellowLevelOptions,
+    sponserNameOptions,
+    fetchAwardFellowLevels,
+    fetchSponserNames
+  } = useDropDowns()
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -152,6 +156,253 @@ export default function AwardsRecognitionPage() {
       setActiveTab(tab)
     }
   }, [searchParams])
+
+  // Fetch dropdowns for tabs
+  const fetchDropdownsForTab = useCallback((tab: string) => {
+    if (tab === "awards") {
+      if (!fetchedDropdownsRef.current.has("awardFellowLevelOptions") && 
+          !fetchingDropdownsRef.current.has("awardFellowLevelOptions") &&
+          awardFellowLevelOptions.length === 0) {
+        fetchingDropdownsRef.current.add("awardFellowLevelOptions")
+        fetchAwardFellowLevels()
+          .then(() => {
+            fetchedDropdownsRef.current.add("awardFellowLevelOptions")
+          })
+          .catch(error => {
+            console.error("Error fetching award fellow levels:", error)
+          })
+          .finally(() => {
+            fetchingDropdownsRef.current.delete("awardFellowLevelOptions")
+          })
+      }
+    } else if (tab === "extension") {
+      const dropdownsToFetch = []
+      
+      if (!fetchedDropdownsRef.current.has("awardFellowLevelOptions") && 
+          !fetchingDropdownsRef.current.has("awardFellowLevelOptions") &&
+          awardFellowLevelOptions.length === 0) {
+        fetchingDropdownsRef.current.add("awardFellowLevelOptions")
+        dropdownsToFetch.push(
+          fetchAwardFellowLevels()
+            .then(() => {
+              fetchedDropdownsRef.current.add("awardFellowLevelOptions")
+            })
+            .catch(error => {
+              console.error("Error fetching award fellow levels:", error)
+            })
+            .finally(() => {
+              fetchingDropdownsRef.current.delete("awardFellowLevelOptions")
+            })
+        )
+      }
+      
+      if (!fetchedDropdownsRef.current.has("sponserNameOptions") && 
+          !fetchingDropdownsRef.current.has("sponserNameOptions") &&
+          sponserNameOptions.length === 0) {
+        fetchingDropdownsRef.current.add("sponserNameOptions")
+        dropdownsToFetch.push(
+          fetchSponserNames()
+            .then(() => {
+              fetchedDropdownsRef.current.add("sponserNameOptions")
+            })
+            .catch(error => {
+              console.error("Error fetching sponser names:", error)
+            })
+            .finally(() => {
+              fetchingDropdownsRef.current.delete("sponserNameOptions")
+            })
+        )
+      }
+      
+      if (dropdownsToFetch.length > 0) {
+        Promise.all(dropdownsToFetch).catch(error => {
+          console.error("Error fetching dropdowns for extension:", error)
+        })
+      }
+    }
+  }, [awardFellowLevelOptions.length, sponserNameOptions.length, fetchAwardFellowLevels, fetchSponserNames])
+
+  // Fetch dropdowns when tab changes
+  useEffect(() => {
+    if (activeTab) {
+      fetchDropdownsForTab(activeTab)
+    }
+  }, [activeTab, fetchDropdownsForTab])
+
+  // Fetch performance teacher from API
+  const fetchPerformanceTeacher = useCallback(async () => {
+    if (!user?.role_id || activeTab !== "performance") return
+    
+    const sectionId = "performance"
+    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
+
+    fetchingRef.current.add(sectionId)
+    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
+
+    try {
+      const res = await fetch(`/api/teacher/awards-recognition/performance-teacher?teacherId=${user.role_id}`)
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to fetch performance teacher")
+      }
+
+      // Map API response to UI format
+      const mappedData = (result.performanceTeacher || []).map((item: any, index: number) => ({
+        id: item.id,
+        srNo: index + 1,
+        name: item.name || "",
+        titleOfPerformance: item.name || "",
+        place: item.place || "",
+        date: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        performanceDate: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        perf_nature: item.perf_nature || "",
+        natureOfPerformance: item.perf_nature || "",
+        Image: item.Image || "http://localhost:3000/assets/demo_document.pdf",
+        supportingDocument: item.Image ? [item.Image] : [],
+      }))
+
+      setData((prev: any) => ({
+        ...prev,
+        performance: mappedData,
+      }))
+      setFetchedSections(prev => new Set([...prev, sectionId]))
+    } catch (error: any) {
+      console.error("Error fetching performance teacher:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load performance teacher",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      fetchingRef.current.delete(sectionId)
+      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
+    }
+  }, [user?.role_id, activeTab, toast])
+
+  // Fetch awards/fellows from API
+  const fetchAwardsFellows = useCallback(async () => {
+    if (!user?.role_id || activeTab !== "awards") return
+    
+    const sectionId = "awards"
+    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
+
+    fetchingRef.current.add(sectionId)
+    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
+
+    try {
+      const res = await fetch(`/api/teacher/awards-recognition/awards-fellow?teacherId=${user.role_id}`)
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to fetch awards/fellows")
+      }
+
+      // Map API response to UI format
+      const mappedData = (result.awardsFellows || []).map((item: any, index: number) => ({
+        id: item.id,
+        srNo: index + 1,
+        name: item.name || "",
+        nameOfAwardFellowship: item.name || "",
+        details: item.details || "",
+        organization: item.organization || "",
+        nameOfAwardingAgency: item.organization || "",
+        address: item.address || "",
+        addressOfAwardingAgency: item.address || "",
+        date_of_award: item.date_of_award ? new Date(item.date_of_award).toISOString().split('T')[0] : "",
+        dateOfAward: item.date_of_award ? new Date(item.date_of_award).toISOString().split('T')[0] : "",
+        level: item.level || "",
+        levelId: item.level,
+        Image: item.Image || "http://localhost:3000/assets/demo_document.pdf",
+        supportingDocument: item.Image ? [item.Image] : [],
+      }))
+
+      setData((prev: any) => ({
+        ...prev,
+        awards: mappedData,
+      }))
+      setFetchedSections(prev => new Set([...prev, sectionId]))
+    } catch (error: any) {
+      console.error("Error fetching awards/fellows:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load awards/fellows",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      fetchingRef.current.delete(sectionId)
+      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
+    }
+  }, [user?.role_id, activeTab, toast])
+
+  // Fetch extension activities from API
+  const fetchExtensionActivities = useCallback(async () => {
+    if (!user?.role_id || activeTab !== "extension") return
+    
+    const sectionId = "extension"
+    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
+
+    fetchingRef.current.add(sectionId)
+    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
+
+    try {
+      const res = await fetch(`/api/teacher/awards-recognition/extensions?teacherId=${user.role_id}`)
+      const result = await res.json()
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to fetch extension activities")
+      }
+
+      // Map API response to UI format
+      const mappedData = (result.extensionActivities || []).map((item: any, index: number) => ({
+        id: item.id,
+        srNo: index + 1,
+        names: item.names || "",
+        nameOfActivity: item.name_of_activity || "",
+        natureOfActivity: item.names || "",
+        place: item.place || "",
+        date: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        sponsered: item.sponsered || "",
+        sponseredId: item.sponsered,
+        sponsoredBy: item.sponsered_name || "",
+        level: item.level || "",
+        levelId: item.level,
+        levelName: item.Awards_Fellows_Level_name || "",
+        Image: item.Image || "http://localhost:3000/assets/demo_document.pdf",
+        supportingDocument: item.Image ? [item.Image] : [],
+      }))
+
+      setData((prev: any) => ({
+        ...prev,
+        extension: mappedData,
+      }))
+      setFetchedSections(prev => new Set([...prev, sectionId]))
+    } catch (error: any) {
+      console.error("Error fetching extension activities:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to load extension activities",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      fetchingRef.current.delete(sectionId)
+      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
+    }
+  }, [user?.role_id, activeTab, toast])
+
+  // Fetch data when tab changes
+  useEffect(() => {
+    if (user?.role_id && activeTab === "performance") {
+      fetchPerformanceTeacher()
+    } else if (user?.role_id && activeTab === "awards") {
+      fetchAwardsFellows()
+    } else if (user?.role_id && activeTab === "extension") {
+      fetchExtensionActivities()
+    }
+  }, [user?.role_id, activeTab, fetchPerformanceTeacher, fetchAwardsFellows, fetchExtensionActivities])
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
@@ -165,62 +416,513 @@ export default function AwardsRecognitionPage() {
     setSelectedFiles(files)
   }
 
-  const handleDelete = (sectionId: string, itemId: number) => {
-    if (window.confirm("Are you sure you want to delete this item?")) {
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).filter((item: any) => item.id !== itemId),
-      }))
-      toast({
-        title: "Success",
-        description: "Item deleted successfully!",
-        duration: 2000,
-      })
+  const handleDeleteClick = (sectionId: string, itemId: number, itemName: string) => {
+    setDeleteConfirm({ sectionId, itemId, itemName })
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return
+
+    const { sectionId, itemId } = deleteConfirm
+
+    if (sectionId === "performance") {
+      try {
+        setIsDeleting(true)
+        const res = await fetch(`/api/teacher/awards-recognition/performance-teacher?perfTeacherId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete performance teacher")
+        }
+
+        setData((prevData: any) => ({
+          ...prevData,
+          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
+        }))
+        
+        toast({
+          title: "Success",
+          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
+          duration: 3000,
+        })
+        
+        setDeleteConfirm(null)
+      } catch (error: any) {
+        console.error("Error deleting performance teacher:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete performance teacher",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsDeleting(false)
+      }
+    } else if (sectionId === "awards") {
+      try {
+        setIsDeleting(true)
+        const res = await fetch(`/api/teacher/awards-recognition/awards-fellow?awardsFellowId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete awards/fellows")
+        }
+
+        setData((prevData: any) => ({
+          ...prevData,
+          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
+        }))
+        
+        toast({
+          title: "Success",
+          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
+          duration: 3000,
+        })
+        
+        setDeleteConfirm(null)
+      } catch (error: any) {
+        console.error("Error deleting awards/fellows:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete awards/fellows",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsDeleting(false)
+      }
+    } else if (sectionId === "extension") {
+      try {
+        setIsDeleting(true)
+        const res = await fetch(`/api/teacher/awards-recognition/extensions?extensionActId=${itemId}`, {
+          method: "DELETE",
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to delete extension activity")
+        }
+
+        setData((prevData: any) => ({
+          ...prevData,
+          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
+        }))
+        
+        toast({
+          title: "Success",
+          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
+          duration: 3000,
+        })
+        
+        setDeleteConfirm(null)
+      } catch (error: any) {
+        console.error("Error deleting extension activity:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to delete extension activity",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsDeleting(false)
+      }
     }
   }
 
   const handleEdit = (sectionId: string, item: any) => {
     setEditingItem({ ...item, sectionId })
-    setFormData({ ...item })
+    // Map UI format to form format
+    let formItem: any = {}
+    
+    if (sectionId === "performance") {
+      formItem = {
+        name: item.name || item.titleOfPerformance,
+        place: item.place,
+        date: item.date || item.performanceDate,
+        perf_nature: item.perf_nature || item.natureOfPerformance,
+      }
+    } else if (sectionId === "awards") {
+      formItem = {
+        name: item.name || item.nameOfAwardFellowship,
+        details: item.details || "",
+        organization: item.organization || item.nameOfAwardingAgency,
+        address: item.address || item.addressOfAwardingAgency || "",
+        date_of_award: item.date_of_award || item.dateOfAward,
+        level: item.levelId || item.level,
+      }
+    } else if (sectionId === "extension") {
+      formItem = {
+        names: item.names || item.natureOfActivity,
+        name_of_activity: item.nameOfActivity || item.name_of_activity,
+        place: item.place,
+        date: item.date,
+        sponsered: item.sponseredId || item.sponsered,
+        level: item.levelId || item.level,
+      }
+    } else {
+      formItem = { ...item }
+    }
+    
+    setFormData(formItem)
+    form.reset(formItem)
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveEdit = () => {
-    if (!editingItem) return
+  const handleSaveEdit = async () => {
+    if (!editingItem || !user?.role_id) return
 
-    setData((prevData) => ({
-      ...prevData,
-      [editingItem.sectionId]: (prevData[editingItem.sectionId as keyof typeof prevData] || []).map((item: any) =>
-        item.id === editingItem.id ? { ...item, ...formData } : item,
-      ),
-    }))
+    if (editingItem.sectionId === "performance") {
+      try {
+        setIsSubmitting(true)
+        
+        const formValues = form.getValues()
+        const payload = {
+          perfTeacherId: editingItem.id,
+          teacherId: user.role_id,
+          perfTeacher: {
+            name: formValues.name,
+            place: formValues.place,
+            date: formValues.date,
+            perf_nature: formValues.perf_nature,
+            Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
+          },
+        }
 
-    setIsEditDialogOpen(false)
-    setEditingItem(null)
-    setFormData({})
-    toast({
-      title: "Success",
-      description: "Item updated successfully!",
-      duration: 2000,
-    })
+        const res = await fetch("/api/teacher/awards-recognition/performance-teacher", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update performance teacher")
+        }
+
+        // Refresh data
+        setFetchedSections(prev => {
+          const newSet = new Set(prev)
+          newSet.delete("performance")
+          return newSet
+        })
+        await fetchPerformanceTeacher()
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        form.reset()
+        
+        toast({
+          title: "Success",
+          description: `"${formValues.name}" has been updated successfully!`,
+          duration: 3000,
+        })
+      } catch (error: any) {
+        console.error("Error updating performance teacher:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update performance teacher",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    } else if (editingItem.sectionId === "awards") {
+      try {
+        setIsSubmitting(true)
+        
+        const formValues = form.getValues()
+        const payload = {
+          awardsFellowId: editingItem.id,
+          teacherId: user.role_id,
+          awardsFellow: {
+            name: formValues.name,
+            details: formValues.details || "",
+            organization: formValues.organization,
+            address: formValues.address || "",
+            date_of_award: formValues.date_of_award,
+            level: formValues.level,
+            Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
+          },
+        }
+
+        const res = await fetch("/api/teacher/awards-recognition/awards-fellow", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update awards/fellows")
+        }
+
+        // Refresh data
+        setFetchedSections(prev => {
+          const newSet = new Set(prev)
+          newSet.delete("awards")
+          return newSet
+        })
+        await fetchAwardsFellows()
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        form.reset()
+        
+        toast({
+          title: "Success",
+          description: `"${formValues.name}" has been updated successfully!`,
+          duration: 3000,
+        })
+      } catch (error: any) {
+        console.error("Error updating awards/fellows:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update awards/fellows",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    } else if (editingItem.sectionId === "extension") {
+      try {
+        setIsSubmitting(true)
+        
+        const formValues = form.getValues()
+        const payload = {
+          extensionActId: editingItem.id,
+          teacherId: user.role_id,
+          extensionAct: {
+            names: formValues.names,
+            place: formValues.place,
+            date: formValues.date,
+            name_of_activity: formValues.name_of_activity,
+            sponsered: formValues.sponsered,
+            level: formValues.level,
+            Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
+          },
+        }
+
+        const res = await fetch("/api/teacher/awards-recognition/extensions", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update extension activity")
+        }
+
+        // Refresh data
+        setFetchedSections(prev => {
+          const newSet = new Set(prev)
+          newSet.delete("extension")
+          return newSet
+        })
+        await fetchExtensionActivities()
+
+        setIsEditDialogOpen(false)
+        setEditingItem(null)
+        setFormData({})
+        form.reset()
+        
+        toast({
+          title: "Success",
+          description: `"${formValues.name_of_activity}" has been updated successfully!`,
+          duration: 3000,
+        })
+      } catch (error: any) {
+        console.error("Error updating extension activity:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update extension activity",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsSubmitting(false)
+      }
+    }
   }
 
-  const handleFileUpload = (sectionId: string, itemId: number) => {
-    if (selectedFiles && selectedFiles.length > 0) {
-      const fileNames = Array.from(selectedFiles).map((f) => f.name)
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).map((item: any) =>
-          item.id === itemId
-            ? { ...item, supportingDocument: [...(item.supportingDocument || []), ...fileNames] }
-            : item,
-        ),
-      }))
+  const handleFileUpload = async (sectionId: string, itemId: number) => {
+    if (!selectedFiles || selectedFiles.length === 0) {
       toast({
-        title: "Files Uploaded",
-        description: "Supporting documents uploaded successfully!",
-        duration: 2000,
+        title: "Error",
+        description: "Please select a file first.",
+        variant: "destructive",
       })
+      return
+    }
+
+    if (sectionId === "performance") {
+      try {
+        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+        const item: any = data.performance.find((r: any) => r.id === itemId)
+        if (!item) {
+          throw new Error("Item not found")
+        }
+
+        const payload = {
+          perfTeacherId: itemId,
+          teacherId: user?.role_id,
+          perfTeacher: {
+            name: item.name || item.titleOfPerformance,
+            place: item.place,
+            date: item.date || item.performanceDate,
+            perf_nature: item.perf_nature || item.natureOfPerformance,
+            Image: dummyUrl,
+          },
+        }
+
+        const res = await fetch("/api/teacher/awards-recognition/performance-teacher", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update document")
+        }
+
+        setFetchedSections(prev => {
+          const newSet = new Set(prev)
+          newSet.delete("performance")
+          return newSet
+        })
+        await fetchPerformanceTeacher()
+
+        toast({
+          title: "Success",
+          description: "Document updated successfully!",
+          duration: 2000,
+        })
+      } catch (error: any) {
+        console.error("Error updating document:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update document",
+          variant: "destructive",
+          duration: 3000,
+        })
+      }
+    } else if (sectionId === "awards") {
+      try {
+        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+        const item: any = data.awards.find((r: any) => r.id === itemId)
+        if (!item) {
+          throw new Error("Item not found")
+        }
+
+        const payload = {
+          awardsFellowId: itemId,
+          teacherId: user?.role_id,
+          awardsFellow: {
+            name: item.name || item.nameOfAwardFellowship,
+            details: item.details || "",
+            organization: item.organization || item.nameOfAwardingAgency,
+            address: item.address || item.addressOfAwardingAgency || "",
+            date_of_award: item.date_of_award || item.dateOfAward,
+            level: item.levelId || item.level,
+            Image: dummyUrl,
+          },
+        }
+
+        const res = await fetch("/api/teacher/awards-recognition/awards-fellow", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update document")
+        }
+
+        setFetchedSections(prev => {
+          const newSet = new Set(prev)
+          newSet.delete("awards")
+          return newSet
+        })
+        await fetchAwardsFellows()
+
+        toast({
+          title: "Success",
+          description: "Document updated successfully!",
+          duration: 2000,
+        })
+      } catch (error: any) {
+        console.error("Error updating document:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update document",
+          variant: "destructive",
+          duration: 3000,
+        })
+      }
+    } else if (sectionId === "extension") {
+      try {
+        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+        const item: any = data.extension.find((r: any) => r.id === itemId)
+        if (!item) {
+          throw new Error("Item not found")
+        }
+
+        const payload = {
+          extensionActId: itemId,
+          teacherId: user?.role_id,
+          extensionAct: {
+            names: item.names || item.natureOfActivity,
+            place: item.place,
+            date: item.date,
+            name_of_activity: item.nameOfActivity || item.name_of_activity,
+            sponsered: item.sponseredId || item.sponsered,
+            level: item.levelId || item.level,
+            Image: dummyUrl,
+          },
+        }
+
+        const res = await fetch("/api/teacher/awards-recognition/extensions", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const result = await res.json()
+
+        if (!res.ok || !result.success) {
+          throw new Error(result.error || "Failed to update document")
+        }
+
+        setFetchedSections(prev => {
+          const newSet = new Set(prev)
+          newSet.delete("extension")
+          return newSet
+        })
+        await fetchExtensionActivities()
+
+        toast({
+          title: "Success",
+          description: "Document updated successfully!",
+          duration: 2000,
+        })
+      } catch (error: any) {
+        console.error("Error updating document:", error)
+        toast({
+          title: "Error",
+          description: error.message || "Failed to update document",
+          variant: "destructive",
+          duration: 3000,
+        })
+      }
     }
   }
 
@@ -244,45 +946,53 @@ export default function AwardsRecognitionPage() {
           </>
         )
       case "awards":
+        const awardLevelName = awardFellowLevelOptions.find(l => l.id === item.levelId || l.id === item.level)?.name || item.level || "N/A"
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfAwardFellowship}</TableCell>
+            <TableCell className="font-medium">{item.nameOfAwardFellowship || item.name}</TableCell>
             <TableCell className="max-w-xs">
               <div className="truncate" title={item.details}>
                 {item.details}
               </div>
             </TableCell>
-            <TableCell>{item.nameOfAwardingAgency}</TableCell>
+            <TableCell>{item.nameOfAwardingAgency || item.organization}</TableCell>
             <TableCell className="max-w-xs">
-              <div className="truncate" title={item.addressOfAwardingAgency}>
-                {item.addressOfAwardingAgency}
+              <div className="truncate" title={item.addressOfAwardingAgency || item.address}>
+                {item.addressOfAwardingAgency || item.address}
               </div>
             </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.dateOfAward}</span>
+                <span className="text-sm">{item.dateOfAward || item.date_of_award}</span>
               </div>
             </TableCell>
             <TableCell>
-              <Badge variant="secondary">{item.level}</Badge>
+              <Badge variant="secondary">{awardLevelName}</Badge>
             </TableCell>
           </>
         )
       case "extension":
+        const extensionLevelName = awardFellowLevelOptions.find(l => l.id === item.levelId || l.id === item.level)?.name || item.levelName || item.level || "N/A"
+        const sponserName = sponserNameOptions.find(s => s.id === item.sponseredId || s.id === item.sponsered)?.name || item.sponsoredBy || "N/A"
         return (
           <>
             <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfActivity}</TableCell>
+            <TableCell className="font-medium">{item.nameOfActivity || item.name_of_activity}</TableCell>
             <TableCell>
-              <Badge variant="outline">{item.natureOfActivity}</Badge>
+              <Badge variant="outline">{item.natureOfActivity || item.names}</Badge>
             </TableCell>
             <TableCell>
-              <Badge variant="secondary">{item.level}</Badge>
+              <Badge variant="secondary">{extensionLevelName}</Badge>
             </TableCell>
-            <TableCell>{item.sponsoredBy}</TableCell>
-            <TableCell>{item.place}</TableCell>
+            <TableCell>{sponserName}</TableCell>
+            <TableCell>
+              <div className="flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-gray-400" />
+                <span className="text-sm">{item.place}</span>
+              </div>
+            </TableCell>
             <TableCell>
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
@@ -302,253 +1012,48 @@ export default function AwardsRecognitionPage() {
     switch (sectionId) {
       case "performance":
         return (
-          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
-            <div>
-              <Label htmlFor="titleOfPerformance">Title of Performance *</Label>
-              <Input
-                id="titleOfPerformance"
-                placeholder="Enter title of performance"
-                value={currentData.titleOfPerformance || ""}
-                onChange={(e) => setFormData({ ...formData, titleOfPerformance: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="place">Place *</Label>
-                <Input
-                  id="place"
-                  placeholder="Enter place"
-                  value={currentData.place || ""}
-                  onChange={(e) => setFormData({ ...formData, place: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="performanceDate">Performance Date *</Label>
-                <Input
-                  id="performanceDate"
-                  type="date"
-                  value={currentData.performanceDate || ""}
-                  onChange={(e) => setFormData({ ...formData, performanceDate: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="natureOfPerformance">Nature of Performance *</Label>
-              <Select
-                value={currentData.natureOfPerformance || ""}
-                onValueChange={(value) => setFormData({ ...formData, natureOfPerformance: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select nature of performance" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Oral Presentation">Oral Presentation</SelectItem>
-                  <SelectItem value="Poster Presentation">Poster Presentation</SelectItem>
-                  <SelectItem value="Workshop Conduct">Workshop Conduct</SelectItem>
-                  <SelectItem value="Seminar">Seminar</SelectItem>
-                  <SelectItem value="Cultural Performance">Cultural Performance</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Image (JPEG/BMP/PNG) OR PDF</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
-              {currentData.supportingDocument && currentData.supportingDocument.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current documents:</p>
-                  <ul className="text-sm text-blue-600">
-                    {currentData.supportingDocument.map((doc: string, index: number) => (
-                      <li key={index}>• {doc}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
+          <PerformanceTeacherForm
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={false}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={() => {}}
+            isEdit={isEdit}
+            editData={currentData}
+          />
         )
       case "awards":
         return (
-          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
-            <div>
-              <Label htmlFor="nameOfAwardFellowship">Name of Award / Fellowship *</Label>
-              <Input
-                id="nameOfAwardFellowship"
-                placeholder="Enter name of award/fellowship"
-                value={currentData.nameOfAwardFellowship || ""}
-                onChange={(e) => setFormData({ ...formData, nameOfAwardFellowship: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="details">Details</Label>
-              <Textarea
-                id="details"
-                placeholder="Enter details"
-                value={currentData.details || ""}
-                onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                rows={3}
-              />
-            </div>
-            <div>
-              <Label htmlFor="nameOfAwardingAgency">Name of Awarding Agency *</Label>
-              <Input
-                id="nameOfAwardingAgency"
-                placeholder="Enter name of awarding agency"
-                value={currentData.nameOfAwardingAgency || ""}
-                onChange={(e) => setFormData({ ...formData, nameOfAwardingAgency: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="addressOfAwardingAgency">Address of Awarding Agency</Label>
-              <Textarea
-                id="addressOfAwardingAgency"
-                placeholder="Enter address of awarding agency"
-                value={currentData.addressOfAwardingAgency || ""}
-                onChange={(e) => setFormData({ ...formData, addressOfAwardingAgency: e.target.value })}
-                rows={2}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="dateOfAward">Date of Award *</Label>
-                <Input
-                  id="dateOfAward"
-                  type="date"
-                  value={currentData.dateOfAward || ""}
-                  onChange={(e) => setFormData({ ...formData, dateOfAward: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="level">Level *</Label>
-                <Select
-                  value={currentData.level || ""}
-                  onValueChange={(value) => setFormData({ ...formData, level: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="International">International</SelectItem>
-                    <SelectItem value="National">National</SelectItem>
-                    <SelectItem value="State">State</SelectItem>
-                    <SelectItem value="Regional">Regional</SelectItem>
-                    <SelectItem value="University">University</SelectItem>
-                    <SelectItem value="College">College</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label>Image (JPEG/BMP/PNG) OR PDF</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
-              {currentData.supportingDocument && currentData.supportingDocument.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current documents:</p>
-                  <ul className="text-sm text-blue-600">
-                    {currentData.supportingDocument.map((doc: string, index: number) => (
-                      <li key={index}>• {doc}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
+          <AwardsFellowshipForm
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={false}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={() => {}}
+            isEdit={isEdit}
+            editData={currentData}
+            awardFellowLevelOptions={awardFellowLevelOptions}
+          />
         )
       case "extension":
         return (
-          <div className="grid gap-4 max-h-[60vh] overflow-y-auto">
-            <div>
-              <Label htmlFor="nameOfActivity">Name of Activity *</Label>
-              <Input
-                id="nameOfActivity"
-                placeholder="Enter name of activity"
-                value={currentData.nameOfActivity || ""}
-                onChange={(e) => setFormData({ ...formData, nameOfActivity: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="natureOfActivity">Nature of Activity *</Label>
-                <Select
-                  value={currentData.natureOfActivity || ""}
-                  onValueChange={(value) => setFormData({ ...formData, natureOfActivity: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select nature of activity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Community Outreach">Community Outreach</SelectItem>
-                    <SelectItem value="Social Service">Social Service</SelectItem>
-                    <SelectItem value="Environmental">Environmental</SelectItem>
-                    <SelectItem value="Educational">Educational</SelectItem>
-                    <SelectItem value="Health & Wellness">Health & Wellness</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="level">Level *</Label>
-                <Select
-                  value={currentData.level || ""}
-                  onValueChange={(value) => setFormData({ ...formData, level: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="International">International</SelectItem>
-                    <SelectItem value="National">National</SelectItem>
-                    <SelectItem value="State">State</SelectItem>
-                    <SelectItem value="District">District</SelectItem>
-                    <SelectItem value="Local">Local</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="sponsoredBy">Sponsored By *</Label>
-              <Input
-                id="sponsoredBy"
-                placeholder="Enter sponsor name"
-                value={currentData.sponsoredBy || ""}
-                onChange={(e) => setFormData({ ...formData, sponsoredBy: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="place">Place *</Label>
-                <Input
-                  id="place"
-                  placeholder="Enter place"
-                  value={currentData.place || ""}
-                  onChange={(e) => setFormData({ ...formData, place: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="date">Date *</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={currentData.date || ""}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Image (JPEG/BMP/PNG) OR PDF</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
-              {currentData.supportingDocument && currentData.supportingDocument.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current documents:</p>
-                  <ul className="text-sm text-blue-600">
-                    {currentData.supportingDocument.map((doc: string, index: number) => (
-                      <li key={index}>• {doc}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
+          <ExtensionActivityForm
+            form={form}
+            onSubmit={handleSaveEdit}
+            isSubmitting={isSubmitting}
+            isExtracting={false}
+            selectedFiles={selectedFiles}
+            handleFileSelect={handleFileSelect}
+            handleExtractInfo={() => {}}
+            isEdit={isEdit}
+            editData={currentData}
+            awardFellowLevelOptions={awardFellowLevelOptions}
+            sponserNameOptions={sponserNameOptions}
+          />
         )
       default:
         return (
@@ -558,8 +1063,6 @@ export default function AwardsRecognitionPage() {
               <Input
                 id="title"
                 placeholder="Enter title"
-                value={currentData.title || ""}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               />
             </div>
             <div>
@@ -626,7 +1129,19 @@ export default function AwardsRecognitionPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {!data[section.id as keyof typeof data] ||
+                        {loadingStates[section.id] ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={section.columns.length}
+                              className="h-24 text-center text-muted-foreground"
+                            >
+                              <div className="flex items-center justify-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading...
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : !data[section.id as keyof typeof data] ||
                         data[section.id as keyof typeof data].length === 0 ? (
                           <TableRow>
                             <TableCell
@@ -702,7 +1217,11 @@ export default function AwardsRecognitionPage() {
                                   <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => handleDelete(section.id, item.id)}>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    onClick={() => handleDeleteClick(section.id, item.id, item.name || item.nameOfAwardFellowship || item.nameOfActivity || "this record")}
+                                  >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -734,13 +1253,61 @@ export default function AwardsRecognitionPage() {
               <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveEdit}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
+              <Button 
+                onClick={() => {
+                  // Trigger form submission
+                  form.handleSubmit(handleSaveEdit)()
+                }} 
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the record
+                <strong className="block mt-2 text-base">
+                  "{deleteConfirm?.itemName}"
+                </strong>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDelete}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
   )
 }
+

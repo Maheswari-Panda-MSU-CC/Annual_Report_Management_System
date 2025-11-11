@@ -40,6 +40,8 @@ export function useDropDowns() {
   const [committeeLevelOptions, setCommitteeLevelOptions] = useState<DropdownOption[]>([]);
   const [talksProgrammeTypeOptions, setTalksProgrammeTypeOptions] = useState<DropdownOption[]>([]);
   const [talksParticipantTypeOptions, setTalksParticipantTypeOptions] = useState<DropdownOption[]>([]);
+  const [awardFellowLevelOptions, setAwardFellowLevelOptions] = useState<DropdownOption[]>([]);
+  const [sponserNameOptions, setSponserNameOptions] = useState<DropdownOption[]>([]);
 
   const fetchFaculties = async () => {
     try {
@@ -512,6 +514,38 @@ export function useDropDowns() {
     }
   }
 
+  const fetchAwardFellowLevels = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/award-fellow-levels');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.awardFellowLevels || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setAwardFellowLevelOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching award fellow levels:', error);
+    }
+  }
+
+  const fetchSponserNames = async () => {
+    try {
+      const res = await fetch('/api/shared/dropdown/sponser-names');
+      if (res.ok) {
+        const data = await res.json();
+        const mapped = (data.sponserNames || []).map((item: any) => ({
+          id: item.id || item.Id,
+          name: item.name || item.Name
+        }));
+        setSponserNameOptions(mapped);
+      }
+    } catch (error) {
+      console.error('Error fetching sponser names:', error);
+    }
+  }
+
   useEffect(() => { fetchFaculties() }, [])
 
   return { 
@@ -546,6 +580,8 @@ export function useDropDowns() {
     committeeLevelOptions,
     talksProgrammeTypeOptions,
     talksParticipantTypeOptions,
+    awardFellowLevelOptions,
+    sponserNameOptions,
     fetchFaculties, 
     fetchDepartments,
     fetchUserTypes,
@@ -576,6 +612,8 @@ export function useDropDowns() {
     fetchReportYears,
     fetchCommitteeLevels,
     fetchTalksProgrammeTypes,
-    fetchTalksParticipantTypes
+    fetchTalksParticipantTypes,
+    fetchAwardFellowLevels,
+    fetchSponserNames
   }
 }
