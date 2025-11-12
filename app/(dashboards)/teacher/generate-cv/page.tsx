@@ -1718,98 +1718,27 @@ export default function GenerateCVPage() {
     }
 
     try {
-      // Build document children from selected sections
-      const children: Paragraph[] = []
+      // Call backend API for Word document generation
+      const response = await fetch("/api/teacher/cv-generation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cvData,
+          template: cvTemplate,
+          format: "word",
+          selectedSections,
+        }),
+      })
 
-      // Header section
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: cvData.personal.name, bold: true, size: 32 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 200 },
-        }),
-        new Paragraph({
-          children: [new TextRun({ text: cvData.personal.designation, size: 24 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 100 },
-        }),
-        new Paragraph({
-          children: [new TextRun({ text: cvData.personal.department, size: 24 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 100 },
-        }),
-        new Paragraph({
-          children: [new TextRun({ text: cvData.personal.institution, size: 24 })],
-          alignment: AlignmentType.CENTER,
-          spacing: { after: 200 },
-        }),
-      )
-
-      // Contact information
-      const contactInfo: string[] = []
-      if (cvData.personal.email) contactInfo.push(`Email: ${cvData.personal.email}`)
-      if (cvData.personal.phone) contactInfo.push(`Phone: ${cvData.personal.phone}`)
-      if (cvData.personal.address) contactInfo.push(`Address: ${cvData.personal.address}`)
-      if (cvData.personal.orcid) contactInfo.push(`ORCID: ${cvData.personal.orcid}`)
-      if (cvData.personal.dateOfBirth) contactInfo.push(`Date of Birth: ${cvData.personal.dateOfBirth}`)
-
-      if (contactInfo.length > 0) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: contactInfo.join(" | "), size: 20 })],
-            alignment: AlignmentType.CENTER,
-            spacing: { after: 400 },
-          }),
-        )
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || errorData.message || "Failed to generate Word document")
       }
 
-      // Add selected sections
-      selectedSections.forEach((sectionId) => {
-        const sectionContent = createWordSection(sectionId, cvData)
-        children.push(...sectionContent)
-      })
-
-      // Document information
-      children.push(
-        new Paragraph({
-          text: "Document Information",
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Generated on: ", bold: true }),
-            new TextRun({ text: new Date().toLocaleDateString() }),
-          ],
-          spacing: { after: 100 },
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Template: ", bold: true }),
-            new TextRun({ text: cvTemplate.charAt(0).toUpperCase() + cvTemplate.slice(1) }),
-          ],
-          spacing: { after: 100 },
-        }),
-        new Paragraph({
-          children: [
-            new TextRun({ text: "Sections included: ", bold: true }),
-            new TextRun({ text: `${selectedSections.length} of ${cvSections.length}` }),
-          ],
-        }),
-      )
-
-      // Create the document
-      const doc = new Document({
-        sections: [
-          {
-            properties: {},
-            children: children,
-          },
-        ],
-      })
-
-      // Generate and download the document
-      const blob = await Packer.toBlob(doc)
+      // Get the blob from response
+      const blob = await response.blob()
       const fileName = `CV_${cvData.personal.name.replace(/\s+/g, "_")}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.docx`
       saveAs(blob, fileName)
 
@@ -1826,112 +1755,48 @@ export default function GenerateCVPage() {
     }
 
     try {
-      // Get current template styles
-      const currentTemplate = templateStyles[cvTemplate as keyof typeof templateStyles]
-      const styles = currentTemplate.documentStyles
+      // Call backend API for PDF generation
+      const response = await fetch("/api/teacher/cv-generation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cvData,
+          template: cvTemplate,
+          format: "pdf",
+          selectedSections,
+        }),
+      })
 
-      // Create comprehensive PDF content using template-specific styling
-      const pdfContent = `
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            @media print {
-              body { margin: 0.5in; }
-              .page-break { page-break-before: always; }
-            }
-            body { 
-              ${styles.body}
-            }
-            .header { 
-              ${styles.header}
-            }
-            .name { 
-              ${styles.name}
-            }
-            .title { 
-              ${styles.title}
-            }
-            .contact { 
-              ${styles.contact}
-            }
-            .section { 
-              ${styles.section}
-            }
-            .section-title { 
-              ${styles.sectionTitle}
-            }
-            .item { 
-              ${styles.item}
-            }
-            .item-title { 
-              ${styles.itemTitle}
-            }
-            .item-subtitle { 
-              ${styles.itemSubtitle}
-            }
-            .item-details { 
-              ${styles.itemDetails}
-            }
-            table { 
-              ${styles.table}
-            }
-            th { 
-              ${styles.th}
-            }
-            td { 
-              ${styles.td}
-            }
-            .publication { 
-              ${styles.publication}
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="name">${cvData.personal.name}</div>
-            <div class="title">${cvData.personal.designation}</div>
-            <div class="title">${cvData.personal.department}</div>
-            <div class="title">${cvData.personal.institution}</div>
-            <div class="contact">
-              ${cvData.personal.email ? `Email: ${cvData.personal.email}` : ""}${cvData.personal.email && cvData.personal.phone ? " | " : ""}${cvData.personal.phone ? `Phone: ${cvData.personal.phone}` : ""}<br>
-              ${cvData.personal.address ? `Address: ${cvData.personal.address}` : ""}${cvData.personal.address && cvData.personal.orcid ? "<br>" : ""}
-              ${cvData.personal.orcid ? `ORCID: ${cvData.personal.orcid}` : ""}
-            </div>
-          </div>
-
-          ${selectedSections.map((sectionId) => formatCVSection(sectionId, cvData, styles)).join("")}
-
-          <div class="section">
-            <div class="section-title">Document Information</div>
-            <p><strong>Generated on:</strong> ${new Date().toLocaleDateString()}</p>
-            <p><strong>Template:</strong> ${cvTemplate.charAt(0).toUpperCase() + cvTemplate.slice(1)}</p>
-            <p><strong>Sections included:</strong> ${selectedSections.length} of ${cvSections.length}</p>
-          </div>
-
-        </body>
-        </html>
-      `
-
-      // Convert HTML to PDF using browser's print functionality
-      const printWindow = window.open("", "_blank")
-      if (!printWindow) {
-        throw new Error("Popup blocked. Please allow popups for this site.")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || errorData.message || "Failed to generate PDF")
       }
 
-      printWindow.document.write(pdfContent)
-      printWindow.document.close()
+      const result = await response.json()
 
-      // Wait for content to load
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (result.html) {
+        // Use browser's print functionality to convert HTML to PDF
+        const printWindow = window.open("", "_blank")
+        if (!printWindow) {
+          throw new Error("Popup blocked. Please allow popups for this site.")
+        }
 
-      // Trigger print dialog which allows saving as PDF
-      printWindow.print()
+        printWindow.document.write(result.html)
+        printWindow.document.close()
 
-      // Close the window after a delay
-      setTimeout(() => {
-        printWindow.close()
-      }, 2000)
+        // Wait for content to load
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        // Trigger print dialog which allows saving as PDF
+        printWindow.print()
+
+        // Close the window after a delay
+        setTimeout(() => {
+          printWindow.close()
+        }, 2000)
+      }
 
       return true
     } catch (error) {
@@ -1988,6 +1853,7 @@ export default function GenerateCVPage() {
         toast({
           title: "CV Generated Successfully!",
           description: `Your ${cvTemplate} template CV with ${selectedSections.length} sections has been generated. ${downloadFormat === "pdf" ? "Use your browser's print dialog to save as PDF." : "The file should download automatically."}`,
+          duration: 5000,
         })
       }
     } catch (error) {

@@ -310,11 +310,7 @@ export default function ChangePasswordPage() {
             <CardHeader className="space-y-1 pb-6">
               <CardTitle className="text-2xl font-bold text-center text-gray-900">{getStepTitle()}</CardTitle>
               <CardDescription className="text-center text-gray-600">{getStepDescription()}</CardDescription>
-              {!token && (
-                <div className="flex justify-center mt-4">
-                  <p className="text-sm text-muted-foreground">Step 1 of 1</p>
-                </div>
-              )}
+       
             </CardHeader>
             <CardContent className="px-6 pb-6">
               {error && (
@@ -334,18 +330,6 @@ export default function ChangePasswordPage() {
               {renderStepContent()}
             </CardContent>
           </Card>
-
-          {/* Progress Indicator */}
-          <div className="flex justify-center space-x-2">
-            {[1, 2, 3].map((stepNumber) => (
-              <div
-                key={stepNumber}
-                className={`h-2 w-8 rounded-full transition-colors duration-200 ${
-                  stepNumber == stepNumber ? "bg-primary" : "bg-gray-300"
-                }`}
-              />
-            ))}
-          </div>
 
           {/* Additional help text */}
           <div className="text-center text-xs text-gray-500 space-y-2">

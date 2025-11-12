@@ -1,373 +1,3 @@
-// "use client"
-
-// import React, { useState } from 'react'
-// import { Button } from "@/components/ui/button"
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-// import { Badge } from "@/components/ui/badge"
-// import { Alert, AlertDescription } from "@/components/ui/alert"
-// import { Progress } from "@/components/ui/progress"
-// import { useToast } from "@/components/ui/use-toast"
-// import FileUpload from "@/components/shared/FileUpload"
-// import { 
-//   CheckCircle, 
-//   Loader2,
-//   ArrowRight,
-//   Brain,
-//   Target
-// } from "lucide-react"
-// import { useRouter } from "next/navigation"
-
-// interface DocumentAnalysis {
-//   category: string
-//   confidence: number
-//   extractedData: {
-//     title: string
-//     type: string
-//     description: string
-//   }
-//   recommendations: string[]
-//   suggestedPages: Array<{
-//     name: string
-//     path: string
-//     description: string
-//   }>
-// }
-
-// export function SmartDocumentAnalyzer() {
-//   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-//   const [isAnalyzing, setIsAnalyzing] = useState(false)
-//   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
-//   const [progress, setProgress] = useState(0)
-//   const { toast } = useToast()
-//   const router = useRouter()
-
-//   const handleFileSelect = (files: FileList | null) => {
-//     if (files && files.length > 0) {
-//       const file = files[0]
-      
-//       // Validate file type
-//       const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
-//       if (!allowedTypes.includes(file.type)) {
-//         toast({
-//           title: "Invalid File Type",
-//           description: "Only PDF, PNG, JPG, and JPEG files are allowed.",
-//           variant: "destructive",
-//         });
-//         return;
-//       }
-
-//       // Validate file size (1MB)
-//       const maxSize = 1024 * 1024;
-//       if (file.size > maxSize) {
-//         toast({
-//           title: "File Too Large",
-//           description: "Maximum file size is 1MB.",
-//           variant: "destructive",
-//         });
-//         return;
-//       }
-
-//       setSelectedFile(file)
-//       setAnalysis(null) // Reset analysis when new file is selected
-//     }
-//   }
-//   const handleAnalyze = async () => {
-//     if (!selectedFile) return;
-  
-//     setIsAnalyzing(true);
-//     setProgress(0);
-  
-//     try {
-//       const formData = new FormData();
-//       formData.append("file", selectedFile);
-  
-//       const response = await fetch("/api/llm/categorize-document", {
-//         method: "POST",
-//         body: formData,
-//       });
-  
-//       if (!response.ok) {
-//         throw new Error("Failed to analyze document");
-//       }
-  
-//       const result = await response.json();
-//       setAnalysis(result);
-//       setProgress(100);
-  
-//       toast({
-//         title: "Document Analyzed Successfully",
-//         description: `Document categorized as: ${result.category}`,
-//         variant: "default",
-//       });
-//     } catch (error) {
-//       console.error("Analysis error:", error);
-//       toast({
-//         title: "Analysis Failed",
-//         description: "Failed to analyze document. Please try again.",
-//         variant: "destructive",
-//       });
-//     } finally {
-//       setIsAnalyzing(false);
-//     }
-//   };
-  
-//   // const handleAnalyze = async () => {
-//   //   if (!selectedFile) return
-
-//   //   setIsAnalyzing(true)
-//   //   setProgress(0)
-
-//   //   try {
-//   //     // Simulate progress
-//   //     const progressInterval = setInterval(() => {
-//   //       setProgress(prev => {
-//   //         if (prev >= 90) {
-//   //           clearInterval(progressInterval)
-//   //           return 90
-//   //         }
-//   //         return prev + 10
-//   //       })
-//   //     }, 200)
-
-//   //     // Call LLM API for categorization
-//   //     const response = await fetch('/api/llm/categorize-document', {
-//   //       method: 'POST',
-//   //       headers: {
-//   //         'Content-Type': 'application/json',
-//   //       },
-//   //       body: JSON.stringify({
-//   //         fileName: selectedFile.name,
-//   //         fileType: selectedFile.type,
-//   //         fileSize: selectedFile.size
-//   //       })
-//   //     })
-
-//   //     if (!response.ok) {
-//   //       throw new Error('Failed to analyze document')
-//   //     }
-
-//   //     const result = await response.json()
-//   //     setAnalysis(result)
-//   //     setProgress(100)
-      
-//   //     toast({
-//   //       title: "Document Analyzed Successfully",
-//   //       description: `Document categorized as: ${result.category}`,
-//   //       variant: "default",
-//   //     })
-
-//   //   } catch (error) {
-//   //     console.error('Analysis error:', error)
-//   //     toast({
-//   //       title: "Analysis Failed",
-//   //       description: "Failed to analyze document. Please try again.",
-//   //       variant: "destructive",
-//   //     })
-//   //   } finally {
-//   //     setIsAnalyzing(false)
-//   //   }
-//   // }
-
-//   const handleNavigateToPage = (path: string) => {
-//     // Store file information in session storage for the target page
-//     if (selectedFile) {
-//       const fileId = `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-//       sessionStorage.setItem('uploadedFileId', fileId);
-//       sessionStorage.setItem('uploadedFileName', selectedFile.name);
-//       sessionStorage.setItem('uploadedFileType', selectedFile.type);
-//       sessionStorage.setItem('uploadedFileSize', selectedFile.size.toString());
-      
-//       // Store the actual file in session storage (for small files)
-//       const reader = new FileReader();
-//       reader.onload = function(e) {
-//         sessionStorage.setItem('uploadedFileData', e.target?.result as string);
-//       };
-//       reader.readAsDataURL(selectedFile);
-//     }
-//     router.push(path)
-//   }
-
-//   const getConfidenceColor = (confidence: number) => {
-//     if (confidence >= 0.8) return "bg-green-500"
-//     if (confidence >= 0.6) return "bg-yellow-500"
-//     return "bg-red-500"
-//   }
-
-//   const getConfidenceText = (confidence: number) => {
-//     if (confidence >= 0.8) return "High Confidence"
-//     if (confidence >= 0.6) return "Medium Confidence"
-//     return "Low Confidence"
-//   }
-
-//   return (
-//     <Card>
-//       <CardHeader>
-//         <CardTitle className="flex items-center gap-2">
-//           <Brain className="h-5 w-5" />
-//           Smart Document Analyzer
-//         </CardTitle>
-//         <CardDescription>
-//           Upload your document and let AI categorize it for you. Get recommendations for the best place to add your document.
-//         </CardDescription>
-//       </CardHeader>
-//       <CardContent className="space-y-6">
-//         {/* File Upload */}
-//         <div className="space-y-4">
-//           <FileUpload 
-//             onFileSelect={handleFileSelect}
-//             acceptedTypes=".pdf,.png,.jpg,.jpeg"
-//             multiple={false}
-//           />
-
-//           {selectedFile && (
-//             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-//               <div className="flex items-center gap-2">
-//                 <span className="text-sm font-medium">{selectedFile.name}</span>
-//                 <Badge variant="secondary">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</Badge>
-//               </div>
-//               <Button
-//                 variant="ghost"
-//                 size="sm"
-//                 onClick={() => {
-//                   setSelectedFile(null)
-//                   setAnalysis(null)
-//                 }}
-//                 disabled={isAnalyzing}
-//               >
-//                 Remove
-//               </Button>
-//             </div>
-//           )}
-
-//           <Button 
-//             onClick={handleAnalyze} 
-//             disabled={!selectedFile || isAnalyzing}
-//             className="w-full"
-//           >
-//             {isAnalyzing ? (
-//               <>
-//                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-//                 Analyzing Document...
-//               </>
-//             ) : (
-//               <>
-//                 <Brain className="mr-2 h-4 w-4" />
-//                 Analyze Document
-//               </>
-//             )}
-//           </Button>
-
-//           {isAnalyzing && (
-//             <div className="space-y-2">
-//               <Progress value={progress} className="w-full" />
-//               <p className="text-sm text-gray-600 text-center">
-//                 AI is analyzing your document...
-//               </p>
-//             </div>
-//           )}
-//         </div>
-
-//         {/* Analysis Results */}
-//         {analysis && (
-//           <div className="space-y-4">
-//             <Alert>
-//               <Brain className="h-4 w-4" />
-//               <AlertDescription>
-//                 Document analysis complete! Here's what we found:
-//               </AlertDescription>
-//             </Alert>
-
-//             <div className="grid gap-4 md:grid-cols-2">
-//               {/* Category Information */}
-//               <Card>
-//                 <CardHeader className="pb-3">
-//                   <CardTitle className="text-lg">Document Category</CardTitle>
-//                 </CardHeader>
-//                 <CardContent className="space-y-3">
-//                   <div className="flex items-center justify-between">
-//                     <span className="font-medium">Category:</span>
-//                     <Badge variant="outline" className="capitalize">
-//                       {analysis.category}
-//                     </Badge>
-//                   </div>
-//                   <div className="flex items-center justify-between">
-//                     <span className="font-medium">Confidence:</span>
-//                     <div className="flex items-center gap-2">
-//                       <div className={`w-3 h-3 rounded-full ${getConfidenceColor(analysis.confidence)}`}></div>
-//                       <span className="text-sm">{getConfidenceText(analysis.confidence)}</span>
-//                     </div>
-//                   </div>
-//                   <div className="space-y-2">
-//                     <span className="font-medium">Extracted Data:</span>
-//                     <div className="text-sm text-gray-600 space-y-1">
-//                       <p><strong>Title:</strong> {analysis.extractedData.title}</p>
-//                       <p><strong>Type:</strong> {analysis.extractedData.type}</p>
-//                       <p><strong>Description:</strong> {analysis.extractedData.description}</p>
-//                     </div>
-//                   </div>
-//                 </CardContent>
-//               </Card>
-
-//               {/* Recommendations */}
-//               <Card>
-//                 <CardHeader className="pb-3">
-//                   <CardTitle className="text-lg">AI Recommendations</CardTitle>
-//                 </CardHeader>
-//                 <CardContent>
-//                   <div className="space-y-2">
-//                     {analysis.recommendations.map((recommendation, index) => (
-//                       <div key={index} className="flex items-start gap-2">
-//                         <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-//                         <span className="text-sm">{recommendation}</span>
-//                       </div>
-//                     ))}
-//                   </div>
-//                 </CardContent>
-//               </Card>
-//             </div>
-
-//             {/* Suggested Pages */}
-//             <Card>
-//               <CardHeader>
-//                 <CardTitle className="flex items-center gap-2">
-//                   <Target className="h-5 w-5" />
-//                   Recommended Pages
-//                 </CardTitle>
-//                 <CardDescription>
-//                   Based on the document analysis, here are the best places to add your document:
-//                 </CardDescription>
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="grid gap-3 md:grid-cols-2">
-//                   {analysis.suggestedPages.map((page, index) => (
-//                     <div key={index} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-//                       <div className="flex items-center justify-between">
-//                         <div className="space-y-1">
-//                           <h4 className="font-medium">{page.name}</h4>
-//                           <p className="text-sm text-gray-600">{page.description}</p>
-//                         </div>
-//                         <Button
-//                           size="sm"
-//                           onClick={() => handleNavigateToPage(page.path)}
-//                           className="ml-2"
-//                         >
-//                           Go to Page
-//                           <ArrowRight className="ml-1 h-3 w-3" />
-//                         </Button>
-//                       </div>
-//                     </div>
-//                   ))}
-//                 </div>
-//               </CardContent>
-//             </Card>
-//           </div>
-//         )}
-//       </CardContent>
-//     </Card>
-//   )
-// }
-
-
 "use client"
 
 import React, { useState } from 'react'
@@ -480,6 +110,181 @@ export function SmartDocumentAnalyzer() {
     return matrix[str2.length][str1.length]
   }
 
+  // Helper function to normalize strings for matching
+  const normalizeString = (str: string): string => {
+    return str
+      .toLowerCase()
+      .trim()
+      .replace(/[&]/g, "and")
+      .replace(/[^a-z0-9\s]/g, "")
+      .replace(/\s+/g, " ")
+  }
+
+  // Helper function to find matching category and subcategory
+  const findMatchingRoute = (category: string, subCategory: string = ""): { route: string; label: string } | null => {
+    const normalizedCategory = normalizeString(category)
+    const normalizedSubCategory = normalizeString(subCategory)
+
+    // Try to find matching category
+    for (const cat of teacherCategories) {
+      const normalizedCatKey = normalizeString(cat.key)
+      const normalizedCatLabel = normalizeString(cat.label)
+
+      // Check if category matches (key or label)
+      if (
+        normalizedCatKey === normalizedCategory ||
+        normalizedCatLabel === normalizedCategory ||
+        normalizedCategory.includes(normalizedCatKey) ||
+        normalizedCatKey.includes(normalizedCategory) ||
+        normalizedCategory.includes(normalizedCatLabel) ||
+        normalizedCatLabel.includes(normalizedCategory)
+      ) {
+        // If category has subcategories, try to match subcategory
+        if (cat.subcategories && cat.subcategories.length > 0 && normalizedSubCategory) {
+          for (const subcat of cat.subcategories) {
+            const normalizedSubcatKey = normalizeString(subcat.key)
+            const normalizedSubcatLabel = normalizeString(subcat.label)
+
+            // More flexible matching - check if subcategory key/label appears in the normalized subcategory
+            // or if normalized subcategory contains key parts
+            const keyParts = normalizedSubcatKey.split(/[\s-]+/) // Split by spaces or hyphens
+            const labelParts = normalizedSubcatLabel.split(/[\s-]+/)
+            
+            // Check exact matches first
+            if (
+              normalizedSubcatKey === normalizedSubCategory ||
+              normalizedSubcatLabel === normalizedSubCategory ||
+              normalizedSubCategory.includes(normalizedSubcatKey.replace(/-/g, " ")) || // Handle hyphens
+              normalizedSubcatKey.replace(/-/g, " ").includes(normalizedSubCategory) ||
+              normalizedSubCategory.includes(normalizedSubcatLabel.toLowerCase()) ||
+              normalizedSubcatLabel.toLowerCase().includes(normalizedSubCategory) ||
+              // Check for plural/singular variations
+              normalizedSubCategory.includes(normalizedSubcatKey.replace(/-/g, "")) ||
+              normalizedSubCategory.replace(/s$/, "").includes(normalizedSubcatKey.replace(/-/g, ""))
+            ) {
+              return { route: subcat.route, label: subcat.label }
+            }
+            
+            // Check if key parts match (e.g., "academic bodies" should match "academic-bodies")
+            if (keyParts.length > 1 && keyParts.every(part => normalizedSubCategory.includes(part))) {
+              return { route: subcat.route, label: subcat.label }
+            }
+            
+            // Check if label parts match
+            if (labelParts.length > 1 && labelParts.every(part => normalizedSubCategory.includes(part))) {
+              return { route: subcat.route, label: subcat.label }
+            }
+          }
+        }
+
+        // If no subcategory match but category has subcategories, return first subcategory route
+        if (cat.subcategories && cat.subcategories.length > 0) {
+          return { route: cat.subcategories[0].route, label: cat.subcategories[0].label }
+        }
+        
+        // If category doesn't have subcategories, return category route
+        return { route: cat.route, label: cat.label }
+      }
+    }
+
+    // Special handling for research contributions variations
+    if (
+      normalizedCategory.includes("research") &&
+      (normalizedCategory.includes("contribution") ||
+        normalizedCategory.includes("consultancy") ||
+        normalizedCategory.includes("academic"))
+    ) {
+      const route = getResearchContributionsRoute(normalizedSubCategory || normalizedCategory, true)
+      return { route, label: "Research Contributions" }
+    }
+
+    // Special handling for publications variations
+    if (
+      normalizedCategory.includes("publication") ||
+      normalizedCategory.includes("journal") ||
+      normalizedCategory.includes("article") ||
+      normalizedCategory.includes("book") ||
+      normalizedCategory.includes("paper")
+    ) {
+      if (normalizedSubCategory.includes("journal") || normalizedSubCategory.includes("article")) {
+        return { route: "/teacher/publication/journal-articles/add", label: "Journal Articles" }
+      } else if (normalizedSubCategory.includes("book")) {
+        return { route: "/teacher/publication/books/add", label: "Books" }
+      } else if (normalizedSubCategory.includes("paper") || normalizedSubCategory.includes("presented")) {
+        return { route: "/teacher/publication/papers/add", label: "Papers Presented" }
+      }
+      // Default to journal articles if no specific subcategory match
+      return { route: "/teacher/publication/journal-articles/add", label: "Publications" }
+    }
+
+    // Special handling for awards variations
+    if (normalizedCategory.includes("award") || normalizedCategory.includes("recognition")) {
+      // Try to match specific subcategory
+      if (normalizedSubCategory.includes("performance")) {
+        return { route: "/teacher/awards-recognition/add?tab=performance", label: "Performance" }
+      } else if (normalizedSubCategory.includes("award") || normalizedSubCategory.includes("fellowship")) {
+        return { route: "/teacher/awards-recognition/add?tab=awards", label: "Awards/Fellows" }
+      } else if (normalizedSubCategory.includes("extension") || normalizedSubCategory.includes("activity")) {
+        return { route: "/teacher/awards-recognition/add?tab=extension", label: "Extension Activities" }
+      }
+      // Default to first subcategory (performance)
+      return { route: "/teacher/awards-recognition/add?tab=performance", label: "Awards & Recognition" }
+    }
+
+    // Special handling for talks variations
+    if (
+      normalizedCategory.includes("talk") ||
+      normalizedCategory.includes("event") ||
+      normalizedCategory.includes("seminar") ||
+      normalizedCategory.includes("conference") ||
+      normalizedCategory.includes("refresher") ||
+      normalizedCategory.includes("orientation") ||
+      normalizedCategory.includes("academic program") ||
+      normalizedCategory.includes("academic body") ||
+      normalizedCategory.includes("committee")
+    ) {
+      // Try to match specific subcategory
+      if (normalizedSubCategory.includes("refresher") || normalizedSubCategory.includes("orientation")) {
+        return { route: "/teacher/talks-events/add?tab=refresher", label: "Refresher/Orientation" }
+      } else if (normalizedSubCategory.includes("academic program") || normalizedSubCategory.includes("program")) {
+        return { route: "/teacher/talks-events/add?tab=academic-programs", label: "Academic Programs" }
+      } else if (
+        normalizedSubCategory.includes("academic body") || 
+        normalizedSubCategory.includes("academic bodies") || 
+        normalizedSubCategory.includes("body") && normalizedSubCategory.includes("academic")
+      ) {
+        return { route: "/teacher/talks-events/add?tab=academic-bodies", label: "Academic Bodies" }
+      } else if (normalizedSubCategory.includes("committee") || normalizedSubCategory.includes("university")) {
+        return { route: "/teacher/talks-events/add?tab=committees", label: "University Committees" }
+      } else if (normalizedSubCategory.includes("talk") || normalizedSubCategory.includes("presentation")) {
+        return { route: "/teacher/talks-events/add?tab=talks", label: "Academic Talks" }
+      }
+      // Default to first subcategory (refresher)
+      return { route: "/teacher/talks-events/add?tab=refresher", label: "Talks & Events" }
+    }
+
+    // Special handling for academic recommendations variations
+    if (
+      normalizedCategory.includes("academic") &&
+      normalizedCategory.includes("recommendation")
+    ) {
+      // Try to match specific subcategory
+      if (normalizedSubCategory.includes("article") || normalizedSubCategory.includes("journal")) {
+        return { route: "/teacher/academic-recommendations/add?tab=articles", label: "Articles/Journals" }
+      } else if (normalizedSubCategory.includes("book")) {
+        return { route: "/teacher/academic-recommendations/add?tab=books", label: "Books" }
+      } else if (normalizedSubCategory.includes("magazine")) {
+        return { route: "/teacher/academic-recommendations/add?tab=magazines", label: "Magazines" }
+      } else if (normalizedSubCategory.includes("technical") || normalizedSubCategory.includes("report")) {
+        return { route: "/teacher/academic-recommendations/add?tab=technical", label: "Technical Reports" }
+      }
+      // Default to first subcategory (articles)
+      return { route: "/teacher/academic-recommendations/add?tab=articles", label: "Academic Recommendations" }
+    }
+
+    return null
+  }
+
   // Helper function to get route for research contributions subcategories
   const getResearchContributionsRoute = (subCategory: string, useAddRoute: boolean = false): string => {
     const subCategoryMap: Record<string, string> = {
@@ -495,15 +300,16 @@ export function SmartDocumentAnalyzer() {
       "visits": "visits",
       "financial support": "financial",
       "financial": "financial",
-      "jrf": "jrfSrf",
-      "srf": "jrfSrf",
-      "jrfsrf": "jrfSrf",
+      "jrf": "jrf-srf",
+      "srf": "jrf-srf",
+      "jrfsrf": "jrf-srf",
+      "jrf-srf": "jrf-srf",
       "phd guidance": "phd",
       "phd": "phd",
       "copyrights": "copyrights",
       "copyright": "copyrights",
     }
-    const normalized = subCategory.toLowerCase().trim()
+    const normalized = normalizeString(subCategory)
     const tab = subCategoryMap[normalized] || normalized
     
     if (useAddRoute) {
@@ -512,19 +318,215 @@ export function SmartDocumentAnalyzer() {
     return `/teacher/research-contributions?tab=${tab}`
   }
 
-  // Mappings for teacher sections with expected fields and routes
-  const teacherCategories: Array<{ key: string; label: string; route: string; fields: string[] }> = [
-    { key: "Books/Papers", label: "Books/Papers", route: "/teacher/publication", fields: ["Title", "DOI", "ISSN", "Impact Factor", "Publisher", "Year"] },
-    { key: "Books", label: "Books (Authored/Edited)", route: "/teacher/publication/books/add", fields: ["Title", "ISBN", "Publisher", "Year"] },
-    { key: "Published Articles/Papers in Journals/Edited Volumes", label: "Published Articles/Papers", route: "/teacher/publication/papers/add", fields: ["Title", "DOI", "ISSN", "Impact Factor", "Journal", "Year"] },
-    { key: "Research Projects", label: "Research Projects", route: "/teacher/research/add", fields: ["Project Title", "Funding Agency", "Sanctioned Amount", "Duration", "Start Date", "End Date"] },
-    { key: "Research Contributions", label: "Research Contributions", route: "/teacher/research-contributions", fields: ["Title", "Type", "Date", "Details"] },
-    { key: "Awards/Recognition", label: "Awards & Recognition", route: "/teacher/awards-recognition/add", fields: ["Award Name", "Awarding Body", "Year"] },
-    { key: "Talks/Events", label: "Talks & Events", route: "/teacher/talks-events/add", fields: ["Event Name", "Role", "Date", "Venue"] },
-    { key: "Online Engagement", label: "Online Engagement", route: "/teacher/online-engagement/add", fields: ["Platform", "URL", "Topic", "Date"] },
+  // Complete mappings for all teacher sections with categories and subcategories
+  const teacherCategories: Array<{
+    key: string
+    label: string
+    route: string
+    fields: string[]
+    subcategories?: Array<{ key: string; label: string; route: string; fields: string[] }>
+  }> = [
+    {
+      key: "Publications",
+      label: "Publications",
+      route: "/teacher/publication",
+      fields: ["Title", "DOI", "ISSN", "Impact Factor", "Publisher", "Year"],
+      subcategories: [
+        {
+          key: "journals",
+          label: "Published Articles/Journals",
+          route: "/teacher/publication/journal-articles/add",
+          fields: ["Title", "DOI", "ISSN", "Impact Factor", "Journal", "Year", "Authors"],
+        },
+        {
+          key: "books",
+          label: "Books (Authored/Edited)",
+          route: "/teacher/publication/books/add",
+          fields: ["Title", "ISBN", "Publisher", "Year", "Authors"],
+        },
+        {
+          key: "papers",
+          label: "Papers Presented",
+          route: "/teacher/publication/papers/add",
+          fields: ["Title", "Organising Body", "Place", "Date", "Authors"],
+        },
+      ],
+    },
+    {
+      key: "Research Projects",
+      label: "Research Projects",
+      route: "/teacher/research/add",
+      fields: ["Project Title", "Funding Agency", "Sanctioned Amount", "Duration", "Start Date", "End Date"],
+    },
+    {
+      key: "Research Contributions",
+      label: "Research & Academic Contributions",
+      route: "/teacher/research-contributions",
+      fields: ["Title", "Type", "Date", "Details"],
+      subcategories: [
+        {
+          key: "patents",
+          label: "Patents",
+          route: "/teacher/research-contributions/patents/add",
+          fields: ["Title", "Level", "Status", "Date", "Patent Application No"],
+        },
+        {
+          key: "policy",
+          label: "Policy Documents",
+          route: "/teacher/research-contributions/policy/add",
+          fields: ["Title", "Level", "Organisation", "Date"],
+        },
+        {
+          key: "econtent",
+          label: "E-Content",
+          route: "/teacher/research-contributions/econtent/add",
+          fields: ["Title", "Type", "Platform", "Publishing Date", "Publishing Authorities"],
+        },
+        {
+          key: "consultancy",
+          label: "Consultancy",
+          route: "/teacher/research-contributions/consultancy/add",
+          fields: ["Name", "Collaborating Institution", "Start Date", "Amount"],
+        },
+        {
+          key: "collaborations",
+          label: "Collaborations",
+          route: "/teacher/research-contributions/collaborations/add",
+          fields: ["Collaborating Institution", "Category", "Type", "Starting Date"],
+        },
+        {
+          key: "visits",
+          label: "Academic Visits",
+          route: "/teacher/research-contributions/visits/add",
+          fields: ["Institution", "Purpose", "Date", "Role"],
+        },
+        {
+          key: "financial",
+          label: "Financial Support",
+          route: "/teacher/research-contributions/financial/add",
+          fields: ["Title", "Amount", "Purpose", "Date"],
+        },
+        {
+          key: "jrf-srf",
+          label: "JRF/SRF",
+          route: "/teacher/research-contributions/jrf-srf/add",
+          fields: ["Name", "Type", "Project Title", "Duration"],
+        },
+        {
+          key: "phd",
+          label: "Ph.D. Guidance",
+          route: "/teacher/research-contributions/phd/add",
+          fields: ["Name", "Registration No", "Topic", "Start Date"],
+        },
+        {
+          key: "copyrights",
+          label: "Copyrights",
+          route: "/teacher/research-contributions/copyrights/add",
+          fields: ["Title", "Reference No", "Publication Date", "Link"],
+        },
+      ],
+    },
+    {
+      key: "Awards Recognition",
+      label: "Awards & Recognition",
+      route: "/teacher/awards-recognition",
+      fields: ["Award Name", "Awarding Body", "Year"],
+      subcategories: [
+        {
+          key: "performance",
+          label: "Performance",
+          route: "/teacher/awards-recognition/add?tab=performance",
+          fields: ["Name", "Place", "Date", "Nature"],
+        },
+        {
+          key: "awards",
+          label: "Awards/Fellows",
+          route: "/teacher/awards-recognition/add?tab=awards",
+          fields: ["Name", "Organization", "Date of Award", "Details"],
+        },
+        {
+          key: "extension",
+          label: "Extension Activities",
+          route: "/teacher/awards-recognition/add?tab=extension",
+          fields: ["Name of Activity", "Place", "Date"],
+        },
+      ],
+    },
+    {
+      key: "Talks Events",
+      label: "Talks & Events",
+      route: "/teacher/talks-events/add",
+      fields: ["Event Name", "Role", "Date", "Venue"],
+      subcategories: [
+        {
+          key: "refresher",
+          label: "Refresher/Orientation",
+          route: "/teacher/talks-events/add?tab=refresher",
+          fields: ["Name", "Course Type", "Start Date", "End Date", "Organizing University", "Organizing Institute"],
+        },
+        {
+          key: "academic-programs",
+          label: "Academic Programs",
+          route: "/teacher/talks-events/add?tab=academic-programs",
+          fields: ["Name", "Programme", "Place", "Date", "Year", "Participated As"],
+        },
+        {
+          key: "academic-bodies",
+          label: "Academic Bodies",
+          route: "/teacher/talks-events/add?tab=academic-bodies",
+          fields: ["Name", "Academic Body", "Place", "Participated As", "Submit Date", "Year"],
+        },
+        {
+          key: "committees",
+          label: "University Committees",
+          route: "/teacher/talks-events/add?tab=committees",
+          fields: ["Name", "Committee Name", "Level", "Participated As", "Submit Date", "Year"],
+        },
+        {
+          key: "talks",
+          label: "Academic Talks",
+          route: "/teacher/talks-events/add?tab=talks",
+          fields: ["Name", "Programme", "Place", "Talk Date", "Title of Event", "Participated As"],
+        },
+      ],
+    },
+    {
+      key: "Academic Recommendations",
+      label: "Academic Recommendations",
+      route: "/teacher/academic-recommendations",
+      fields: ["Title", "Type", "Date"],
+      subcategories: [
+        {
+          key: "articles",
+          label: "Articles/Journals",
+          route: "/teacher/academic-recommendations/add?tab=articles",
+          fields: ["Title", "Journal", "Date"],
+        },
+        {
+          key: "books",
+          label: "Books",
+          route: "/teacher/academic-recommendations/add?tab=books",
+          fields: ["Title", "Publisher", "Date"],
+        },
+        {
+          key: "magazines",
+          label: "Magazines",
+          route: "/teacher/academic-recommendations/add?tab=magazines",
+          fields: ["Title", "Magazine", "Date"],
+        },
+        {
+          key: "technical",
+          label: "Technical Reports",
+          route: "/teacher/academic-recommendations/add?tab=technical",
+          fields: ["Title", "Organization", "Date"],
+        },
+      ],
+    },
   ]
 
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null)
+  const [selectedSubcategoryKey, setSelectedSubcategoryKey] = useState<string | null>(null)
+  const [isClassificationCorrect, setIsClassificationCorrect] = useState<boolean | null>(null)
 
   const handleFileSelect = (files: FileList | null) => {
     if (files && files.length > 0) {
@@ -572,10 +574,11 @@ export function SmartDocumentAnalyzer() {
       }
 
       setAnalysis(result)
-      const suggested = result?.classification?.category
-      const normalized = teacherCategories.find(c => c.key.toLowerCase() === String(suggested || "").toLowerCase())
-      setSelectedCategoryKey(normalized ? normalized.key : null)
       setProgress(100)
+      // Reset classification confirmation
+      setIsClassificationCorrect(null)
+      setSelectedCategoryKey(null)
+      setSelectedSubcategoryKey(null)
 
       toast({
         title: "Document Analyzed Successfully",
@@ -694,200 +697,230 @@ export function SmartDocumentAnalyzer() {
                     </Badge>
                   </div>
                 )}
-                
-                {/* Redirect Button for Categorized Page */}
-                {analysis.classification.category && (
-                  <div className="pt-2 border-t space-y-3">
-                    {/* Field Similarity Warning */}
-                    {(() => {
-                      const category = analysis.classification.category.toLowerCase()
-                      const subCategory = analysis.classification["sub-category"]?.toLowerCase() || ""
-                      const dataFields = analysis.classification.dataFields || {}
-                      
-                      // Check if it's a research contributions category
-                      if (category.includes("research") && (category.includes("contribution") || category.includes("consultancy"))) {
-                        // Map expected fields for each subcategory
-                        const expectedFieldsMap: Record<string, string[]> = {
-                          "copyrights": ["title", "reference no", "reference number", "publication date", "link"],
-                          "copyright": ["title", "reference no", "reference number", "publication date", "link"],
-                          "patents": ["title", "level", "status", "date", "patent application", "patent number"],
-                          "policy": ["title", "level", "organisation", "date"],
-                          "econtent": ["title", "type", "platform", "date"],
-                          "consultancy": ["title", "organisation", "amount", "date"],
-                          "collaborations": ["title", "organisation", "type", "date"],
-                          "visits": ["title", "organisation", "purpose", "date"],
-                          "financial": ["title", "amount", "purpose", "date"],
-                          "jrfSrf": ["name", "type", "project title", "duration"],
-                          "phd": ["name", "reg no", "registration no", "topic", "date"],
-                        }
-                        
-                        const normalizedSubCat = subCategory || "copyrights"
-                        const expectedFields = expectedFieldsMap[normalizedSubCat] || expectedFieldsMap["copyrights"]
-                        const similarity = calculateFieldSimilarity(dataFields, expectedFields)
-                        
-                        if (similarity < 0.3 && Object.keys(dataFields).length > 0) {
-                          return (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                              <p className="text-sm text-yellow-800">
-                                <strong>Warning:</strong> Low field match ({Math.round(similarity * 100)}%). 
-                                The predicted category might not be correct. Please verify before proceeding.
-                              </p>
-                            </div>
-                          )
-                        }
-                      } else {
-                        // Check against teacher categories
-                        const matchedCategory = teacherCategories.find(
-                          c => c.key.toLowerCase() === category.toLowerCase()
-                        )
-                        if (matchedCategory) {
-                          const similarity = calculateFieldSimilarity(dataFields, matchedCategory.fields)
-                          if (similarity < 0.3 && Object.keys(dataFields).length > 0) {
-                            return (
-                              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                                <p className="text-sm text-yellow-800">
-                                  <strong>Warning:</strong> Low field match ({Math.round(similarity * 100)}%). 
-                                  The predicted category might not be correct. Please verify before proceeding.
-                                </p>
-                              </div>
-                            )
-                          }
-                        }
-                      }
-                      return null
-                    })()}
-                    
-                    <Button
-                      onClick={() => {
-                        try {
-                          const category = analysis.classification.category.toLowerCase()
-                          const subCategory = analysis.classification["sub-category"]?.toLowerCase() || ""
-                          const dataFields = analysis.classification.dataFields || {}
-                          
-                          // Handle Research & Consultancy or Research Contributions category
-                          if (category.includes("research") && (category.includes("contribution") || category.includes("consultancy"))) {
-                            // Use add route when we have dataFields
-                            const useAddRoute = Object.keys(dataFields).length > 0
-                            const route = getResearchContributionsRoute(subCategory || category, useAddRoute)
-                            
-                            // Store analysis data including dataFields for form population
+
+                {/* Classification Confirmation */}
+                <div className="pt-2 border-t space-y-3">
+                  <div className="space-y-2">
+                    <p className="font-medium text-sm">Is this classification correct?</p>
+                    <RadioGroup
+                      value={isClassificationCorrect === null ? undefined : isClassificationCorrect ? "yes" : "no"}
+                      onValueChange={(val) => setIsClassificationCorrect(val === "yes")}
+                      className="flex gap-4"
+                    >
+                      <label className="flex items-center gap-2 rounded-md border p-3 hover:bg-gray-50 cursor-pointer">
+                        <RadioGroupItem value="yes" />
+                        <span className="text-sm font-medium">Yes</span>
+                      </label>
+                      <label className="flex items-center gap-2 rounded-md border p-3 hover:bg-gray-50 cursor-pointer">
+                        <RadioGroupItem value="no" />
+                        <span className="text-sm font-medium">No</span>
+                      </label>
+                    </RadioGroup>
+                  </div>
+
+                  {/* If Yes - Show redirect button */}
+                  {isClassificationCorrect === true && (
+                    <div className="space-y-3">
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const category = analysis.classification.category
+                            const subCategory = analysis.classification["sub-category"] || ""
+                            const dataFields = analysis.classification.dataFields || {}
+
+                            // Find matching route using the helper function
+                            const match = findMatchingRoute(category, subCategory)
+
+                            if (!match) {
+                              toast({
+                                title: "Route Not Found",
+                                description: "Could not determine the correct page. Please select manually below.",
+                                variant: "destructive",
+                              })
+                              return
+                            }
+
+                            // Store file for document viewer
+                            if (selectedFile) {
+                              await new Promise<void>((resolve) => {
+                                const reader = new FileReader()
+                                reader.onload = function (e) {
+                                  sessionStorage.setItem("arms_uploaded_file", e.target?.result as string)
+                                  sessionStorage.setItem("arms_uploaded_file_name", selectedFile.name)
+                                  sessionStorage.setItem("arms_uploaded_file_type", selectedFile.type)
+                                  resolve()
+                                }
+                                reader.onerror = () => resolve() // Resolve even on error to not block navigation
+                                reader.readAsDataURL(selectedFile)
+                              })
+                            }
+
+                            // Store analysis data for form population
                             sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
                             sessionStorage.setItem("arms_dataFields", JSON.stringify(dataFields))
-                            sessionStorage.setItem("arms_category", category)
-                            sessionStorage.setItem("arms_subcategory", subCategory)
-                            
-                            router.push(route)
+                            sessionStorage.setItem("arms_category", category.toLowerCase())
+                            sessionStorage.setItem("arms_subcategory", subCategory.toLowerCase())
+                            sessionStorage.setItem("arms_auto_fill", "true")
+
+                            router.push(match.route)
                             toast({
                               title: "Redirecting...",
-                              description: `Taking you to ${subCategory || "Research Contributions"} ${useAddRoute ? "add" : ""} page`,
+                              description: `Taking you to ${match.label} page with auto-filled data`,
                             })
-                            return
-                          }
-                          
-                          // Handle other categories
-                          const normalized = teacherCategories.find(
-                            c => c.key.toLowerCase() === category.toLowerCase()
-                          )
-                          
-                          if (normalized) {
-                            // Store analysis data including dataFields
-                            sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
-                            sessionStorage.setItem("arms_dataFields", JSON.stringify(dataFields))
-                            sessionStorage.setItem("arms_category", category)
-                            
-                            router.push(normalized.route)
+                          } catch (e) {
+                            console.error("Navigation error:", e)
                             toast({
-                              title: "Redirecting...",
-                              description: `Taking you to ${normalized.label} page`,
-                            })
-                          } else {
-                            toast({
-                              title: "Route Not Found",
-                              description: "Could not determine the correct page. Please select manually below.",
+                              title: "Navigation Failed",
+                              description: "Please try again or select manually below.",
                               variant: "destructive",
                             })
                           }
-                        } catch (e) {
-                          console.error("Navigation error:", e)
-                          toast({
-                            title: "Navigation Failed",
-                            description: "Please try again or select manually below.",
-                            variant: "destructive",
-                          })
-                        }
-                      }}
-                      className="w-full sm:w-auto"
-                      variant="default"
-                    >
-                      <span className="hidden sm:inline">
-                        Go to {analysis.classification["sub-category"] || analysis.classification.category} Page
-                      </span>
-                      <span className="sm:hidden">
-                        Go to Page
-                      </span>
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                        }}
+                        className="w-full"
+                        variant="default"
+                      >
+                        Go to {analysis.classification["sub-category"] || analysis.classification.category} Add Page
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* If No - Show category and subcategory selection */}
+                  {isClassificationCorrect === false && (
+                    <div className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-lg">Select Correct Category</CardTitle>
+                          <CardDescription>
+                            Choose the correct category and subcategory for your document.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="space-y-2">
+                            <p className="font-medium text-sm">Category:</p>
+                            <RadioGroup
+                              value={selectedCategoryKey ?? undefined}
+                              onValueChange={(val) => {
+                                setSelectedCategoryKey(val)
+                                setSelectedSubcategoryKey(null) // Reset subcategory when category changes
+                              }}
+                              className="grid gap-2 sm:grid-cols-2"
+                            >
+                              {teacherCategories.map((c) => (
+                                <label
+                                  key={c.key}
+                                  className="flex items-center gap-2 rounded-md border p-3 hover:bg-gray-50 cursor-pointer"
+                                >
+                                  <RadioGroupItem value={c.key} />
+                                  <span className="text-sm font-medium">{c.label}</span>
+                                </label>
+                              ))}
+                            </RadioGroup>
+                          </div>
+
+                          {/* Show subcategories if category has them */}
+                          {selectedCategoryKey &&
+                            teacherCategories
+                              .find((c) => c.key === selectedCategoryKey)
+                              ?.subcategories && (
+                              <div className="space-y-2">
+                                <p className="font-medium text-sm">Sub-Category:</p>
+                                <RadioGroup
+                                  value={selectedSubcategoryKey ?? undefined}
+                                  onValueChange={(val) => setSelectedSubcategoryKey(val)}
+                                  className="grid gap-2 sm:grid-cols-2"
+                                >
+                                  {teacherCategories
+                                    .find((c) => c.key === selectedCategoryKey)
+                                    ?.subcategories?.map((sub) => (
+                                      <label
+                                        key={sub.key}
+                                        className="flex items-center gap-2 rounded-md border p-3 hover:bg-gray-50 cursor-pointer"
+                                      >
+                                        <RadioGroupItem value={sub.key} />
+                                        <span className="text-sm font-medium">{sub.label}</span>
+                                      </label>
+                                    ))}
+                                </RadioGroup>
+                              </div>
+                            )}
+
+                          <Button
+                            disabled={
+                              !selectedCategoryKey ||
+                              (!!teacherCategories.find((c) => c.key === selectedCategoryKey)?.subcategories &&
+                                (teacherCategories.find((c) => c.key === selectedCategoryKey)?.subcategories?.length ?? 0) > 0 &&
+                                !selectedSubcategoryKey)
+                            }
+                            onClick={async () => {
+                              try {
+                                if (!selectedCategoryKey) return
+
+                                const chosenCategory = teacherCategories.find((c) => c.key === selectedCategoryKey)
+                                if (!chosenCategory) return
+
+                                // Determine route - use subcategory route if available, otherwise category route
+                                let targetRoute = chosenCategory.route
+                                let targetFields = chosenCategory.fields
+
+                                if (selectedSubcategoryKey && chosenCategory.subcategories) {
+                                  const chosenSubcategory = chosenCategory.subcategories.find(
+                                    (s) => s.key === selectedSubcategoryKey
+                                  )
+                                  if (chosenSubcategory) {
+                                    targetRoute = chosenSubcategory.route
+                                    targetFields = chosenSubcategory.fields
+                                  }
+                                }
+
+                                // Store file for document viewer
+                                if (selectedFile) {
+                                  await new Promise<void>((resolve) => {
+                                    const reader = new FileReader()
+                                    reader.onload = function (e) {
+                                      sessionStorage.setItem("arms_uploaded_file", e.target?.result as string)
+                                      sessionStorage.setItem("arms_uploaded_file_name", selectedFile.name)
+                                      sessionStorage.setItem("arms_uploaded_file_type", selectedFile.type)
+                                      resolve()
+                                    }
+                                    reader.onerror = () => resolve() // Resolve even on error to not block navigation
+                                    reader.readAsDataURL(selectedFile)
+                                  })
+                                }
+
+                                // Store analysis data for form population
+                                sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
+                                sessionStorage.setItem("arms_dataFields", JSON.stringify(analysis.classification.dataFields || {}))
+                                sessionStorage.setItem("arms_category", selectedCategoryKey)
+                                sessionStorage.setItem("arms_subcategory", selectedSubcategoryKey || "")
+                                sessionStorage.setItem("arms_auto_fill", "true")
+
+                                router.push(targetRoute)
+                                toast({
+                                  title: "Redirecting...",
+                                  description: `Taking you to ${selectedSubcategoryKey ? chosenCategory.subcategories?.find(s => s.key === selectedSubcategoryKey)?.label : chosenCategory.label} page with auto-filled data`,
+                                })
+                              } catch (e) {
+                                console.error("Navigation error:", e)
+                                toast({
+                                  title: "Navigation Failed",
+                                  description: "Please try again.",
+                                  variant: "destructive",
+                                })
+                              }
+                            }}
+                            className="w-full"
+                          >
+                            Continue to Add Page
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Is this category correct?</CardTitle>
-                <CardDescription>
-                  If not, choose the correct category from teacher sections below.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  value={selectedCategoryKey ?? undefined}
-                  onValueChange={(val) => setSelectedCategoryKey(val)}
-                  className="grid gap-2 sm:grid-cols-2"
-                >
-                  {teacherCategories.map((c) => (
-                    <label key={c.key} className="flex items-center gap-2 rounded-md border p-3 hover:bg-gray-50">
-                      <RadioGroupItem value={c.key} />
-                      <span className="text-sm font-medium">{c.label}</span>
-                    </label>
-                  ))}
-                </RadioGroup>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end">
-              <Button
-                disabled={!selectedCategoryKey}
-                onClick={() => {
-                  try {
-                    if (!selectedCategoryKey) return
-                    const chosen = teacherCategories.find(c => c.key === selectedCategoryKey)
-                    if (!chosen) return
-                    const returnedFields = Object.keys(analysis.classification.dataFields || {})
-                    const overlap = returnedFields.filter(f => chosen.fields.map(x => x.toLowerCase()).includes(f.toLowerCase()))
-                    const matchRatio = chosen.fields.length ? overlap.length / chosen.fields.length : 0
-
-                    sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
-                    sessionStorage.setItem("arms_selected_category", chosen.key)
-
-                    if (matchRatio >= 0.5) {
-                      router.push(chosen.route)
-                    } else {
-                      toast({
-                        title: "Low field match",
-                        description: "Fields don’t seem to match well. You can proceed and map manually.",
-                      })
-                      router.push(chosen.route)
-                    }
-                  } catch (e) {
-                    toast({ title: "Navigation Failed", description: "Please try again.", variant: "destructive" })
-                  }
-                }}
-              >
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
 
             {/* <Card>
               <CardHeader>

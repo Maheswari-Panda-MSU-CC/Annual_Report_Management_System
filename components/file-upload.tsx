@@ -33,7 +33,7 @@ export function FileUpload({
         <div className="mt-4">
           <label htmlFor="file-upload" className="cursor-pointer">
             <span className="mt-2 block text-sm font-medium text-gray-900">Upload document to auto-fill form</span>
-            <span className="mt-1 block text-xs text-gray-500">PDF, DOCX up to 10MB</span>
+            <span className="mt-1 block text-xs text-gray-500">PDF, DOCX up to 1MB</span>
           </label>
           <input
             id="file-upload"

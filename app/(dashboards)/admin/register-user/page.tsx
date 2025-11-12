@@ -22,6 +22,7 @@ import {
   Loader2,
   Eye,
   EyeOff,
+  InfoIcon,
 } from "lucide-react"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
@@ -553,20 +554,21 @@ export default function RegisterUserPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Email Notification</CardTitle>
+              <CardTitle className="text-lg">Welcome Email Contains</CardTitle>
+              <span className="text-xs text-gray-500">Which will be sent to the user on successfull registration.</span>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Welcome email will be sent automatically</span>
+                <InfoIcon className="h-4 w-4 text-blue-600" />
+                  <span>Welcome greetings </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Login credentials included</span>
+                  <InfoIcon className="h-4 w-4 text-blue-600" />
+                  <span>Login credentials</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <InfoIcon className="h-4 w-4 text-blue-600" />
                   <span>Password change reminder</span>
                 </div>
               </div>

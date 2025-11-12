@@ -77,6 +77,12 @@ type EditingData = {
   ictOnlineCourse: boolean
   ictOthers: boolean
   ictOthersSpecify: string
+  // Research Metrics
+  H_INDEX: string
+  i10_INDEX: string
+  CITIATIONS: string
+  ORCHID_ID: string
+  RESEARCHER_ID: string
 }
 
 // Build a comma separated ICT_Details string from current editingData
@@ -130,6 +136,13 @@ const initialEditingData: EditingData = {
   ictOnlineCourse: false,
   ictOthers: false,
   ictOthersSpecify: "",
+
+  // Research Metrics
+  H_INDEX: "",
+  i10_INDEX: "",
+  CITIATIONS: "",
+  ORCHID_ID: "",
+  RESEARCHER_ID: "",
 };
 
 
@@ -225,54 +238,60 @@ export default function ProfilePage() {
 
         const data: TeacherData = await res.json()
         setTeacherInfo(data.teacherInfo)
-        
-        // Initialize react-hook-form arrays
-        experienceForm.reset({ experiences: data.teacherExperience || [] })
-        postDocForm.reset({ researches: data.postDoctoralExp || [] })
-        educationForm.reset({ educations: data.graduationDetails || [] })
-        setFacultyData(data.faculty)
-        setSelectedFacultyId(data.faculty?.Fid ?? null)
-        setDepartmentData(data.department)
-        setDesignationData(data.designation)
-        // Initialize react-hook-form with fetched personal details
-        reset({
-          Abbri: data.teacherInfo?.Abbri || '',
-          fname: data.teacherInfo?.fname || '',
-          mname: data.teacherInfo?.mname || '',
-          lname: data.teacherInfo?.lname || '',
-          email_id: data.teacherInfo?.email_id || '',
-          phone_no: data.teacherInfo?.phone_no || '',
-          // Dates must be in YYYY-MM-DD for <input type="date">
-          DOB: formatDateForInput(data.teacherInfo?.DOB),
-          recruit_date: formatDateForInput(data.teacherInfo?.recruit_date),
-          PAN_No: data.teacherInfo?.PAN_No || '',
-          // Teaching status and designations
-          perma_or_tenure: data.teacherInfo?.perma_or_tenure ?? false,
-          desig_perma: data.teacherInfo?.desig_perma ?? undefined,
-          desig_tenure: data.teacherInfo?.desig_tenure ?? undefined,
-          // Department
-          deptid: data.teacherInfo?.deptid ?? undefined,
-          // Exams/guide fields
-          NET: data.teacherInfo?.NET || false,
-          NET_year: data.teacherInfo?.NET_year || '',
-          GATE: data.teacherInfo?.GATE || false,
-          GATE_year: data.teacherInfo?.GATE_year || '',
-          PHDGuide: data.teacherInfo?.PHDGuide || false,
-          Guide_year: data.teacherInfo?.Guide_year || '',
-        })
-        // Initialize ICT selection from teacherInfo.ICT_Details
-        const details = (data.teacherInfo?.ICT_Details || '').split(',').map(s => s.trim()).filter(Boolean)
-        const othersEntry = details.find(d => d.toLowerCase().startsWith('others'))
-        setEditingData(prev => ({
-          ...prev,
-          ictSmartBoard: details.includes(ICT_LABELS.smartBoard),
-          ictPowerPoint: details.includes(ICT_LABELS.powerPoint),
-          ictTools: details.includes(ICT_LABELS.ictTools),
-          ictELearningTools: details.includes(ICT_LABELS.eLearningTools),
-          ictOnlineCourse: details.includes(ICT_LABELS.onlineCourse),
-          ictOthers: Boolean(othersEntry),
-          ictOthersSpecify: othersEntry?.split(':')?.[1]?.trim() || '',
-        }))
+      
+      // Initialize react-hook-form arrays
+      experienceForm.reset({ experiences: data.teacherExperience || [] })
+      postDocForm.reset({ researches: data.postDoctoralExp || [] })
+      educationForm.reset({ educations: data.graduationDetails || [] })
+      setFacultyData(data.faculty)
+      setSelectedFacultyId(data.faculty?.Fid ?? null)
+      setDepartmentData(data.department)
+      setDesignationData(data.designation)
+      // Initialize react-hook-form with fetched personal details
+      reset({
+        Abbri: data.teacherInfo?.Abbri || '',
+        fname: data.teacherInfo?.fname || '',
+        mname: data.teacherInfo?.mname || '',
+        lname: data.teacherInfo?.lname || '',
+        email_id: data.teacherInfo?.email_id || '',
+        phone_no: data.teacherInfo?.phone_no || '',
+        // Dates must be in YYYY-MM-DD for <input type="date">
+        DOB: formatDateForInput(data.teacherInfo?.DOB),
+        recruit_date: formatDateForInput(data.teacherInfo?.recruit_date),
+        PAN_No: data.teacherInfo?.PAN_No || '',
+        // Teaching status and designations
+        perma_or_tenure: data.teacherInfo?.perma_or_tenure ?? false,
+        desig_perma: data.teacherInfo?.desig_perma ?? undefined,
+        desig_tenure: data.teacherInfo?.desig_tenure ?? undefined,
+        // Department
+        deptid: data.teacherInfo?.deptid ?? undefined,
+        // Exams/guide fields
+        NET: data.teacherInfo?.NET || false,
+        NET_year: data.teacherInfo?.NET_year || '',
+        GATE: data.teacherInfo?.GATE || false,
+        GATE_year: data.teacherInfo?.GATE_year || '',
+        PHDGuide: data.teacherInfo?.PHDGuide || false,
+        Guide_year: data.teacherInfo?.Guide_year || '',
+        // Research Metrics - Add these new fields
+        H_INDEX: data.teacherInfo?.H_INDEX || '',
+        i10_INDEX: data.teacherInfo?.i10_INDEX || '',
+        CITIATIONS: data.teacherInfo?.CITIATIONS || '',
+        ORCHID_ID: data.teacherInfo?.ORCHID_ID || '',
+        RESEARCHER_ID: data.teacherInfo?.RESEARCHER_ID || '',
+      })
+      // Initialize ICT selection from teacherInfo.ICT_Details
+      const details = (data.teacherInfo?.ICT_Details || '').split(',').map(s => s.trim()).filter(Boolean)
+      const othersEntry = details.find(d => d.toLowerCase().startsWith('others'))
+      setEditingData(prev => ({
+        ...prev,
+        ictSmartBoard: details.includes(ICT_LABELS.smartBoard),
+        ictPowerPoint: details.includes(ICT_LABELS.powerPoint),
+        ictTools: details.includes(ICT_LABELS.ictTools),
+        ictELearningTools: details.includes(ICT_LABELS.eLearningTools),
+        ictOnlineCourse: details.includes(ICT_LABELS.onlineCourse),
+        ictOthers: Boolean(othersEntry),
+        ictOthersSpecify: othersEntry?.split(':')?.[1]?.trim() || '',
+      }))
       } catch (error) {
         console.error("Error fetching teacher profile:", error)
       } finally {
@@ -286,7 +305,7 @@ export default function ProfilePage() {
       fetchTeacherData()
       fetchDropdownData()
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, user])
 
   // When faculty selection changes, fetch departments for that faculty
   useEffect(() => {
@@ -1056,6 +1075,92 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              {/* Research Metrics - Add this new section */}
+              <div className="space-y-4">
+                <h4 className="text-md font-medium">Research Metrics</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="hIndex">H-Index</Label>
+                    <Input 
+                      id="hIndex" 
+                      type="number" 
+                      {...register('H_INDEX', {
+                        min: { value: 0, message: "H-Index must be a positive number" },
+                        valueAsNumber: true
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                      placeholder="Enter H-Index"
+                    />
+                    {errors.H_INDEX && isEditingPersonal && (
+                      <p className="text-sm text-red-500">{errors.H_INDEX.message as string}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="i10Index">i10-Index</Label>
+                    <Input 
+                      id="i10Index" 
+                      type="number" 
+                      {...register('i10_INDEX', {
+                        min: { value: 0, message: "i10-Index must be a positive number" },
+                        valueAsNumber: true
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                      placeholder="Enter i10-Index"
+                    />
+                    {errors.i10_INDEX && isEditingPersonal && (
+                      <p className="text-sm text-red-500">{errors.i10_INDEX.message as string}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="citations">Citations</Label>
+                    <Input 
+                      id="citations" 
+                      type="number" 
+                      {...register('CITIATIONS', {
+                        min: { value: 0, message: "Citations must be a positive number" },
+                        valueAsNumber: true
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                      placeholder="Enter total citations"
+                    />
+                    {errors.CITIATIONS && isEditingPersonal && (
+                      <p className="text-sm text-red-500">{errors.CITIATIONS.message as string}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="orcidId">ORCID ID</Label>
+                    <Input 
+                      id="orcidId" 
+                      {...register('ORCHID_ID', {
+                        pattern: {
+                          value: /^(\d{4}-){3}\d{3}[\dX]$/,
+                          message: "Invalid ORCID ID format (e.g., 0000-0000-0000-0000)"
+                        }
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                      placeholder="0000-0000-0000-0000"
+                      maxLength={19}
+                    />
+                    {errors.ORCHID_ID && isEditingPersonal && (
+                      <p className="text-sm text-red-500">{errors.ORCHID_ID.message as string}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="researcherId">Researcher ID</Label>
+                    <Input 
+                      id="researcherId" 
+                      {...register('RESEARCHER_ID')} 
+                      readOnly={!isEditingPersonal} 
+                      placeholder="Enter Researcher ID"
+                      maxLength={100}
+                    />
+                    {errors.RESEARCHER_ID && isEditingPersonal && (
+                      <p className="text-sm text-red-500">{errors.RESEARCHER_ID.message as string}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Teaching Status */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Teaching Status</h3>
@@ -1230,7 +1335,7 @@ export default function ProfilePage() {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Registration Information</h3>
                 <div className="space-y-2">
-                  <Label>Registered Guide at MSU</Label>
+                  <Label>Registered Phd Guide at MSU</Label>
                   <RadioGroup
                     value={watch('PHDGuide') ? "yes" : "no"}
                     onValueChange={(value: any) => setValue('PHDGuide', value === 'yes')}
