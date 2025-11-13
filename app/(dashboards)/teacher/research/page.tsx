@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { ResearchMetrics } from "@/types/interfaces"
+import { useTeacherResearch } from "@/hooks/use-teacher-data"
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 
 export default function ResearchProjectsPage() {
   const router = useRouter()
@@ -27,17 +29,19 @@ export default function ResearchProjectsPage() {
     researcherId: "",
   })
 
-  // Fetch metrics data from backend
+  // Use React Query for research data
+  const { data: researchData, isLoading: researchLoading } = useTeacherResearch()
+
+  // Fetch metrics data from backend (separate endpoint)
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
         const res = await fetch(`/api/teacher/research/research-indices?teacherId=${user?.role_id}`);
         if (!res.ok) throw new Error("Failed to fetch research metrics")
         const data = await res.json()
-      console.log(data.researchIndexes);
         setMetrics({
           hIndex: data.researchIndexes.H_INDEX || 0,
-          i10Index:data.researchIndexes.i10_INDEX || 0,
+          i10Index: data.researchIndexes.i10_INDEX || 0,
           citations: data.researchIndexes.CITIATIONS || 0,
           orcidId: data.researchIndexes.ORCHID_ID || "",
           researcherId: data.researchIndexes.RESEARCHER_ID || "",
@@ -47,9 +51,10 @@ export default function ResearchProjectsPage() {
       }
     }
 
-
-    fetchMetrics()
-  }, [refreshKey])
+    if (user?.role_id) {
+      fetchMetrics()
+    }
+  }, [refreshKey, user?.role_id])
 
   // Handle save (PUT / PATCH API call)
   const handleSaveMetrics = async () => {

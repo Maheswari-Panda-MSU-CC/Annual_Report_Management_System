@@ -1,4 +1,5 @@
 import { connectToDatabase } from '@/lib/db';
+import { cachedJsonResponse } from '@/lib/api-cache';
 import sql from 'mssql';
 
 // #region Profile Data get
@@ -36,10 +37,8 @@ export async function GET(request: Request) {
         graduationDetails: recordsets?.[6] ?? [],        
       };
       
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Cache for 5 minutes (300 seconds) - profile data doesn't change frequently
+    return cachedJsonResponse(response, 300);
   } catch (err) {
     console.error('Error fetching teacher profile:', err);
     return new Response(JSON.stringify({ error: 'Failed to fetch teacher profile' }), {

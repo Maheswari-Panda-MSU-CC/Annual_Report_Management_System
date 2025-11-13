@@ -12,6 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useTeacherPublications, useInvalidateTeacherData } from "@/hooks/use-teacher-data"
+import { TableLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 import {
   Plus,
   Edit,
@@ -214,10 +216,15 @@ export default function PublicationsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("journals")
-  const [data, setData] = useState(initialData)
-  const [isLoading, setIsLoading] = useState(true)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
+
+  // Use React Query for data fetching with automatic caching
+  const { journals, books, papers, isLoading, isFetching, data: rawData } = useTeacherPublications()
+  const { invalidatePublications } = useInvalidateTeacherData()
+  
+  // Show loading only if we have no data at all (first load)
+  const isInitialLoading = isLoading && !journals.data && !books.data && !papers.data
 
   // Dropdowns
   const {
@@ -239,28 +246,14 @@ export default function PublicationsPage() {
     fetchBookTypes()
   }, [])
 
-  // Fetch publications data
+  // Map data when it's loaded from React Query
+  const [data, setData] = useState(initialData)
+  
   useEffect(() => {
-    if (user?.role_id) {
-      fetchPublications()
-    }
-  }, [user?.role_id])
-
-  const fetchPublications = async () => {
-    if (!user?.role_id) return
-
-    setIsLoading(true)
-    try {
-      // Fetch all three types in parallel
-      const [journalsRes, booksRes, papersRes] = await Promise.all([
-        fetch(`/api/teacher/publication/journals?teacherId=${user.role_id}`),
-        fetch(`/api/teacher/publication/books?teacherId=${user.role_id}`),
-        fetch(`/api/teacher/publication/papers?teacherId=${user.role_id}`),
-      ])
-
-      const journalsData = await journalsRes.json()
-      const booksData = await booksRes.json()
-      const papersData = await papersRes.json()
+    if (journals.data && books.data && papers.data) {
+      const journalsData = journals.data
+      const booksData = books.data
+      const papersData = papers.data
 
       // Map database fields to UI format
       const mappedJournals = (journalsData.journals || []).map((item: any, index: number) => ({
@@ -336,17 +329,8 @@ export default function PublicationsPage() {
         books: mappedBooks,
         papers: mappedPapers,
       })
-    } catch (error: any) {
-      console.error("Error fetching publications:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load publications",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
     }
-  }
+  }, [journals.data, books.data, papers.data])
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -404,8 +388,8 @@ export default function PublicationsPage() {
         description: "Item deleted successfully!",
       })
 
-      // Refresh data
-      await fetchPublications()
+      // Invalidate and refetch data using React Query
+      invalidatePublications()
     } catch (error: any) {
       toast({
         title: "Error",
@@ -563,15 +547,10 @@ export default function PublicationsPage() {
   }
 
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading publications...</p>
-        </div>
-      </div>
-    )
+  // Show loading only on initial load (when no cached data exists)
+  // If we have cached data, show it immediately even if refetching
+  if (isInitialLoading) {
+    return <TableLoadingSkeleton />
   }
 
   return (

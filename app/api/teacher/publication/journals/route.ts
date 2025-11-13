@@ -1,4 +1,5 @@
 import { connectToDatabase } from '@/lib/db'
+import { cachedJsonResponse } from '@/lib/api-cache'
 import sql from 'mssql'
 import { NextResponse } from 'next/server'
 
@@ -23,10 +24,11 @@ export async function GET(request: Request) {
 
     const journals = result.recordset || []
 
-    return NextResponse.json({
+    // Cache for 3 minutes (180 seconds)
+    return cachedJsonResponse({
       success: true,
       journals,
-    })
+    }, 180)
   } catch (err: any) {
     console.error('Error fetching journals:', err)
     return NextResponse.json(

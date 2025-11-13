@@ -499,7 +499,7 @@ export default function TalksEventsPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch academic bodies participation from API
   const fetchAcademicBodiesParticipation = useCallback(async () => {
@@ -555,7 +555,7 @@ export default function TalksEventsPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch teacher talks from API
   const fetchTeacherTalks = useCallback(async () => {
@@ -610,7 +610,7 @@ export default function TalksEventsPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch university committees from API
   const fetchUniversityCommittees = useCallback(async () => {
@@ -669,22 +669,26 @@ export default function TalksEventsPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch data when tab changes
   useEffect(() => {
-    if (user?.role_id && activeTab === "refresher") {
+    if (!user?.role_id) return
+    
+    // Only fetch if we haven't fetched this section yet and it's the active tab
+    if (activeTab === "refresher" && !fetchedSections.has("refresher") && !fetchingRef.current.has("refresher")) {
       fetchRefresherDetails()
-    } else if (user?.role_id && activeTab === "academic-programs") {
+    } else if (activeTab === "academic-programs" && !fetchedSections.has("academic-programs") && !fetchingRef.current.has("academic-programs")) {
       fetchAcademicContributions()
-    } else if (user?.role_id && activeTab === "academic-bodies") {
+    } else if (activeTab === "academic-bodies" && !fetchedSections.has("academic-bodies") && !fetchingRef.current.has("academic-bodies")) {
       fetchAcademicBodiesParticipation()
-    } else if (user?.role_id && activeTab === "committees") {
+    } else if (activeTab === "committees" && !fetchedSections.has("committees") && !fetchingRef.current.has("committees")) {
       fetchUniversityCommittees()
-    } else if (user?.role_id && activeTab === "talks") {
+    } else if (activeTab === "talks" && !fetchedSections.has("talks") && !fetchingRef.current.has("talks")) {
       fetchTeacherTalks()
     }
-  }, [user?.role_id, activeTab, fetchRefresherDetails, fetchAcademicContributions, fetchAcademicBodiesParticipation, fetchUniversityCommittees, fetchTeacherTalks])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role_id, activeTab]) // Fetch functions are useCallbacks with their own dependencies
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {

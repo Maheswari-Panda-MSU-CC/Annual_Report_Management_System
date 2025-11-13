@@ -2,6 +2,7 @@ import type React from "react"
 import "./globals.css"
 import { Inter } from "next/font/google"
 import { AuthProvider } from "@/app/api/auth/auth-provider"
+import { ReactQueryProvider } from "@/lib/react-query-provider"
 import { Toaster } from "@/components/ui/toaster"
 import type { Metadata } from "next"
 
@@ -37,10 +38,12 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
       <body className="antialiased">
-        <AuthProvider>
+        <ReactQueryProvider>
+          <AuthProvider>
             {children}
-          <Toaster />
-        </AuthProvider>
+            <Toaster />
+          </AuthProvider>
+        </ReactQueryProvider>
       </body>
     </html>
   )

@@ -279,7 +279,7 @@ export default function AwardsRecognitionPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch awards/fellows from API
   const fetchAwardsFellows = useCallback(async () => {
@@ -335,7 +335,7 @@ export default function AwardsRecognitionPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch extension activities from API
   const fetchExtensionActivities = useCallback(async () => {
@@ -391,18 +391,22 @@ export default function AwardsRecognitionPage() {
       fetchingRef.current.delete(sectionId)
       setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab, toast])
+  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
   // Fetch data when tab changes
   useEffect(() => {
-    if (user?.role_id && activeTab === "performance") {
+    if (!user?.role_id) return
+    
+    // Only fetch if we haven't fetched this section yet and it's the active tab
+    if (activeTab === "performance" && !fetchedSections.has("performance") && !fetchingRef.current.has("performance")) {
       fetchPerformanceTeacher()
-    } else if (user?.role_id && activeTab === "awards") {
+    } else if (activeTab === "awards" && !fetchedSections.has("awards") && !fetchingRef.current.has("awards")) {
       fetchAwardsFellows()
-    } else if (user?.role_id && activeTab === "extension") {
+    } else if (activeTab === "extension" && !fetchedSections.has("extension") && !fetchingRef.current.has("extension")) {
       fetchExtensionActivities()
     }
-  }, [user?.role_id, activeTab, fetchPerformanceTeacher, fetchAwardsFellows, fetchExtensionActivities])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role_id, activeTab]) // Fetch functions are useCallbacks with their own dependencies
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {

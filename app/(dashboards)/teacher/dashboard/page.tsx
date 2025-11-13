@@ -3,9 +3,11 @@
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink, Upload, Brain, GraduationCap } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { SmartDocumentAnalyzer } from "@/components/smart-document-analyzer"
+import { useTeacherDashboard } from "@/hooks/use-teacher-data"
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 
 interface ResearchMetrics {
   scopus: {
@@ -25,20 +27,10 @@ interface ResearchMetrics {
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
-
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [researchMetrics, setResearchMetrics] = useState<ResearchMetrics>({
-    scopus: { hIndex: 0, citations: 0, documents: 0, coAuthors: 0 },
-    googleScholar: { hIndex: 0, i10Index: 0, citations: 0, citationsLast5Years: 0 },
-  });
-  const [stats, setStats] = useState<any[]>([]);
-  const [recentActivities, setRecentActivities] = useState<any[]>([]);
-  const [quickCounts, setQuickCounts] = useState<any>({});
-  const [researchSummary, setResearchSummary] =  useState<any>({});
-  const [researchIndexes, setResearchIndexes] = useState<any>({});
-  const [phdStudentsCount, setPhdStudentsCount] = useState<any>({});
-  const [phdStudentStatusCount, setPhdStudentStatusCount] = useState<any>({});
+
+  // Use React Query for data fetching with automatic caching
+  const { data: dashboardData, isLoading: loading, isError, error } = useTeacherDashboard();
 
   // Quick actions
   const quickActions = [
@@ -46,50 +38,27 @@ export default function DashboardPage() {
     { title: "Generate CV", description: "Create your academic CV", href: "/teacher/generate-cv" },
     { title: "Update Profile", description: "Modify your information", href: "/teacher/profile" },
     { title: "Add Publication", description: "Submit new publication", href: "/teacher/publication?tab=books" },
-    { title: "Add Research Project", description: "Register new research project", href: "/teacher/add-research" },
-    { title: "Add Patent", description: "Register new patent", href: "/teacher/add-patents" },
-    { title: "Add Event/Talk", description: "Add conference or talk", href: "/teacher/add-event" },
-    { title: "Add Award", description: "Add recognition or award", href: "/teacher/add-awards" },
-    { title: "Add Recommendation", description: "Add academic recommendation", href: "/teacher/add-academic-recommendations" },
+    { title: "Add Research Project", description: "Register new research project", href: "/teacher/research/add" },
+    { title: "Add Patent", description: "Register new patent", href: "/teacher/research-contributions/patents/add" },
+    { title: "Add Event/Talk", description: "Add conference or talk", href: "/teacher/talks-events/add" },
+    { title: "Add Award", description: "Add recognition or award", href: "/teacher/awards-recognition/add" },
+    { title: "Add Recommendation", description: "Add academic recommendation", href: "/teacher/academic-recommendations/add" },
   ];
 
-  // Fetch dashboard data
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!user) return;
-
-      setLoading(true);
-      try {
-        const teacherId = user?.role_id || user?.id;
-        if (!teacherId) return;
-
-        const response = await fetch(`/api/teacher/dashboard?teacherId=${teacherId}`);
-        if (!response.ok) throw new Error("Failed to fetch dashboard data");
-
-        const data = await response.json();
-
-        setStats([
-          { title: "Books Published", value: data.booksPublished ?? 0, description: "Books published this year", icon: BookOpen, color: "text-green-600", href: "/teacher/publication?tab=books" },
-          { title: "Journal Articles", value: data.journalArticles ?? 0, description: "Journal papers published", icon: FileText, color: "text-blue-600", href: "/teacher/publication?tab=journals" },
-          { title: "Papers Presented", value: data.PapersPresented ?? 0, description: "Papers Presented", icon: Award, color: "text-purple-600", href: "/teacher/publication?tab=papers" },
-          { title: "Total Publications", value: data.totalPublications ?? 0, description: "All publications this year", icon: TrendingUp, color: "text-orange-600", href: "/teacher/publication" },
-        ]);
-
-        setRecentActivities(data.recentActivities || []);
-        setQuickCounts(data.quickCounts || {});
-        setResearchSummary(data.researchSummary || {});
-        setResearchIndexes(data.researchIndexes || {});
-        setPhdStudentsCount(data.phdStudentsCount || {});
-        setPhdStudentStatusCount(data.phdStudentStatusCount || {});
-      } catch (err) {
-        console.error("Error fetching dashboard data:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [user]);
+  // Extract data from React Query response
+  const data = dashboardData || {};
+  const stats = [
+    { title: "Books Published", value: data.booksPublished ?? 0, description: "Books published this year", icon: BookOpen, color: "text-green-600", href: "/teacher/publication?tab=books" },
+    { title: "Journal Articles", value: data.journalArticles ?? 0, description: "Journal papers published", icon: FileText, color: "text-blue-600", href: "/teacher/publication?tab=journals" },
+    { title: "Papers Presented", value: data.PapersPresented ?? 0, description: "Papers Presented", icon: Award, color: "text-purple-600", href: "/teacher/publication?tab=papers" },
+    { title: "Total Publications", value: data.totalPublications ?? 0, description: "All publications this year", icon: TrendingUp, color: "text-orange-600", href: "/teacher/publication" },
+  ];
+  const recentActivities = data.recentActivities || [];
+  const quickCounts = data.quickCounts || {};
+  const researchSummary = data.researchSummary || {};
+  const researchIndexes = data.researchIndexes || {};
+  const phdStudentsCount = data.phdStudentsCount || {};
+  const phdStudentStatusCount = data.phdStudentStatusCount || {};
 
 
 
@@ -103,7 +72,15 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return <div className="text-center text-gray-500 mt-10">Loading dashboard...</div>;
+    return <PageLoadingSkeleton />;
+  }
+
+  if (isError) {
+    return (
+      <div className="text-center text-red-500 mt-10">
+        <p>Error loading dashboard: {error instanceof Error ? error.message : "Unknown error"}</p>
+      </div>
+    );
   }
 
   return (
@@ -156,7 +133,7 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentActivities.map((activity, index)=> (
+                {recentActivities.map((activity: any, index: number)=> (
                   <div
                     key={activity.id ?? index}
                     className="flex items-center space-x-4 p-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"

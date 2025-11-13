@@ -1,4 +1,5 @@
 import { connectToDatabase } from '@/lib/db';
+import { cachedJsonResponse } from '@/lib/api-cache';
 import sql from 'mssql';
 
 export async function GET(request: Request) {
@@ -37,10 +38,8 @@ export async function GET(request: Request) {
       phdStudentStatusCount: recordsets?.[10]?.[0] ?? {},
     };
 
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    // Cache for 2 minutes (120 seconds) - dashboard data changes frequently
+    return cachedJsonResponse(response, 120);
   } catch (err) {
     console.error('Error fetching dashboard data:', err);
     return new Response(JSON.stringify({ error: 'Failed to fetch dashboard data' }), {

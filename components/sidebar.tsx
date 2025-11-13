@@ -633,7 +633,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                                 const IconComponent = getIconComponent(subItem.icon)
                                 return (
                                   <li key={subItem.name}>
-                                    <Link href={subItem.href}>
+                                    <Link href={subItem.href} prefetch={true}>
                                       <span
                                         onClick={handleLinkClick}
                                         className="group flex gap-x-3 rounded-md p-2 text-sm leading-6 text-gray-600 hover:text-blue-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -651,6 +651,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                       ) : (
                         <Link
                           href={item.href}
+                          prefetch={true}
                           onClick={handleLinkClick}
                           className={cn(
                             pathname === item.href

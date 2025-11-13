@@ -457,7 +457,7 @@ export default function GenerateCVPage() {
     } finally {
       setIsLoadingData(false)
     }
-  }, [user?.role_id, toast])
+  }, [user?.role_id]) // Removed toast from dependencies - it's stable and doesn't need to be in deps
 
   useEffect(() => {
     if (user?.role_id) {

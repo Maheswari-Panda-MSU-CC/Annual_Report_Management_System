@@ -18,6 +18,8 @@ import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText } from "luc
 import { TeacherInfo, ExperienceEntry, PostDocEntry, EducationEntry, TeacherData, Faculty, Department, Designation, FacultyOption, DepartmentOption, DesignationOption, DegreeTypeOption } from "@/types/interfaces"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
+import { useTeacherProfile, useInvalidateTeacherData } from "@/hooks/use-teacher-data"
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 
 
 
@@ -229,15 +231,18 @@ export default function ProfilePage() {
     }
   };
 
-  useEffect(() => {
-    const fetchTeacherData = async () => {
-      try {
-        const teacherId = user?.role_id || 1 // Replace with actual user id or fallback
-        const res = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-        if (!res.ok) throw new Error("Failed to fetch teacher data")
+  // Use React Query for data fetching with automatic caching
+  // IMPORTANT: These hooks MUST be called unconditionally before any early returns
+  const { data: profileData, isLoading: profileLoading, isError: profileError } = useTeacherProfile()
+  const { invalidateProfile } = useInvalidateTeacherData()
+  
+  // Ensure all hooks are called before any conditional logic or early returns
 
-        const data: TeacherData = await res.json()
-        setTeacherInfo(data.teacherInfo)
+  // Initialize forms when data is loaded
+  useEffect(() => {
+    if (profileData) {
+      const data: TeacherData = profileData as any
+      setTeacherInfo(data.teacherInfo)
       
       // Initialize react-hook-form arrays
       experienceForm.reset({ experiences: data.teacherExperience || [] })
@@ -292,27 +297,43 @@ export default function ProfilePage() {
         ictOthers: Boolean(othersEntry),
         ictOthersSpecify: othersEntry?.split(':')?.[1]?.trim() || '',
       }))
-      } catch (error) {
-        console.error("Error fetching teacher profile:", error)
-      } finally {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     }
+  }, [profileData])
 
+  useEffect(() => {
     if (isAuthenticated === false) {
       router.push("/teacher/dashboard")
-    } else {
-      fetchTeacherData()
+    } else if (isAuthenticated) {
       fetchDropdownData()
     }
-  }, [isAuthenticated, router, user])
+  }, [isAuthenticated, router])
 
   // When faculty selection changes, fetch departments for that faculty
+  // MUST be before any early returns to follow Rules of Hooks
   useEffect(() => {
     if (selectedFacultyId && !Number.isNaN(selectedFacultyId)) {
       fetchDepartmentsByFaculty(selectedFacultyId)
     }
   }, [selectedFacultyId])
+
+  // Show loading state - AFTER all hooks
+  // All hooks must be called before any early returns to follow Rules of Hooks
+  if (profileLoading || isLoading) {
+    return <PageLoadingSkeleton />
+  }
+
+  if (profileError) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center text-red-500">
+          <p>Error loading profile. Please try again.</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Remove duplicate isLoading check that was after hooks
 
 
   const handleInputChange = <K extends keyof TeacherInfo>(field: K, value: TeacherInfo[K]) => {
@@ -793,13 +814,7 @@ export default function ProfilePage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-      </div>
-    )
-  }
+  // Loading state is already handled above (line 322) - removed duplicate check to follow Rules of Hooks
 
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">

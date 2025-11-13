@@ -1,4 +1,5 @@
 import { connectToDatabase } from '@/lib/db'
+import { cachedJsonResponse } from '@/lib/api-cache'
 import sql from 'mssql'
 
 export async function GET(request: Request) {
@@ -22,10 +23,8 @@ export async function GET(request: Request) {
 
       const researchProjects = Array.isArray(result.recordset) ? result.recordset : []
 
-    return new Response(JSON.stringify({ researchProjects }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    // Cache for 3 minutes (180 seconds)
+    return cachedJsonResponse({ researchProjects }, 180)
   } catch (err) {
     console.error('Error fetching research projects:', err)
     return new Response(JSON.stringify({ error: 'Failed to fetch research projects' }), {
