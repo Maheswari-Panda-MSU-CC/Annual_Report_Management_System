@@ -12,43 +12,9 @@ import {
   BorderStyle,
 } from "docx"
 import { type CVTemplate } from "./cv-template-styles"
+import type { CVData } from "@/types/cv-data"
 
-interface PersonalInfo {
-  name: string
-  designation: string
-  department: string
-  institution: string
-  email: string
-  phone: string
-  address: string
-  dateOfBirth: string
-  nationality: string
-  orcid: string
-}
-
-interface CVData {
-  personal: PersonalInfo | null
-  education: any[]
-  postdoc: any[]
-  experience: any[]
-  research: any[]
-  patents: any[]
-  econtent: any[]
-  consultancy: any[]
-  collaborations: any[]
-  phdguidance: any[]
-  books: any[]
-  papers: any[]
-  articles: any[]
-  awards: any[]
-  talks: any[]
-  academic_contribution: any[]
-  academic_participation: any[]
-  committees: any[]
-  performance: any[]
-  extension: any[]
-  orientation: any[]
-}
+// Types are now imported from types/cv-data.ts
 
 // Template-specific styling configurations
 const templateStyles = {
@@ -61,6 +27,7 @@ const templateStyles = {
     nameColor: "1f2937",
     titleColor: "4b5563",
     sectionColor: "1e3a8a",
+    fontFamily: "Times New Roman",
   },
   professional: {
     nameSize: 36,
@@ -71,6 +38,7 @@ const templateStyles = {
     nameColor: "ffffff",
     titleColor: "ffffff",
     sectionColor: "1d4ed8",
+    fontFamily: "Calibri",
   },
   modern: {
     nameSize: 34,
@@ -81,6 +49,7 @@ const templateStyles = {
     nameColor: "111827",
     titleColor: "4b5563",
     sectionColor: "374151",
+    fontFamily: "Calibri",
   },
   classic: {
     nameSize: 30,
@@ -91,6 +60,7 @@ const templateStyles = {
     nameColor: "1f2937",
     titleColor: "374151",
     sectionColor: "374151",
+    fontFamily: "Times New Roman",
   },
 }
 
@@ -1102,10 +1072,153 @@ export async function generateWordDocument(
   }
 
   const styles = templateStyles[template]
-  const children: (Paragraph | Table)[] = []
+  
+  // Build left column content (Personal info, Contact)
+  const leftColumnContent: (Paragraph | Table)[] = []
+  
+  // Profile image placeholder
+  leftColumnContent.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: "[Profile Image]",
+          italics: true,
+          size: styles.bodySize - 4,
+          color: "888888",
+        }),
+      ],
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 400 },
+    })
+  )
 
-  // Header with template-specific styling
-  children.push(
+  // Contact Information
+  leftColumnContent.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: "CONTACT",
+          bold: true,
+          size: styles.sectionHeadingSize - 4,
+          color: template === "professional" ? "ffffff" : styles.sectionColor,
+        }),
+      ],
+      spacing: { after: 200 },
+    })
+  )
+
+  if (cvData.personal.email) {
+    leftColumnContent.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Email: ${cvData.personal.email}`,
+            size: styles.bodySize - 2,
+            color: template === "professional" ? "ffffff" : "000000",
+          }),
+        ],
+        spacing: { after: 100 },
+      })
+    )
+  }
+
+  if (cvData.personal.phone) {
+    leftColumnContent.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Phone: ${cvData.personal.phone}`,
+            size: styles.bodySize - 2,
+            color: template === "professional" ? "ffffff" : "000000",
+          }),
+        ],
+        spacing: { after: 100 },
+      })
+    )
+  }
+
+  if (cvData.personal.address) {
+    leftColumnContent.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Address: ${cvData.personal.address}`,
+            size: styles.bodySize - 2,
+            color: template === "professional" ? "ffffff" : "000000",
+          }),
+        ],
+        spacing: { after: 100 },
+      })
+    )
+  }
+
+  if (cvData.personal.orcid) {
+    leftColumnContent.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `ORCID: ${cvData.personal.orcid}`,
+            size: styles.bodySize - 2,
+            color: template === "professional" ? "ffffff" : "000000",
+          }),
+        ],
+        spacing: { after: 200 },
+      })
+    )
+  }
+
+  // Personal Details (if selected)
+  if (selectedSections.includes("personal") && (cvData.personal.dateOfBirth || cvData.personal.nationality)) {
+    leftColumnContent.push(
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "PERSONAL",
+            bold: true,
+            size: styles.sectionHeadingSize - 4,
+            color: template === "professional" ? "ffffff" : styles.sectionColor,
+          }),
+        ],
+        spacing: { before: 200, after: 200 },
+      })
+    )
+
+    if (cvData.personal.dateOfBirth) {
+      leftColumnContent.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Date of Birth: ${cvData.personal.dateOfBirth}`,
+              size: styles.bodySize - 2,
+              color: template === "professional" ? "ffffff" : "000000",
+            }),
+          ],
+          spacing: { after: 100 },
+        })
+      )
+    }
+
+    if (cvData.personal.nationality) {
+      leftColumnContent.push(
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: `Nationality: ${cvData.personal.nationality}`,
+              size: styles.bodySize - 2,
+              color: template === "professional" ? "ffffff" : "000000",
+            }),
+          ],
+          spacing: { after: 100 },
+        })
+      )
+    }
+  }
+
+  // Build right column content (Header + Sections)
+  const rightColumnContent: (Paragraph | Table)[] = []
+
+  // Header
+  rightColumnContent.push(
     new Paragraph({
       children: [
         new TextRun({
@@ -1113,6 +1226,7 @@ export async function generateWordDocument(
           bold: true,
           size: styles.nameSize,
           color: styles.nameColor,
+          font: styles.fontFamily,
         }),
       ],
       alignment: AlignmentType.CENTER,
@@ -1124,6 +1238,7 @@ export async function generateWordDocument(
           text: cvData.personal.designation,
           size: styles.titleSize,
           color: styles.titleColor,
+          font: styles.fontFamily,
         }),
       ],
       alignment: AlignmentType.CENTER,
@@ -1135,6 +1250,7 @@ export async function generateWordDocument(
           text: cvData.personal.department,
           size: styles.titleSize,
           color: styles.titleColor,
+          font: styles.fontFamily,
         }),
       ],
       alignment: AlignmentType.CENTER,
@@ -1146,80 +1262,86 @@ export async function generateWordDocument(
           text: cvData.personal.institution,
           size: styles.titleSize,
           color: styles.titleColor,
+          font: styles.fontFamily,
         }),
       ],
       alignment: AlignmentType.CENTER,
-      spacing: { after: 300 },
-    }),
+      spacing: { after: 400 },
+    })
   )
-
-  // Contact information
-  const contactInfo: string[] = []
-  if (cvData.personal.email) contactInfo.push(`Email: ${cvData.personal.email}`)
-  if (cvData.personal.phone) contactInfo.push(`Phone: ${cvData.personal.phone}`)
-  if (cvData.personal.address) contactInfo.push(`Address: ${cvData.personal.address}`)
-  if (cvData.personal.orcid) contactInfo.push(`ORCID: ${cvData.personal.orcid}`)
-
-  if (contactInfo.length > 0) {
-    children.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: contactInfo.join(" | "),
-            size: styles.contactSize,
-            color: styles.titleColor,
-          }),
-        ],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 400 },
-      }),
-    )
-  }
 
   // Add selected sections in order
   selectedSections.forEach((sectionId) => {
-    const sectionContent = createWordSection(sectionId, cvData, template)
-    children.push(...sectionContent)
+    if (sectionId !== "personal") {
+      const sectionContent = createWordSection(sectionId, cvData, template)
+      rightColumnContent.push(...sectionContent)
+    }
   })
 
-  // Document information
-  children.push(
-    new Paragraph({
-      text: "Document Information",
-      heading: HeadingLevel.HEADING_1,
-      spacing: { before: 400, after: 200 },
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({ text: "Generated on: ", bold: true, size: styles.bodySize }),
-        new TextRun({ text: new Date().toLocaleDateString(), size: styles.bodySize }),
-      ],
-      spacing: { after: 100 },
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({ text: "Template: ", bold: true, size: styles.bodySize }),
-        new TextRun({
-          text: template.charAt(0).toUpperCase() + template.slice(1),
-          size: styles.bodySize,
-        }),
-      ],
-      spacing: { after: 100 },
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({ text: "Sections included: ", bold: true, size: styles.bodySize }),
-        new TextRun({ text: `${selectedSections.length}`, size: styles.bodySize }),
-      ],
-    }),
-  )
+  // Create two-column table
+  const mainTable = new Table({
+    rows: [
+      new TableRow({
+        children: [
+          // Left column (33% width)
+          new TableCell({
+            children: leftColumnContent,
+            width: { size: 33, type: WidthType.PERCENTAGE },
+            shading: {
+              fill: template === "professional" ? "1d4ed8" : template === "modern" ? "eff6ff" : "f9fafb",
+            },
+            margins: {
+              top: 1440, // 1 inch
+              right: 360, // 0.25 inch
+              bottom: 1440,
+              left: 360,
+            },
+          }),
+          // Right column (67% width)
+          new TableCell({
+            children: rightColumnContent,
+            width: { size: 67, type: WidthType.PERCENTAGE },
+            margins: {
+              top: 1440,
+              right: 360,
+              bottom: 1440,
+              left: 360,
+            },
+          }),
+        ],
+      }),
+    ],
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.NONE },
+      bottom: { style: BorderStyle.NONE },
+      left: { style: BorderStyle.NONE },
+      right: { style: BorderStyle.NONE },
+      insideHorizontal: { style: BorderStyle.NONE },
+      insideVertical: { style: BorderStyle.NONE },
+    },
+  })
 
   // Create the document
   const doc = new Document({
     sections: [
       {
-        properties: {},
-        children: children,
+        properties: {
+          page: {
+            size: {
+              orientation: "portrait",
+              width: 12240, // 8.5 inches in twips
+              height: 15840, // 11 inches in twips
+            },
+            margin: {
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+            },
+          },
+        },
+        children: [mainTable],
       },
     ],
   })

@@ -1,6 +1,22 @@
 // Shared CV template styles for both frontend and backend
 export const cvTemplateStyles = {
   academic: {
+    // Preview styles (Tailwind classes)
+    previewStyles: {
+      container: "bg-white text-gray-900 font-['Times_New_Roman','Times',serif]",
+      leftColumn: "bg-gray-50 p-8 border-r-2 border-gray-300 min-h-full",
+      rightColumn: "p-8 bg-white min-h-full",
+      header: "text-center mb-8 pb-5 border-b-2 border-gray-400",
+      nameClass: "text-3xl font-bold text-gray-900 mb-3 leading-tight",
+      titleClass: "text-lg text-gray-700 mb-2",
+      sectionTitle: "text-base font-bold text-blue-900 mb-4 mt-8 uppercase tracking-wide border-b-2 border-blue-900 pb-2.5",
+      itemClass: "mb-5 pb-4 border-b border-gray-200 last:border-b-0",
+      itemTitle: "font-bold text-gray-900 mb-1.5 text-base",
+      itemSubtitle: "text-sm italic text-gray-700 mb-1.5",
+      itemDetails: "text-sm text-gray-600 leading-relaxed",
+      contactHeading: "font-bold text-base mb-4 text-gray-900 uppercase tracking-wide",
+      contactText: "text-sm text-gray-700 leading-relaxed",
+    },
     documentStyles: {
       body: "font-family: 'Times New Roman', serif; line-height: 1.6; margin: 1in; color: #333;",
       header: "text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 20px; margin-bottom: 30px;",
@@ -21,6 +37,22 @@ export const cvTemplateStyles = {
     },
   },
   professional: {
+    // Preview styles (Tailwind classes)
+    previewStyles: {
+      container: "bg-white text-gray-900 font-['Calibri','Arial',sans-serif]",
+      leftColumn: "bg-blue-900 text-white p-8 min-h-full",
+      rightColumn: "p-8 bg-white min-h-full",
+      header: "text-center mb-8 pb-5 border-b border-blue-700",
+      nameClass: "text-3xl font-bold text-white mb-3 leading-tight",
+      titleClass: "text-lg text-blue-100 mb-2 font-medium",
+      sectionTitle: "text-base font-semibold text-blue-900 mb-4 mt-8 uppercase border-l-4 border-blue-900 pl-4",
+      itemClass: "mb-5 pb-4 border-l-2 border-blue-200 pl-4 last:border-b-0",
+      itemTitle: "font-semibold text-gray-900 mb-1.5 text-base",
+      itemSubtitle: "text-sm italic text-blue-600 mb-1.5",
+      itemDetails: "text-sm text-gray-600 leading-relaxed",
+      contactHeading: "font-bold text-base mb-4 text-blue-100 uppercase tracking-wide",
+      contactText: "text-sm text-white leading-relaxed",
+    },
     documentStyles: {
       body: "font-family: Arial, sans-serif; line-height: 1.5; margin: 1in; color: #374151;",
       header:
@@ -42,6 +74,22 @@ export const cvTemplateStyles = {
     },
   },
   modern: {
+    // Preview styles (Tailwind classes)
+    previewStyles: {
+      container: "bg-white text-gray-900 font-['Roboto','Calibri','Arial',sans-serif]",
+      leftColumn: "bg-gradient-to-b from-blue-50 to-white p-8 border-r-2 border-blue-100 min-h-full",
+      rightColumn: "p-8 bg-white min-h-full",
+      header: "text-center mb-8 pb-5 border-b-2 border-blue-200",
+      nameClass: "text-3xl font-bold text-gray-900 mb-3 leading-tight",
+      titleClass: "text-lg text-gray-600 mb-2 font-medium",
+      sectionTitle: "text-base font-semibold text-blue-700 mb-4 mt-8 uppercase tracking-wide border-b-2 border-blue-200 pb-2.5",
+      itemClass: "mb-5 pb-4 border-b border-gray-100 last:border-b-0",
+      itemTitle: "font-semibold text-gray-900 mb-1.5 text-base",
+      itemSubtitle: "text-sm italic text-gray-600 mb-1.5",
+      itemDetails: "text-sm text-gray-500 leading-relaxed",
+      contactHeading: "font-bold text-base mb-4 text-gray-900 uppercase tracking-wide",
+      contactText: "text-sm text-gray-700 leading-relaxed",
+    },
     documentStyles: {
       body: "font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.5; margin: 1in; color: #111827; background-color: #f9fafb;",
       header:
@@ -65,6 +113,22 @@ export const cvTemplateStyles = {
     },
   },
   classic: {
+    // Preview styles (Tailwind classes)
+    previewStyles: {
+      container: "bg-white text-gray-900 font-['Times_New_Roman','Times',serif]",
+      leftColumn: "bg-gray-50 p-8 border-r border-gray-300 min-h-full",
+      rightColumn: "p-8 bg-white min-h-full",
+      header: "text-center mb-8 pb-5 border-b border-gray-400",
+      nameClass: "text-3xl font-bold text-gray-900 mb-3 leading-tight",
+      titleClass: "text-lg text-gray-700 mb-2",
+      sectionTitle: "text-base font-bold text-gray-800 mb-4 mt-8 uppercase border-b border-gray-400 pb-2.5 tracking-wider",
+      itemClass: "mb-5 pb-4 border-b border-gray-200 last:border-b-0",
+      itemTitle: "font-bold text-gray-900 mb-1.5 text-base",
+      itemSubtitle: "text-sm italic text-gray-700 mb-1.5",
+      itemDetails: "text-sm text-gray-600 leading-relaxed",
+      contactHeading: "font-bold text-base mb-4 text-gray-900 uppercase tracking-wide",
+      contactText: "text-sm text-gray-700 leading-relaxed",
+    },
     documentStyles: {
       body: "font-family: 'Times New Roman', serif; line-height: 1.6; margin: 1in; color: #1f2937; background-color: #fefdf8;",
       header: "text-align: center; border-bottom: 1px solid #9ca3af; padding-bottom: 20px; margin-bottom: 30px;",

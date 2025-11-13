@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { generateCVHTML } from "@/lib/cv-html-generator"
-import { generateWordDocument } from "@/lib/cv-word-generator"
-import { type CVTemplate } from "@/lib/cv-template-styles"
+import { generateCVHTML } from "@/app/api/teacher/cv-generation/cv-html-generator"
+import { generateWordDocument } from "@/app/api/teacher/cv-generation/cv-word-generator"
+import { type CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
 
 interface CVGenerationRequest {
   cvData: {
