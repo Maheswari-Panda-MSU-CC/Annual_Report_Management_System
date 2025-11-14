@@ -60,11 +60,11 @@ export async function PATCH(req: Request) {
     request.input('Tid', sql.Int, teacherId);
     request.input('Employeer', sql.NVarChar(500), experience.Employeer);
     request.input('Start_Date', sql.Date, experience.Start_Date);
-    request.input('End_Date', sql.Date, experience.currente ? null : (experience.End_Date ?? null));
+    request.input('End_Date', sql.Date, experience.currente===1 ? null : (experience.End_Date ?? null));
     request.input('Nature', sql.VarChar(500), experience.Nature);
     request.input('UG_PG', sql.VarChar(10), experience.UG_PG);
     request.input('upload', sql.VarChar(100), experience.upload ?? null);
-    request.input('currente', sql.Bit, experience.currente ?? false);
+    request.input('currente', sql.Bit, experience.currente ?? 0);
     request.input('desig', sql.NVarChar(100), experience.desig ?? null);
 
     await request.execute('sp_Update_Teacher_Experience');

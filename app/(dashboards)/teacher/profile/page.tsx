@@ -14,7 +14,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/app/api/auth/auth-provider"
-import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText } from "lucide-react"
+import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText, Eye } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { DocumentViewer } from "@/components/document-viewer"
+
+// FileUpload Component
+interface FileUploadProps {
+  onFileSelect: (files: FileList | null) => void
+  acceptedTypes?: string
+  multiple?: boolean
+}
+
+function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png,.bmp", multiple = false }: FileUploadProps) {
+  return (
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+      <Upload className="mx-auto h-8 w-8 text-gray-400" />
+      <div className="mt-2">
+        <label htmlFor="file-upload" className="cursor-pointer">
+          <span className="mt-1 block text-xs font-medium text-gray-900">Upload file or drag and drop</span>
+          <span className="mt-1 block text-[10px] text-gray-500">PDF, JPG, JPEG, PNG, BMP up to 10MB</span>
+        </label>
+        <input
+          id="file-upload"
+          name="file-upload"
+          type="file"
+          className="sr-only"
+          accept={acceptedTypes}
+          multiple={multiple}
+          onChange={(e) => onFileSelect(e.target.files)}
+        />
+      </div>
+    </div>
+  )
+}
 import { TeacherInfo, ExperienceEntry, PostDocEntry, EducationEntry, TeacherData, Faculty, Department, Designation, FacultyOption, DepartmentOption, DesignationOption, DegreeTypeOption } from "@/types/interfaces"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
@@ -166,6 +198,7 @@ export default function ProfilePage() {
   const [experienceEditingIds, setExperienceEditingIds] = useState<Set<number>>(new Set());
   const [postDocEditingIds, setPostDocEditingIds] = useState<Set<number>>(new Set());
   const [educationEditingIds, setEducationEditingIds] = useState<Set<number>>(new Set());
+  const [selectedFiles, setSelectedFiles] = useState<{ type: 'phd' | 'education', index: number, files: FileList | null } | null>(null);
 
 
   const { facultyOptions, departmentOptions, degreeTypeOptions, permanentDesignationOptions, temporaryDesignationOptions, fetchFaculties, fetchDepartments, fetchDegreeTypes, fetchParmanentDesignations, fetchTemporaryDesignations } = useDropDowns()
@@ -174,14 +207,17 @@ export default function ProfilePage() {
   const [editingData, setEditingData] = useState({ ...initialEditingData })
 
   // react-hook-form for Personal Details
-  const { control, register, reset, handleSubmit, getValues, watch, setValue, formState: { errors } } = useForm<any>({
+  const { control, register, reset, handleSubmit, getValues, watch, setValue, formState: { errors, touchedFields } } = useForm<any>({
     defaultValues: {},
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
   })
 
   // react-hook-form for Experience Details
   const experienceForm = useForm<{ experiences: ExperienceEntry[] }>({
     defaultValues: { experiences: [] },
-    mode: 'onChange',
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
   })
   const { fields: experienceFields, append: appendExperience, remove: removeExperience, update: updateExperience } = useFieldArray({
     control: experienceForm.control,
@@ -191,7 +227,8 @@ export default function ProfilePage() {
   // react-hook-form for Post-Doctoral Research
   const postDocForm = useForm<{ researches: PostDocEntry[] }>({
     defaultValues: { researches: [] },
-    mode: 'onChange',
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
   })
   const { fields: postDocFields, append: appendPostDoc, remove: removePostDoc, update: updatePostDoc } = useFieldArray({
     control: postDocForm.control,
@@ -201,7 +238,8 @@ export default function ProfilePage() {
   // react-hook-form for Education Details
   const educationForm = useForm<{ educations: EducationEntry[] }>({
     defaultValues: { educations: [] },
-    mode: 'onChange',
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
   })
   const { fields: educationFields, append: appendEducation, remove: removeEducation, update: updateEducationField } = useFieldArray({
     control: educationForm.control,
@@ -245,7 +283,11 @@ export default function ProfilePage() {
       setTeacherInfo(data.teacherInfo)
       
       // Initialize react-hook-form arrays
-      experienceForm.reset({ experiences: data.teacherExperience || [] })
+      const normalizedExperiences = (data.teacherExperience || []).map((exp: any) => ({
+        ...exp,
+        currente: exp.currente === 1 || exp.currente === true ? true : false // Normalize 0/1 to boolean
+      }))
+      experienceForm.reset({ experiences: normalizedExperiences })
       postDocForm.reset({ researches: data.postDoctoralExp || [] })
       educationForm.reset({ educations: data.graduationDetails || [] })
       setFacultyData(data.faculty)
@@ -613,17 +655,35 @@ export default function ProfilePage() {
       // Validate only this row
       const isValid = await experienceForm.trigger(`experiences.${index}`)
       if (!isValid) {
-        toast({ title: "Validation Failed", description: "Please fill all required fields.", variant: "destructive" })
+        // Get specific field errors
+        const errors = experienceForm.formState.errors.experiences?.[index]
+        const errorMessages = Object.entries(errors || {}).map(([field, error]: [string, any]) => {
+          return `${field}: ${error?.message || 'Invalid value'}`
+        })
+        
+        toast({ 
+          title: "Validation Failed", 
+          description: errorMessages.length > 0 
+            ? `${errorMessages.join(', ')}` 
+            : "Please fill all required fields.", 
+          variant: "destructive" 
+        })
         return
       }
 
       const entry = experienceForm.getValues(`experiences.${index}`)
       const isNewEntry = !entry.Id || entry.Id > 2147483647
 
+      // Convert boolean currente to 0/1 for database
+      const experienceData = {
+        ...entry,
+        currente: (entry.currente === true || (typeof entry.currente === 'number' && entry.currente === 1)) ? 1 : 0
+      }
+
       const res = await fetch('/api/teacher/profile/experience', {
         method: isNewEntry ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ teacherId, experience: entry }),
+        body: JSON.stringify({ teacherId, experience: experienceData }),
       });
       
       if (!res.ok) {
@@ -640,12 +700,18 @@ export default function ProfilePage() {
           return next
         })
         
-        // Refresh data after successful save
-        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-        if (refreshRes.ok) {
-          const refreshData: TeacherData = await refreshRes.json()
-          experienceForm.reset({ experiences: refreshData.teacherExperience || [] })
-        }
+        // Invalidate and refresh data after successful save
+        await invalidateProfile()
+        
+        // Wait a bit for the data to refresh, then update the form
+        setTimeout(async () => {
+          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+          if (refreshRes.ok) {
+            const refreshData: TeacherData = await refreshRes.json()
+            experienceForm.reset({ experiences: refreshData.teacherExperience || [] })
+          }
+        }, 100)
+        
         toast({ 
           title: "Experience Saved", 
           description: result.message || "Experience details saved successfully." 
@@ -698,12 +764,18 @@ export default function ProfilePage() {
           return next
         })
         
-        // Refresh data after successful save
-        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-        if (refreshRes.ok) {
-          const refreshData: TeacherData = await refreshRes.json()
-          postDocForm.reset({ researches: refreshData.postDoctoralExp || [] })
-        }
+        // Invalidate and refresh data after successful save
+        await invalidateProfile()
+        
+        // Wait a bit for the data to refresh, then update the form
+        setTimeout(async () => {
+          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+          if (refreshRes.ok) {
+            const refreshData: TeacherData = await refreshRes.json()
+            postDocForm.reset({ researches: refreshData.postDoctoralExp || [] })
+          }
+        }, 100)
+        
         toast({ 
           title: "Post-Doc Saved", 
           description: result.message || "Post-doctoral details saved successfully." 
@@ -756,12 +828,18 @@ export default function ProfilePage() {
           return next
         })
         
-        // Refresh data after successful save
-        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-        if (refreshRes.ok) {
-          const refreshData: TeacherData = await refreshRes.json()
-          educationForm.reset({ educations: refreshData.graduationDetails || [] })
-        }
+        // Invalidate and refresh data after successful save
+        await invalidateProfile()
+        
+        // Wait a bit for the data to refresh, then update the form
+        setTimeout(async () => {
+          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+          if (refreshRes.ok) {
+            const refreshData: TeacherData = await refreshRes.json()
+            educationForm.reset({ educations: refreshData.graduationDetails || [] })
+          }
+        }, 100)
+        
         toast({ 
           title: "Education Saved", 
           description: result.message || "Education details saved successfully." 
@@ -772,6 +850,105 @@ export default function ProfilePage() {
     } catch (e: any) {
       console.error('Save education error:', e)
       toast({ title: "Save Failed", description: e.message || "Could not save education details.", variant: "destructive" })
+    }
+  }
+
+  // Handle file selection for document upload
+  const handleFileSelect = (files: FileList | null, type: 'phd' | 'education', index: number) => {
+    setSelectedFiles({ type, index, files })
+  }
+
+  // Handle document upload for PhD Research
+  const handlePhdDocumentUpload = async (index: number, id: number) => {
+    if (!selectedFiles || selectedFiles.type !== 'phd' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select a file first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const teacherId = user?.role_id || teacherInfo?.Tid
+      if (!teacherId) {
+        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
+        return
+      }
+
+      // For now, using a placeholder URL - in production, upload to S3 and get the URL
+      const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+      const entry = postDocForm.getValues(`researches.${index}`)
+      
+      const res = await fetch('/api/teacher/profile/phd-research', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          teacherId, 
+          research: { ...entry, doc: dummyUrl } 
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to upload document')
+      }
+
+      await invalidateProfile()
+      setSelectedFiles(null)
+      toast({ 
+        title: "Success", 
+        description: "Document uploaded successfully." 
+      })
+    } catch (e: any) {
+      console.error('Upload error:', e)
+      toast({ title: "Upload Failed", description: e.message || "Could not upload document.", variant: "destructive" })
+    }
+  }
+
+  // Handle document upload for Education
+  const handleEducationDocumentUpload = async (index: number, id: number) => {
+    if (!selectedFiles || selectedFiles.type !== 'education' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please select a file first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const teacherId = user?.role_id || teacherInfo?.Tid
+      if (!teacherId) {
+        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
+        return
+      }
+
+      // For now, using a placeholder URL - in production, upload to S3 and get the URL
+      const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+      const entry = educationForm.getValues(`educations.${index}`)
+      
+      const res = await fetch('/api/teacher/profile/graduation', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          teacherId, 
+          education: { ...entry, Image: dummyUrl } 
+        }),
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to upload document')
+      }
+
+      await invalidateProfile()
+      setSelectedFiles(null)
+      toast({ 
+        title: "Success", 
+        description: "Document uploaded successfully." 
+      })
+    } catch (e: any) {
+      console.error('Upload error:', e)
+      toast({ title: "Upload Failed", description: e.message || "Could not upload document.", variant: "destructive" })
     }
   }
 
@@ -980,7 +1157,7 @@ export default function ProfilePage() {
                     })} 
                     readOnly={!isEditingPersonal} 
                   />
-                  {errors.fname && isEditingPersonal && (
+                  {errors.fname && isEditingPersonal && touchedFields.fname && (
                     <p className="text-sm text-red-500">{errors.fname.message as string}</p>
                   )}
                 </div>
@@ -1003,7 +1180,7 @@ export default function ProfilePage() {
                     })} 
                     readOnly={!isEditingPersonal} 
                   />
-                  {errors.mname && isEditingPersonal && (
+                  {errors.mname && isEditingPersonal && touchedFields.mname && (
                     <p className="text-sm text-red-500">{errors.mname.message as string}</p>
                   )}
                 </div>
@@ -1025,7 +1202,7 @@ export default function ProfilePage() {
                     })} 
                     readOnly={!isEditingPersonal} 
                   />
-                  {errors.lname && isEditingPersonal && (
+                  {errors.lname && isEditingPersonal && touchedFields.lname && (
                     <p className="text-sm text-red-500">{errors.lname.message as string}</p>
                   )}
                 </div>
@@ -1074,7 +1251,7 @@ export default function ProfilePage() {
                         />
                     )}
                   />
-                  {errors.phone_no && isEditingPersonal && (
+                  {errors.phone_no && isEditingPersonal && touchedFields.phone_no && (
                     <p className="text-sm text-red-500">{errors.phone_no.message as string}</p>
                   )}
                 </div>
@@ -1087,15 +1264,136 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 w-full">
                   <div className="space-y-2">
                     <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input id="dateOfBirth" type="date" {...register('DOB')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
+                    <Controller
+                      control={control}
+                      name="DOB"
+                      rules={{
+                        required: isEditingPersonal ? "Date of birth is required" : false,
+                        validate: (value) => {
+                          if (!value || (typeof value === 'string' && value.trim() === '')) {
+                            if (isEditingPersonal) return "Date of birth is required";
+                            return true;
+                          }
+                          const dob = new Date(value);
+                          if (isNaN(dob.getTime())) {
+                            if (isEditingPersonal) return "Please enter a valid date";
+                            return true;
+                          }
+                          const today = new Date();
+                          const age = today.getFullYear() - dob.getFullYear();
+                          const monthDiff = today.getMonth() - dob.getMonth();
+                          
+                          if (dob > today) {
+                            return "Date of birth cannot be in the future";
+                          }
+                          if (age < 18 || (age === 18 && monthDiff < 0)) {
+                            return "Age must be at least 18 years";
+                          }
+                          if (age > 100) {
+                            return "Please enter a valid date of birth";
+                          }
+                          return true;
+                        }
+                      }}
+                      render={({ field }) => (
+                        <Input
+                          id="dateOfBirth"
+                          type="date"
+                          {...field}
+                          max={new Date().toISOString().split('T')[0]}
+                          readOnly={!isEditingPersonal}
+                          className="h-8 text-xs"
+                        />
+                      )}
+                    />
+                    {errors.DOB && isEditingPersonal && touchedFields.DOB && (
+                      <p className="text-sm text-red-500">{errors.DOB.message as string}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dateOfJoining">Date of Joining</Label>
-                  <Input id="dateOfJoining" type="date" {...register('recruit_date')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
+                    <Controller
+                      control={control}
+                      name="recruit_date"
+                      rules={{
+                        required: isEditingPersonal ? "Date of joining is required" : false,
+                        validate: (value) => {
+                          if (!value || (typeof value === 'string' && value.trim() === '')) {
+                            if (isEditingPersonal) return "Date of joining is required";
+                            return true;
+                          }
+                          const joinDate = new Date(value);
+                          if (isNaN(joinDate.getTime())) {
+                            if (isEditingPersonal) return "Please enter a valid date";
+                            return true;
+                          }
+                          const today = new Date();
+                          const dob = watch('DOB') ? new Date(watch('DOB')) : null;
+                          
+                          if (joinDate > today) {
+                            return "Date of joining cannot be in the future";
+                          }
+                          if (dob && !isNaN(dob.getTime()) && joinDate < dob) {
+                            return "Date of joining must be after date of birth";
+                          }
+                          return true;
+                        }
+                      }}
+                      render={({ field }) => (
+                        <Input
+                          id="dateOfJoining"
+                          type="date"
+                          {...field}
+                          max={new Date().toISOString().split('T')[0]}
+                          readOnly={!isEditingPersonal}
+                          className="h-8 text-xs"
+                        />
+                      )}
+                    />
+                    {errors.recruit_date && isEditingPersonal && touchedFields.recruit_date && (
+                      <p className="text-sm text-red-500">{errors.recruit_date.message as string}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="panNo">PAN Number</Label>
-                  <Input id="panNo" {...register('PAN_No')} readOnly={!isEditingPersonal} placeholder="ABCDE1234F" maxLength={10} className="h-8 text-xs" />
+                    <Controller
+                      control={control}
+                      name="PAN_No"
+                      rules={{
+                        required: isEditingPersonal ? "PAN number is required" : false,
+                        validate: (value) => {
+                          if (!value || (typeof value === 'string' && value.trim() === '')) {
+                            if (isEditingPersonal) return "PAN number is required";
+                            return true;
+                          }
+                          const panValue = String(value).trim().toUpperCase();
+                          if (panValue.length !== 10) {
+                            return "PAN number must be exactly 10 characters";
+                          }
+                          if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panValue)) {
+                            return "PAN must be in format: ABCDE1234F (5 letters, 4 digits, 1 letter)";
+                          }
+                          return true;
+                        }
+                      }}
+                      render={({ field }) => (
+                        <Input
+                          id="panNo"
+                          {...field}
+                          onChange={(e) => {
+                            const upperValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                            field.onChange(upperValue);
+                          }}
+                          readOnly={!isEditingPersonal}
+                          placeholder="ABCDE1234F"
+                          maxLength={10}
+                          className="h-8 text-xs"
+                        />
+                      )}
+                    />
+                    {errors.PAN_No && isEditingPersonal && touchedFields.PAN_No && (
+                      <p className="text-sm text-red-500">{errors.PAN_No.message as string}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1111,13 +1409,22 @@ export default function ProfilePage() {
                       type="number" 
                       {...register('H_INDEX', {
                         min: { value: 0, message: "H-Index must be a positive number" },
-                        valueAsNumber: true
+                        max: { value: 200, message: "H-Index value seems too high" },
+                        valueAsNumber: true,
+                        validate: (value) => {
+                          if (value !== undefined && value !== null && value !== '') {
+                            if (!Number.isInteger(Number(value))) {
+                              return "H-Index must be a whole number";
+                            }
+                          }
+                          return true;
+                        }
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter H-Index"
                       className="h-8 text-xs"
                     />
-                    {errors.H_INDEX && isEditingPersonal && (
+                    {errors.H_INDEX && isEditingPersonal && touchedFields.H_INDEX && (
                       <p className="text-sm text-red-500">{errors.H_INDEX.message as string}</p>
                     )}
                   </div>
@@ -1128,13 +1435,22 @@ export default function ProfilePage() {
                       type="number" 
                       {...register('i10_INDEX', {
                         min: { value: 0, message: "i10-Index must be a positive number" },
-                        valueAsNumber: true
+                        max: { value: 200, message: "i10-Index value seems too high" },
+                        valueAsNumber: true,
+                        validate: (value) => {
+                          if (value !== undefined && value !== null && value !== '') {
+                            if (!Number.isInteger(Number(value))) {
+                              return "i10-Index must be a whole number";
+                            }
+                          }
+                          return true;
+                        }
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter i10-Index"
                       className="h-8 text-xs"
                     />
-                    {errors.i10_INDEX && isEditingPersonal && (
+                    {errors.i10_INDEX && isEditingPersonal && touchedFields.i10_INDEX && (
                       <p className="text-sm text-red-500">{errors.i10_INDEX.message as string}</p>
                     )}
                   </div>
@@ -1145,13 +1461,22 @@ export default function ProfilePage() {
                       type="number" 
                       {...register('CITIATIONS', {
                         min: { value: 0, message: "Citations must be a positive number" },
-                        valueAsNumber: true
+                        max: { value: 1000000, message: "Citations value seems too high" },
+                        valueAsNumber: true,
+                        validate: (value) => {
+                          if (value !== undefined && value !== null && value !== '') {
+                            if (!Number.isInteger(Number(value))) {
+                              return "Citations must be a whole number";
+                            }
+                          }
+                          return true;
+                        }
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter total citations"
                       className="h-8 text-xs"
                     />
-                    {errors.CITIATIONS && isEditingPersonal && (
+                    {errors.CITIATIONS && isEditingPersonal && touchedFields.CITIATIONS && (
                       <p className="text-sm text-red-500">{errors.CITIATIONS.message as string}</p>
                     )}
                   </div>
@@ -1170,7 +1495,7 @@ export default function ProfilePage() {
                       maxLength={19}
                       className="h-8 text-xs"
                     />
-                    {errors.ORCHID_ID && isEditingPersonal && (
+                    {errors.ORCHID_ID && isEditingPersonal && touchedFields.ORCHID_ID && (
                       <p className="text-sm text-red-500">{errors.ORCHID_ID.message as string}</p>
                     )}
                   </div>
@@ -1178,13 +1503,30 @@ export default function ProfilePage() {
                     <Label htmlFor="researcherId">Researcher ID</Label>
                       <Input 
                       id="researcherId" 
-                      {...register('RESEARCHER_ID')} 
+                      {...register('RESEARCHER_ID', {
+                        maxLength: {
+                          value: 100,
+                          message: "Researcher ID must be less than 100 characters"
+                        },
+                        validate: (value) => {
+                          if (!value || value.trim() === '') {
+                            return true; // Optional field
+                          }
+                          if (value.length < 3) {
+                            return "Researcher ID must be at least 3 characters";
+                          }
+                          if (!/^[A-Za-z0-9._-]+$/.test(value)) {
+                            return "Researcher ID can only contain letters, numbers, dots, hyphens, and underscores";
+                          }
+                          return true;
+                        }
+                      })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter Researcher ID"
                       maxLength={100}
                       className="h-8 text-xs"
                     />
-                    {errors.RESEARCHER_ID && isEditingPersonal && (
+                    {errors.RESEARCHER_ID && isEditingPersonal && touchedFields.RESEARCHER_ID && (
                       <p className="text-sm text-red-500">{errors.RESEARCHER_ID.message as string}</p>
                     )}
                   </div>
@@ -1231,6 +1573,9 @@ export default function ProfilePage() {
                     <Controller
                       control={control}
                       name={watch('perma_or_tenure') === false ? 'desig_perma' : 'desig_tenure'}
+                      rules={{
+                        required: isEditingPersonal ? "Designation is required" : false
+                      }}
                       render={({ field }) => {
                         const designationOptions = watch('perma_or_tenure') === false 
                           ? permanentDesignationOptions 
@@ -1251,28 +1596,46 @@ export default function ProfilePage() {
                         )
                       }}
                     />
+                    {errors.desig_perma && isEditingPersonal && touchedFields.desig_perma && (
+                      <p className="text-sm text-red-500">{errors.desig_perma.message as string}</p>
+                    )}
+                    {errors.desig_tenure && isEditingPersonal && touchedFields.desig_tenure && (
+                      <p className="text-sm text-red-500">{errors.desig_tenure.message as string}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="faculty">Faculty</Label>
-                    <SearchableSelect
-                      options={facultyOptions.map((faculty) => ({
-                        value: faculty.Fid,
-                        label: faculty.Fname,
-                      }))}
-                      value={selectedFacultyId ?? facultyData?.Fid}
-                      onValueChange={(value: string | number) => {
-                        const fidNum = Number(value)
-                        setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
-                        // Reset selected department when faculty changes
-                        setValue('deptid', 0)
-                        setDepartmentData(null)
+                    <Controller
+                      control={control}
+                      name="faculty"
+                      rules={{
+                        required: isEditingPersonal ? "Faculty is required" : false
                       }}
-                      placeholder="Select faculty"
-                      disabled={!isEditingPersonal}
-                      emptyMessage="No faculty found."
-                      className="w-full min-w-0"
+                      render={({ field }) => (
+                        <SearchableSelect
+                          options={facultyOptions.map((faculty) => ({
+                            value: faculty.Fid,
+                            label: faculty.Fname,
+                          }))}
+                          value={selectedFacultyId ?? facultyData?.Fid}
+                          onValueChange={(value: string | number) => {
+                            const fidNum = Number(value)
+                            setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
+                            setValue('deptid', 0)
+                            setDepartmentData(null)
+                            field.onChange(fidNum)
+                          }}
+                          placeholder="Select faculty"
+                          disabled={!isEditingPersonal}
+                          emptyMessage="No faculty found."
+                          className="w-full min-w-0"
+                        />
+                      )}
                     />
+                    {errors.faculty && isEditingPersonal && touchedFields.faculty && (
+                      <p className="text-sm text-red-500">{errors.faculty.message as string}</p>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-4 w-full">
@@ -1281,6 +1644,18 @@ export default function ProfilePage() {
                     <Controller
                       control={control}
                       name="deptid"
+                      rules={{
+                        required: isEditingPersonal ? "Department is required" : false,
+                        validate: (value) => {
+                          if (isEditingPersonal && !selectedFacultyId) {
+                            return "Please select a faculty first";
+                          }
+                          if (isEditingPersonal && !value) {
+                            return "Department is required";
+                          }
+                          return true;
+                        }
+                      }}
                       render={({ field }) => (
                         <SearchableSelect
                           options={departmentOptions.map((dept) => ({
@@ -1326,7 +1701,47 @@ export default function ProfilePage() {
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="netYear">NET Qualified Year</Label>
-                          <Input id="netYear" {...register('NET_year')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
+                          <Controller
+                            control={control}
+                            name="NET_year"
+                            rules={{
+                              required: watch('NET') && isEditingPersonal ? "NET qualified year is required" : false,
+                              validate: (value) => {
+                                if (watch('NET') && isEditingPersonal) {
+                                  if (!value || value.toString().trim() === '') {
+                                    return "NET qualified year is required";
+                                  }
+                                  const yearStr = value.toString().trim();
+                                  if (yearStr.length !== 4) {
+                                    return "Year must be 4 digits";
+                                  }
+                                  const year = parseInt(yearStr);
+                                  const currentYear = new Date().getFullYear();
+                                  if (isNaN(year) || year < 1950 || year > currentYear) {
+                                    return `Year must be between 1950 and ${currentYear}`;
+                                  }
+                                }
+                                return true;
+                              }
+                            }}
+                            render={({ field }) => (
+                              <Input
+                                id="netYear"
+                                {...field}
+                                onChange={(e) => {
+                                  const year = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                  field.onChange(year);
+                                }}
+                                readOnly={!isEditingPersonal}
+                                placeholder="YYYY (e.g., 2018)"
+                                maxLength={4}
+                                className="h-8 text-xs"
+                              />
+                            )}
+                          />
+                          {errors.NET_year && isEditingPersonal && touchedFields.NET_year && (
+                            <p className="text-sm text-red-500">{errors.NET_year.message as string}</p>
+                          )}
                         </div>
 
                       </>
@@ -1355,7 +1770,47 @@ export default function ProfilePage() {
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="gateYear">GATE Qualified Year</Label>
-                          <Input id="gateYear" {...register('GATE_year')} readOnly={!isEditingPersonal} placeholder="e.g., 2018" className="h-8 text-xs" />
+                          <Controller
+                            control={control}
+                            name="GATE_year"
+                            rules={{
+                              required: watch('GATE') && isEditingPersonal ? "GATE qualified year is required" : false,
+                              validate: (value) => {
+                                if (watch('GATE') && isEditingPersonal) {
+                                  if (!value || value.toString().trim() === '') {
+                                    return "GATE qualified year is required";
+                                  }
+                                  const yearStr = value.toString().trim();
+                                  if (yearStr.length !== 4) {
+                                    return "Year must be 4 digits";
+                                  }
+                                  const year = parseInt(yearStr);
+                                  const currentYear = new Date().getFullYear();
+                                  if (isNaN(year) || year < 1950 || year > currentYear) {
+                                    return `Year must be between 1950 and ${currentYear}`;
+                                  }
+                                }
+                                return true;
+                              }
+                            }}
+                            render={({ field }) => (
+                              <Input
+                                id="gateYear"
+                                {...field}
+                                onChange={(e) => {
+                                  const year = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                  field.onChange(year);
+                                }}
+                                readOnly={!isEditingPersonal}
+                                placeholder="YYYY (e.g., 2018)"
+                                maxLength={4}
+                                className="h-8 text-xs"
+                              />
+                            )}
+                          />
+                          {errors.GATE_year && isEditingPersonal && touchedFields.GATE_year && (
+                            <p className="text-sm text-red-500">{errors.GATE_year.message as string}</p>
+                          )}
                         </div>
 
                       </>
@@ -1387,7 +1842,47 @@ export default function ProfilePage() {
                 {watch('PHDGuide') && (
                   <div className="space-y-2">
                     <Label htmlFor="registrationYear">Year of Registration</Label>
-                    <Input id="registrationYear" {...register('Guide_year')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
+                    <Controller
+                      control={control}
+                      name="Guide_year"
+                      rules={{
+                        required: watch('PHDGuide') && isEditingPersonal ? "Year of registration is required" : false,
+                        validate: (value) => {
+                          if (watch('PHDGuide') && isEditingPersonal) {
+                            if (!value || value.toString().trim() === '') {
+                              return "Year of registration is required";
+                            }
+                            const yearStr = value.toString().trim();
+                            if (yearStr.length !== 4) {
+                              return "Year must be 4 digits";
+                            }
+                            const year = parseInt(yearStr);
+                            const currentYear = new Date().getFullYear();
+                            if (isNaN(year) || year < 1950 || year > currentYear) {
+                              return `Year must be between 1950 and ${currentYear}`;
+                            }
+                          }
+                          return true;
+                        }
+                      }}
+                      render={({ field }) => (
+                        <Input
+                          id="registrationYear"
+                          {...field}
+                          onChange={(e) => {
+                            const year = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            field.onChange(year);
+                          }}
+                          readOnly={!isEditingPersonal}
+                          placeholder="YYYY (e.g., 2015)"
+                          maxLength={4}
+                          className="h-8 text-xs"
+                        />
+                      )}
+                    />
+                    {errors.Guide_year && isEditingPersonal && touchedFields.Guide_year && (
+                      <p className="text-sm text-red-500">{errors.Guide_year.message as string}</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1474,14 +1969,39 @@ export default function ProfilePage() {
                   {editingData.ictOthers && (
                     <div className="space-y-2">
                       <Label htmlFor="otherIctTools">If Others, please specify:</Label>
-                      <Input
-                        id="otherIctTools"
-                        value={editingData.ictOthersSpecify}
-                        // onChange={(e) => handleInputChange("ictOthersSpecify", e.target.value)}
-                        placeholder="Please specify other ICT tools used..."
-                        readOnly={!isEditingPersonal}
-                        className="max-w-md h-8 text-xs"
+                      <Controller
+                        control={control}
+                        name="ictOthersSpecify"
+                        rules={{
+                          required: editingData.ictOthers && isEditingPersonal ? "Please specify other ICT tools" : false,
+                          minLength: editingData.ictOthers && isEditingPersonal ? {
+                            value: 3,
+                            message: "Please provide at least 3 characters"
+                          } : undefined,
+                          maxLength: {
+                            value: 200,
+                            message: "Specification must be less than 200 characters"
+                          }
+                        }}
+                        render={({ field }) => (
+                          <Input
+                            id="otherIctTools"
+                            value={editingData.ictOthersSpecify}
+                            onChange={(e) => {
+                              const value = e.target.value.slice(0, 200);
+                              setEditingData(prev => ({ ...prev, ictOthersSpecify: value }));
+                              field.onChange(value);
+                            }}
+                            placeholder="Please specify other ICT tools used..."
+                            readOnly={!isEditingPersonal}
+                            maxLength={200}
+                            className="max-w-md h-8 text-xs"
+                          />
+                        )}
                       />
+                      {errors.ictOthersSpecify && isEditingPersonal && touchedFields.ictOthersSpecify && (
+                        <p className="text-sm text-red-500">{errors.ictOthersSpecify.message as string}</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1527,7 +2047,7 @@ export default function ProfilePage() {
                     </TableRow>
                   </TableHeader>
               <TableBody>
-                {experienceFields.map((field, index) => {
+                {experienceFields.map((field:any, index:number) => {
                   const entry = experienceForm.watch(`experiences.${index}`)
                   const rowEditing = experienceEditingIds.has(field.Id);
                   return (
@@ -1537,7 +2057,28 @@ export default function ProfilePage() {
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Employeer`}
-                          rules={{ required: rowEditing ? "Employer is required" : false }}
+                          rules={{
+                            required: rowEditing ? "Employer is required" : false,
+                            minLength: {
+                              value: 2,
+                              message: "Employer name must be at least 2 characters"
+                            },
+                            maxLength: {
+                              value: 200,
+                              message: "Employer name must be less than 200 characters"
+                            },
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Employer is required";
+                                }
+                                if (!/^[A-Za-z0-9\s.,'-]+$/.test(value)) {
+                                  return "Employer name contains invalid characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1551,27 +2092,57 @@ export default function ProfilePage() {
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.currente`}
-                          render={({ field: formField }) => (
-                            <Select
-                              value={formField.value ? "yes" : "no"}
-                              onValueChange={(value: string) => formField.onChange(value === "yes")}
-                              disabled={!rowEditing}
-                            >
-                              <SelectTrigger className={`w-full min-w-[60px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="yes">Yes</SelectItem>
-                                <SelectItem value="no">No</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
+                          render={({ field: formField }) => {
+                            // Handle database values: 0/1 or boolean
+                            const currentValue = formField.value === true || (typeof formField.value === 'number' && formField.value === 1)
+                            return (
+                              <Select
+                                value={currentValue ? "yes" : "no"}
+                                onValueChange={(value: string) => {
+                                  // Convert to boolean for form (will be converted to 0/1 on save)
+                                  const boolValue = value === "yes"
+                                  formField.onChange(boolValue)
+                                  // Only trigger validation on End_Date field, not all fields
+                                  setTimeout(() => {
+                                    experienceForm.trigger(`experiences.${index}.End_Date`, { shouldFocus: false })
+                                  }, 0)
+                                }}
+                                disabled={!rowEditing}
+                              >
+                                <SelectTrigger className={`w-full min-w-[60px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="yes">Yes</SelectItem>
+                                  <SelectItem value="no">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )
+                          }}
                         />
                       </TableCell>
                       <TableCell className="min-w-[220px]">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.desig`}
+                          rules={{
+                            required: rowEditing ? "Designation is required" : false,
+                            maxLength: {
+                              value: 100,
+                              message: "Designation must be less than 100 characters"
+                            },
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Designation is required";
+                                }
+                                if (value.length < 2) {
+                                  return "Designation must be at least 2 characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1602,16 +2173,58 @@ export default function ProfilePage() {
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.End_Date`}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              type="date"
-                              value={formatDateForInput(formField.value)}
-                              onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full min-w-0"
-                              readOnly={!rowEditing}
-                            />
-                          )}
+                          rules={{
+                            validate: (value) => {
+                              if (rowEditing) {
+                                // Handle database values: 0/1 or boolean
+                                const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
+                                const currenteValue = currenteRaw === true ? true : false
+                                const startDate = experienceForm.watch(`experiences.${index}.Start_Date`)
+                                
+                                if (!currenteValue && (!value || (typeof value === 'string' && value.trim() === ''))) {
+                                  return "End date is required if not currently employed";
+                                }
+                                if (startDate && value && (typeof value !== 'string' || value.trim() !== '')) {
+                                  const start = new Date(startDate);
+                                  const end = new Date(value);
+                                  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                                    return "Please enter valid dates";
+                                  }
+                                  if (end < start) {
+                                    return "End date must be after start date";
+                                  }
+                                  if (!currenteValue && end > new Date()) {
+                                    return "End date cannot be in the future if not currently employed";
+                                  }
+                                }
+                                if (currenteValue && value && (typeof value !== 'string' || value.trim() !== '')) {
+                                  const end = new Date(value);
+                                  if (isNaN(end.getTime())) {
+                                    return "Please enter a valid date";
+                                  }
+                                 
+                                }
+                              }
+                              return true;
+                            }
+                          }}
+                          render={({ field: formField }) => {
+                            // Handle database values: 0/1 or boolean
+                            const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
+                            const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
+                            return (
+                              <Input
+                                {...formField}
+                                type="date"
+                                value={formatDateForInput(formField.value)}
+                                onChange={(e) => formField.onChange(e.target.value)}
+                                max={currenteValue ? undefined : new Date().toISOString().split('T')[0]}
+                                className="w-full min-w-0"
+                                readOnly={!rowEditing}
+                                disabled={currenteValue || !rowEditing}
+                              />
+                            )
+                          }}
                         />
                       </TableCell>
                       <TableCell className="p-1.5 sm:p-2 min-w-0">
@@ -1764,7 +2377,17 @@ export default function ProfilePage() {
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.Institute`}
-                          rules={{ required: rowEditing ? "Institute is required" : false }}
+                          rules={{
+                            required: rowEditing ? "Institute is required" : false,
+                            minLength: {
+                              value: 2,
+                              message: "Institute name must be at least 2 characters"
+                            },
+                            maxLength: {
+                              value: 200,
+                              message: "Institute name must be less than 200 characters"
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1795,7 +2418,28 @@ export default function ProfilePage() {
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.End_Date`}
-                          rules={{ required: rowEditing ? "End date is required" : false }}
+                          rules={{
+                            required: rowEditing ? "End date is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "End date is required";
+                                }
+                                const startDate = entry.Start_Date;
+                                if (startDate && value) {
+                                  const start = new Date(startDate);
+                                  const end = new Date(value);
+                                  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                                    return "Please enter valid dates";
+                                  }
+                                  if (end < start) {
+                                    return "End date must be after start date";
+                                  }
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1812,6 +2456,20 @@ export default function ProfilePage() {
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.SponsoredBy`}
+                          rules={{
+                            maxLength: {
+                              value: 200,
+                              message: "Sponsored by must be less than 200 characters"
+                            },
+                            validate: (value) => {
+                              if (value && typeof value === 'string' && value.trim() !== '') {
+                                if (value.trim().length < 2) {
+                                  return "If provided, must be at least 2 characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1826,6 +2484,20 @@ export default function ProfilePage() {
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.QS_THE`}
+                          rules={{
+                            maxLength: {
+                              value: 100,
+                              message: "QS/THE ranking must be less than 100 characters"
+                            },
+                            validate: (value) => {
+                              if (value && typeof value === 'string' && value.trim() !== '') {
+                                if (!/^[A-Za-z0-9\s:.-]+$/.test(value)) {
+                                  return "QS/THE ranking contains invalid characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1837,23 +2509,47 @@ export default function ProfilePage() {
                         />
                       </TableCell>
                       <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
-                        <div className="flex items-center gap-1 flex-wrap sm:flex-nowrap">
-                          <Controller
-                            control={postDocForm.control}
-                            name={`researches.${index}.doc`}
-                            render={({ field: formField }) => (
-                              <Input
-                                {...formField}
-                                className="w-full min-w-0"
-                                placeholder="Document name"
-                                readOnly={!rowEditing}
-                              />
-                            )}
-                          />
-                          <Button size="sm" variant="outline" disabled={!rowEditing}>
-                            <Upload className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        {entry.doc ? (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden" style={{ display: "flex", flexDirection: "column" }}>
+                              <DialogHeader className="p-4 border-b">
+                                <DialogTitle>View Supporting Document</DialogTitle>
+                              </DialogHeader>
+                              <div className="flex-1 overflow-y-auto p-4">
+                                <DocumentViewer
+                                  documentUrl={entry.doc}
+                                  documentName={`Post-Doc Document - ${entry.Institute || 'Document'}`}
+                                  documentType={(entry.doc || "").split('.').pop()?.toLowerCase() || 'pdf'}
+                                />
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Upload Document">
+                                <Upload className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Upload Supporting Document</DialogTitle>
+                              </DialogHeader>
+                              <FileUpload onFileSelect={(files) => handleFileSelect(files, 'phd', index)} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
+                              <div className="flex justify-end gap-2 mt-4">
+                                <Button variant="outline" onClick={() => setSelectedFiles(null)}>Cancel</Button>
+                                <Button onClick={() => handlePhdDocumentUpload(index, field.Id)} disabled={!selectedFiles || selectedFiles.type !== 'phd' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0}>
+                                  Upload File
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        )}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
@@ -1938,6 +2634,7 @@ export default function ProfilePage() {
                   <TableHead>Year of Passing</TableHead>
                   <TableHead>Specialization</TableHead>
                   <TableHead>QS Ranking</TableHead>
+                  <TableHead>Image</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1975,7 +2672,28 @@ export default function ProfilePage() {
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.university_name`}
-                          rules={{ required: rowEditing ? "University name is required" : false }}
+                          rules={{
+                            required: rowEditing ? "University name is required" : false,
+                            minLength: {
+                              value: 3,
+                              message: "University name must be at least 3 characters"
+                            },
+                            maxLength: {
+                              value: 200,
+                              message: "University name must be less than 200 characters"
+                            },
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "University name is required";
+                                }
+                                if (!/^[A-Za-z0-9\s.,'-]+$/.test(value)) {
+                                  return "University name contains invalid characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -1989,6 +2707,23 @@ export default function ProfilePage() {
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.state`}
+                          rules={{
+                            maxLength: {
+                              value: 50,
+                              message: "State must be less than 50 characters"
+                            },
+                            validate: (value) => {
+                              if (value && typeof value === 'string' && value.trim() !== '') {
+                                if (value.trim().length < 2) {
+                                  return "If provided, must be at least 2 characters";
+                                }
+                                if (!/^[A-Za-z\s]+$/.test(value)) {
+                                  return "State should only contain letters and spaces";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -2004,7 +2739,34 @@ export default function ProfilePage() {
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.year_of_passing`}
-                          rules={{ required: rowEditing ? "Year of passing is required" : false }}
+                          rules={{
+                            required: rowEditing ? "Year of passing is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Year of passing is required";
+                                }
+                                let yearStr = '';
+                                if (typeof value === 'string' && value.includes('-')) {
+                                  const date = new Date(value);
+                                  if (!isNaN(date.getTime())) {
+                                    yearStr = date.getFullYear().toString();
+                                  }
+                                } else {
+                                  yearStr = String(value).trim().replace(/\D/g, '').slice(0, 4);
+                                }
+                                if (yearStr.length !== 4) {
+                                  return "Year must be 4 digits";
+                                }
+                                const year = parseInt(yearStr);
+                                const currentYear = new Date().getFullYear();
+                                if (isNaN(year) || year < 1950 || year > currentYear) {
+                                  return `Year must be between 1950 and ${currentYear}`;
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => {
                             // Extract year value: handle both date format (YYYY-MM-DD) and plain year strings
                             let yearValue = ""
@@ -2068,6 +2830,20 @@ export default function ProfilePage() {
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.subject`}
+                          rules={{
+                            maxLength: {
+                              value: 200,
+                              message: "Specialization must be less than 200 characters"
+                            },
+                            validate: (value) => {
+                              if (value && typeof value === 'string' && value.trim() !== '') {
+                                if (value.trim().length < 2) {
+                                  return "If provided, must be at least 2 characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -2083,6 +2859,20 @@ export default function ProfilePage() {
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.QS_Ranking`}
+                          rules={{
+                            maxLength: {
+                              value: 50,
+                              message: "QS Ranking must be less than 50 characters"
+                            },
+                            validate: (value) => {
+                              if (value && typeof value === 'string' && value.trim() !== '') {
+                                if (!/^[A-Za-z0-9\s:.-]+$/.test(value)) {
+                                  return "QS Ranking contains invalid characters";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
@@ -2093,6 +2883,53 @@ export default function ProfilePage() {
                             />
                           )}
                         />
+                      </TableCell>
+                      <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
+                        {entry.Image ? (
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden" style={{ display: "flex", flexDirection: "column" }}>
+                              <DialogHeader className="p-4 border-b">
+                                <DialogTitle>View Document</DialogTitle>
+                              </DialogHeader>
+                              <div className="flex-1 overflow-y-auto p-4">
+                                <DocumentViewer
+                                  documentUrl={entry.Image}
+                                  documentName={`Education Document - ${entry.university_name || 'Document'}`}
+                                  documentType={(entry.Image || "").split('.').pop()?.toLowerCase() || 'pdf'}
+                                />
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          rowEditing ? (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Upload Document">
+                                  <Upload className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Upload Document</DialogTitle>
+                                </DialogHeader>
+                                <FileUpload onFileSelect={(files) => handleFileSelect(files, 'education', index)} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
+                                <div className="flex justify-end gap-2 mt-4">
+                                  <Button variant="outline" onClick={() => setSelectedFiles(null)}>Cancel</Button>
+                                  <Button onClick={() => handleEducationDocumentUpload(index, field.gid)} disabled={!selectedFiles || selectedFiles.type !== 'education' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0}>
+                                    Upload File
+                                  </Button>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          ) : (
+                            <span className="text-xs text-gray-400">No document</span>
+                          )
+                        )}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
