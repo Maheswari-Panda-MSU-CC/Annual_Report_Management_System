@@ -100,16 +100,19 @@ export default function ResearchProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">Research Projects</h1>
-          <p className="text-gray-600">Manage research projects, grants, and funding information</p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2 w-full">
+        <div className="w-full sm:w-auto">
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold tracking-tight">Research Projects</h1>
+          <p className="text-[11px] sm:text-xs md:text-sm text-muted-foreground">Manage research projects, grants, and funding information</p>
         </div>
 
-        <Button onClick={() => router.push("/teacher/research/add")}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Research Project
-        </Button>
+        <div className="flex justify-start sm:justify-end w-full sm:w-auto">
+          <Button onClick={() => router.push("/teacher/research/add")} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add Research Project</span>
+            <span className="sm:hidden">Add Project</span>
+          </Button>
+        </div>
       </div>
 
       {/* Research Metrics */}

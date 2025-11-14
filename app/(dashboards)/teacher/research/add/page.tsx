@@ -379,25 +379,26 @@ export default function AddResearchPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="sm" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+    <div className="w-full max-w-full overflow-x-hidden px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full">
+        <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2 w-full sm:w-auto">
+          <ArrowLeft className="h-4 w-4" />
+          <span className="hidden sm:inline">Back</span>
+          <span className="sm:hidden">Back</span>
         </Button>
-        <h1 className="text-3xl font-bold tracking-tight">Add Research Project</h1>
+        <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold tracking-tight w-full sm:w-auto">Add Research Project</h1>
       </div>
 
       <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Research Project Details</CardTitle>
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 sm:p-6">
+          <CardTitle className="text-sm sm:text-base">Research Project Details</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-4 md:p-6">
           {/* Document Upload Section */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-            <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Supporting Document</Label>
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
+            <Label className="text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Supporting Document</Label>
             <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              className={`border-2 border-dashed rounded-lg p-3 sm:p-4 md:p-6 text-center transition-colors ${
                 dragActive ? "border-primary bg-primary/5" : "border-gray-300 hover:border-gray-400"
               }`}
               onDragEnter={handleDrag}
@@ -405,9 +406,9 @@ export default function AddResearchPage() {
               onDragOver={handleDrag}
               onDrop={handleDrop}
             >
-              <Upload className="mx-auto h-8 w-8 text-gray-400 mb-3" />
-              <div className="space-y-2">
-                <p className="text-sm text-gray-600">
+              <Upload className="mx-auto h-6 w-6 sm:h-8 sm:w-8 text-gray-400 mb-2 sm:mb-3" />
+              <div className="space-y-1 sm:space-y-2">
+                <p className="text-xs sm:text-sm text-gray-600">
                   Drag and drop your file here, or{" "}
                   <label
                     htmlFor="file-upload"
@@ -416,7 +417,7 @@ export default function AddResearchPage() {
                     browse
                   </label>
                 </p>
-                <p className="text-xs text-gray-500">PDF, JPEG, PNG, JPG up to 10MB</p>
+                <p className="text-[10px] sm:text-xs text-gray-500">PDF, JPEG, PNG, JPG up to 10MB</p>
                 <input
                   id="file-upload"
                   type="file"
@@ -432,10 +433,10 @@ export default function AddResearchPage() {
             </div>
 
             {selectedFile && (
-              <div className="mt-4 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <FileText className="h-4 w-4" />
-                  <span>{selectedFile.name}</span>
+              <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-green-600 min-w-0 flex-1">
+                  <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                  <span className="truncate">{selectedFile.name}</span>
                 </div>
                 <Button
                   type="button"
@@ -443,26 +444,28 @@ export default function AddResearchPage() {
                   size="sm"
                   onClick={handleAutoFill}
                   disabled={!selectedFile || isExtracting}
+                  className="flex items-center gap-2 w-full sm:w-auto"
                 >
                   {isExtracting ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Brain className="h-4 w-4 mr-2" />
+                    <Brain className="h-4 w-4" />
                   )}
-                  {isExtracting ? "Extracting..." : "Extract Information"}
+                  <span className="hidden sm:inline">{isExtracting ? "Extracting..." : "Extract Information"}</span>
+                  <span className="sm:hidden">{isExtracting ? "Extracting..." : "Extract"}</span>
                 </Button>
               </div>
             )}
           </div>
 
           {/* Form Section */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <Label className="text-lg font-semibold mb-4 block">Step 2: Verify/Complete Project Details</Label>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+            <Label className="text-sm sm:text-base md:text-lg font-semibold mb-3 sm:mb-4 block">Step 2: Verify/Complete Project Details</Label>
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                 {/* Title */}
                 <div className="md:col-span-2 space-y-2">
-                  <Label htmlFor="title">
+                  <Label htmlFor="title" className="text-xs sm:text-sm">
                     Project Title <span className="text-red-500">*</span>
                   </Label>
                   <Controller
@@ -470,15 +473,15 @@ export default function AddResearchPage() {
                     name="title"
                     rules={{ required: "Project title is required" }}
                     render={({ field }) => (
-                      <Input {...field} id="title" placeholder="Enter project title" />
+                      <Input {...field} id="title" placeholder="Enter project title" className="h-8 sm:h-10 text-xs sm:text-sm" />
                     )}
                   />
-                  {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
+                  {errors.title && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.title.message}</p>}
                 </div>
 
                 {/* Funding Agency */}
                 <div className="space-y-2">
-                  <Label htmlFor="funding_agency">
+                  <Label htmlFor="funding_agency" className="text-xs sm:text-sm">
                     Funding Agency <span className="text-red-500">*</span>
                   </Label>
                   <Controller
@@ -495,17 +498,18 @@ export default function AddResearchPage() {
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Select funding agency"
                         emptyMessage="No funding agency found"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
                   {errors.funding_agency && (
-                    <p className="text-sm text-red-500 mt-1">{errors.funding_agency.message}</p>
+                    <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.funding_agency.message}</p>
                   )}
                 </div>
 
                 {/* Project Nature */}
                 <div className="space-y-2">
-                  <Label htmlFor="proj_nature">
+                  <Label htmlFor="proj_nature" className="text-xs sm:text-sm">
                     Project Nature <span className="text-red-500">*</span>
                   </Label>
                   <Controller
@@ -522,17 +526,18 @@ export default function AddResearchPage() {
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Select project nature"
                         emptyMessage="No project nature found"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
                   {errors.proj_nature && (
-                    <p className="text-sm text-red-500 mt-1">{errors.proj_nature.message}</p>
+                    <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.proj_nature.message}</p>
                   )}
                 </div>
 
                 {/* Status */}
                 <div className="space-y-2">
-                  <Label htmlFor="status">
+                  <Label htmlFor="status" className="text-xs sm:text-sm">
                     Status <span className="text-red-500">*</span>
                   </Label>
                   <Controller
@@ -549,15 +554,16 @@ export default function AddResearchPage() {
                         onValueChange={(val) => field.onChange(Number(val))}
                         placeholder="Select status"
                         emptyMessage="No status found"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
-                  {errors.status && <p className="text-sm text-red-500 mt-1">{errors.status.message}</p>}
+                  {errors.status && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.status.message}</p>}
                 </div>
 
                 {/* Project Level */}
                 <div className="space-y-2">
-                  <Label htmlFor="proj_level">Project Level</Label>
+                  <Label htmlFor="proj_level" className="text-xs sm:text-sm">Project Level</Label>
                   <Controller
                     control={control}
                     name="proj_level"
@@ -571,6 +577,7 @@ export default function AddResearchPage() {
                         onValueChange={(val) => field.onChange(val ? Number(val) : null)}
                         placeholder="Select project level"
                         emptyMessage="No level found"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
@@ -578,7 +585,7 @@ export default function AddResearchPage() {
 
                 {/* Start Date */}
                 <div className="space-y-2">
-                  <Label htmlFor="start_date">
+                  <Label htmlFor="start_date" className="text-xs sm:text-sm">
                     Start Date <span className="text-red-500">*</span>
                   </Label>
                   <Controller
@@ -586,17 +593,17 @@ export default function AddResearchPage() {
                     name="start_date"
                     rules={{ required: "Start date is required" }}
                     render={({ field }) => (
-                      <Input {...field} id="start_date" type="date" />
+                      <Input {...field} id="start_date" type="date" className="h-8 sm:h-10 text-xs sm:text-sm" />
                     )}
                   />
                   {errors.start_date && (
-                    <p className="text-sm text-red-500 mt-1">{errors.start_date.message}</p>
+                    <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.start_date.message}</p>
                   )}
                 </div>
 
                 {/* Duration */}
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Duration (months)</Label>
+                  <Label htmlFor="duration" className="text-xs sm:text-sm">Duration (months)</Label>
                   <Controller
                     control={control}
                     name="duration"
@@ -613,6 +620,7 @@ export default function AddResearchPage() {
                             const numValue = e.target.value === "" ? 0 : Number(e.target.value)
                             onChange(numValue)
                           }}
+                          className="h-8 sm:h-10 text-xs sm:text-sm"
                         />
                       )
                     }}
@@ -621,7 +629,7 @@ export default function AddResearchPage() {
 
                 {/* Grant Sanctioned */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_sanctioned">Grant Sanctioned (₹)</Label>
+                  <Label htmlFor="grant_sanctioned" className="text-xs sm:text-sm">Grant Sanctioned (₹)</Label>
                   <Controller
                     control={control}
                     name="grant_sanctioned"
@@ -633,6 +641,7 @@ export default function AddResearchPage() {
                         placeholder="Enter sanctioned amount"
                         min="0"
                         step="0.01"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
@@ -640,7 +649,7 @@ export default function AddResearchPage() {
 
                 {/* Grant Received */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_received">Grant Received (₹)</Label>
+                  <Label htmlFor="grant_received" className="text-xs sm:text-sm">Grant Received (₹)</Label>
                   <Controller
                     control={control}
                     name="grant_received"
@@ -652,6 +661,7 @@ export default function AddResearchPage() {
                         placeholder="Enter received amount"
                         min="0"
                         step="0.01"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
@@ -659,7 +669,7 @@ export default function AddResearchPage() {
 
                 {/* Grant Year */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_year">Grant Year</Label>
+                  <Label htmlFor="grant_year" className="text-xs sm:text-sm">Grant Year</Label>
                   <Controller
                     control={control}
                     name="grant_year"
@@ -671,6 +681,7 @@ export default function AddResearchPage() {
                         placeholder="Enter grant year"
                         min="2000"
                         max="2030"
+                        className="h-8 sm:h-10 text-xs sm:text-sm"
                       />
                     )}
                   />
@@ -687,29 +698,33 @@ export default function AddResearchPage() {
                         id="grant_sealed"
                         checked={field.value}
                         onChange={(e) => field.onChange(e.target.checked)}
-                        className="rounded border-gray-300"
+                        className="rounded border-gray-300 h-4 w-4"
                       />
                     )}
                   />
-                  <Label htmlFor="grant_sealed" className="cursor-pointer">
+                  <Label htmlFor="grant_sealed" className="cursor-pointer text-xs sm:text-sm">
                     Grant Sealed
                   </Label>
                 </div>
               </div>
 
               {/* Submit Button */}
-              <div className="flex justify-end gap-4">
-                <Button type="button" variant="outline" onClick={() => router.back()}>
+              <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-2 sm:pt-4">
+                <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto" size="sm">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading}>
+                <Button type="submit" disabled={isLoading} className="w-full sm:w-auto" size="sm">
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Adding Project...
+                      <span className="hidden sm:inline">Adding Project...</span>
+                      <span className="sm:hidden">Adding...</span>
                     </>
                   ) : (
-                    "Add Research Project"
+                    <>
+                      <span className="hidden sm:inline">Add Research Project</span>
+                      <span className="sm:hidden">Add Project</span>
+                    </>
                   )}
                 </Button>
               </div>

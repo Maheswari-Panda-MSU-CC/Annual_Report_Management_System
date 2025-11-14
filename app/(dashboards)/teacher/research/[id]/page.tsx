@@ -95,48 +95,49 @@ export default function ResearchProjectDetailPage() {
   }
 
   return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => router.push("/teacher/research")}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Projects
+      <div className="w-full max-w-full overflow-x-hidden px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 md:gap-4 flex-wrap">
+          <Button variant="outline" size="sm" onClick={() => router.push("/teacher/research")} className="flex items-center gap-2 w-full sm:w-auto">
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Back to Projects</span>
+            <span className="sm:hidden">Back</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => router.push(`/teacher/research/${params.id}/edit`)}>
-            <Edit className="h-4 w-4 mr-2" />
-            Edit
+          <Button variant="outline" size="sm" onClick={() => router.push(`/teacher/research/${params.id}/edit`)} className="flex items-center gap-2 w-full sm:w-auto">
+            <Edit className="h-4 w-4" />
+            <span>Edit</span>
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
+              <Button variant="destructive" size="sm" className="flex items-center gap-2 w-full sm:w-auto">
+                <Trash2 className="h-4 w-4" />
+                <span>Delete</span>
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent className="w-[90vw] max-w-md mx-4">
               <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                <AlertDialogDescription>
+                <AlertDialogTitle className="text-base sm:text-lg">Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription className="text-sm">
                   This action cannot be undone. This will permanently delete the research project record.
                 </AlertDialogDescription>
               </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+              <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="w-full sm:w-auto">Delete</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
         </div>
 
-        <div className="mt-4">
-          <h1 className="text-3xl font-bold">{project.title}</h1>
+        <div className="mt-2 sm:mt-4">
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold break-words">{project?.title}</h1>
         </div>
 
         {isEditing ? (
           <Card>
-            <CardHeader>
-              <CardTitle>Edit Research Project</CardTitle>
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="text-sm sm:text-base">Edit Research Project</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6">
               <ResearchProjectForm
                 initialData={project}
                 onSuccess={handleEditSuccess}
@@ -146,112 +147,112 @@ export default function ResearchProjectDetailPage() {
           </Card>
         ) : (
           <Tabs defaultValue="details">
-            <TabsList>
-              <TabsTrigger value="details">Project Details</TabsTrigger>
-              <TabsTrigger value="funding">Funding & Timeline</TabsTrigger>
-              <TabsTrigger value="team">Research Team</TabsTrigger>
-              <TabsTrigger value="outcomes">Outcomes</TabsTrigger>
+            <TabsList className="w-full overflow-x-auto flex-nowrap sm:flex-wrap">
+              <TabsTrigger value="details" className="text-xs sm:text-sm whitespace-nowrap">Project Details</TabsTrigger>
+              <TabsTrigger value="funding" className="text-xs sm:text-sm whitespace-nowrap">Funding & Timeline</TabsTrigger>
+              <TabsTrigger value="team" className="text-xs sm:text-sm whitespace-nowrap">Research Team</TabsTrigger>
+              <TabsTrigger value="outcomes" className="text-xs sm:text-sm whitespace-nowrap">Outcomes</TabsTrigger>
             </TabsList>
-            <TabsContent value="details" className="space-y-4 mt-4">
+            <TabsContent value="details" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
               <Card>
-                <CardHeader>
-                  <CardTitle>Project Information</CardTitle>
-                  <CardDescription>
-                    <Badge variant={project.status === 1 ? "default" : project.status === 2 ? "secondary" : "destructive"}>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-sm sm:text-base">Project Information</CardTitle>
+                  <CardDescription className="flex flex-wrap gap-2 mt-2">
+                    <Badge variant={project.status === 1 ? "default" : project.status === 2 ? "secondary" : "destructive"} className="text-xs">
                       {project.status_name}
                     </Badge>
-                    <Badge variant="outline" className="ml-2">
+                    <Badge variant="outline" className="text-xs">
                       {project.proj_level_name}
                     </Badge>
-                    <Badge variant="outline" className="ml-2">
+                    <Badge variant="outline" className="text-xs">
                       {project.proj_nature_name}
                     </Badge>
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500">Project Description</h3>
-                    <p className="mt-1">{project.description}</p>
+                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Project Description</h3>
+                    <p className="mt-1 text-xs sm:text-sm break-words">{project.description}</p>
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500">Project Objectives</h3>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Project Objectives</h3>
+                    <ul className="list-disc pl-4 sm:pl-5 mt-1 space-y-1 text-xs sm:text-sm">
                       {project.objectives.map((objective: string, index: number) => (
-                        <li key={index}>{objective}</li>
+                        <li key={index} className="break-words">{objective}</li>
                       ))}
                     </ul>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Department</h3>
-                      <p>{project.department}</p>
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Department</h3>
+                      <p className="text-xs sm:text-sm mt-1">{project.department}</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Faculty</h3>
-                      <p>{project.faculty}</p>
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Faculty</h3>
+                      <p className="text-xs sm:text-sm mt-1">{project.faculty}</p>
                     </div>
                   </div>
 
                   <div>
-                    <h3 className="text-sm font-medium text-gray-500">Project Progress</h3>
+                    <h3 className="text-xs sm:text-sm font-medium text-gray-500">Project Progress</h3>
                     <div className="mt-2">
                       <Progress value={project.progress} className="h-2" />
-                      <p className="text-sm text-gray-500 mt-1">{project.progress}% Complete</p>
+                      <p className="text-xs sm:text-sm text-gray-500 mt-1">{project.progress}% Complete</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="funding" className="space-y-4 mt-4">
+            <TabsContent value="funding" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
               <Card>
-                <CardHeader>
-                  <CardTitle>Funding & Timeline</CardTitle>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-sm sm:text-base">Funding & Timeline</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-sm font-medium text-gray-500">Grant Sanctioned</h3>
-                      <p className="text-2xl font-bold">₹{project.grant_sanctioned.toLocaleString()}</p>
+                <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Grant Sanctioned</h3>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold mt-1 break-words">₹{project.grant_sanctioned.toLocaleString()}</p>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-sm font-medium text-gray-500">Grant Received</h3>
-                      <p className="text-2xl font-bold">₹{project.grant_received.toLocaleString()}</p>
+                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Grant Received</h3>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold mt-1 break-words">₹{project.grant_received.toLocaleString()}</p>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="text-sm font-medium text-gray-500">Utilization</h3>
-                      <p className="text-2xl font-bold">
+                    <div className="bg-gray-50 p-3 sm:p-4 rounded-lg sm:col-span-2 lg:col-span-1">
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Utilization</h3>
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold mt-1">
                         {Math.round((project.grant_received / project.grant_sanctioned) * 100)}%
                       </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Funding Agency</h3>
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Funding Agency</h3>
                       <div className="flex items-center mt-1">
-                        <IndianRupee className="h-5 w-5 mr-2 text-gray-400" />
-                        <p>{project.funding_agency_name}</p>
+                        <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-gray-400 flex-shrink-0" />
+                        <p className="text-xs sm:text-sm break-words">{project.funding_agency_name}</p>
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Duration</h3>
-                      <p>{project.duration} months</p>
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Duration</h3>
+                      <p className="text-xs sm:text-sm mt-1">{project.duration} months</p>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">Start Date</h3>
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">Start Date</h3>
                       <div className="flex items-center mt-1">
-                        <Calendar className="h-5 w-5 mr-2 text-gray-400" />
-                        <p>{new Date(project.start_date).toLocaleDateString()}</p>
+                        <Calendar className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-gray-400 flex-shrink-0" />
+                        <p className="text-xs sm:text-sm">{new Date(project.start_date).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div>
-                      <h3 className="text-sm font-medium text-gray-500">End Date</h3>
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-500">End Date</h3>
                       <div className="flex items-center mt-1">
-                        <Calendar className="h-5 w-5 mr-2 text-gray-400" />
-                        <p>
+                        <Calendar className="h-4 w-4 sm:h-5 sm:w-5 mr-2 text-gray-400 flex-shrink-0" />
+                        <p className="text-xs sm:text-sm">
                           {new Date(
                             new Date(project.start_date).setMonth(
                               new Date(project.start_date).getMonth() + project.duration,
@@ -265,22 +266,22 @@ export default function ResearchProjectDetailPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="team" className="space-y-4 mt-4">
+            <TabsContent value="team" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
               <Card>
-                <CardHeader>
-                  <CardTitle>Research Team</CardTitle>
-                  <CardDescription>Investigators and team members</CardDescription>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-sm sm:text-base">Research Team</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Investigators and team members</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+                <CardContent className="p-3 sm:p-6">
+                  <div className="space-y-3 sm:space-y-4">
                     {project.investigators.map((investigator: any, index: number) => (
-                      <div key={index} className="flex items-center gap-4 p-3 border rounded-lg">
-                        <div className="bg-gray-100 rounded-full p-2">
-                          <Users className="h-6 w-6" />
+                      <div key={index} className="flex items-start sm:items-center gap-3 sm:gap-4 p-3 border rounded-lg">
+                        <div className="bg-gray-100 rounded-full p-2 flex-shrink-0">
+                          <Users className="h-5 w-5 sm:h-6 sm:w-6" />
                         </div>
-                        <div>
-                          <p className="font-medium">{investigator.name}</p>
-                          <p className="text-sm text-gray-500">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-xs sm:text-sm break-words">{investigator.name}</p>
+                          <p className="text-xs sm:text-sm text-gray-500 break-words">
                             {investigator.role} • {investigator.department}
                           </p>
                         </div>
@@ -291,30 +292,30 @@ export default function ResearchProjectDetailPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="outcomes" className="space-y-4 mt-4">
+            <TabsContent value="outcomes" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
               <Card>
-                <CardHeader>
-                  <CardTitle>Project Outcomes</CardTitle>
-                  <CardDescription>Publications, patents, and other outcomes</CardDescription>
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-sm sm:text-base">Project Outcomes</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Publications, patents, and other outcomes</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
+                <CardContent className="p-3 sm:p-6">
+                  <div className="space-y-3 sm:space-y-4">
                     {project.outcomes.map((outcome: string, index: number) => (
-                      <div key={index} className="flex items-center gap-4 p-3 border rounded-lg">
-                        <div className="bg-gray-100 rounded-full p-2">
-                          <FileText className="h-6 w-6" />
+                      <div key={index} className="flex items-start sm:items-center gap-3 sm:gap-4 p-3 border rounded-lg">
+                        <div className="bg-gray-100 rounded-full p-2 flex-shrink-0">
+                          <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
                         </div>
-                        <div>
-                          <p>{outcome}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs sm:text-sm break-words">{outcome}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 </CardContent>
-                <CardFooter>
-                  <Button variant="outline" size="sm" className="ml-auto bg-transparent">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Outcome
+                <CardFooter className="p-3 sm:p-6">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto sm:ml-auto bg-transparent flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span>Add Outcome</span>
                   </Button>
                 </CardFooter>
               </Card>
