@@ -51,7 +51,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-gray-50">
       <Header onMobileMenuToggle={toggleMobileMenu} />
 
-      <div className="flex h-screen pt-16">
+      <div className="flex h-screen pt-14 sm:pt-16">
         {/* Sidebar */}
         <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:pt-16">{renderSidebar()}</div>
 
@@ -59,10 +59,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="lg:hidden">{renderSidebar()}</div>
 
         {/* Main content */}
-        <div className="flex-1 lg:pl-64">
-          <main className="flex-1 overflow-y-auto">
+        <div className="flex-1 lg:pl-64 overflow-x-hidden">
+          <main className="flex-1 overflow-y-auto custom-scrollbar overflow-x-hidden">
             <div className="py-6">
-              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">{children}</div>
+              <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full max-w-full">{children}</div>
             </div>
           </main>
         </div>

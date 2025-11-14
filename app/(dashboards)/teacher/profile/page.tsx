@@ -817,22 +817,25 @@ export default function ProfilePage() {
   // Loading state is already handled above (line 322) - removed duplicate check to follow Rules of Hooks
 
   return (
-    <div className="space-y-6 w-full max-w-full overflow-x-hidden">
+    <div className="w-full max-w-full overflow-x-hidden text-xs sm:text-sm">
+      <div className="space-y-3 sm:space-y-4 w-full max-w-full">
 
-      <div className="flex items-center justify-between px-auto">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Profile</h1>
-          <p className="text-muted-foreground">View and manage your personal information</p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 w-full">
+        <div className="w-full sm:w-auto">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight">My Profile</h1>
+          <p className="text-[11px] sm:text-xs md:text-sm text-muted-foreground">View and manage your personal information</p>
         </div>
 
         {/* Generate CV Button */}
-        <div className="flex justify-end">
+        <div className="flex justify-start sm:justify-end w-full sm:w-auto">
           <Button
             onClick={() => router.push("/teacher/generate-cv")}
-            className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+            size="sm"
           >
             <FileText className="h-4 w-4" />
-            Generate CV
+            <span className="hidden sm:inline">Generate CV</span>
+            <span className="sm:hidden">CV</span>
           </Button>
         </div>
       </div>
@@ -840,29 +843,32 @@ export default function ProfilePage() {
       {/* Personal Information */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <User className="h-4 w-4 sm:h-5 sm:w-5" />
                 Personal Information
               </CardTitle>
-              <CardDescription>Your personal and academic details</CardDescription>
+              <CardDescription className="text-[11px] sm:text-xs">Your personal and academic details</CardDescription>
             </div>
             {!isEditingPersonal ? (
-              <Button onClick={() => setIsEditingPersonal(true)} className="flex items-center gap-2">
+              <Button onClick={() => setIsEditingPersonal(true)} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
                 <Edit className="h-4 w-4" />
-                Edit Personal Info
+                <span className="hidden sm:inline">Edit Personal Info</span>
+                <span className="sm:hidden">Edit</span>
               </Button>
             ) : (
-              <div className="flex gap-2">
-                <Button onClick={handleSubmit(onSubmitPersonal)} className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button onClick={handleSubmit(onSubmitPersonal)} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
                   <Save className="h-4 w-4" />
-                  Save Changes
+                  <span className="hidden sm:inline">Save Changes</span>
+                  <span className="sm:hidden">Save</span>
                 </Button>
                 <Button
                   variant="outline"
                   onClick={handleCancelPersonal}
-                  className="flex items-center gap-2 bg-transparent"
+                  className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
+                  size="sm"
                 >
                   <X className="h-4 w-4" />
                   Cancel
@@ -871,15 +877,15 @@ export default function ProfilePage() {
             )}
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-full">
-            <div className="lg:col-span-3 space-y-6">
+        <CardContent className="p-3 sm:p-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full">
+            <div className="space-y-3 sm:space-y-4 w-full">
 
               {/* Profile Photo Section */}
-              <div className="col-span-full lg:col-span-1 flex flex-col items-center space-y-4">
+              <div className="col-span-full flex flex-col items-center space-y-2 sm:space-y-3 w-full">
 
                 <div className="relative">
-                  <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
+                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 sm:border-4 border-white shadow-lg">
                     {teacherInfo?.ProfileImage ? (
                       <img
                         src={teacherInfo?.ProfileImage || "/placeholder.svg"}
@@ -888,7 +894,7 @@ export default function ProfilePage() {
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                        <User className="h-16 w-16 text-blue-400" />
+                        <User className="h-12 w-12 sm:h-16 sm:w-16 text-blue-400" />
                       </div>
                     )}
                   </div>
@@ -917,9 +923,9 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div className="text-center">
-                  <p className="font-medium">{`${teacherInfo?.Abbri} ${teacherInfo?.fname} ${teacherInfo?.lname}`}</p>
-                  <p className="text-sm text-muted-foreground">{designationData?.name}</p>
-                  <p className="text-sm text-muted-foreground">{departmentData?.name}</p>
+                  <p className="font-medium text-xs sm:text-sm">{`${teacherInfo?.Abbri} ${teacherInfo?.fname} ${teacherInfo?.lname}`}</p>
+                  <p className="text-xs text-muted-foreground">{designationData?.name}</p>
+                  <p className="text-xs text-muted-foreground">{departmentData?.name}</p>
                 </div>
                 {isEditingPersonal && (
                   <div className="text-center">
@@ -929,9 +935,9 @@ export default function ProfilePage() {
                 )}
               </div>
               {/* Basic Information */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 w-full">
                 <div className="space-y-2">
-                  <Label htmlFor="salutation">Salutation</Label>
+                  <Label htmlFor="salutation" className="text-[11px] sm:text-xs">Salutation</Label>
                   <Controller
                     control={control}
                     name="Abbri"
@@ -940,7 +946,7 @@ export default function ProfilePage() {
                         value={field.value}
                         onValueChange={(v: any) => field.onChange(v)}
                       >
-                        <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                        <SelectTrigger className={`h-8 text-xs ${!isEditingPersonal ? "pointer-events-none" : ""}`}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -957,9 +963,10 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="firstName">First Name</Label>
+                  <Label htmlFor="firstName" className="text-[11px] sm:text-xs">First Name</Label>
                   <Input 
                     id="firstName" 
+                    className="h-8 text-xs"
                     {...register('fname', {
                       required: isEditingPersonal ? "First name is required" : false,
                       minLength: {
@@ -978,9 +985,10 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="middleName">Middle Name</Label>
+                  <Label htmlFor="middleName" className="text-[11px] sm:text-xs">Middle Name</Label>
                   <Input 
                     id="middleName" 
+                    className="h-8 text-xs"
                     {...register('mname', {
                       validate: (value) => {
                         if (!value || value.trim() === '') return true; // Optional field
@@ -1000,9 +1008,10 @@ export default function ProfilePage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name</Label>
+                  <Label htmlFor="lastName" className="text-[11px] sm:text-xs">Last Name</Label>
                   <Input 
                     id="lastName" 
+                    className="h-8 text-xs"
                     {...register('lname', {
                       required: isEditingPersonal ? "Last name is required" : false,
                       minLength: {
@@ -1023,13 +1032,13 @@ export default function ProfilePage() {
               </div>
 
               {/* Contact Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 w-full">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" {...register('email_id')} readOnly />
+                  <Label htmlFor="email" className="text-[11px] sm:text-xs">Email</Label>
+                  <Input id="email" type="email" {...register('email_id')} readOnly className="h-8 text-xs" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
+                  <Label htmlFor="phone" className="text-[11px] sm:text-xs">Phone Number</Label>
                   <Controller
                     control={control}
                     name="phone_no"
@@ -1049,19 +1058,20 @@ export default function ProfilePage() {
                       }
                     }}
                     render={({ field }) => (
-                      <Input
-                        id="phone"
-                        type="tel"
-                        {...field}
-                        onChange={(e) => {
-                          // Only allow digits and limit to 10
-                          const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                          field.onChange(value);
-                        }}
-                        readOnly={!isEditingPersonal}
-                        placeholder="Enter 10 digit phone number"
-                        maxLength={10}
-                      />
+                        <Input
+                          id="phone"
+                          type="tel"
+                          {...field}
+                          className="h-8 text-xs"
+                          onChange={(e) => {
+                            // Only allow digits and limit to 10
+                            const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            field.onChange(value);
+                          }}
+                          readOnly={!isEditingPersonal}
+                          placeholder="Enter 10 digit phone number"
+                          maxLength={10}
+                        />
                     )}
                   />
                   {errors.phone_no && isEditingPersonal && (
@@ -1073,30 +1083,30 @@ export default function ProfilePage() {
 
               {/* Additional Personal Information */}
               <div className="space-y-4">
-                <h4 className="text-md font-medium">Additional Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h4 className="text-xs sm:text-sm font-medium">Additional Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 w-full">
                   <div className="space-y-2">
                     <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input id="dateOfBirth" type="date" {...register('DOB')} readOnly={!isEditingPersonal} />
+                  <Input id="dateOfBirth" type="date" {...register('DOB')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dateOfJoining">Date of Joining</Label>
-                  <Input id="dateOfJoining" type="date" {...register('recruit_date')} readOnly={!isEditingPersonal} />
+                  <Input id="dateOfJoining" type="date" {...register('recruit_date')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="panNo">PAN Number</Label>
-                  <Input id="panNo" {...register('PAN_No')} readOnly={!isEditingPersonal} placeholder="ABCDE1234F" maxLength={10} />
+                  <Input id="panNo" {...register('PAN_No')} readOnly={!isEditingPersonal} placeholder="ABCDE1234F" maxLength={10} className="h-8 text-xs" />
                   </div>
                 </div>
               </div>
 
               {/* Research Metrics - Add this new section */}
               <div className="space-y-4">
-                <h4 className="text-md font-medium">Research Metrics</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <h4 className="text-xs sm:text-sm font-medium">Research Metrics</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
                   <div className="space-y-2">
                     <Label htmlFor="hIndex">H-Index</Label>
-                    <Input 
+                      <Input 
                       id="hIndex" 
                       type="number" 
                       {...register('H_INDEX', {
@@ -1105,6 +1115,7 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter H-Index"
+                      className="h-8 text-xs"
                     />
                     {errors.H_INDEX && isEditingPersonal && (
                       <p className="text-sm text-red-500">{errors.H_INDEX.message as string}</p>
@@ -1112,7 +1123,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="i10Index">i10-Index</Label>
-                    <Input 
+                      <Input 
                       id="i10Index" 
                       type="number" 
                       {...register('i10_INDEX', {
@@ -1121,6 +1132,7 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter i10-Index"
+                      className="h-8 text-xs"
                     />
                     {errors.i10_INDEX && isEditingPersonal && (
                       <p className="text-sm text-red-500">{errors.i10_INDEX.message as string}</p>
@@ -1128,7 +1140,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="citations">Citations</Label>
-                    <Input 
+                      <Input 
                       id="citations" 
                       type="number" 
                       {...register('CITIATIONS', {
@@ -1137,14 +1149,15 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter total citations"
+                      className="h-8 text-xs"
                     />
                     {errors.CITIATIONS && isEditingPersonal && (
                       <p className="text-sm text-red-500">{errors.CITIATIONS.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="orcidId">ORCID ID</Label>
-                    <Input 
+                    <Label htmlFor="orcidId">ORCHID ID</Label>
+                      <Input 
                       id="orcidId" 
                       {...register('ORCHID_ID', {
                         pattern: {
@@ -1155,6 +1168,7 @@ export default function ProfilePage() {
                       readOnly={!isEditingPersonal} 
                       placeholder="0000-0000-0000-0000"
                       maxLength={19}
+                      className="h-8 text-xs"
                     />
                     {errors.ORCHID_ID && isEditingPersonal && (
                       <p className="text-sm text-red-500">{errors.ORCHID_ID.message as string}</p>
@@ -1162,12 +1176,13 @@ export default function ProfilePage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="researcherId">Researcher ID</Label>
-                    <Input 
+                      <Input 
                       id="researcherId" 
                       {...register('RESEARCHER_ID')} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter Researcher ID"
                       maxLength={100}
+                      className="h-8 text-xs"
                     />
                     {errors.RESEARCHER_ID && isEditingPersonal && (
                       <p className="text-sm text-red-500">{errors.RESEARCHER_ID.message as string}</p>
@@ -1178,8 +1193,8 @@ export default function ProfilePage() {
 
               {/* Teaching Status */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Teaching Status</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-sm sm:text-base font-semibold">Teaching Status</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 w-full">
                   <div className="space-y-2">
                     <Label htmlFor="teachingStatus">Teaching Status</Label>
                     <Controller
@@ -1193,7 +1208,7 @@ export default function ProfilePage() {
                             field.onChange(isPermanent ? false : true);
                           }}
                         >
-                          <SelectTrigger className={!isEditingPersonal ? "pointer-events-none" : undefined}>
+                          <SelectTrigger className={`h-8 text-xs ${!isEditingPersonal ? "pointer-events-none" : ""}`}>
                             <SelectValue placeholder="Select teaching status" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1209,8 +1224,8 @@ export default function ProfilePage() {
 
               {/* Academic Information */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Academic Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h3 className="text-sm sm:text-base font-semibold">Academic Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 w-full">
                   <div className="space-y-2">
                     <Label htmlFor="designation">Designation</Label>
                     <Controller
@@ -1231,6 +1246,7 @@ export default function ProfilePage() {
                             placeholder="Select designation"
                             disabled={!isEditingPersonal}
                             emptyMessage="No designation found."
+                            className="w-full min-w-0 h-8 text-xs"
                           />
                         )
                       }}
@@ -1255,10 +1271,11 @@ export default function ProfilePage() {
                       placeholder="Select faculty"
                       disabled={!isEditingPersonal}
                       emptyMessage="No faculty found."
+                      className="w-full min-w-0"
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-4 w-full">
                   <div className="space-y-2">
                     <Label htmlFor="department">Department</Label>
                     <Controller
@@ -1275,6 +1292,7 @@ export default function ProfilePage() {
                           placeholder="Select department"
                           disabled={!isEditingPersonal || !selectedFacultyId}
                           emptyMessage={!selectedFacultyId ? "Please select a faculty first" : "No department found."}
+                          className="w-full min-w-0"
                         />
                       )}
                     />
@@ -1284,8 +1302,8 @@ export default function ProfilePage() {
 
               {/* Qualification Information */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Qualification Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <h3 className="text-sm sm:text-base font-semibold">Qualification Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Qualified NET Exam</Label>
@@ -1308,7 +1326,7 @@ export default function ProfilePage() {
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="netYear">NET Qualified Year</Label>
-                          <Input id="netYear" {...register('NET_year')} readOnly={!isEditingPersonal} />
+                          <Input id="netYear" {...register('NET_year')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
                         </div>
 
                       </>
@@ -1337,7 +1355,7 @@ export default function ProfilePage() {
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="gateYear">GATE Qualified Year</Label>
-                          <Input id="gateYear" {...register('GATE_year')} readOnly={!isEditingPersonal} placeholder="e.g., 2018" />
+                          <Input id="gateYear" {...register('GATE_year')} readOnly={!isEditingPersonal} placeholder="e.g., 2018" className="h-8 text-xs" />
                         </div>
 
                       </>
@@ -1348,7 +1366,7 @@ export default function ProfilePage() {
 
               {/* Registration Information */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Registration Information</h3>
+                <h3 className="text-sm sm:text-base font-semibold">Registration Information</h3>
                 <div className="space-y-2">
                   <Label>Registered Phd Guide at MSU</Label>
                   <RadioGroup
@@ -1369,17 +1387,17 @@ export default function ProfilePage() {
                 {watch('PHDGuide') && (
                   <div className="space-y-2">
                     <Label htmlFor="registrationYear">Year of Registration</Label>
-                    <Input id="registrationYear" {...register('Guide_year')} readOnly={!isEditingPersonal} />
+                    <Input id="registrationYear" {...register('Guide_year')} readOnly={!isEditingPersonal} className="h-8 text-xs" />
                   </div>
                 )}
               </div>
 
               {/* ICT in Teaching */}
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Use of ICT in Teaching</h3>
+                <h3 className="text-sm sm:text-base font-semibold">Use of ICT in Teaching</h3>
                 <div className="space-y-4">
                   <Label>Technologies Used for Teaching (Select all that apply)</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
                     <div className="flex items-center space-x-2">
                       <input
                         type="checkbox"
@@ -1462,7 +1480,7 @@ export default function ProfilePage() {
                         // onChange={(e) => handleInputChange("ictOthersSpecify", e.target.value)}
                         placeholder="Please specify other ICT tools used..."
                         readOnly={!isEditingPersonal}
-                        className="max-w-md"
+                        className="max-w-md h-8 text-xs"
                       />
                     </div>
                   )}
@@ -1478,33 +1496,36 @@ export default function ProfilePage() {
       {/* Experience Details - Always Editable */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
             <div>
-              <CardTitle>Experience Details</CardTitle>
-              <CardDescription>Your professional work experience</CardDescription>
+              <CardTitle className="text-sm sm:text-base">Experience Details</CardTitle>
+              <CardDescription className="text-[11px] sm:text-xs">Your professional work experience</CardDescription>
             </div>
-            <Button onClick={addExperienceEntry} size="sm" className="flex items-center gap-2">
+            <Button onClick={addExperienceEntry} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
-              Add Experience
+              <span className="hidden sm:inline">Add Experience</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sr No.</TableHead>
-                  <TableHead>Employer</TableHead>
-                  <TableHead>Currently Employed?</TableHead>
-                  <TableHead>Designation</TableHead>
-                  <TableHead>Date of Joining</TableHead>
-                  <TableHead>Date of Relieving</TableHead>
-                  <TableHead>Nature of Job</TableHead>
-                  <TableHead>Type of Teaching</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+        <CardContent className="p-2 sm:p-3">
+          <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
+            <div className="min-w-full inline-block align-middle">
+              <div className="overflow-hidden border rounded-lg">
+                <Table className="w-full table-auto text-xs sm:text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Sr No.</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Employer</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Currently Employed?</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Designation</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Date of Joining</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Date of Relieving</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Nature of Job</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Type of Teaching</TableHead>
+                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
               <TableBody>
                 {experienceFields.map((field, index) => {
                   const entry = experienceForm.watch(`experiences.${index}`)
@@ -1512,7 +1533,7 @@ export default function ProfilePage() {
                   return (
                     <TableRow key={field.id}>
                       <TableCell>{index + 1}</TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-[220px]">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Employeer`}
@@ -1520,7 +1541,7 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0 h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
@@ -1536,7 +1557,7 @@ export default function ProfilePage() {
                               onValueChange={(value: string) => formField.onChange(value === "yes")}
                               disabled={!rowEditing}
                             >
-                              <SelectTrigger className={`min-w-[100px] ${!rowEditing ? "pointer-events-none" : ""}`}>
+                              <SelectTrigger className={`w-full min-w-[60px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1547,14 +1568,14 @@ export default function ProfilePage() {
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-[220px]">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.desig`}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0 h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
@@ -1571,13 +1592,13 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.End_Date`}
@@ -1587,13 +1608,13 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Nature`}
@@ -1604,7 +1625,7 @@ export default function ProfilePage() {
                               onValueChange={formField.onChange}
                               disabled={!rowEditing}
                             >
-                              <SelectTrigger className={`min-w-[150px] ${!rowEditing ? "pointer-events-none" : ""}`}>
+                              <SelectTrigger className={`w-full min-w-[80px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1630,7 +1651,7 @@ export default function ProfilePage() {
                               onValueChange={formField.onChange}
                               disabled={!rowEditing}
                             >
-                              <SelectTrigger className={`min-w-[120px] ${!rowEditing ? "pointer-events-none" : ""}`}>
+                              <SelectTrigger className={`w-full min-w-[70px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1643,15 +1664,15 @@ export default function ProfilePage() {
                           )}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
+                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
                             <>
-                              <Button size="sm" onClick={() => toggleExperienceRowEdit(field.Id)}>
-                                <Edit className="h-4 w-4" />
+                              <Button size="sm" onClick={() => toggleExperienceRowEdit(field.Id)} className="h-7 w-7 p-0">
+                                <Edit className="h-3 w-3" />
                               </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(index, field.Id)}>
-                                <Trash2 className="h-4 w-4" />
+                              <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(index, field.Id)} className="h-7 w-7 p-0">
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </>
                           ) : (
@@ -1660,9 +1681,9 @@ export default function ProfilePage() {
                                 size="sm" 
                                 variant="default"
                                 onClick={() => handleSaveExperienceRow(index, field.Id)}
-                                className="flex items-center gap-1"
+                                className="flex items-center gap-1 h-7 text-xs px-2"
                               >
-                                <Save className="h-4 w-4" />
+                                <Save className="h-3 w-3" />
                                 <span className="hidden sm:inline">Save</span>
                               </Button>
                               <Button 
@@ -1680,9 +1701,9 @@ export default function ProfilePage() {
                                       })
                                   }
                                 }}
-                                className="flex items-center gap-1"
+                                className="flex items-center gap-1 h-7 text-xs px-2"
                               >
-                                <X className="h-4 w-4" />
+                                <X className="h-3 w-3" />
                                 <span className="hidden sm:inline">Cancel</span>
                               </Button>
                             </>
@@ -1693,7 +1714,9 @@ export default function ProfilePage() {
                   )
                 })}
               </TableBody>
-            </Table>
+                </Table>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1701,40 +1724,43 @@ export default function ProfilePage() {
       {/* Post Doctoral Research Experience - Always Editable */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
             <div>
-              <CardTitle>Post Doctoral Research Experience</CardTitle>
-              <CardDescription>Your post-doctoral research positions</CardDescription>
+              <CardTitle className="text-sm sm:text-base">Post Doctoral Research Experience</CardTitle>
+              <CardDescription className="text-[11px] sm:text-xs">Your post-doctoral research positions</CardDescription>
             </div>
-            <Button onClick={addPostDocEntry} size="sm" className="flex items-center gap-2">
+            <Button onClick={addPostDocEntry} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
-              Add Post-Doc
+              <span className="hidden sm:inline">Add Post-Doc</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sr No.</TableHead>
-                  <TableHead>Institute / Industry</TableHead>
-                  <TableHead>Start Date</TableHead>
-                  <TableHead>End Date</TableHead>
-                  <TableHead>Sponsored By</TableHead>
-                  <TableHead>QS / THE World University Ranking</TableHead>
-                  <TableHead>Supporting Document</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
+        <CardContent className="p-4 sm:p-6">
+          <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
+            <div className="min-w-full inline-block align-middle">
+              <div className="overflow-hidden border rounded-lg">
+                <Table className="w-full table-auto">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Sr No.</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Institute / Industry</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Start Date</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">End Date</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Sponsored By</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">QS / THE World University Ranking</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Supporting Document</TableHead>
+                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
               <TableBody>
                 {postDocFields.map((field, index) => {
                   const entry = postDocForm.watch(`researches.${index}`)
                   const rowEditing = postDocEditingIds.has(field.Id);
                   return (
                     <TableRow key={field.id}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 whitespace-nowrap text-xs">{index + 1}</TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.Institute`}
@@ -1742,7 +1768,7 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="min-w-[200px]"
+                              className="w-full min-w-0 h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
@@ -1759,13 +1785,13 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.End_Date`}
@@ -1776,49 +1802,49 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.SponsoredBy`}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="min-w-[150px]"
+                              className="w-full min-w-0"
                               placeholder="e.g., UGC, CSIR"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.QS_THE`}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="min-w-[200px]"
+                              className="w-full min-w-0"
                               placeholder="e.g., QS Ranking: 172"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
+                      <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1 flex-wrap sm:flex-nowrap">
                           <Controller
                             control={postDocForm.control}
                             name={`researches.${index}.doc`}
                             render={({ field: formField }) => (
                               <Input
                                 {...formField}
-                                className="min-w-[150px]"
+                                className="w-full min-w-0"
                                 placeholder="Document name"
                                 readOnly={!rowEditing}
                               />
@@ -1829,8 +1855,8 @@ export default function ProfilePage() {
                           </Button>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
+                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
                             <>
                               <Button size="sm" onClick={() => togglePostDocRowEdit(field.Id)}>
@@ -1878,7 +1904,9 @@ export default function ProfilePage() {
                   )
                 })}
               </TableBody>
-            </Table>
+                </Table>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1886,19 +1914,20 @@ export default function ProfilePage() {
       {/* Education Details - Always Editable */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
             <div>
-              <CardTitle>Education Details</CardTitle>
-              <CardDescription>Your academic qualifications</CardDescription>
+              <CardTitle className="text-sm sm:text-base">Education Details</CardTitle>
+              <CardDescription className="text-[11px] sm:text-xs">Your academic qualifications</CardDescription>
             </div>
-            <Button onClick={addEducationEntry} size="sm" className="flex items-center gap-2">
+            <Button onClick={addEducationEntry} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
               <Plus className="h-4 w-4" />
-              Add Education
+              <span className="hidden sm:inline">Add Education</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1918,9 +1947,9 @@ export default function ProfilePage() {
                   const rowEditing = educationEditingIds.has(field.gid);
                   return (
                     <TableRow key={field.id}>
-                      <TableCell>{index + 1}</TableCell>
+                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">{index + 1}</TableCell>
 
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.degree_type`}
@@ -1936,13 +1965,13 @@ export default function ProfilePage() {
                               placeholder="Select degree type"
                               disabled={!rowEditing}
                               emptyMessage="No degree type found."
-                              className="min-w-[140px]"
+                              className="w-full min-w-0"
                             />
                           )}
                         />
                       </TableCell>
 
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.university_name`}
@@ -1950,20 +1979,20 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="min-w-[200px]"
+                              className="w-full min-w-0 h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.state`}
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className={`min-w-[140px] ${!rowEditing ? "pointer-events-none bg-gray-100 text-gray-500" : ""}`}
+                              className={`w-full min-w-0 ${!rowEditing ? "pointer-events-none bg-gray-100 text-gray-500" : ""}`}
                               placeholder="Enter state"
                               readOnly={!rowEditing}
                             />
@@ -1971,7 +2000,7 @@ export default function ProfilePage() {
                         />
                       </TableCell>
 
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.year_of_passing`}
@@ -2026,7 +2055,7 @@ export default function ProfilePage() {
                                 }}
                                 name={formField.name}
                                 ref={formField.ref}
-                                className="min-w-[120px]"
+                                className="w-full min-w-0"
                                 placeholder="YYYY"
                                 readOnly={!rowEditing}
                               />
@@ -2035,7 +2064,7 @@ export default function ProfilePage() {
                         />
                       </TableCell>
 
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.subject`}
@@ -2043,14 +2072,14 @@ export default function ProfilePage() {
                             <Input
                               {...formField}
                               value={formField.value || ""}
-                              className="min-w-[200px]"
+                              className="w-full min-w-0"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
 
-                      <TableCell>
+                      <TableCell className="p-1.5 sm:p-2 min-w-0">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.QS_Ranking`}
@@ -2058,15 +2087,15 @@ export default function ProfilePage() {
                             <Input
                               {...formField}
                               value={formField.value || ""}
-                              className="min-w-[120px]"
+                              className="w-full min-w-0"
                               placeholder="QS Ranking"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
+                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
                             <>
                               <Button size="sm" onClick={() => toggleEducationRowEdit(field.gid)}>
@@ -2122,20 +2151,20 @@ export default function ProfilePage() {
       {/* Academic Year Information Availability */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
             <div>
-              <CardTitle>Academic Year Information Availability</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-sm sm:text-base">Academic Year Information Availability</CardTitle>
+              <CardDescription className="text-[11px] sm:text-xs">
                 Academic Year Information Activity - Please tick if you DON'T have any information to submit in the
                 following academic years
               </CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto">
               <Button
                 onClick={handleSaveAcademicYears}
                 size="sm"
                 variant="outline"
-                className="flex items-center gap-2 bg-transparent"
+                className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
               >
                 <Save className="h-4 w-4" />
                 Save
@@ -2143,9 +2172,9 @@ export default function ProfilePage() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <CardContent className="p-2 sm:p-3">
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 w-full">
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
@@ -2317,6 +2346,7 @@ export default function ProfilePage() {
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

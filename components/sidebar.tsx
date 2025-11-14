@@ -488,11 +488,11 @@ const navigationConfig: Record<number, NavigationItem[]> = {
     //   href: "/teacher/online-engagement",
     //   icon: Globe,
     // },
-    {
-      name: "Change Password",
-      href: "/change-password",
-      icon: Settings,
-    },
+    // {
+    //   name: "Change Password",
+    //   href: "/change-password",
+    //   icon: Settings,
+    // },
   ],
 }
 
@@ -582,7 +582,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
-        <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-white px-6 pb-4 shadow-lg border-r border-gray-200">
+        <div className="flex grow flex-col gap-y-5 overflow-y-auto custom-scrollbar bg-white px-6 pb-4 shadow-lg border-r border-gray-200">
           {/* Mobile header */}
           <div className="flex h-16 shrink-0 items-center justify-end lg:hidden">
             <Button variant="ghost" size="sm" onClick={onClose}>

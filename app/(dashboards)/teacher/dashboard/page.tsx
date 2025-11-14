@@ -222,6 +222,10 @@ export default function DashboardPage() {
                     <span className="text-sm font-medium">Researcher Id</span>
                     <span className="text-lg font-bold text-purple-600">{researchIndexes.RESEARCHER_ID}</span>
                   </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">ORCHID ID</span>
+                    <span className="text-lg font-bold text-green-600">{researchIndexes.ORCHID_ID}</span>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -267,10 +271,14 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Citations (5 years)</span>
+                    <span className="text-sm font-medium">Researcher Id</span>
                     <span className="text-lg font-bold text-purple-600">
                       {researchIndexes.RESEARCHER_ID}
                     </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">ORCHID ID</span>
+                    <span className="text-lg font-bold text-green-600">{researchIndexes.ORCHID_ID}</span>
                   </div>
                 </div>
               )}
