@@ -8,22 +8,20 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Upload, FileText, Loader2, Brain } from "lucide-react"
+import { ArrowLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ResearchProjectFormData } from "@/types/interfaces"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 
 export default function AddResearchPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
-  const [dragActive, setDragActive] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
   const {
     projectStatusOptions,
@@ -66,185 +64,90 @@ export default function AddResearchPage() {
     fetchProjectNatures()
   }, [])
 
-  const handleFileUpload = (file: File) => {
-    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"]
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload only PDF or image files (JPEG, PNG, JPG)",
-        variant: "destructive",
-      })
-      return
+  // Handle extracted fields from DocumentUpload component
+  const handleExtractFields = useCallback((fields: Record<string, any>) => {
+    let fieldsPopulated = 0
+
+    // Map extracted fields to form fields
+    if (fields.title) {
+      setValue("title", fields.title)
+      fieldsPopulated++
+    }
+    if (fields.fundingAgency || fields.funding_agency) {
+      const agencyName = fields.fundingAgency || fields.funding_agency
+      // Try to find matching funding agency
+      const matchingAgency = fundingAgencyOptions.find(
+        (a) => a.name.toLowerCase().includes(agencyName.toLowerCase()) || 
+               agencyName.toLowerCase().includes(a.name.toLowerCase())
+      )
+      if (matchingAgency) {
+        setValue("funding_agency", matchingAgency.id)
+        fieldsPopulated++
+      }
+    }
+    if (fields.totalGrantSanctioned || fields.grant_sanctioned) {
+      const value = fields.totalGrantSanctioned || fields.grant_sanctioned
+      setValue("grant_sanctioned", value.toString())
+      fieldsPopulated++
+    }
+    if (fields.totalGrantReceived || fields.grant_received) {
+      const value = fields.totalGrantReceived || fields.grant_received
+      setValue("grant_received", value.toString())
+      fieldsPopulated++
+    }
+    if (fields.projectNature || fields.proj_nature) {
+      const value = fields.projectNature || fields.proj_nature
+      setValue("proj_nature", typeof value === 'number' ? value : null)
+      fieldsPopulated++
+    }
+    if (fields.level || fields.proj_level) {
+      const levelName = fields.level || fields.proj_level
+      const matchingLevel = projectLevelOptions.find(
+        (l) => l.name.toLowerCase().includes(levelName.toLowerCase()) ||
+               levelName.toLowerCase().includes(l.name.toLowerCase())
+      )
+      if (matchingLevel) {
+        setValue("proj_level", matchingLevel.id)
+        fieldsPopulated++
+      }
+    }
+    if (fields.duration) {
+      const durationValue = typeof fields.duration === 'number' 
+        ? fields.duration 
+        : parseInt(fields.duration.toString()) || 0
+      setValue("duration", durationValue)
+      fieldsPopulated++
+    }
+    if (fields.status) {
+      const matchingStatus = projectStatusOptions.find(
+        (s) => s.name.toLowerCase().includes(fields.status.toLowerCase()) ||
+               fields.status.toLowerCase().includes(s.name.toLowerCase())
+      )
+      if (matchingStatus) {
+        setValue("status", matchingStatus.id)
+        fieldsPopulated++
+      }
+    }
+    if (fields.startDate || fields.start_date) {
+      const dateValue = fields.startDate || fields.start_date
+      setValue("start_date", dateValue)
+      fieldsPopulated++
+    }
+    if (fields.seedGrant) {
+      setValue("grant_sanctioned", fields.seedGrant.toString())
+      fieldsPopulated++
+    }
+    if (fields.seedGrantYear || fields.grant_year) {
+      const yearValue = fields.seedGrantYear || fields.grant_year
+      setValue("grant_year", yearValue.toString())
+      fieldsPopulated++
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please upload files smaller than 10MB",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSelectedFile(file)
     toast({
-      title: "File selected",
-      description: `${file.name} is ready for upload`,
+      title: "Information Extracted Successfully",
+      description: `${fieldsPopulated} fields populated from document analysis`,
     })
-  }
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true)
-    } else if (e.type === "dragleave") {
-      setDragActive(false)
-    }
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0])
-    }
-  }
-
-
-  const handleAutoFill = useCallback(async () => {
-    if (!selectedFile) {
-      toast({
-        title: "No document uploaded",
-        description: "Please upload a document first to extract information.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsExtracting(true)
-    try {
-      const categoryResponse = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ type: "research_project" }),
-      })
-
-      if (!categoryResponse.ok) {
-        throw new Error("Failed to get category")
-      }
-
-      const categoryData = await categoryResponse.json()
-
-      const formFieldsResponse = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          category: categoryData.category,
-          type: "research_project",
-        }),
-      })
-
-      if (!formFieldsResponse.ok) {
-        throw new Error("Failed to get form fields")
-      }
-
-      const formFieldsData = await formFieldsResponse.json()
-
-      if (formFieldsData.success && formFieldsData.data) {
-        const data = formFieldsData.data
-        let fieldsPopulated = 0
-
-        // Map extracted fields to form fields
-        if (data.title) {
-          setValue("title", data.title)
-          fieldsPopulated++
-        }
-        if (data.fundingAgency) {
-          // Try to find matching funding agency
-          const matchingAgency = fundingAgencyOptions.find(
-            (a) => a.name.toLowerCase().includes(data.fundingAgency.toLowerCase()) || 
-                   data.fundingAgency.toLowerCase().includes(a.name.toLowerCase())
-          )
-          if (matchingAgency) {
-            setValue("funding_agency", matchingAgency.id)
-            fieldsPopulated++
-          }
-        }
-        if (data.totalGrantSanctioned) {
-          setValue("grant_sanctioned", data.totalGrantSanctioned.toString())
-          fieldsPopulated++
-        }
-        if (data.totalGrantReceived) {
-          setValue("grant_received", data.totalGrantReceived.toString())
-          fieldsPopulated++
-        }
-        if (data.projectNature) {
-          // Project nature is a number ID - try to match or use input
-          setValue("proj_nature", typeof data.projectNature === 'number' ? data.projectNature : null)
-          fieldsPopulated++
-        }
-        if (data.level) {
-          const matchingLevel = projectLevelOptions.find(
-            (l) => l.name.toLowerCase().includes(data.level.toLowerCase()) ||
-                   data.level.toLowerCase().includes(l.name.toLowerCase())
-          )
-          if (matchingLevel) {
-            setValue("proj_level", matchingLevel.id)
-            fieldsPopulated++
-          }
-        }
-        if (data.duration) {
-          const durationValue = typeof data.duration === 'number' 
-            ? data.duration 
-            : parseInt(data.duration.toString()) || 0
-          setValue("duration", durationValue)
-          fieldsPopulated++
-        }
-        if (data.status) {
-          const matchingStatus = projectStatusOptions.find(
-            (s) => s.name.toLowerCase().includes(data.status.toLowerCase()) ||
-                   data.status.toLowerCase().includes(s.name.toLowerCase())
-          )
-          if (matchingStatus) {
-            setValue("status", matchingStatus.id)
-            fieldsPopulated++
-          }
-        }
-        if (data.startDate) {
-          setValue("start_date", data.startDate)
-          fieldsPopulated++
-        }
-        if (data.seedGrant) {
-          setValue("grant_sanctioned", data.seedGrant.toString())
-          fieldsPopulated++
-        }
-        if (data.seedGrantYear) {
-          setValue("grant_year", data.seedGrantYear.toString())
-          fieldsPopulated++
-        }
-
-        toast({
-          title: "Information Extracted Successfully",
-          description: `${fieldsPopulated} fields populated from document analysis (${Math.round(formFieldsData.confidence * 100)}% confidence)`,
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Extraction Failed",
-        description: error.message || "Failed to extract information from document. Please try again or fill the form manually.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }, [setValue, toast, selectedFile, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
+  }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
     setIsLoading(true)
@@ -397,65 +300,24 @@ export default function AddResearchPage() {
           {/* Document Upload Section */}
           <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
             <Label className="text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Supporting Document</Label>
-            <div
-              className={`border-2 border-dashed rounded-lg p-3 sm:p-4 md:p-6 text-center transition-colors ${
-                dragActive ? "border-primary bg-primary/5" : "border-gray-300 hover:border-gray-400"
-              }`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-            >
-              <Upload className="mx-auto h-6 w-6 sm:h-8 sm:w-8 text-gray-400 mb-2 sm:mb-3" />
-              <div className="space-y-1 sm:space-y-2">
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Drag and drop your file here, or{" "}
-                  <label
-                    htmlFor="file-upload"
-                    className="text-primary hover:text-primary/80 cursor-pointer font-medium"
-                  >
-                    browse
-                  </label>
-                </p>
-                <p className="text-[10px] sm:text-xs text-gray-500">PDF, JPEG, PNG, JPG up to 10MB</p>
-                <input
-                  id="file-upload"
-                  type="file"
-                  className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      handleFileUpload(e.target.files[0])
-                    }
+            <Controller
+              control={control}
+              name="Pdf"
+              render={({ field }) => (
+                <DocumentUpload
+                  documentUrl={field.value || undefined}
+                  category="research"
+                  subCategory="research-project"
+                  onChange={(url) => {
+                    field.onChange(url)
                   }}
+                  onExtract={handleExtractFields}
+                  allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+                  maxFileSize={1 * 1024 * 1024}
+                  className="w-full"
                 />
-              </div>
-            </div>
-
-            {selectedFile && (
-              <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
-                <div className="flex items-center gap-2 text-xs sm:text-sm text-green-600 min-w-0 flex-1">
-                  <FileText className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-                  <span className="truncate">{selectedFile.name}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAutoFill}
-                  disabled={!selectedFile || isExtracting}
-                  className="flex items-center gap-2 w-full sm:w-auto"
-                >
-                  {isExtracting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Brain className="h-4 w-4" />
-                  )}
-                  <span className="hidden sm:inline">{isExtracting ? "Extracting..." : "Extract Information"}</span>
-                  <span className="sm:hidden">{isExtracting ? "Extracting..." : "Extract"}</span>
-                </Button>
-              </div>
-            )}
+              )}
+            />
           </div>
 
           {/* Form Section */}

@@ -469,12 +469,12 @@ export function DocumentViewer({
   </CardHeader>
 
   <CardContent>
-    <div className="w-full h-[600px] bg-white rounded-lg border-2 border-blue-500 overflow-hidden flex items-center justify-center">
+    <div className="w-full min-h-[250px] h-[500px] max-h-[800px] bg-white rounded-lg border-2 border-blue-500 overflow-hidden flex items-center justify-center">
       {["jpg", "jpeg", "png", "gif"].includes(documentType.toLowerCase()) ? (
         <img
           src={documentUrl}
           alt={documentName}
-          className="h-full w-auto object-contain"
+          className="max-h-full max-w-full object-contain"
         />
       ) : (
         <iframe
