@@ -8,15 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Upload, FileText, Loader2, Brain, Save, Eye } from "lucide-react"
+import { ArrowLeft, Loader2, Save } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ResearchProjectFormData } from "@/types/interfaces"
-import { DocumentViewer } from "@/components/document-viewer"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 
 export default function EditResearchPage() {
   const router = useRouter()
@@ -25,13 +24,7 @@ export default function EditResearchPage() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [dragActive, setDragActive] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [existingDocPath, setExistingDocPath] = useState<string | null>(null)
-  const [showDocumentViewer, setShowDocumentViewer] = useState(false)
-  const [showEditDocument, setShowEditDocument] = useState(false)
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null)
 
   const {
     projectStatusOptions,
@@ -49,6 +42,7 @@ export default function EditResearchPage() {
     handleSubmit,
     setValue,
     reset,
+    watch,
     formState: { errors },
   } = useForm<ResearchProjectFormData>({
     defaultValues: {
@@ -66,6 +60,9 @@ export default function EditResearchPage() {
       Pdf: "",
     },
   })
+
+  // Watch grant_sealed to enable/disable grant_year
+  const grantSealed = watch("grant_sealed")
 
   // Fetch dropdown data
   useEffect(() => {
@@ -135,7 +132,7 @@ export default function EditResearchPage() {
         }
 
         reset(formData)
-        setExistingDocPath(project.Pdf || null)
+        setDocumentUrl(project.Pdf || null)
       } catch (error: any) {
         console.error("Error loading project:", error)
         toast({
@@ -153,237 +150,81 @@ export default function EditResearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id, user?.role_id])
 
-  const handleFileUpload = (file: File) => {
-    const allowedTypes = ["application/pdf", "image/jpeg", "image/png", "image/jpg"]
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload only PDF or image files (JPEG, PNG, JPG)",
-        variant: "destructive",
-      })
-      return
+  // Handle extracted fields from DocumentUpload
+  const handleExtractedFields = useCallback((fields: Record<string, any>) => {
+    let fieldsPopulated = 0
+
+    // Map extracted fields to form fields
+    if (fields.title) {
+      setValue("title", fields.title)
+      fieldsPopulated++
     }
-
-    if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please upload files smaller than 10MB",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSelectedFile(file)
-    toast({
-      title: "File selected",
-      description: `${file.name} is ready for upload`,
-    })
-  }
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true)
-    } else if (e.type === "dragleave") {
-      setDragActive(false)
-    }
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0])
-    }
-  }
-
-  // Upload file to S3
-  const uploadToS3 = async (file: File): Promise<string | null> => {
-    try {
-      setIsUploading(true)
-      const reader = new FileReader()
-      reader.readAsDataURL(file)
-      
-      return new Promise((resolve, reject) => {
-        reader.onload = async () => {
-          try {
-            const base64 = (reader.result as string).split(',')[1]
-            
-            const response = await fetch(`/api/s3/upload`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                fileBase64: base64,
-                fileDetails: {
-                  bucketName: process.env.NEXT_PUBLIC_S3_BUCKET || 'arms-bucket',
-                  subDirectoryInBucket: `research-projects/${user?.role_id}`,
-                  filename: `${Date.now()}_${file.name}`,
-                  userId: user?.role_id || 0,
-                  methodName: 'UpdateResearchProject',
-                },
-              }),
-            })
-
-            const result = await response.json()
-            
-            if (result.fileUploadStatus) {
-              const filename = `${Date.now()}_${file.name}`
-              const s3Path = `research-projects/${user?.role_id}/${filename}`
-              toast({
-                title: "File uploaded successfully",
-                description: "Document has been uploaded to S3",
-              })
-              resolve(s3Path)
-            } else {
-              throw new Error(result.message || 'Upload failed')
-            }
-          } catch (error) {
-            reject(error)
-          }
-        }
-        reader.onerror = reject
-      })
-    } catch (error: any) {
-      toast({
-        title: "Upload failed",
-        description: error.message || "Failed to upload file to S3",
-        variant: "destructive",
-      })
-      return null
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  const handleAutoFill = useCallback(async () => {
-    if (!selectedFile) {
-      toast({
-        title: "No document uploaded",
-        description: "Please upload a document first to extract information.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsExtracting(true)
-    try {
-      const categoryResponse = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ type: "research_project" }),
-      })
-
-      if (!categoryResponse.ok) {
-        throw new Error("Failed to get category")
+    if (fields.fundingAgency) {
+      const matchingAgency = fundingAgencyOptions.find(
+        (a) => a.name.toLowerCase().includes(fields.fundingAgency.toLowerCase()) || 
+               fields.fundingAgency.toLowerCase().includes(a.name.toLowerCase())
+      )
+      if (matchingAgency) {
+        setValue("funding_agency", matchingAgency.id)
+        fieldsPopulated++
       }
-
-      const categoryData = await categoryResponse.json()
-
-      const formFieldsResponse = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          category: categoryData.category,
-          type: "research_project",
-        }),
-      })
-
-      if (!formFieldsResponse.ok) {
-        throw new Error("Failed to get form fields")
-      }
-
-      const formFieldsData = await formFieldsResponse.json()
-
-      if (formFieldsData.success && formFieldsData.data) {
-        const data = formFieldsData.data
-        let fieldsPopulated = 0
-
-        // Map extracted fields to form fields
-        if (data.title) {
-          setValue("title", data.title)
-          fieldsPopulated++
-        }
-        if (data.fundingAgency) {
-          const matchingAgency = fundingAgencyOptions.find(
-            (a) => a.name.toLowerCase().includes(data.fundingAgency.toLowerCase()) || 
-                   data.fundingAgency.toLowerCase().includes(a.name.toLowerCase())
-          )
-          if (matchingAgency) {
-            setValue("funding_agency", matchingAgency.id)
-            fieldsPopulated++
-          }
-        }
-        if (data.totalGrantSanctioned) {
-          setValue("grant_sanctioned", data.totalGrantSanctioned.toString())
-          fieldsPopulated++
-        }
-        if (data.totalGrantReceived) {
-          setValue("grant_received", data.totalGrantReceived.toString())
-          fieldsPopulated++
-        }
-        if (data.projectNature) {
-          setValue("proj_nature", typeof data.projectNature === 'number' ? data.projectNature : null)
-          fieldsPopulated++
-        }
-        if (data.level) {
-          const matchingLevel = projectLevelOptions.find(
-            (l) => l.name.toLowerCase().includes(data.level.toLowerCase()) ||
-                   data.level.toLowerCase().includes(l.name.toLowerCase())
-          )
-          if (matchingLevel) {
-            setValue("proj_level", matchingLevel.id)
-            fieldsPopulated++
-          }
-        }
-        if (data.duration) {
-          setValue("duration", data.duration.toString())
-          fieldsPopulated++
-        }
-        if (data.status) {
-          const matchingStatus = projectStatusOptions.find(
-            (s) => s.name.toLowerCase().includes(data.status.toLowerCase()) ||
-                   data.status.toLowerCase().includes(s.name.toLowerCase())
-          )
-          if (matchingStatus) {
-            setValue("status", matchingStatus.id)
-            fieldsPopulated++
-          }
-        }
-        if (data.startDate) {
-          setValue("start_date", data.startDate)
-          fieldsPopulated++
-        }
-        if (data.seedGrant) {
-          setValue("grant_sanctioned", data.seedGrant.toString())
-          fieldsPopulated++
-        }
-        if (data.seedGrantYear) {
-          setValue("grant_year", data.seedGrantYear.toString())
-          fieldsPopulated++
-        }
-
-        toast({
-          title: "Information Extracted Successfully",
-          description: `${fieldsPopulated} fields populated from document analysis (${Math.round(formFieldsData.confidence * 100)}% confidence)`,
-        })
-      }
-    } catch (error: any) {
-      toast({
-        title: "Extraction Failed",
-        description: error.message || "Failed to extract information from document. Please try again or fill the form manually.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExtracting(false)
     }
-  }, [setValue, toast, selectedFile, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
+    if (fields.totalGrantSanctioned) {
+      setValue("grant_sanctioned", fields.totalGrantSanctioned.toString())
+      fieldsPopulated++
+    }
+    if (fields.totalGrantReceived) {
+      setValue("grant_received", fields.totalGrantReceived.toString())
+      fieldsPopulated++
+    }
+    if (fields.projectNature) {
+      setValue("proj_nature", typeof fields.projectNature === 'number' ? fields.projectNature : null)
+      fieldsPopulated++
+    }
+    if (fields.level) {
+      const matchingLevel = projectLevelOptions.find(
+        (l) => l.name.toLowerCase().includes(fields.level.toLowerCase()) ||
+               fields.level.toLowerCase().includes(l.name.toLowerCase())
+      )
+      if (matchingLevel) {
+        setValue("proj_level", matchingLevel.id)
+        fieldsPopulated++
+      }
+    }
+    if (fields.duration) {
+      setValue("duration", fields.duration.toString())
+      fieldsPopulated++
+    }
+    if (fields.status) {
+      const matchingStatus = projectStatusOptions.find(
+        (s) => s.name.toLowerCase().includes(fields.status.toLowerCase()) ||
+               fields.status.toLowerCase().includes(s.name.toLowerCase())
+      )
+      if (matchingStatus) {
+        setValue("status", matchingStatus.id)
+        fieldsPopulated++
+      }
+    }
+    if (fields.startDate) {
+      setValue("start_date", fields.startDate)
+      fieldsPopulated++
+    }
+    if (fields.seedGrant) {
+      setValue("grant_sanctioned", fields.seedGrant.toString())
+      fieldsPopulated++
+    }
+    if (fields.seedGrantYear) {
+      setValue("grant_year", fields.seedGrantYear.toString())
+      fieldsPopulated++
+    }
+
+    if (fieldsPopulated > 0) {
+      toast({
+        title: "Information Extracted Successfully",
+        description: `${fieldsPopulated} fields populated from document analysis`,
+      })
+    }
+  }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
     setIsSaving(true)
@@ -403,50 +244,97 @@ export default function EditResearchPage() {
       }
 
       // Validate required fields
-      if (!data.title || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date) {
+      if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date || !data.duration || !data.proj_level || !data.grant_sanctioned || !data.grant_received) {
         setIsSaving(false)
         toast({
           title: "Validation Error",
-          description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date)",
+          description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date, Duration, Project Level, Grant Sanctioned, Grant Received)",
           variant: "destructive",
         })
         return
       }
 
-      // Upload file to S3 if new file is selected
-      let pdfPath = data.Pdf || existingDocPath
-      if (selectedFile) {
+      // Validate numeric fields
+      const grantSanctioned = data.grant_sanctioned?.trim() ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, '')) : null
+      const grantReceived = data.grant_received?.trim() ? parseFloat(data.grant_received.replace(/[,\s]/g, '')) : null
+      const duration = data.duration && data.duration > 0 ? Math.floor(data.duration) : null
+
+      if (!grantSanctioned || isNaN(grantSanctioned) || grantSanctioned < 0) {
+        setIsSaving(false)
         toast({
-          title: "Uploading document",
-          description: "Please wait while we upload your document...",
+          title: "Validation Error",
+          description: "Grant Sanctioned is required and must be a valid positive number",
+          variant: "destructive",
         })
-        const uploadedPath = await uploadToS3(selectedFile)
-        if (uploadedPath) {
-          pdfPath = uploadedPath
-        } else {
+        return
+      }
+
+      if (!grantReceived || isNaN(grantReceived) || grantReceived < 0) {
+        setIsSaving(false)
+        toast({
+          title: "Validation Error",
+          description: "Grant Received is required and must be a valid positive number",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!duration || duration <= 0) {
+        setIsSaving(false)
+        toast({
+          title: "Validation Error",
+          description: "Duration is required and must be a positive number",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Grant Year: only set if grant_sealed is checked, otherwise null
+      let grantYear = null
+      if (data.grant_sealed && data.grant_year?.trim()) {
+        // Validate it's exactly 4 digits
+        if (!/^\d{4}$/.test(data.grant_year.trim())) {
+          setIsSaving(false)
           toast({
-            title: "Upload warning",
-            description: "Could not upload new document. Existing document will be retained.",
-            variant: "default",
+            title: "Validation Error",
+            description: "Grant Year must be exactly 4 digits",
+            variant: "destructive",
           })
+          return
+        }
+        const yearValue = parseInt(data.grant_year)
+        if (!isNaN(yearValue) && yearValue >= 2000 && yearValue <= 2100) {
+          grantYear = yearValue
+        } else {
+          setIsSaving(false)
+          toast({
+            title: "Validation Error",
+            description: "Grant Year must be a valid year between 2000 and 2100",
+            variant: "destructive",
+          })
+          return
         }
       }
+
+      // Use document URL from DocumentUpload component
+      // The DocumentUpload component handles S3 upload on form submission
+      const pdfPath = documentUrl || data.Pdf || ""
 
       // Prepare payload
       const payload = {
         teacherId,
         projectId: parseInt(projectId),
         project: {
-          title: data.title,
+          title: data.title.trim(),
           funding_agency: data.funding_agency,
-          grant_sanctioned: data.grant_sanctioned ? parseFloat(data.grant_sanctioned) : null,
-          grant_received: data.grant_received ? parseFloat(data.grant_received) : null,
+          grant_sanctioned: grantSanctioned,
+          grant_received: grantReceived,
           proj_nature: data.proj_nature,
-          duration: data.duration,
+          duration: duration,
           status: data.status,
           start_date: data.start_date,
           proj_level: data.proj_level,
-          grant_year: data.grant_year ? parseInt(data.grant_year) : null,
+          grant_year: grantYear,
           grant_sealed: data.grant_sealed,
           Pdf: pdfPath,
         },
@@ -516,116 +404,17 @@ export default function EditResearchPage() {
           {/* Document Section */}
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
             <Label className="text-lg font-semibold mb-3 block">Step 1: Supporting Document</Label>
-            
-            {existingDocPath && !showEditDocument ? (
-              <div className="space-y-3">
-                <div className="p-3 bg-green-50 border border-green-200 rounded flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-sm text-green-700">
-                    <FileText className="h-4 w-4" />
-                    <span>Current document: {existingDocPath.split('/').pop() || 'Document'}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowDocumentViewer(true)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowEditDocument(true)}
-                    >
-                      <Upload className="h-4 w-4 mr-1" />
-                      Edit Document
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                {existingDocPath && showEditDocument && (
-                  <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
-                    <FileText className="h-4 w-4 inline mr-2" />
-                    Replacing existing document
-                  </div>
-                )}
-                <div
-                  className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    dragActive ? "border-primary bg-primary/5" : "border-gray-300 hover:border-gray-400"
-                  }`}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <Upload className="mx-auto h-8 w-8 text-gray-400 mb-3" />
-                  <div className="space-y-2">
-                    <p className="text-sm text-gray-600">
-                      Drag and drop your file here, or{" "}
-                      <label
-                        htmlFor="file-upload-edit"
-                        className="text-primary hover:text-primary/80 cursor-pointer font-medium"
-                      >
-                        browse
-                      </label>
-                    </p>
-                    <p className="text-xs text-gray-500">PDF, JPEG, PNG, JPG up to 10MB</p>
-                    <input
-                      id="file-upload-edit"
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          handleFileUpload(e.target.files[0])
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {selectedFile && (
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-sm text-green-600">
-                      <FileText className="h-4 w-4" />
-                      <span>New file: {selectedFile.name}</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedFile(null)
-                          setShowEditDocument(false)
-                        }}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAutoFill}
-                        disabled={!selectedFile || isExtracting}
-                      >
-                        {isExtracting ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Brain className="h-4 w-4 mr-2" />
-                        )}
-                        {isExtracting ? "Extracting..." : "Extract Information"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            <DocumentUpload
+              documentUrl={documentUrl || undefined}
+              category="research"
+              subCategory="research-project"
+              onChange={(url) => {
+                setDocumentUrl(url)
+                setValue("Pdf", url)
+              }}
+              onExtract={handleExtractedFields}
+              className="w-full"
+            />
           </div>
 
           {/* Form Section */}
@@ -728,26 +517,6 @@ export default function EditResearchPage() {
                   {errors.status && <p className="text-sm text-red-500 mt-1">{errors.status.message}</p>}
                   </div>
 
-                {/* Project Level */}
-                <div className="space-y-2">
-                  <Label htmlFor="proj_level">Project Level</Label>
-                  <Controller
-                    control={control}
-                    name="proj_level"
-                    render={({ field }) => (
-                      <SearchableSelect
-                        options={projectLevelOptions.map((l) => ({
-                          value: l.id,
-                          label: l.name,
-                        }))}
-                        value={field.value || ""}
-                        onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                        placeholder="Select project level"
-                        emptyMessage="No level found"
-                      />
-                    )}
-                  />
-                    </div>
 
                 {/* Start Date */}
                 <div className="space-y-2">
@@ -769,27 +538,43 @@ export default function EditResearchPage() {
 
                 {/* Duration */}
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Duration (months)</Label>
+                  <Label htmlFor="duration">
+                    Duration (months) <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="duration"
+                    rules={{ 
+                      required: "Duration is required",
+                      min: { value: 1, message: "Duration must be at least 1 month" }
+                    }}
                     render={({ field }) => (
                       <Input
                         {...field}
                         id="duration"
                         type="number"
                         placeholder="Enter duration in months"
+                        min="1"
+                        value={field.value || ""}
+                        onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : "")}
                       />
                     )}
                   />
+                  {errors.duration && <p className="text-sm text-red-500 mt-1">{errors.duration.message}</p>}
                   </div>
 
                 {/* Grant Sanctioned */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_sanctioned">Grant Sanctioned (₹)</Label>
+                  <Label htmlFor="grant_sanctioned">
+                    Grant Sanctioned (₹) <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="grant_sanctioned"
+                    rules={{ 
+                      required: "Grant Sanctioned is required",
+                      min: { value: 0, message: "Grant Sanctioned must be a positive number" }
+                    }}
                     render={({ field }) => (
                       <Input
                         {...field}
@@ -801,14 +586,21 @@ export default function EditResearchPage() {
                       />
                     )}
                   />
+                  {errors.grant_sanctioned && <p className="text-sm text-red-500 mt-1">{errors.grant_sanctioned.message}</p>}
                   </div>
 
                 {/* Grant Received */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_received">Grant Received (₹)</Label>
+                  <Label htmlFor="grant_received">
+                    Grant Received (₹) <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="grant_received"
+                    rules={{ 
+                      required: "Grant Received is required",
+                      min: { value: 0, message: "Grant Received must be a positive number" }
+                    }}
                     render={({ field }) => (
                       <Input
                         {...field}
@@ -820,28 +612,35 @@ export default function EditResearchPage() {
                       />
                     )}
                   />
+                  {errors.grant_received && <p className="text-sm text-red-500 mt-1">{errors.grant_received.message}</p>}
                     </div>
 
-                {/* Grant Year */}
-                    <div className="space-y-2">
-                  <Label htmlFor="grant_year">Grant Year</Label>
+                {/* Project Level */}
+                <div className="space-y-2">
+                  <Label htmlFor="proj_level">
+                    Project Level <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
-                    name="grant_year"
+                    name="proj_level"
+                    rules={{ required: "Project Level is required" }}
                     render={({ field }) => (
-                        <Input
-                        {...field}
-                        id="grant_year"
-                        type="number"
-                        placeholder="Enter grant year"
-                        min="2000"
-                        max="2030"
+                      <SearchableSelect
+                        options={projectLevelOptions.map((l) => ({
+                          value: l.id,
+                          label: l.name,
+                        }))}
+                        value={field.value || ""}
+                        onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                        placeholder="Select project level"
+                        emptyMessage="No level found"
                       />
                     )}
                   />
-                      </div>
+                  {errors.proj_level && <p className="text-sm text-red-500 mt-1">{errors.proj_level.message}</p>}
+                  </div>
 
-                {/* Grant Sealed */}
+                {/* Grant Sealed Checkbox */}
                 <div className="md:col-span-2 flex items-center space-x-2">
                   <Controller
                     control={control}
@@ -851,15 +650,67 @@ export default function EditResearchPage() {
                         type="checkbox"
                         id="grant_sealed"
                         checked={field.value}
-                        onChange={(e) => field.onChange(e.target.checked)}
+                        onChange={(e) => {
+                          field.onChange(e.target.checked)
+                          // Clear grant_year when unchecked
+                          if (!e.target.checked) {
+                            setValue("grant_year", "")
+                          }
+                        }}
                         className="rounded border-gray-300"
                       />
                     )}
                   />
                   <Label htmlFor="grant_sealed" className="cursor-pointer">
-                    Grant Sealed
+                    Whether this Project is under University Grant Seed
                   </Label>
-                        </div>
+                </div>
+
+                {/* Grant Year - Only enabled when grant_sealed is checked */}
+                <div className="space-y-2">
+                  <Label htmlFor="grant_year">Grant Year</Label>
+                  <Controller
+                    control={control}
+                    name="grant_year"
+                    rules={{
+                      validate: (value) => {
+                        if (grantSealed && !value?.trim()) {
+                          return "Grant Year is required when University Grant Seed is selected"
+                        }
+                        if (grantSealed && value?.trim()) {
+                          // Check if it's exactly 4 digits
+                          if (!/^\d{4}$/.test(value.trim())) {
+                            return "Grant Year must be exactly 4 digits"
+                          }
+                          const yearValue = parseInt(value)
+                          if (isNaN(yearValue) || yearValue < 2000 || yearValue > 2100) {
+                            return "Grant Year must be between 2000 and 2100"
+                          }
+                        }
+                        return true
+                      }
+                    }}
+                    render={({ field }) => (
+                      <Input
+                        {...field}
+                        id="grant_year"
+                        type="number"
+                        placeholder="Enter grant year (YYYY)"
+                        min="2000"
+                        max="2100"
+                        maxLength={4}
+                        disabled={!grantSealed}
+                        className={!grantSealed ? "bg-gray-100 cursor-not-allowed" : ""}
+                        onChange={(e) => {
+                          // Limit to 4 digits
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 4)
+                          field.onChange(value)
+                        }}
+                      />
+                    )}
+                  />
+                  {errors.grant_year && <p className="text-sm text-red-500 mt-1">{errors.grant_year.message}</p>}
+                </div>
                     </div>
 
               {/* Submit Button */}
@@ -867,11 +718,11 @@ export default function EditResearchPage() {
                 <Button type="button" variant="outline" onClick={() => router.back()}>
               Cancel
             </Button>
-                <Button type="submit" disabled={isSaving || isUploading}>
-                  {isSaving || isUploading ? (
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? (
                 <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {isUploading ? "Uploading..." : "Updating..."}
+                      Updating...
                 </>
               ) : (
                 <>
@@ -886,22 +737,6 @@ export default function EditResearchPage() {
         </CardContent>
       </Card>
 
-      {/* Document Viewer Dialog */}
-      <Dialog open={showDocumentViewer} onOpenChange={setShowDocumentViewer}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Document Viewer</DialogTitle>
-            <DialogDescription>View research project document</DialogDescription>
-          </DialogHeader>
-          {existingDocPath && (
-            <DocumentViewer
-              documentUrl={existingDocPath.startsWith('http') ? existingDocPath : `/api/s3/download?path=${encodeURIComponent(existingDocPath)}&userId=${user?.role_id || 0}`}
-              documentName={existingDocPath.split('/').pop() || 'Document'}
-              documentType={existingDocPath.toLowerCase().endsWith('.pdf') ? 'pdf' : existingDocPath.toLowerCase().match(/\.(jpg|jpeg|png)$/) ? 'jpg' : 'pdf'}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
       </div>
   )
 }

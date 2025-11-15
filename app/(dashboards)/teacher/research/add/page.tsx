@@ -38,6 +38,7 @@ export default function AddResearchPage() {
     control,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<ResearchProjectFormData>({
     defaultValues: {
@@ -55,6 +56,9 @@ export default function AddResearchPage() {
       Pdf: "",
     },
   })
+
+  // Watch grant_sealed to enable/disable grant_year
+  const grantSealed = watch("grant_sealed")
 
   // Fetch dropdown data
   useEffect(() => {
@@ -165,11 +169,22 @@ export default function AddResearchPage() {
       }
 
       // Validate required fields
-      if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date) {
+      if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date || !data.duration || !data.proj_level || !data.grant_sanctioned || !data.grant_received) {
         setIsLoading(false)
         toast({
           title: "Validation Error",
-          description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date)",
+          description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date, Duration, Project Level, Grant Sanctioned, Grant Received)",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Validate document is uploaded
+      if (!data.Pdf || !data.Pdf.trim()) {
+        setIsLoading(false)
+        toast({
+          title: "Validation Error",
+          description: "Supporting document is required. Please upload a document.",
           variant: "destructive",
         })
         return
@@ -220,52 +235,66 @@ export default function AddResearchPage() {
         }
       }
 
-      // Format and validate numeric fields
-      const grantSanctioned = data.grant_sanctioned?.trim()
-        ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, ''))
-        : null
-      
-      const grantReceived = data.grant_received?.trim()
-        ? parseFloat(data.grant_received.replace(/[,\s]/g, ''))
-        : null
-
-      // Validate grant amounts are valid numbers
-      if (grantSanctioned !== null && (isNaN(grantSanctioned) || grantSanctioned < 0)) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Grant Sanctioned must be a valid positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (grantReceived !== null && (isNaN(grantReceived) || grantReceived < 0)) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Grant Received must be a valid positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Format duration - ensure it's a number or null
+      // Validate numeric fields
+      const grantSanctioned = data.grant_sanctioned?.trim() ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, '')) : null
+      const grantReceived = data.grant_received?.trim() ? parseFloat(data.grant_received.replace(/[,\s]/g, '')) : null
       const duration = data.duration && data.duration > 0 ? Math.floor(data.duration) : null
 
-      // Format grant year
-      const grantYear = data.grant_year?.trim()
-        ? parseInt(data.grant_year)
-        : null
-
-      if (grantYear !== null && (isNaN(grantYear) || grantYear < 2000 || grantYear > 2100)) {
+      if (!grantSanctioned || isNaN(grantSanctioned) || grantSanctioned < 0) {
         setIsLoading(false)
         toast({
           title: "Validation Error",
-          description: "Grant Year must be a valid year between 2000 and 2100",
+          description: "Grant Sanctioned is required and must be a valid positive number",
           variant: "destructive",
         })
         return
+      }
+
+      if (!grantReceived || isNaN(grantReceived) || grantReceived < 0) {
+        setIsLoading(false)
+        toast({
+          title: "Validation Error",
+          description: "Grant Received is required and must be a valid positive number",
+          variant: "destructive",
+        })
+        return
+      }
+
+      if (!duration || duration <= 0) {
+        setIsLoading(false)
+        toast({
+          title: "Validation Error",
+          description: "Duration is required and must be a positive number",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Grant Year: only set if grant_sealed is checked, otherwise null
+      let grantYear = null
+      if (data.grant_sealed && data.grant_year?.trim()) {
+        // Validate it's exactly 4 digits
+        if (!/^\d{4}$/.test(data.grant_year.trim())) {
+          setIsLoading(false)
+          toast({
+            title: "Validation Error",
+            description: "Grant Year must be exactly 4 digits",
+            variant: "destructive",
+          })
+          return
+        }
+        const yearValue = parseInt(data.grant_year)
+        if (!isNaN(yearValue) && yearValue >= 2000 && yearValue <= 2100) {
+          grantYear = yearValue
+        } else {
+          setIsLoading(false)
+          toast({
+            title: "Validation Error",
+            description: "Grant Year must be a valid year between 2000 and 2100",
+            variant: "destructive",
+          })
+          return
+        }
       }
 
       // Prepare payload
@@ -341,23 +370,37 @@ export default function AddResearchPage() {
         <CardContent className="p-3 sm:p-4 md:p-6">
           {/* Document Upload Section */}
           <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
-            <Label className="text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Supporting Document</Label>
+            <Label className="text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 block">
+              Step 1: Upload Supporting Document <span className="text-red-500">*</span>
+            </Label>
             <Controller
               control={control}
               name="Pdf"
+              rules={{ 
+                required: "Supporting document is required",
+                validate: (value) => {
+                  if (!value || !value.trim()) {
+                    return "Please upload a supporting document"
+                  }
+                  return true
+                }
+              }}
               render={({ field }) => (
-                <DocumentUpload
-                  documentUrl={field.value || undefined}
-                  category="research"
-                  subCategory="research-project"
-                  onChange={(url) => {
-                    field.onChange(url)
-                  }}
-                  onExtract={handleExtractFields}
-                  allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
-                  maxFileSize={1 * 1024 * 1024}
-                  className="w-full"
-                />
+                <div>
+                  <DocumentUpload
+                    documentUrl={field.value || undefined}
+                    category="research"
+                    subCategory="research-project"
+                    onChange={(url) => {
+                      field.onChange(url)
+                    }}
+                    onExtract={handleExtractFields}
+                    allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+                    maxFileSize={1 * 1024 * 1024}
+                    className="w-full"
+                  />
+                  {errors.Pdf && <p className="text-xs sm:text-sm text-red-500 mt-2">{errors.Pdf.message}</p>}
+                </div>
               )}
             />
           </div>
@@ -467,10 +510,13 @@ export default function AddResearchPage() {
 
                 {/* Project Level */}
                 <div className="space-y-2">
-                  <Label htmlFor="proj_level" className="text-xs sm:text-sm">Project Level</Label>
+                  <Label htmlFor="proj_level" className="text-xs sm:text-sm">
+                    Project Level <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="proj_level"
+                    rules={{ required: "Project Level is required" }}
                     render={({ field }) => (
                       <SearchableSelect
                         options={projectLevelOptions.map((l) => ({
@@ -485,6 +531,7 @@ export default function AddResearchPage() {
                       />
                     )}
                   />
+                  {errors.proj_level && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.proj_level.message}</p>}
                 </div>
 
                 {/* Start Date */}
@@ -507,10 +554,16 @@ export default function AddResearchPage() {
 
                 {/* Duration */}
                 <div className="space-y-2">
-                  <Label htmlFor="duration" className="text-xs sm:text-sm">Duration (months)</Label>
+                  <Label htmlFor="duration" className="text-xs sm:text-sm">
+                    Duration (months) <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="duration"
+                    rules={{ 
+                      required: "Duration is required",
+                      min: { value: 1, message: "Duration must be at least 1 month" }
+                    }}
                     render={({ field }) => {
                       const { value, onChange, ...restField } = field
                       return (
@@ -519,9 +572,10 @@ export default function AddResearchPage() {
                           id="duration"
                           type="number"
                           placeholder="Enter duration in months"
+                          min="1"
                           value={value ?? ""}
                           onChange={(e) => {
-                            const numValue = e.target.value === "" ? 0 : Number(e.target.value)
+                            const numValue = e.target.value === "" ? "" : Number(e.target.value)
                             onChange(numValue)
                           }}
                           className="h-8 sm:h-10 text-xs sm:text-sm"
@@ -529,14 +583,21 @@ export default function AddResearchPage() {
                       )
                     }}
                   />
+                  {errors.duration && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.duration.message}</p>}
                 </div>
 
                 {/* Grant Sanctioned */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_sanctioned" className="text-xs sm:text-sm">Grant Sanctioned (₹)</Label>
+                  <Label htmlFor="grant_sanctioned" className="text-xs sm:text-sm">
+                    Grant Sanctioned (₹) <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="grant_sanctioned"
+                    rules={{ 
+                      required: "Grant Sanctioned is required",
+                      min: { value: 0, message: "Grant Sanctioned must be a positive number" }
+                    }}
                     render={({ field }) => (
                       <Input
                         {...field}
@@ -549,14 +610,21 @@ export default function AddResearchPage() {
                       />
                     )}
                   />
+                  {errors.grant_sanctioned && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.grant_sanctioned.message}</p>}
                 </div>
 
                 {/* Grant Received */}
                 <div className="space-y-2">
-                  <Label htmlFor="grant_received" className="text-xs sm:text-sm">Grant Received (₹)</Label>
+                  <Label htmlFor="grant_received" className="text-xs sm:text-sm">
+                    Grant Received (₹) <span className="text-red-500">*</span>
+                  </Label>
                   <Controller
                     control={control}
                     name="grant_received"
+                    rules={{ 
+                      required: "Grant Received is required",
+                      min: { value: 0, message: "Grant Received must be a positive number" }
+                    }}
                     render={({ field }) => (
                       <Input
                         {...field}
@@ -569,29 +637,10 @@ export default function AddResearchPage() {
                       />
                     )}
                   />
+                  {errors.grant_received && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.grant_received.message}</p>}
                 </div>
 
-                {/* Grant Year */}
-                <div className="space-y-2">
-                  <Label htmlFor="grant_year" className="text-xs sm:text-sm">Grant Year</Label>
-                  <Controller
-                    control={control}
-                    name="grant_year"
-                    render={({ field }) => (
-                      <Input
-                        {...field}
-                        id="grant_year"
-                        type="number"
-                        placeholder="Enter grant year"
-                        min="2000"
-                        max="2030"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
-                      />
-                    )}
-                  />
-                </div>
-
-                {/* Grant Sealed */}
+                {/* Grant Sealed Checkbox */}
                 <div className="md:col-span-2 flex items-center space-x-2">
                   <Controller
                     control={control}
@@ -601,14 +650,66 @@ export default function AddResearchPage() {
                         type="checkbox"
                         id="grant_sealed"
                         checked={field.value}
-                        onChange={(e) => field.onChange(e.target.checked)}
+                        onChange={(e) => {
+                          field.onChange(e.target.checked)
+                          // Clear grant_year when unchecked
+                          if (!e.target.checked) {
+                            setValue("grant_year", "")
+                          }
+                        }}
                         className="rounded border-gray-300 h-4 w-4"
                       />
                     )}
                   />
                   <Label htmlFor="grant_sealed" className="cursor-pointer text-xs sm:text-sm">
-                    Grant Sealed
+                    Whether this Project is under University Grant Seed
                   </Label>
+                </div>
+
+                {/* Grant Year - Only enabled when grant_sealed is checked */}
+                <div className="space-y-2">
+                  <Label htmlFor="grant_year" className="text-xs sm:text-sm">Grant Year</Label>
+                  <Controller
+                    control={control}
+                    name="grant_year"
+                    rules={{
+                      validate: (value) => {
+                        if (grantSealed && !value?.trim()) {
+                          return "Grant Year is required when University Grant Seed is selected"
+                        }
+                        if (grantSealed && value?.trim()) {
+                          const yearValue = parseInt(value)
+                          // Check if it's exactly 4 digits
+                          if (!/^\d{4}$/.test(value.trim())) {
+                            return "Grant Year must be exactly 4 digits"
+                          }
+                          if (isNaN(yearValue) || yearValue < 2000 || yearValue > 2100) {
+                            return "Grant Year must be between 2000 and 2100"
+                          }
+                        }
+                        return true
+                      }
+                    }}
+                    render={({ field }) => (
+                      <Input
+                        {...field}
+                        id="grant_year"
+                        type="number"
+                        placeholder="Enter grant year (YYYY)"
+                        min="2000"
+                        max="2100"
+                        maxLength={4}
+                        disabled={!grantSealed}
+                        className={`h-8 sm:h-10 text-xs sm:text-sm ${!grantSealed ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                        onChange={(e) => {
+                          // Limit to 4 digits
+                          const value = e.target.value.replace(/\D/g, '').slice(0, 4)
+                          field.onChange(value)
+                        }}
+                      />
+                    )}
+                  />
+                  {errors.grant_year && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.grant_year.message}</p>}
                 </div>
               </div>
 
