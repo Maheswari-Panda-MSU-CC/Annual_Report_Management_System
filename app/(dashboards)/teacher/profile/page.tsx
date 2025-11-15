@@ -207,7 +207,7 @@ export default function ProfilePage() {
   const [editingData, setEditingData] = useState({ ...initialEditingData })
 
   // react-hook-form for Personal Details
-  const { control, register, reset, handleSubmit, getValues, watch, setValue, formState: { errors, touchedFields } } = useForm<any>({
+  const { control, register, reset, handleSubmit, getValues, watch, setValue, trigger, formState: { errors, touchedFields } } = useForm<any>({
     defaultValues: {},
     mode: 'onSubmit',
     reValidateMode: 'onChange',
@@ -291,9 +291,16 @@ export default function ProfilePage() {
       postDocForm.reset({ researches: data.postDoctoralExp || [] })
       educationForm.reset({ educations: data.graduationDetails || [] })
       setFacultyData(data.faculty)
-      setSelectedFacultyId(data.faculty?.Fid ?? null)
+      const facultyId = data.faculty?.Fid ?? null
+      setSelectedFacultyId(facultyId)
       setDepartmentData(data.department)
       setDesignationData(data.designation)
+      
+      // Fetch departments for the selected faculty
+      if (facultyId) {
+        fetchDepartmentsByFaculty(facultyId)
+      }
+      
       // Initialize react-hook-form with fetched personal details
       reset({
         Abbri: data.teacherInfo?.Abbri || '',
@@ -310,7 +317,8 @@ export default function ProfilePage() {
         perma_or_tenure: data.teacherInfo?.perma_or_tenure ?? false,
         desig_perma: data.teacherInfo?.desig_perma ?? undefined,
         desig_tenure: data.teacherInfo?.desig_tenure ?? undefined,
-        // Department
+        // Faculty and Department - IMPORTANT: Set these in form state
+        faculty: facultyId ?? undefined,
         deptid: data.teacherInfo?.deptid ?? undefined,
         // Exams/guide fields
         NET: data.teacherInfo?.NET || false,
@@ -358,6 +366,14 @@ export default function ProfilePage() {
       fetchDepartmentsByFaculty(selectedFacultyId)
     }
   }, [selectedFacultyId])
+
+  // Sync selectedFacultyId with form field value
+  const facultyFormValue = watch('faculty');
+  useEffect(() => {
+    if (facultyFormValue && facultyFormValue !== selectedFacultyId) {
+      setSelectedFacultyId(facultyFormValue);
+    }
+  }, [facultyFormValue, selectedFacultyId])
 
   // Show loading state - AFTER all hooks
   // All hooks must be called before any early returns to follow Rules of Hooks
@@ -610,14 +626,104 @@ export default function ProfilePage() {
   //   setIsEditingPersonal(false)
   // }
 
-  const onSubmitPersonal = async () => {
+  // Wrapper to handle validation errors
+  const handlePersonalSubmit = handleSubmit(
+    // Success callback - validation passed
+    async (data: any) => {
+      await onSubmitPersonal(data);
+    },
+    // Error callback - validation failed
+    (validationErrors) => {
+      const errorMessages: string[] = [];
+      
+      Object.entries(validationErrors).forEach(([key, error]: [string, any]) => {
+        if (error?.message) {
+          const fieldLabel = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          errorMessages.push(`${fieldLabel}: ${error.message}`);
+        }
+      });
+
+      if (errorMessages.length > 0) {
+        toast({ 
+          title: "Validation Failed", 
+          description: errorMessages.join('. ') || "Please fix the validation errors before submitting.", 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Please fix the validation errors before submitting.", 
+          variant: "destructive" 
+        });
+      }
+    }
+  );
+
+  const onSubmitPersonal = async (data: any) => {
     try {
-      const values = getValues();
+      // Use validated data from handleSubmit, but also get current form values for fields not in validation
+      const values = { ...getValues(), ...data };
       const newIctDetails = buildIctDetails(editingData);
-      const payload = {
+      
+      // Ensure we have the teacher ID
+      const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (!teacherId) {
+        toast({ 
+          title: "Update Failed", 
+          description: "Teacher ID not found. Please refresh the page and try again.", 
+          variant: "destructive" 
+        });
+        return;
+      }
+
+      // Build payload with proper data types and ensure all required fields
+      // Note: phone_no needs to be a number (not BigInt) for JSON serialization
+      const phoneNoValue = values.phone_no 
+        ? (typeof values.phone_no === 'string' ? parseInt(values.phone_no) : values.phone_no)
+        : (teacherInfo?.phone_no ? Number(teacherInfo.phone_no) : 0);
+      
+      // Extract faculty field (not part of TeacherInfo, only used for validation)
+      const { faculty, ...restValues } = values;
+      
+      const payload: TeacherInfo = {
         ...(teacherInfo || {}),
-        ...values,
-        ICT_Details: newIctDetails,
+        Tid: teacherId,
+        ...restValues,
+        // Ensure proper data types
+        phone_no: phoneNoValue,
+        NET: values.NET ?? teacherInfo?.NET ?? false,
+        PET: values.PET ?? teacherInfo?.PET ?? false,
+        GATE: values.GATE ?? teacherInfo?.GATE ?? false,
+        PHDGuide: values.PHDGuide ?? teacherInfo?.PHDGuide ?? false,
+        OtherGuide: values.OtherGuide ?? teacherInfo?.OtherGuide ?? false,
+        perma_or_tenure: values.perma_or_tenure ?? teacherInfo?.perma_or_tenure ?? false,
+        ICT_Use: editingData.ictSmartBoard || editingData.ictPowerPoint || editingData.ictTools || 
+                 editingData.ictELearningTools || editingData.ictOnlineCourse || editingData.ictOthers 
+                 ? true : (teacherInfo?.ICT_Use ?? false),
+        ICT_Details: newIctDetails || null,
+        // Convert empty strings to null for optional fields
+        NET_year: values.NET_year && values.NET ? parseInt(values.NET_year) || null : (teacherInfo?.NET_year || null),
+        GATE_year: values.GATE_year && values.GATE ? parseInt(values.GATE_year) || null : (teacherInfo?.GATE_year || null),
+        Guide_year: values.Guide_year && values.PHDGuide ? parseInt(values.Guide_year) || null : (teacherInfo?.Guide_year || null),
+        H_INDEX: values.H_INDEX !== undefined && values.H_INDEX !== '' ? parseInt(values.H_INDEX) || 0 : (teacherInfo?.H_INDEX || 0),
+        i10_INDEX: values.i10_INDEX !== undefined && values.i10_INDEX !== '' ? parseInt(values.i10_INDEX) || 0 : (teacherInfo?.i10_INDEX || 0),
+        CITIATIONS: values.CITIATIONS !== undefined && values.CITIATIONS !== '' ? parseInt(values.CITIATIONS) || 0 : (teacherInfo?.CITIATIONS || 0),
+        ORCHID_ID: values.ORCHID_ID || teacherInfo?.ORCHID_ID || '',
+        RESEARCHER_ID: values.RESEARCHER_ID || teacherInfo?.RESEARCHER_ID || '',
+        // Preserve other fields
+        NILL2016_17: teacherInfo?.NILL2016_17 ?? false,
+        NILL2017_18: teacherInfo?.NILL2017_18 ?? false,
+        NILL2018_19: teacherInfo?.NILL2018_19 ?? false,
+        NILL2019_20: teacherInfo?.NILL2019_20 ?? false,
+        NILL2020_21: teacherInfo?.NILL2020_21 ?? false,
+        NILL2021_22: teacherInfo?.NILL2021_22 ?? false,
+        NILL2022_23: teacherInfo?.NILL2022_23 ?? false,
+        NILL2023_24: teacherInfo?.NILL2023_24 ?? false,
+        NILL2024_25: teacherInfo?.NILL2024_25 ?? false,
+        NILL2025_26: teacherInfo?.NILL2025_26 ?? false,
+        Disabled: teacherInfo?.Disabled ?? false,
+        Status: teacherInfo?.Status || '',
+        ProfileImage: teacherInfo?.ProfileImage || null,
       } as TeacherInfo;
 
       const response = await fetch("/api/teacher/profile", {
@@ -625,16 +731,52 @@ export default function ProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const result = await response.json();
-      if (result.success) {
-        setTeacherInfo(payload);
-        toast({ title: "Profile Updated", description: "Your information has been saved successfully." });
-        setIsEditingPersonal(false)
-      } else {
-        toast({ title: "Update Failed", description: result.error || "Something went wrong.", variant: "destructive" });
+
+      // Check HTTP status first
+      if (!response.ok) {
+        let errorMessage = "Failed to update profile";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || `Server returned ${response.status}: ${response.statusText}`;
+        } catch (e) {
+          errorMessage = `Server error: ${response.status} ${response.statusText}`;
+        }
+        toast({ 
+          title: "Update Failed", 
+          description: errorMessage, 
+          variant: "destructive" 
+        });
+        return;
       }
-    } catch (error) {
-      toast({ title: "Update Failed", description: "Network or server error while saving your profile.", variant: "destructive" })
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Invalidate cache and refetch data
+        await invalidateProfile();
+        
+        // Update local state
+        setTeacherInfo(payload);
+        toast({ 
+          title: "Profile Updated", 
+          description: result.message || "Your information has been saved successfully." 
+        });
+        setIsEditingPersonal(false);
+      } else {
+        toast({ 
+          title: "Update Failed", 
+          description: result.error || result.message || "Something went wrong while updating your profile.", 
+          variant: "destructive" 
+        });
+      }
+    } catch (error: any) {
+      console.error("Profile update error:", error);
+      const errorMessage = error?.message || "Network or server error while saving your profile.";
+      toast({ 
+        title: "Update Failed", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -1036,7 +1178,7 @@ export default function ProfilePage() {
               </Button>
             ) : (
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button onClick={handleSubmit(onSubmitPersonal)} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
+                <Button onClick={handlePersonalSubmit} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
                   <Save className="h-4 w-4" />
                   <span className="hidden sm:inline">Save Changes</span>
                   <span className="sm:hidden">Save</span>
@@ -1618,12 +1760,14 @@ export default function ProfilePage() {
                             value: faculty.Fid,
                             label: faculty.Fname,
                           }))}
-                          value={selectedFacultyId ?? facultyData?.Fid}
+                          value={field.value ?? selectedFacultyId ?? facultyData?.Fid ?? undefined}
                           onValueChange={(value: string | number) => {
                             const fidNum = Number(value)
                             setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
-                            setValue('deptid', 0)
+                            // Reset department when faculty changes
+                            setValue('deptid', undefined)
                             setDepartmentData(null)
+                            // Update form field
                             field.onChange(fidNum)
                           }}
                           placeholder="Select faculty"
@@ -1647,7 +1791,8 @@ export default function ProfilePage() {
                       rules={{
                         required: isEditingPersonal ? "Department is required" : false,
                         validate: (value) => {
-                          if (isEditingPersonal && !selectedFacultyId) {
+                          const facultyValue = watch('faculty');
+                          if (isEditingPersonal && !facultyValue) {
                             return "Please select a faculty first";
                           }
                           if (isEditingPersonal && !value) {
@@ -1656,20 +1801,23 @@ export default function ProfilePage() {
                           return true;
                         }
                       }}
-                      render={({ field }) => (
-                        <SearchableSelect
-                          options={departmentOptions.map((dept) => ({
-                            value: dept.Deptid,
-                            label: dept.name,
-                          }))}
-                          value={field.value}
-                          onValueChange={(v: string | number) => field.onChange(Number(v))}
-                          placeholder="Select department"
-                          disabled={!isEditingPersonal || !selectedFacultyId}
-                          emptyMessage={!selectedFacultyId ? "Please select a faculty first" : "No department found."}
-                          className="w-full min-w-0"
-                        />
-                      )}
+                      render={({ field }) => {
+                        const facultyValue = watch('faculty');
+                        return (
+                          <SearchableSelect
+                            options={departmentOptions.map((dept) => ({
+                              value: dept.Deptid,
+                              label: dept.name,
+                            }))}
+                            value={field.value}
+                            onValueChange={(v: string | number) => field.onChange(Number(v))}
+                            placeholder="Select department"
+                            disabled={!isEditingPersonal || !facultyValue}
+                            emptyMessage={!facultyValue ? "Please select a faculty first" : "No department found."}
+                            className="w-full min-w-0"
+                          />
+                        );
+                      }}
                     />
                   </div>
                 </div>
@@ -2826,7 +2974,7 @@ export default function ProfilePage() {
                         />
                       </TableCell>
 
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-1.5 sm:p-2 min-w-[220px]">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.subject`}
