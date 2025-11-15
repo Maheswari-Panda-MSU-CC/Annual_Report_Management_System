@@ -175,8 +175,50 @@ export default function AddResearchPage() {
         return
       }
 
-      // Use PDF path from form data (upload handled separately if needed)
-      const pdfPath = data.Pdf || null
+      // Handle document upload to S3 if a document exists
+      let pdfPath = data.Pdf || null
+      
+      if (pdfPath && pdfPath.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = pdfPath.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            pdfPath = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          setIsLoading(false)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return
+        }
+      }
 
       // Format and validate numeric fields
       const grantSanctioned = data.grant_sanctioned?.trim()
