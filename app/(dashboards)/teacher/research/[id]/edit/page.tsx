@@ -16,6 +16,7 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ResearchProjectFormData } from "@/types/interfaces"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
+import { useInvalidateTeacherData } from "@/hooks/use-teacher-data"
 
 export default function EditResearchPage() {
   const router = useRouter()
@@ -25,6 +26,7 @@ export default function EditResearchPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string | null>(null)
+  const { invalidateResearch } = useInvalidateTeacherData()
 
   const {
     projectStatusOptions,
@@ -355,15 +357,16 @@ export default function EditResearchPage() {
         throw new Error(result.error || result.message || "Failed to update research project")
       }
 
+      // Invalidate React Query cache to ensure fresh data
+      await invalidateResearch()
+
       toast({
         title: "Success",
         description: "Research project updated successfully",
       })
 
-      // Redirect back to research page
-      setTimeout(() => {
-        router.push("/teacher/research")
-      }, 1000)
+      // Redirect with query parameter to trigger refresh on research page
+      router.push("/teacher/research?updated=true")
     } catch (error: any) {
       toast({
         title: "Error",

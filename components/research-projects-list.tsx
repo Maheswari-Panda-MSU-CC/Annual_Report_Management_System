@@ -27,7 +27,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentViewer } from "@/components/document-viewer"
 import { ResearchProject, ResearchProjectFormData } from "@/types/interfaces"
 
-export function ResearchProjectsList() {
+export function ResearchProjectsList({ refreshKey }: { refreshKey?: number }) {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -94,7 +94,8 @@ export function ResearchProjectsList() {
     const fetchProjects = async () => {
       try {
         setLoading(true)
-        const res = await fetch(`/api/teacher/research?teacherId=${user?.role_id}&type=projects`)
+        // Add cache-busting parameter to ensure fresh data
+        const res = await fetch(`/api/teacher/research?teacherId=${user?.role_id}&type=projects&_t=${Date.now()}`)
 
         if (!res.ok) {
           throw new Error(`Failed to fetch research projects (${res.status})`)
@@ -141,7 +142,8 @@ export function ResearchProjectsList() {
     if (user?.role_id) {
       fetchProjects()
     }
-  }, [user?.role_id])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role_id, refreshKey]) // Add refreshKey to dependencies to trigger refetch
 
   // Filter projects
   const filteredProjects = projects.filter((project) => {

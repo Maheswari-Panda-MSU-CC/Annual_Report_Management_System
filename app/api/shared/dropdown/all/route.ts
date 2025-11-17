@@ -3,7 +3,14 @@ import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
 import { cachedJsonResponse } from '@/lib/api-cache';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  // Support query parameter: ?modules=shared,teacher,department
+  // If not provided, fetch all modules (backward compatibility)
+  const modulesParam = searchParams.get('modules');
+  const requestedModules = modulesParam 
+    ? modulesParam.split(',').map(m => m.trim().toLowerCase())
+    : ['shared', 'teacher', 'department', 'faculty', 'university']; // Default: all modules
   try {
     const pool = await connectToDatabase();
     
@@ -94,42 +101,109 @@ export async function GET() {
       name: item.name || item.Name || item.type || item.Type || '',
     });
 
-    const response = {
-      // Preserve original Faculty structure (Fid, Fname) - required by profile page
-      faculties: (faculties.recordset || []).map(mapFacultyItem),
-      // All other dropdowns use { id, name } structure
-      bookTypes: (bookTypes.recordset || []).map(mapDropdownItem),
-      journalAuthorTypes: (journalAuthorTypes.recordset || []).map(mapDropdownItem),
-      journalEditedTypes: (journalEditedTypes.recordset || []).map(mapDropdownItem),
-      resPubLevels: (resPubLevels.recordset || []).map(mapDropdownItem),
-      projectStatuses: (projectStatuses.recordset || []).map(mapDropdownItem),
-      projectLevels: (projectLevels.recordset || []).map(mapDropdownItem),
-      fundingAgencies: (fundingAgencies.recordset || []).map(mapDropdownItem),
-      projectNatures: (projectNatures.recordset || []).map(mapDropdownItem),
-      patentStatuses: (patentStatuses.recordset || []).map(mapDropdownItem),
-      eContentTypes: (eContentTypes.recordset || []).map(mapDropdownItem),
-      typeEcontentValues: (typeEcontentValues.recordset || []).map(mapDropdownItem),
-      collaborationsLevels: (collaborationsLevels.recordset || []).map(mapDropdownItem),
-      collaborationsOutcomes: (collaborationsOutcomes.recordset || []).map(mapDropdownItem),
-      collaborationsTypes: (collaborationsTypes.recordset || []).map(mapDropdownItem),
-      academicVisitRoles: (academicVisitRoles.recordset || []).map(mapDropdownItem),
-      financialSupportTypes: (financialSupportTypes.recordset || []).map(mapDropdownItem),
-      jrfSrfTypes: (jrfSrfTypes.recordset || []).map(mapDropdownItem),
-      phdGuidanceStatuses: (phdGuidanceStatuses.recordset || []).map(mapDropdownItem),
-      refresherTypes: (refresherTypes.recordset || []).map(mapDropdownItem),
-      academicProgrammes: (academicProgrammes.recordset || []).map(mapDropdownItem),
-      participantTypes: (participantTypes.recordset || []).map(mapDropdownItem),
-      reportYears: (reportYears.recordset || []).map(mapDropdownItem),
-      committeeLevels: (committeeLevels.recordset || []).map(mapDropdownItem),
-      talksProgrammeTypes: (talksProgrammeTypes.recordset || []).map(mapDropdownItem),
-      talksParticipantTypes: (talksParticipantTypes.recordset || []).map(mapDropdownItem),
-      awardFellowLevels: (awardFellowLevels.recordset || []).map(mapDropdownItem),
-      sponserNames: (sponserNames.recordset || []).map(mapDropdownItem),
-      degreeTypes: (degreeTypes.recordset || []).map(mapDropdownItem),
-      permanentDesignations: (permanentDesignations.recordset || []).map(mapDesignationItem),
-      temporaryDesignations: (temporaryDesignations.recordset || []).map(mapDesignationItem),
-    };
+    // Build response structure based on requested modules
+    const response: any = {};
 
+    // Shared dropdowns (available to all modules)
+    if (requestedModules.includes('shared')) {
+      response.faculties = (faculties.recordset || []).map(mapFacultyItem);
+      response.degreeTypes = (degreeTypes.recordset || []).map(mapDropdownItem);
+      response.permanentDesignations = (permanentDesignations.recordset || []).map(mapDesignationItem);
+      response.temporaryDesignations = (temporaryDesignations.recordset || []).map(mapDesignationItem);
+    }
+
+    // Teacher module dropdowns
+    if (requestedModules.includes('teacher')) {
+      response.projectStatuses = (projectStatuses.recordset || []).map(mapDropdownItem);
+      response.projectLevels = (projectLevels.recordset || []).map(mapDropdownItem);
+      response.fundingAgencies = (fundingAgencies.recordset || []).map(mapDropdownItem);
+      response.projectNatures = (projectNatures.recordset || []).map(mapDropdownItem);
+      response.bookTypes = (bookTypes.recordset || []).map(mapDropdownItem);
+      response.journalAuthorTypes = (journalAuthorTypes.recordset || []).map(mapDropdownItem);
+      response.journalEditedTypes = (journalEditedTypes.recordset || []).map(mapDropdownItem);
+      response.resPubLevels = (resPubLevels.recordset || []).map(mapDropdownItem);
+      response.patentStatuses = (patentStatuses.recordset || []).map(mapDropdownItem);
+      response.eContentTypes = (eContentTypes.recordset || []).map(mapDropdownItem);
+      response.typeEcontentValues = (typeEcontentValues.recordset || []).map(mapDropdownItem);
+      response.collaborationsLevels = (collaborationsLevels.recordset || []).map(mapDropdownItem);
+      response.collaborationsOutcomes = (collaborationsOutcomes.recordset || []).map(mapDropdownItem);
+      response.collaborationsTypes = (collaborationsTypes.recordset || []).map(mapDropdownItem);
+      response.academicVisitRoles = (academicVisitRoles.recordset || []).map(mapDropdownItem);
+      response.financialSupportTypes = (financialSupportTypes.recordset || []).map(mapDropdownItem);
+      response.jrfSrfTypes = (jrfSrfTypes.recordset || []).map(mapDropdownItem);
+      response.phdGuidanceStatuses = (phdGuidanceStatuses.recordset || []).map(mapDropdownItem);
+      response.refresherTypes = (refresherTypes.recordset || []).map(mapDropdownItem);
+      response.academicProgrammes = (academicProgrammes.recordset || []).map(mapDropdownItem);
+      response.participantTypes = (participantTypes.recordset || []).map(mapDropdownItem);
+      response.reportYears = (reportYears.recordset || []).map(mapDropdownItem);
+      response.committeeLevels = (committeeLevels.recordset || []).map(mapDropdownItem);
+      response.talksProgrammeTypes = (talksProgrammeTypes.recordset || []).map(mapDropdownItem);
+      response.talksParticipantTypes = (talksParticipantTypes.recordset || []).map(mapDropdownItem);
+      response.awardFellowLevels = (awardFellowLevels.recordset || []).map(mapDropdownItem);
+      response.sponserNames = (sponserNames.recordset || []).map(mapDropdownItem);
+    }
+
+    // Department module dropdowns (placeholder for future expansion)
+    if (requestedModules.includes('department')) {
+      // Add department-specific dropdowns here as needed
+      // response.departmentSpecificDropdown = ...
+    }
+
+    // Faculty module dropdowns (placeholder for future expansion)
+    if (requestedModules.includes('faculty')) {
+      // Add faculty-specific dropdowns here as needed
+      // response.facultySpecificDropdown = ...
+    }
+
+    // University module dropdowns (placeholder for future expansion)
+    if (requestedModules.includes('university')) {
+      // Add university-specific dropdowns here as needed
+      // response.universitySpecificDropdown = ...
+    }
+
+    // For backward compatibility: if no modules specified, flatten structure
+    // This ensures existing code continues to work
+    if (!modulesParam) {
+      // Flatten the response to match the old structure
+      const flattenedResponse: any = {
+        // Shared dropdowns
+        faculties: response.faculties || [],
+        degreeTypes: response.degreeTypes || [],
+        permanentDesignations: response.permanentDesignations || [],
+        temporaryDesignations: response.temporaryDesignations || [],
+        // Teacher dropdowns
+        projectStatuses: response.projectStatuses || [],
+        projectLevels: response.projectLevels || [],
+        fundingAgencies: response.fundingAgencies || [],
+        projectNatures: response.projectNatures || [],
+        bookTypes: response.bookTypes || [],
+        journalAuthorTypes: response.journalAuthorTypes || [],
+        journalEditedTypes: response.journalEditedTypes || [],
+        resPubLevels: response.resPubLevels || [],
+        patentStatuses: response.patentStatuses || [],
+        eContentTypes: response.eContentTypes || [],
+        typeEcontentValues: response.typeEcontentValues || [],
+        collaborationsLevels: response.collaborationsLevels || [],
+        collaborationsOutcomes: response.collaborationsOutcomes || [],
+        collaborationsTypes: response.collaborationsTypes || [],
+        academicVisitRoles: response.academicVisitRoles || [],
+        financialSupportTypes: response.financialSupportTypes || [],
+        jrfSrfTypes: response.jrfSrfTypes || [],
+        phdGuidanceStatuses: response.phdGuidanceStatuses || [],
+        refresherTypes: response.refresherTypes || [],
+        academicProgrammes: response.academicProgrammes || [],
+        participantTypes: response.participantTypes || [],
+        reportYears: response.reportYears || [],
+        committeeLevels: response.committeeLevels || [],
+        talksProgrammeTypes: response.talksProgrammeTypes || [],
+        talksParticipantTypes: response.talksParticipantTypes || [],
+        awardFellowLevels: response.awardFellowLevels || [],
+        sponserNames: response.sponserNames || [],
+      };
+      return cachedJsonResponse(flattenedResponse, 1800);
+    }
+
+    // Return structured response with modules
     // Cache for 30 minutes (1800 seconds) - dropdowns rarely change
     return cachedJsonResponse(response, 1800);
   } catch (err) {

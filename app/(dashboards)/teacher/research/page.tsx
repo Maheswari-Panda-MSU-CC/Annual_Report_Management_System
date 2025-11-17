@@ -5,7 +5,7 @@ import { ResearchProjectsList } from "@/components/research-projects-list"
 import { Button } from "@/components/ui/button"
 import { Plus, BarChart3, Hash, FileText, User, BadgeIcon as IdCard, Save, Edit, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useToast } from "@/hooks/use-toast"
 import { ResearchMetrics } from "@/types/interfaces"
@@ -14,6 +14,7 @@ import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 
 export default function ResearchProjectsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user } = useAuth()
   const { toast } = useToast()
   const [isEditingMetrics, setIsEditingMetrics] = useState(false)
@@ -31,6 +32,16 @@ export default function ResearchProjectsPage() {
 
   // Use React Query for research data
   const { data: researchData, isLoading: researchLoading } = useTeacherResearch()
+
+  // Check if we're coming from an update and refresh
+  useEffect(() => {
+    if (searchParams.get('updated') === 'true') {
+      // Remove query parameter from URL (clean URL)
+      router.replace('/teacher/research', { scroll: false })
+      // Increment refreshKey to remount ResearchProjectsList and fetch fresh data
+      setRefreshKey(prev => prev + 1)
+    }
+  }, [searchParams, router])
 
   // Fetch metrics data from backend (separate endpoint)
   useEffect(() => {
@@ -260,7 +271,7 @@ export default function ResearchProjectsPage() {
       </Card>
 
       {/* Research Projects List */}
-      <ResearchProjectsList key={refreshKey} />
+      <ResearchProjectsList refreshKey={refreshKey} />
     </div>
   )
 }

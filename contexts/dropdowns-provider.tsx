@@ -58,48 +58,60 @@ const DropdownsContext = createContext<DropdownsContextType | undefined>(undefin
 const DROPDOWN_CACHE_TIME = 30 * 60 * 1000
 
 // Fetch all dropdowns in one batched API call
+// Fetches both shared and teacher-specific dropdowns
+// For other modules, they can call with their specific modules parameter
 const fetchAllDropdowns = async (): Promise<DropdownsData> => {
-  const response = await fetch('/api/shared/dropdown/all')
+  // Fetch both shared and teacher dropdowns (teacher module needs both)
+  // Other modules can modify this to fetch their specific modules
+  const response = await fetch('/api/shared/dropdown/all?modules=shared,teacher')
   if (!response.ok) {
     throw new Error('Failed to fetch dropdowns')
   }
   const result = await response.json()
   
+  // Handle both flattened (backward compatibility) and structured responses
+  // If result has shared/teacher structure, extract from there
+  // Otherwise, assume flattened structure (backward compatibility)
+  const shared = result.shared || {};
+  const teacher = result.teacher || {};
+  
   // Return with default empty arrays if any field is missing
   return {
-    faculties: result.faculties || [],
-    departments: [],
-    userTypes: [],
-    permanentDesignations: result.permanentDesignations || [],
-    temporaryDesignations: result.temporaryDesignations || [],
-    degreeTypes: result.degreeTypes || [],
-    projectStatuses: result.projectStatuses || [],
-    projectLevels: result.projectLevels || [],
-    fundingAgencies: result.fundingAgencies || [],
-    projectNatures: result.projectNatures || [],
-    bookTypes: result.bookTypes || [],
-    journalEditedTypes: result.journalEditedTypes || [],
-    resPubLevels: result.resPubLevels || [],
-    journalAuthorTypes: result.journalAuthorTypes || [],
-    patentStatuses: result.patentStatuses || [],
-    eContentTypes: result.eContentTypes || [],
-    typeEcontentValues: result.typeEcontentValues || [],
-    collaborationsLevels: result.collaborationsLevels || [],
-    collaborationsOutcomes: result.collaborationsOutcomes || [],
-    collaborationsTypes: result.collaborationsTypes || [],
-    academicVisitRoles: result.academicVisitRoles || [],
-    financialSupportTypes: result.financialSupportTypes || [],
-    jrfSrfTypes: result.jrfSrfTypes || [],
-    phdGuidanceStatuses: result.phdGuidanceStatuses || [],
-    refresherTypes: result.refresherTypes || [],
-    academicProgrammes: result.academicProgrammes || [],
-    participantTypes: result.participantTypes || [],
-    reportYears: result.reportYears || [],
-    committeeLevels: result.committeeLevels || [],
-    talksProgrammeTypes: result.talksProgrammeTypes || [],
-    talksParticipantTypes: result.talksParticipantTypes || [],
-    awardFellowLevels: result.awardFellowLevels || [],
-    sponserNames: result.sponserNames || [],
+    // Shared dropdowns
+    faculties: shared.faculties || result.faculties || [],
+    departments: [], // Dynamic, fetched per faculty
+    userTypes: [], // Admin only
+    permanentDesignations: shared.permanentDesignations || result.permanentDesignations || [],
+    temporaryDesignations: shared.temporaryDesignations || result.temporaryDesignations || [],
+    degreeTypes: shared.degreeTypes || result.degreeTypes || [],
+    // Teacher dropdowns
+    projectStatuses: teacher.projectStatuses || result.projectStatuses || [],
+    projectLevels: teacher.projectLevels || result.projectLevels || [],
+    fundingAgencies: teacher.fundingAgencies || result.fundingAgencies || [],
+    projectNatures: teacher.projectNatures || result.projectNatures || [],
+    bookTypes: teacher.bookTypes || result.bookTypes || [],
+    journalEditedTypes: teacher.journalEditedTypes || result.journalEditedTypes || [],
+    resPubLevels: teacher.resPubLevels || result.resPubLevels || [],
+    journalAuthorTypes: teacher.journalAuthorTypes || result.journalAuthorTypes || [],
+    patentStatuses: teacher.patentStatuses || result.patentStatuses || [],
+    eContentTypes: teacher.eContentTypes || result.eContentTypes || [],
+    typeEcontentValues: teacher.typeEcontentValues || result.typeEcontentValues || [],
+    collaborationsLevels: teacher.collaborationsLevels || result.collaborationsLevels || [],
+    collaborationsOutcomes: teacher.collaborationsOutcomes || result.collaborationsOutcomes || [],
+    collaborationsTypes: teacher.collaborationsTypes || result.collaborationsTypes || [],
+    academicVisitRoles: teacher.academicVisitRoles || result.academicVisitRoles || [],
+    financialSupportTypes: teacher.financialSupportTypes || result.financialSupportTypes || [],
+    jrfSrfTypes: teacher.jrfSrfTypes || result.jrfSrfTypes || [],
+    phdGuidanceStatuses: teacher.phdGuidanceStatuses || result.phdGuidanceStatuses || [],
+    refresherTypes: teacher.refresherTypes || result.refresherTypes || [],
+    academicProgrammes: teacher.academicProgrammes || result.academicProgrammes || [],
+    participantTypes: teacher.participantTypes || result.participantTypes || [],
+    reportYears: teacher.reportYears || result.reportYears || [],
+    committeeLevels: teacher.committeeLevels || result.committeeLevels || [],
+    talksProgrammeTypes: teacher.talksProgrammeTypes || result.talksProgrammeTypes || [],
+    talksParticipantTypes: teacher.talksParticipantTypes || result.talksParticipantTypes || [],
+    awardFellowLevels: teacher.awardFellowLevels || result.awardFellowLevels || [],
+    sponserNames: teacher.sponserNames || result.sponserNames || [],
   }
 }
 
