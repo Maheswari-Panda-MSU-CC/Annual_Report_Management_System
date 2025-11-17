@@ -11,38 +11,61 @@ const config: sql.config = {
     trustServerCertificate: true,
   },
   pool: {
-    max: 10,
-    min: 0,
+    max: 20, // Increased from 10 to 20 for better concurrency
+    min: 5,  // Keep minimum connections alive (was 0)
     idleTimeoutMillis: 30000,
+    acquireTimeoutMillis: 30000,
+    createTimeoutMillis: 30000,
   },
+  requestTimeout: 30000,
+  connectionTimeout: 30000,
 };
 
 // Singleton connection pool - reused across all API calls
 let pool: ConnectionPool | null = null;
+let isConnecting = false; // Prevent multiple simultaneous connection attempts
 
 export async function connectToDatabase(): Promise<ConnectionPool> {
   try {
-    // Reuse existing connection pool if it exists
-    // Note: mssql ConnectionPool doesn't have a 'connected' property
-    // We check if pool exists and try to use it, recreating only if needed
+    // If pool exists and appears to be connected, reuse it
     if (pool) {
-      // Try to verify pool is still valid by checking if it has active connections
-      // If pool exists, reuse it (mssql handles reconnection internally)
-      try {
-        // Simple check: if pool exists, try to use it
-        // mssql will handle reconnection if needed
+      // Check if pool is still valid
+      // mssql ConnectionPool.connected can be true, false, or undefined
+      // undefined means pool exists but connection state is unknown (usually means it's valid)
+      // false means explicitly disconnected
+      if (pool.connected !== false) {
+        // Pool exists and is not explicitly disconnected, reuse it
+        // mssql will handle reconnection internally if needed
         return pool;
-      } catch (err) {
-        // If pool is invalid, reset it
+      } else {
+        // Pool is explicitly disconnected, reset it
+        console.warn('Pool is disconnected, recreating...');
         pool = null;
       }
     }
 
-    // Create new connection pool (only once, then reused)
-    pool = await sql.connect(config);
-    console.log('DB Connection Pool Created!');
-    return pool;
+    // Prevent multiple simultaneous connection attempts
+    if (isConnecting) {
+      // Wait for existing connection attempt (max 5 seconds)
+      let waitCount = 0;
+      while (isConnecting && !pool && waitCount < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        waitCount++;
+      }
+      if (pool) return pool;
+    }
+
+    // Create new connection pool
+    isConnecting = true;
+    try {
+      pool = await sql.connect(config);
+      console.log('DB Connection Pool Created!');
+      return pool;
+    } finally {
+      isConnecting = false;
+    }
   } catch (error) {
+    isConnecting = false;
     console.error('DB Connection Error:', error);
     pool = null; // Reset pool on error
     throw error;
