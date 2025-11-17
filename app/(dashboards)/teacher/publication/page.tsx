@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -176,26 +176,26 @@ function PublicationStats({ data, onStatClick }: { data: typeof initialData; onS
       </Card>
 
       {/* Individual Publication Type Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {stats.map((stat, index) => (
           <Card 
             key={index} 
             className={`${stat.borderColor} border-2 hover:shadow-md transition-all duration-200 cursor-pointer hover:scale-[1.02] active:scale-[0.98]`}
             onClick={() => onStatClick(stat.sectionId)}
           >
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`p-3 ${stat.bgColor} rounded-lg`}>
-                    <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                <div className="flex items-center space-x-2 sm:space-x-3">
+                  <div className={`p-2 sm:p-3 ${stat.bgColor} rounded-lg`}>
+                    <stat.icon className={`h-5 w-5 sm:h-6 sm:w-6 ${stat.color}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate">{stat.title}</h3>
-                    <p className="text-sm text-gray-600 line-clamp-2">{stat.description}</p>
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">{stat.title}</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{stat.description}</p>
                   </div>
                 </div>
-                <div className="text-right ml-4">
-                  <div className={`text-2xl font-bold ${stat.color}`}>{stat.count}</div>
+                <div className="text-right ml-2 sm:ml-4">
+                  <div className={`text-xl sm:text-2xl font-bold ${stat.color}`}>{stat.count}</div>
                   <div className="text-xs text-gray-500 uppercase tracking-wide">
                     {stat.count === 1 ? "Item" : "Items"}
                   </div>
@@ -246,91 +246,153 @@ export default function PublicationsPage() {
     fetchBookTypes()
   }, [])
 
-  // Map data when it's loaded from React Query
-  const [data, setData] = useState(initialData)
-  
-  useEffect(() => {
-    if (journals.data && books.data && papers.data) {
-      const journalsData = journals.data
-      const booksData = books.data
-      const papersData = papers.data
-
-      // Map database fields to UI format
-      const mappedJournals = (journalsData.journals || []).map((item: any, index: number) => ({
-        id: item.id,
-        srNo: index + 1,
-        authors: item.authors || "",
-        noOfAuthors: item.author_num || 0,
-        authorType: item.Teacher_Journals_Author_Type_Name || "",
-        authorTypeId: item.author_type,
-        title: item.title || "",
-        type: item.Teacher_Jour_Edited_Type_Name || "",
-        typeId: item.type,
-        issn: item.issn || "",
-        isbn: item.isbn || "",
-        journalBookName: item.journal_name || "",
-        volumeNo: item.volume_num || "",
-        pageNo: item.page_num || "",
-        date: item.month_year ? new Date(item.month_year).toISOString().split('T')[0] : "",
-        level: item.Res_Pub_Level_Name || "",
-        levelId: item.level,
-        peerReviewed: item.peer_reviewed ? "Yes" : "No",
-        hIndex: item.h_index?.toString() || "",
-        impactFactor: item.impact_factor?.toString() || "",
-        inScopus: item.in_scopus ? "Yes" : "No",
-        inUgcCare: item.in_ugc ? "Yes" : "No",
-        inClarivate: item.in_clarivate ? "Yes" : "No",
-        inOldUgcList: item.in_oldUGCList ? "Yes" : "No",
-        chargesPaid: item.paid ? "Yes" : "No",
-        supportingDocument: item.Image ? [item.Image] : [],
-        Image: item.Image,
-        DOI: item.DOI || "",
-      }))
-
-      // Fetch books data - we'll resolve names later when dropdowns are loaded
-      const mappedBooks = (booksData.books || []).map((item: any, index: number) => ({
-        id: item.bid,
-        srNo: index + 1,
-        authors: item.authors || "",
-        title: item.title || "",
-        isbn: item.isbn || "",
-        publisherName: item.publisher_name || "",
-        publishingDate: item.submit_date ? new Date(item.submit_date).toISOString().split('T')[0] : "",
-        publishingPlace: item.place || "",
-        chargesPaid: item.paid ? "Yes" : "No",
-        edited: item.edited ? "Yes" : "No",
-        chapterCount: item.chap_count?.toString() || "",
-        publishingLevelId: item.publishing_level,
-        bookTypeId: item.book_type,
-        authorTypeId: item.author_type,
-        supportingDocument: item.Image ? [item.Image] : [],
-        Image: item.Image,
-        cha: item.cha || "",
-      }))
-
-      const mappedPapers = (papersData.papers || []).map((item: any, index: number) => ({
-        id: item.papid,
-        srNo: index + 1,
-        authors: item.authors || "",
-        presentationLevel: item.Res_Pub_Level_Name || "",
-        levelId: item.level,
-        themeOfConference: item.theme || "",
-        modeOfParticipation: item.mode || "",
-        titleOfPaper: item.title_of_paper || "",
-        organizingBody: item.organising_body || "",
-        place: item.place || "",
-        dateOfPresentation: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
-        supportingDocument: item.Image ? [item.Image] : [],
-        Image: item.Image,
-      }))
-
-      setData({
-        journals: mappedJournals,
-        books: mappedBooks,
-        papers: mappedPapers,
-      })
+  // Use useMemo to compute mapped data - automatically updates when dependencies change
+  const mappedData = useMemo(() => {
+    // Only proceed if we have data
+    if (!journals.data || !books.data || !papers.data) {
+      return initialData
     }
-  }, [journals.data, books.data, papers.data])
+
+    const journalsData = journals.data
+    const booksData = books.data
+    const papersData = papers.data
+
+    // Map database fields to UI format
+    const mappedJournals = (journalsData.journals || []).map((item: any, index: number) => ({
+      id: item.id,
+      srNo: index + 1,
+      authors: item.authors || "",
+      noOfAuthors: item.author_num || 0,
+      authorType: item.Teacher_Journals_Author_Type_Name || "",
+      authorTypeId: item.author_type,
+      title: item.title || "",
+      type: item.Teacher_Jour_Edited_Type_Name || "",
+      typeId: item.type,
+      issn: item.issn || "",
+      isbn: item.isbn || "",
+      journalBookName: item.journal_name || "",
+      volumeNo: item.volume_num || "",
+      pageNo: item.page_num || "",
+      date: item.month_year ? new Date(item.month_year).toISOString().split('T')[0] : "",
+      level: item.Res_Pub_Level_Name || "",
+      levelId: item.level,
+      peerReviewed: item.peer_reviewed ? "Yes" : "No",
+      hIndex: item.h_index?.toString() || "",
+      impactFactor: item.impact_factor?.toString() || "",
+      inScopus: item.in_scopus ? "Yes" : "No",
+      inUgcCare: item.in_ugc ? "Yes" : "No",
+      inClarivate: item.in_clarivate ? "Yes" : "No",
+      inOldUgcList: item.in_oldUGCList ? "Yes" : "No",
+      chargesPaid: item.paid ? "Yes" : "No",
+      supportingDocument: item.Image ? [item.Image] : [],
+      Image: item.Image,
+      DOI: item.DOI || "",
+    }))
+
+    // Fetch books data - we'll resolve names later when dropdowns are loaded
+    const mappedBooks = (booksData.books || []).map((item: any, index: number) => ({
+      id: item.bid,
+      srNo: index + 1,
+      authors: item.authors || "",
+      title: item.title || "",
+      isbn: item.isbn || "",
+      publisherName: item.publisher_name || "",
+      publishingDate: item.submit_date ? new Date(item.submit_date).toISOString().split('T')[0] : "",
+      publishingPlace: item.place || "",
+      chargesPaid: item.paid ? "Yes" : "No",
+      edited: item.edited ? "Yes" : "No",
+      chapterCount: item.chap_count?.toString() || "",
+      publishingLevelId: item.publishing_level,
+      bookTypeId: item.book_type,
+      authorTypeId: item.author_type,
+      supportingDocument: item.Image ? [item.Image] : [],
+      Image: item.Image,
+      cha: item.cha || "",
+    }))
+
+    const mappedPapers = (papersData.papers || []).map((item: any, index: number) => ({
+      id: item.papid,
+      srNo: index + 1,
+      authors: item.authors || "",
+      presentationLevel: item.Res_Pub_Level_Name || "",
+      levelId: item.level,
+      themeOfConference: item.theme || "",
+      modeOfParticipation: item.mode || "",
+      titleOfPaper: item.title_of_paper || "",
+      organizingBody: item.organising_body || "",
+      place: item.place || "",
+      dateOfPresentation: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+      supportingDocument: item.Image ? [item.Image] : [],
+      Image: item.Image,
+    }))
+
+    return {
+      journals: mappedJournals,
+      books: mappedBooks,
+      papers: mappedPapers,
+    }
+  }, [
+    journals.data, 
+    journals.dataUpdatedAt,
+    journals.isSuccess,
+    journals.isFetching,
+    books.data, 
+    books.dataUpdatedAt,
+    books.isSuccess,
+    books.isFetching,
+    papers.data, 
+    papers.dataUpdatedAt,
+    papers.isSuccess,
+    papers.isFetching,
+    // Add length checks to detect changes even if object reference doesn't change
+    journals.data?.journals?.length,
+    books.data?.books?.length,
+    papers.data?.papers?.length,
+  ])
+
+  // Use mappedData directly instead of state to avoid sync issues
+  const data = mappedData
+  
+  // Refetch when component mounts (user navigates to this page)
+  useEffect(() => {
+    // Force refetch when component mounts to ensure fresh data
+    invalidatePublications()
+    journals.refetch()
+    books.refetch()
+    papers.refetch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Only run on mount - refetch functions are stable
+  
+  // Refetch data when page becomes visible (user returns from add/edit)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Force refetch immediately when page becomes visible
+        invalidatePublications()
+        journals.refetch()
+        books.refetch()
+        papers.refetch()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [journals, books, papers, invalidatePublications])
+  
+  // Refetch when window gains focus (user returns to tab)
+  useEffect(() => {
+    const handleFocus = () => {
+      // Force refetch when window gains focus
+      invalidatePublications()
+      journals.refetch()
+      books.refetch()
+      papers.refetch()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [journals, books, papers, invalidatePublications])
+  
 
   // Handle URL tab parameter
   useEffect(() => {
@@ -390,6 +452,13 @@ export default function PublicationsPage() {
 
       // Invalidate and refetch data using React Query
       invalidatePublications()
+      
+      // Force immediate refetch - the useEffect will update when dataUpdatedAt changes
+      await Promise.all([
+        journals.refetch(),
+        books.refetch(),
+        papers.refetch()
+      ])
     } catch (error: any) {
       toast({
         title: "Error",
@@ -431,26 +500,26 @@ export default function PublicationsPage() {
       case "journals":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="max-w-xs">
+            <TableCell className="text-xs sm:text-sm">{item.srNo}</TableCell>
+            <TableCell className="max-w-xs text-xs sm:text-sm">
               <div className="truncate" title={item.authors}>
                 {item.authors}
               </div>
             </TableCell>
-            <TableCell>{item.noOfAuthors}</TableCell>
-            <TableCell>{item.authorType}</TableCell>
-            <TableCell className="font-medium max-w-xs">
+            <TableCell className="text-xs sm:text-sm">{item.noOfAuthors}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.authorType}</TableCell>
+            <TableCell className="font-medium max-w-xs text-xs sm:text-sm">
               <div className="truncate" title={item.title}>
                 {item.title}
               </div>
             </TableCell>
-            <TableCell>{item.type}</TableCell>
-            <TableCell>{item.issn}</TableCell>
-            <TableCell>{item.isbn}</TableCell>
-            <TableCell>{item.journalBookName}</TableCell>
-            <TableCell>{item.volumeNo}</TableCell>
-            <TableCell>{item.pageNo}</TableCell>
-            <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.type}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.issn}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.isbn}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.journalBookName}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.volumeNo}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{item.pageNo}</TableCell>
+            <TableCell className="text-xs sm:text-sm">{new Date(item.date).toLocaleDateString()}</TableCell>
             <TableCell>
               <Badge variant={item.level === "International" ? "default" : "secondary"}>{item.level}</Badge>
             </TableCell>
@@ -554,10 +623,10 @@ export default function PublicationsPage() {
   }
 
   return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Publications</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Publications</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Manage your academic publications, books, and conference presentations
           </p>
         </div>
@@ -573,10 +642,11 @@ export default function PublicationsPage() {
                   <TabsTrigger
                     key={section.id}
                     value={section.id}
-                    className="flex items-center gap-2 whitespace-nowrap px-3 py-2"
+                    className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm"
                   >
-                    <section.icon className="h-4 w-4" />
-                    <span className="text-xs">{section.title}</span>
+                    <section.icon className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">{section.title}</span>
+                    <span className="sm:hidden">{section.title.split(' ')[0]}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -586,14 +656,15 @@ export default function PublicationsPage() {
           {sections.map((section) => (
             <TabsContent key={section.id} value={section.id}>
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <section.icon className="h-5 w-5" />
-                    {section.title}
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                    <section.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <span className="text-base sm:text-lg">{section.title}</span>
                   </CardTitle>
-                  <Button onClick={() => router.push(section.addRoute)}>
+                  <Button onClick={() => router.push(section.addRoute)} size="sm" className="w-full sm:w-auto">
                     <Plus className="h-4 w-4 mr-2" />
-                    Add {section.title}
+                    <span className="hidden sm:inline">Add {section.title}</span>
+                    <span className="sm:hidden">Add</span>
                   </Button>
                 </CardHeader>
                 <CardContent>
@@ -602,7 +673,7 @@ export default function PublicationsPage() {
                       <TableHeader>
                         <TableRow>
                           {section.columns.map((column) => (
-                            <TableHead key={column} className="whitespace-nowrap">
+                            <TableHead key={column} className="whitespace-nowrap text-xs sm:text-sm">
                               {column}
                             </TableHead>
                           ))}
@@ -623,25 +694,25 @@ export default function PublicationsPage() {
                             <TableRow key={item.id}>
                               {renderTableData(section, item)}
                               <TableCell>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 {item.supportingDocument && item.supportingDocument.length > 0 ? (
                                   <>
                                     <Dialog>
                                       <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" title="View Document">
-                                          <FileText className="h-4 w-4" />
+                                        <Button variant="ghost" size="sm" title="View Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                          <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
                                         </Button>
                                       </DialogTrigger>
                                       <DialogContent
-                                        className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden"
+                                        className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
                                         style={{ display: "flex", flexDirection: "column" }}
                                       >
-                                        <DialogHeader className="p-4 border-b">
-                                          <DialogTitle>View Document</DialogTitle>
+                                        <DialogHeader className="p-3 sm:p-4 border-b">
+                                          <DialogTitle className="text-base sm:text-lg">View Document</DialogTitle>
                                         </DialogHeader>
 
                                         {/* Scrollable Content */}
-                                        <div className="flex-1 overflow-y-auto p-4">
+                                        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
                                           <div className="w-full h-full">
                                             <DocumentViewer
                                               documentUrl={item.supportingDocument?.[0] || item.Image || ""}
@@ -653,20 +724,20 @@ export default function PublicationsPage() {
                                       </DialogContent>
                                     </Dialog>
 
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge variant="outline" className="text-xs hidden sm:inline-flex">
                                       {item.supportingDocument.length} file(s)
                                     </Badge>
                                   </>
                                 ) : (
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" title="Upload Document">
-                                        <Upload className="h-4 w-4" />
+                                      <Button variant="ghost" size="sm" title="Upload Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                        <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
                                       </Button>
                                     </DialogTrigger>
-                                    <DialogContent>
+                                    <DialogContent className="w-[90vw] sm:w-auto">
                                       <DialogHeader>
-                                        <DialogTitle>Upload Supporting Documents</DialogTitle>
+                                        <DialogTitle className="text-base sm:text-lg">Upload Supporting Documents</DialogTitle>
                                       </DialogHeader>
                                       <p className="text-sm text-muted-foreground">Please edit the publication to upload documents</p>
                                     </DialogContent>
@@ -675,19 +746,21 @@ export default function PublicationsPage() {
                               </div>
                             </TableCell>
                               <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Button variant="ghost" size="sm" onClick={() => handleView(section.id, item.id)}>
-                                    <Eye className="h-4 w-4" />
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <Button variant="ghost" size="sm" onClick={() => handleView(section.id, item.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="View">
+                                    <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>
-                                    <Edit className="h-4 w-4" />
+                                  <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Edit">
+                                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </Button>
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() => handleDelete(section.id, item.id, item.title || item.titleOfPaper || "this item")}
+                                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                                    title="Delete"
                                   >
-                                    <Trash2 className="h-4 w-4" />
+                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </Button>
                                 </div>
                               </TableCell>

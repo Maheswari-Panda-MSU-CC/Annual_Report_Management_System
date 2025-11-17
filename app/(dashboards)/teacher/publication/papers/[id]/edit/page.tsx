@@ -8,11 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { ArrowLeft, Presentation, Loader2 } from "lucide-react"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
+import { useInvalidateTeacherData, teacherQueryKeys } from "@/hooks/use-teacher-data"
+import { useQueryClient } from "@tanstack/react-query"
 
 interface PaperFormData {
   authors: string
@@ -30,9 +33,13 @@ export default function EditPaperPage() {
   const { id } = useParams()
   const { toast } = useToast()
   const { user } = useAuth()
+  const { invalidatePublications } = useInvalidateTeacherData()
+  const queryClient = useQueryClient()
+  const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<FileList | null>(null)
+  const [documentUrl, setDocumentUrl] = useState<string>("")
+  const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
 
   const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
 
@@ -83,6 +90,12 @@ export default function EditPaperPage() {
         }
       }
 
+      // Set existing document URL if available
+      if (paper.Image) {
+        setExistingDocumentUrl(paper.Image)
+        setDocumentUrl(paper.Image)
+      }
+
       // Populate form with fetched data
       reset({
         authors: paper.authors || "",
@@ -106,8 +119,8 @@ export default function EditPaperPage() {
     }
   }
 
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFile(files)
+  const handleDocumentChange = (url: string) => {
+    setDocumentUrl(url)
   }
 
   const onSubmit = async (data: PaperFormData) => {
@@ -122,13 +135,6 @@ export default function EditPaperPage() {
 
     setIsSubmitting(true)
     try {
-      // Generate dummy document URL if file selected, otherwise keep existing
-      let documentUrl: string | null = null
-      if (selectedFile && selectedFile.length > 0) {
-        const file = selectedFile[0]
-        documentUrl = `publications/${user.role_id}/${Date.now()}_${file.name}`
-      }
-
       // Validate required fields
       if (!data.title_of_paper || !data.authors || !data.level) {
         toast({
@@ -138,6 +144,55 @@ export default function EditPaperPage() {
         })
         setIsSubmitting(false)
         return
+      }
+
+      // Handle document upload to S3 if a new document was uploaded
+      let pdfPath = existingDocumentUrl || null
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            pdfPath = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          setIsSubmitting(false)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return
+        }
+      } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
+        // Keep existing document URL if it's not a new upload
+        pdfPath = documentUrl
       }
 
       const payload = {
@@ -151,7 +206,7 @@ export default function EditPaperPage() {
           title_of_paper: data.title_of_paper,
           level: data.level,
           authors: data.authors,
-          Image: documentUrl,
+          Image: pdfPath,
           mode: data.mode || null,
         },
       }
@@ -173,9 +228,26 @@ export default function EditPaperPage() {
         description: "Paper presentation updated successfully!",
       })
 
-      setTimeout(() => {
-        router.push("/teacher/publication")
-      }, 1000)
+      // Invalidate and refetch data
+      invalidatePublications()
+
+      // Wait for refetch to complete before navigation
+      await Promise.all([
+        queryClient.refetchQueries({ 
+          queryKey: teacherQueryKeys.publications.journals(teacherId),
+          exact: true 
+        }),
+        queryClient.refetchQueries({ 
+          queryKey: teacherQueryKeys.publications.books(teacherId),
+          exact: true 
+        }),
+        queryClient.refetchQueries({ 
+          queryKey: teacherQueryKeys.publications.papers(teacherId),
+          exact: true 
+        }),
+      ])
+
+      router.push("/teacher/publication")
     } catch (error: any) {
       toast({
         title: "Error",
@@ -199,15 +271,15 @@ export default function EditPaperPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <Button variant="outline" size="sm" onClick={() => router.push("/teacher/publication")} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
-          Back
+          <span className="hidden sm:inline">Back</span>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Edit Paper Presented</h1>
-          <p className="text-muted-foreground">Edit your presented paper at conference/seminar/symposia</p>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Edit Paper Presented</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Edit your presented paper at conference/seminar/symposia</p>
         </div>
       </div>
 
@@ -219,24 +291,51 @@ export default function EditPaperPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Document Upload Section */}
+          <div className="mb-6">
+            <Label className="text-base sm:text-lg font-semibold mb-3 block">
+              Supporting Document (Optional - upload new to replace existing)
+            </Label>
+            <DocumentUpload
+              documentUrl={documentUrl}
+              category="papers"
+              subCategory="papers"
+              onChange={handleDocumentChange}
+              allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+              maxFileSize={1 * 1024 * 1024}
+            />
+            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
+          </div>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
             <div>
               <Label htmlFor="authors">Author(s) *</Label>
               <Input
                 id="authors"
-                {...register("authors", { required: "Authors are required" })}
+                {...register("authors", { 
+                  required: "Authors are required",
+                  minLength: { value: 2, message: "Authors must be at least 2 characters" },
+                  maxLength: { value: 500, message: "Authors must not exceed 500 characters" },
+                  pattern: {
+                    value: /^[a-zA-Z\s,\.&'-]+$/,
+                    message: "Authors can only contain letters, spaces, commas, periods, ampersands, apostrophes, and hyphens"
+                  }
+                })}
                 placeholder="Enter all authors"
               />
               {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <Label htmlFor="level">Presentation Level *</Label>
                 <Controller
                   name="level"
                   control={control}
-                  rules={{ required: "Presentation level is required" }}
+                  rules={{ 
+                    required: "Presentation level is required",
+                    validate: (v) => v !== null && v !== undefined || "Presentation level is required"
+                  }}
                   render={({ field }) => (
                     <SearchableSelect
                       options={resPubLevelOptions.map((l) => ({
@@ -257,6 +356,9 @@ export default function EditPaperPage() {
                 <Controller
                   name="mode"
                   control={control}
+                  rules={{
+                    validate: (v) => !v || ["Physical", "Virtual", "Hybrid"].includes(v) || "Mode must be Physical, Virtual, or Hybrid"
+                  }}
                   render={({ field }) => (
                     <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger>
@@ -270,51 +372,83 @@ export default function EditPaperPage() {
                     </Select>
                   )}
                 />
+                {errors.mode && <p className="text-sm text-red-500 mt-1">{errors.mode.message}</p>}
               </div>
             </div>
 
             <div>
               <Label htmlFor="theme">Theme Of Conference/Seminar/Symposia</Label>
-              <Input id="theme" {...register("theme")} placeholder="Enter conference theme" />
+              <Input 
+                id="theme" 
+                {...register("theme", {
+                  maxLength: { value: 500, message: "Theme must not exceed 500 characters" }
+                })} 
+                placeholder="Enter conference theme" 
+              />
+              {errors.theme && <p className="text-sm text-red-500 mt-1">{errors.theme.message}</p>}
             </div>
 
             <div>
               <Label htmlFor="title_of_paper">Title of Paper *</Label>
               <Input
                 id="title_of_paper"
-                {...register("title_of_paper", { required: "Title of paper is required" })}
+                {...register("title_of_paper", { 
+                  required: "Title of paper is required",
+                  minLength: { value: 5, message: "Title must be at least 5 characters" },
+                  maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
+                })}
                 placeholder="Enter paper title"
               />
               {errors.title_of_paper && <p className="text-sm text-red-500 mt-1">{errors.title_of_paper.message}</p>}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <Label htmlFor="organising_body">Organizing Body</Label>
-                <Input id="organising_body" {...register("organising_body")} placeholder="Enter organizing body" />
+                <Input 
+                  id="organising_body" 
+                  {...register("organising_body", {
+                    maxLength: { value: 300, message: "Organizing body must not exceed 300 characters" },
+                    pattern: {
+                      value: /^[a-zA-Z0-9\s,\.&'-]*$/,
+                      message: "Organizing body contains invalid characters"
+                    }
+                  })} 
+                  placeholder="Enter organizing body" 
+                />
+                {errors.organising_body && <p className="text-sm text-red-500 mt-1">{errors.organising_body.message}</p>}
               </div>
               <div>
                 <Label htmlFor="place">Place</Label>
-                <Input id="place" {...register("place")} placeholder="Enter place" />
+                <Input 
+                  id="place" 
+                  {...register("place", {
+                    maxLength: { value: 200, message: "Place must not exceed 200 characters" },
+                    pattern: {
+                      value: /^[a-zA-Z\s,\.-]*$/,
+                      message: "Place contains invalid characters"
+                    }
+                  })} 
+                  placeholder="Enter place" 
+                />
+                {errors.place && <p className="text-sm text-red-500 mt-1">{errors.place.message}</p>}
               </div>
             </div>
 
             <div>
               <Label htmlFor="date">Date of Presentation/Seminar</Label>
-              <Input id="date" type="date" {...register("date")} />
-            </div>
-
-            <div>
-              <Label>Supporting Document (Optional - upload new to replace existing)</Label>
-              <Input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => handleFileSelect(e.target.files)}
+              <Input 
+                id="date" 
+                type="date" 
+                {...register("date", {
+                  validate: (v) => !v || new Date(v) <= new Date() || "Date cannot be in the future"
+                })} 
               />
+              {errors.date && <p className="text-sm text-red-500 mt-1">{errors.date.message}</p>}
             </div>
 
-            <div className="flex gap-4">
-              <Button type="submit" disabled={isSubmitting}>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -324,7 +458,7 @@ export default function EditPaperPage() {
                   "Update Paper Presentation"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")}>
+              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>

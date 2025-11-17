@@ -8,11 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { ArrowLeft, BookOpen, Loader2 } from "lucide-react"
 import { toast, useToast } from "@/hooks/use-toast"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useInvalidateTeacherData, teacherQueryKeys } from "@/hooks/use-teacher-data"
+import { useQueryClient } from "@tanstack/react-query"
 
 interface BookFormData {
   authors: string
@@ -35,9 +38,13 @@ export default function EditBookPage() {
   const { id } = useParams()
   const { toast: showToast } = useToast()
   const { user } = useAuth()
+  const { invalidatePublications } = useInvalidateTeacherData()
+  const queryClient = useQueryClient()
+  const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<FileList | null>(null)
+  const [documentUrl, setDocumentUrl] = useState<string>("")
+  const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
 
   const {
     journalAuthorTypeOptions,
@@ -97,6 +104,12 @@ export default function EditBookPage() {
         }
       }
 
+      // Set existing document URL if available
+      if (book.Image) {
+        setExistingDocumentUrl(book.Image)
+        setDocumentUrl(book.Image)
+      }
+
       // Populate form with fetched data
       reset({
         authors: book.authors || "",
@@ -125,8 +138,8 @@ export default function EditBookPage() {
     }
   }
 
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFile(files)
+  const handleDocumentChange = (url: string) => {
+    setDocumentUrl(url)
   }
 
   const onSubmit = async (data: BookFormData) => {
@@ -141,13 +154,6 @@ export default function EditBookPage() {
 
     setIsSubmitting(true)
     try {
-      // Generate dummy document URL if file selected, otherwise keep existing
-      let documentUrl: string | null = null
-      if (selectedFile && selectedFile.length > 0) {
-        const file = selectedFile[0]
-        documentUrl = `publications/${user.role_id}/${Date.now()}_${file.name}`
-      }
-
       // Validate required fields
       if (!data.title || !data.authors || !data.publishing_level || !data.book_type || !data.author_type) {
         showToast({
@@ -157,6 +163,55 @@ export default function EditBookPage() {
         })
         setIsSubmitting(false)
         return
+      }
+
+      // Handle document upload to S3 if a new document was uploaded
+      let pdfPath = existingDocumentUrl || null
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            pdfPath = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          setIsSubmitting(false)
+          showToast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return
+        }
+      } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
+        // Keep existing document URL if it's not a new upload
+        pdfPath = documentUrl
       }
 
       const payload = {
@@ -176,7 +231,7 @@ export default function EditBookPage() {
           publishing_level: data.publishing_level,
           book_type: data.book_type,
           author_type: data.author_type,
-          Image: documentUrl,
+          Image: pdfPath,
         },
       }
 
@@ -197,9 +252,26 @@ export default function EditBookPage() {
         description: "Book/Book chapter updated successfully!",
       })
 
-      setTimeout(() => {
-        router.push("/teacher/publication")
-      }, 1000)
+      // Invalidate and refetch data
+      invalidatePublications()
+
+      // Wait for refetch to complete before navigation
+      await Promise.all([
+        queryClient.refetchQueries({ 
+          queryKey: teacherQueryKeys.publications.journals(teacherId),
+          exact: true 
+        }),
+        queryClient.refetchQueries({ 
+          queryKey: teacherQueryKeys.publications.books(teacherId),
+          exact: true 
+        }),
+        queryClient.refetchQueries({ 
+          queryKey: teacherQueryKeys.publications.papers(teacherId),
+          exact: true 
+        }),
+      ])
+
+      router.push("/teacher/publication")
     } catch (error: any) {
       showToast({
         title: "Error",
@@ -223,15 +295,15 @@ export default function EditBookPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <Button variant="outline" size="sm" onClick={() => router.push("/teacher/publication")} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
-          Back
+          <span className="hidden sm:inline">Back</span>
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Edit Book/Book Chapter</h1>
-          <p className="text-muted-foreground">Edit your published book or book chapter</p>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Edit Book/Book Chapter</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Edit your published book or book chapter</p>
         </div>
       </div>
 
@@ -243,12 +315,36 @@ export default function EditBookPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {/* Document Upload Section */}
+          <div className="mb-6">
+            <Label className="text-base sm:text-lg font-semibold mb-3 block">
+              Supporting Document (Optional - upload new to replace existing)
+            </Label>
+            <DocumentUpload
+              documentUrl={documentUrl}
+              category="books"
+              subCategory="books"
+              onChange={handleDocumentChange}
+              allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+              maxFileSize={1 * 1024 * 1024}
+            />
+            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
+          </div>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
             <div>
               <Label htmlFor="authors">Authors *</Label>
               <Input
                 id="authors"
-                {...register("authors", { required: "Authors are required" })}
+                {...register("authors", { 
+                  required: "Authors are required",
+                  minLength: { value: 2, message: "Authors must be at least 2 characters" },
+                  maxLength: { value: 500, message: "Authors must not exceed 500 characters" },
+                  pattern: {
+                    value: /^[a-zA-Z\s,\.&'-]+$/,
+                    message: "Authors can only contain letters, spaces, commas, periods, ampersands, apostrophes, and hyphens"
+                  }
+                })}
                 placeholder="Enter all authors"
               />
               {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
@@ -258,7 +354,11 @@ export default function EditBookPage() {
               <Label htmlFor="title">Title *</Label>
               <Input
                 id="title"
-                {...register("title", { required: "Title is required" })}
+                {...register("title", { 
+                  required: "Title is required",
+                  minLength: { value: 5, message: "Title must be at least 5 characters" },
+                  maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
+                })}
                 placeholder="Enter book title"
               />
               {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
@@ -267,27 +367,70 @@ export default function EditBookPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="isbn">ISBN (Without -)</Label>
-                <Input id="isbn" {...register("isbn")} placeholder="Enter ISBN without dashes" />
+                <Input 
+                  id="isbn" 
+                  {...register("isbn", {
+                    validate: (v) => !v || /^[0-9]{10}$/.test(v.replace(/-/g, '')) || /^[0-9]{13}$/.test(v.replace(/-/g, '')) || "ISBN must be 10 or 13 digits"
+                  })} 
+                  placeholder="Enter ISBN without dashes (10 or 13 digits)"
+                />
+                {errors.isbn && <p className="text-sm text-red-500 mt-1">{errors.isbn.message}</p>}
               </div>
               <div>
                 <Label htmlFor="publisher_name">Publisher Name</Label>
-                <Input id="publisher_name" {...register("publisher_name")} placeholder="Enter publisher name" />
+                <Input 
+                  id="publisher_name" 
+                  {...register("publisher_name", {
+                    maxLength: { value: 300, message: "Publisher name must not exceed 300 characters" },
+                    pattern: {
+                      value: /^[a-zA-Z0-9\s,\.&'-]*$/,
+                      message: "Publisher name contains invalid characters"
+                    }
+                  })} 
+                  placeholder="Enter publisher name" 
+                />
+                {errors.publisher_name && <p className="text-sm text-red-500 mt-1">{errors.publisher_name.message}</p>}
               </div>
             </div>
 
             <div>
               <Label htmlFor="cha">Chapter/Article Title</Label>
-              <Input id="cha" {...register("cha")} placeholder="Enter chapter/article title if applicable" />
+              <Input 
+                id="cha" 
+                {...register("cha", {
+                  maxLength: { value: 500, message: "Chapter title must not exceed 500 characters" }
+                })} 
+                placeholder="Enter chapter/article title if applicable" 
+              />
+              {errors.cha && <p className="text-sm text-red-500 mt-1">{errors.cha.message}</p>}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="submit_date">Publishing Date</Label>
-                <Input id="submit_date" type="date" {...register("submit_date")} />
+                <Input 
+                  id="submit_date" 
+                  type="date" 
+                  {...register("submit_date", {
+                    validate: (v) => !v || new Date(v) <= new Date() || "Date cannot be in the future"
+                  })} 
+                />
+                {errors.submit_date && <p className="text-sm text-red-500 mt-1">{errors.submit_date.message}</p>}
               </div>
               <div>
                 <Label htmlFor="place">Publishing Place</Label>
-                <Input id="place" {...register("place")} placeholder="Enter publishing place" />
+                <Input 
+                  id="place" 
+                  {...register("place", {
+                    maxLength: { value: 200, message: "Place must not exceed 200 characters" },
+                    pattern: {
+                      value: /^[a-zA-Z\s,\.-]*$/,
+                      message: "Place contains invalid characters"
+                    }
+                  })} 
+                  placeholder="Enter publishing place" 
+                />
+                {errors.place && <p className="text-sm text-red-500 mt-1">{errors.place.message}</p>}
               </div>
             </div>
 
@@ -336,22 +479,31 @@ export default function EditBookPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               <div>
                 <Label htmlFor="chap_count">Chapter Count</Label>
                 <Input
                   id="chap_count"
                   type="number"
-                  {...register("chap_count", { valueAsNumber: true })}
+                  {...register("chap_count", { 
+                    valueAsNumber: true,
+                    min: { value: 1, message: "Chapter count must be at least 1" },
+                    max: { value: 1000, message: "Chapter count cannot exceed 1000" },
+                    validate: (v) => v === null || v === undefined || (v > 0 && Number.isInteger(v)) || "Must be a positive integer"
+                  })}
                   placeholder="Number of chapters"
                 />
+                {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
               </div>
               <div>
                 <Label htmlFor="publishing_level">Publishing Level *</Label>
                 <Controller
                   name="publishing_level"
                   control={control}
-                  rules={{ required: "Publishing level is required" }}
+                  rules={{ 
+                    required: "Publishing level is required",
+                    validate: (v) => v !== null && v !== undefined || "Publishing level is required"
+                  }}
                   render={({ field }) => (
                     <SearchableSelect
                       options={resPubLevelOptions.map((l) => ({
@@ -374,7 +526,10 @@ export default function EditBookPage() {
                 <Controller
                   name="book_type"
                   control={control}
-                  rules={{ required: "Book type is required" }}
+                  rules={{ 
+                    required: "Book type is required",
+                    validate: (v) => v !== null && v !== undefined || "Book type is required"
+                  }}
                   render={({ field }) => (
                     <SearchableSelect
                       options={bookTypeOptions.map((b) => ({
@@ -397,7 +552,10 @@ export default function EditBookPage() {
               <Controller
                 name="author_type"
                 control={control}
-                rules={{ required: "Author type is required" }}
+                rules={{ 
+                  required: "Author type is required",
+                  validate: (v) => v !== null && v !== undefined || "Author type is required"
+                }}
                 render={({ field }) => (
                   <SearchableSelect
                     options={journalAuthorTypeOptions.map((a) => ({
@@ -414,17 +572,8 @@ export default function EditBookPage() {
               {errors.author_type && <p className="text-sm text-red-500 mt-1">{errors.author_type.message}</p>}
             </div>
 
-            <div>
-              <Label>Supporting Document (Optional - upload new to replace existing)</Label>
-              <Input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={(e) => handleFileSelect(e.target.files)}
-              />
-            </div>
-
-            <div className="flex gap-4">
-              <Button type="submit" disabled={isSubmitting}>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -434,7 +583,7 @@ export default function EditBookPage() {
                   "Update Book/Book Chapter"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")}>
+              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>

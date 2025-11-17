@@ -1,5 +1,4 @@
 import { connectToDatabase } from '@/lib/db'
-import { cachedJsonResponse } from '@/lib/api-cache'
 import sql from 'mssql'
 import { NextResponse } from 'next/server'
 
@@ -24,11 +23,17 @@ export async function GET(request: Request) {
 
     const journals = result.recordset || []
 
-    // Cache for 3 minutes (180 seconds)
-    return cachedJsonResponse({
+    // No caching - always return fresh data from database
+    const response = NextResponse.json({
       success: true,
       journals,
-    }, 180)
+    })
+    // Explicitly disable all caching
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    response.headers.set('Surrogate-Control', 'no-store')
+    return response
   } catch (err: any) {
     console.error('Error fetching journals:', err)
     return NextResponse.json(

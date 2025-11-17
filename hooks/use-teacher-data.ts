@@ -33,9 +33,18 @@ export const teacherQueryKeys = {
   },
 }
 
-// API Fetch Helper
+// API Fetch Helper with cache-busting
 const fetchAPI = async (url: string) => {
-  const response = await fetch(url)
+  // Add cache-busting parameter to prevent any caching
+  const separator = url.includes('?') ? '&' : '?'
+  const cacheBuster = `${separator}_cb=${Date.now()}`
+  const response = await fetch(`${url}${cacheBuster}`, {
+    cache: 'no-store', // Disable browser cache
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    },
+  })
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Failed to fetch data" }))
     throw new Error(error.error || "Failed to fetch data")
@@ -78,21 +87,30 @@ export function useTeacherPublications() {
     queryKey: teacherQueryKeys.publications.journals(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/publication/journals?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 0, // Always consider data stale - force refetch after invalidation
+    gcTime: 0, // Don't keep in cache - always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   })
 
   const books = useQuery({
     queryKey: teacherQueryKeys.publications.books(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/publication/books?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 0, // Always consider data stale - force refetch after invalidation
+    gcTime: 0, // Don't keep in cache - always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   })
 
   const papers = useQuery({
     queryKey: teacherQueryKeys.publications.papers(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/publication/papers?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 0, // Always consider data stale - force refetch after invalidation
+    gcTime: 0, // Don't keep in cache - always fetch fresh data
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   })
 
   return {
