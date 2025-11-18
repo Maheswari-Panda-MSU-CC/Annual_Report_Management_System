@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "@/hooks/use-toast"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { useTeacherPublications, useInvalidateTeacherData } from "@/hooks/use-teacher-data"
+import { useTeacherPublications } from "@/hooks/use-teacher-data"
+import { usePaperMutations, useJournalMutations, useBookMutations } from "@/hooks/use-teacher-mutations"
 import { TableLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
 import {
   Plus,
@@ -216,15 +217,19 @@ export default function PublicationsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("journals")
-  const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
 
   // Use React Query for data fetching with automatic caching
   const { journals, books, papers, isLoading, isFetching, data: rawData } = useTeacherPublications()
-  const { invalidatePublications } = useInvalidateTeacherData()
+  const { deletePaper } = usePaperMutations()
+  const { deleteJournal } = useJournalMutations()
+  const { deleteBook } = useBookMutations()
   
   // Show loading only if we have no data at all (first load)
   const isInitialLoading = isLoading && !journals.data && !books.data && !papers.data
+
+  // Check if any delete mutation is pending
+  const isDeleting = deletePaper.isPending || deleteJournal.isPending || deleteBook.isPending
 
   // Dropdowns
   const {
@@ -238,13 +243,7 @@ export default function PublicationsPage() {
     fetchBookTypes,
   } = useDropDowns()
 
-  // Fetch dropdowns
-  useEffect(() => {
-    fetchJournalAuthorTypes()
-    fetchJournalEditedTypes()
-    fetchResPubLevels()
-    fetchBookTypes()
-  }, [])
+  // Note: Dropdown data is already available from Context, no need to fetch
 
   // Use useMemo to compute mapped data - automatically updates when dependencies change
   const mappedData = useMemo(() => {
@@ -353,45 +352,8 @@ export default function PublicationsPage() {
   // Use mappedData directly instead of state to avoid sync issues
   const data = mappedData
   
-  // Refetch when component mounts (user navigates to this page)
-  useEffect(() => {
-    // Force refetch when component mounts to ensure fresh data
-    invalidatePublications()
-    journals.refetch()
-    books.refetch()
-    papers.refetch()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run on mount - refetch functions are stable
-  
-  // Refetch data when page becomes visible (user returns from add/edit)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // Force refetch immediately when page becomes visible
-        invalidatePublications()
-        journals.refetch()
-        books.refetch()
-        papers.refetch()
-      }
-    }
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [journals, books, papers, invalidatePublications])
-  
-  // Refetch when window gains focus (user returns to tab)
-  useEffect(() => {
-    const handleFocus = () => {
-      // Force refetch when window gains focus
-      invalidatePublications()
-      journals.refetch()
-      books.refetch()
-      papers.refetch()
-    }
-    
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  }, [journals, books, papers, invalidatePublications])
+  // Note: Mutations handle cache invalidation automatically
+  // Removed all manual refetch logic - React Query handles it
   
 
   // Handle URL tab parameter
@@ -415,60 +377,23 @@ export default function PublicationsPage() {
     setDeleteConfirm({ sectionId, itemId, itemName })
   }
 
-  const confirmDelete = async () => {
-    if (!deleteConfirm || !user?.role_id) return
+  const confirmDelete = () => {
+    if (!deleteConfirm) return
 
-    setIsDeleting(true)
-    try {
-      let endpoint = ""
-      let paramName = ""
-
-      switch (deleteConfirm.sectionId) {
-        case "journals":
-          endpoint = `/api/teacher/publication/journals?journalId=${deleteConfirm.itemId}`
-          break
-        case "books":
-          endpoint = `/api/teacher/publication/books?bookId=${deleteConfirm.itemId}`
-          break
-        case "papers":
-          endpoint = `/api/teacher/publication/papers?paperId=${deleteConfirm.itemId}`
-          break
-      }
-
-      const res = await fetch(endpoint, {
-        method: "DELETE",
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to delete")
-      }
-
-      toast({
-        title: "Success",
-        description: "Item deleted successfully!",
-      })
-
-      // Invalidate and refetch data using React Query
-      invalidatePublications()
-      
-      // Force immediate refetch - the useEffect will update when dataUpdatedAt changes
-      await Promise.all([
-        journals.refetch(),
-        books.refetch(),
-        papers.refetch()
-      ])
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete item",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeleting(false)
-      setDeleteConfirm(null)
+    // Use mutations for delete operations - they handle cache invalidation automatically
+    switch (deleteConfirm.sectionId) {
+      case "journals":
+        deleteJournal.mutate(deleteConfirm.itemId)
+        break
+      case "books":
+        deleteBook.mutate(deleteConfirm.itemId)
+        break
+      case "papers":
+        deletePaper.mutate(deleteConfirm.itemId)
+        break
     }
+
+    setDeleteConfirm(null)
   }
 
   const handleEdit = (sectionId: string, item: any) => {

@@ -16,12 +16,13 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ResearchProjectFormData } from "@/types/interfaces"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
+import { useResearchMutations } from "@/hooks/use-teacher-mutations"
 
 export default function AddResearchPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useAuth()
-  const [isLoading, setIsLoading] = useState(false)
+  const { createResearch } = useResearchMutations()
 
   const {
     projectStatusOptions,
@@ -60,13 +61,7 @@ export default function AddResearchPage() {
   // Watch grant_sealed to enable/disable grant_year
   const grantSealed = watch("grant_sealed")
 
-  // Fetch dropdown data
-  useEffect(() => {
-    fetchProjectStatuses()
-    fetchProjectLevels()
-    fetchFundingAgencies()
-    fetchProjectNatures()
-  }, [])
+  // Note: Dropdown data is already available from Context, no need to fetch
 
   // Handle extracted fields from DocumentUpload component
   const handleExtractFields = useCallback((fields: Record<string, any>) => {
@@ -154,202 +149,158 @@ export default function AddResearchPage() {
   }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
-    setIsLoading(true)
-
-    try {
-      const teacherId = user?.role_id
-      if (!teacherId) {
-        setIsLoading(false)
-        toast({
-          title: "Error",
-          description: "User ID not found. Please log in again.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Validate required fields
-      if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date || !data.duration || !data.proj_level || !data.grant_sanctioned || !data.grant_received) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date, Duration, Project Level, Grant Sanctioned, Grant Received)",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Validate document is uploaded
-      if (!data.Pdf || !data.Pdf.trim()) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Supporting document is required. Please upload a document.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Handle document upload to S3 if a document exists
-      let pdfPath = data.Pdf || null
-      
-      if (pdfPath && pdfPath.startsWith("/uploaded-document/")) {
-        try {
-          // Extract fileName from local URL
-          const fileName = pdfPath.split("/").pop()
-          
-          if (fileName) {
-            // Upload to S3 using the file in /public/uploaded-document/
-            const s3Response = await fetch("/api/shared/s3", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: fileName,
-              }),
-            })
-
-            if (!s3Response.ok) {
-              const s3Error = await s3Response.json()
-              throw new Error(s3Error.error || "Failed to upload document to S3")
-            }
-
-            const s3Data = await s3Response.json()
-            pdfPath = s3Data.url // Use S3 URL for database storage
-
-            // Delete local file after successful S3 upload
-            await fetch("/api/shared/local-document-upload", {
-              method: "DELETE",
-            })
-          }
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          setIsLoading(false)
-          toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      // Validate numeric fields
-      const grantSanctioned = data.grant_sanctioned?.trim() ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, '')) : null
-      const grantReceived = data.grant_received?.trim() ? parseFloat(data.grant_received.replace(/[,\s]/g, '')) : null
-      const duration = data.duration && data.duration > 0 ? Math.floor(data.duration) : null
-
-      if (!grantSanctioned || isNaN(grantSanctioned) || grantSanctioned < 0) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Grant Sanctioned is required and must be a valid positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!grantReceived || isNaN(grantReceived) || grantReceived < 0) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Grant Received is required and must be a valid positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!duration || duration <= 0) {
-        setIsLoading(false)
-        toast({
-          title: "Validation Error",
-          description: "Duration is required and must be a positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Grant Year: only set if grant_sealed is checked, otherwise null
-      let grantYear = null
-      if (data.grant_sealed && data.grant_year?.trim()) {
-        // Validate it's exactly 4 digits
-        if (!/^\d{4}$/.test(data.grant_year.trim())) {
-          setIsLoading(false)
-          toast({
-            title: "Validation Error",
-            description: "Grant Year must be exactly 4 digits",
-            variant: "destructive",
-          })
-          return
-        }
-        const yearValue = parseInt(data.grant_year)
-        if (!isNaN(yearValue) && yearValue >= 2000 && yearValue <= 2100) {
-          grantYear = yearValue
-        } else {
-          setIsLoading(false)
-          toast({
-            title: "Validation Error",
-            description: "Grant Year must be a valid year between 2000 and 2100",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      // Prepare payload
-      const payload = {
-        teacherId,
-        project: {
-          title: data.title.trim(),
-          funding_agency: data.funding_agency,
-          grant_sanctioned: grantSanctioned,
-          grant_received: grantReceived,
-          proj_nature: data.proj_nature,
-          duration: duration,
-          status: data.status,
-          start_date: data.start_date,
-          proj_level: data.proj_level,
-          grant_year: grantYear,
-          grant_sealed: data.grant_sealed ?? false,
-          Pdf: pdfPath,
-        },
-      }
-
-      console.log("Submitting payload:", payload)
-
-      const res = await fetch("/api/teacher/research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      const result = await res.json()
-      console.log("API Response:", result)
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || result.message || "Failed to add research project")
-      }
-
-      toast({
-        title: "Success!",
-        description: "Research project has been added successfully.",
-      })
-
-      // Redirect back to research page
-      setTimeout(() => {
-        router.push("/teacher/research")
-      }, 1000)
-    } catch (error: any) {
-      console.error("Error submitting form:", error)
+    const teacherId = user?.role_id
+    if (!teacherId) {
       toast({
         title: "Error",
-        description: error.message || "Failed to add research project. Please try again.",
+        description: "User ID not found. Please log in again.",
         variant: "destructive",
       })
-    } finally {
-      setIsLoading(false)
+      return
     }
+
+    // Validate required fields
+    if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date || !data.duration || !data.proj_level || !data.grant_sanctioned || !data.grant_received) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date, Duration, Project Level, Grant Sanctioned, Grant Received)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate document is uploaded
+    if (!data.Pdf || !data.Pdf.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Supporting document is required. Please upload a document.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Handle document upload to S3 if a document exists
+    let pdfPath = data.Pdf || null
+    
+    if (pdfPath && pdfPath.startsWith("/uploaded-document/")) {
+      try {
+        // Extract fileName from local URL
+        const fileName = pdfPath.split("/").pop()
+        
+        if (fileName) {
+          // Upload to S3 using the file in /public/uploaded-document/
+          const s3Response = await fetch("/api/shared/s3", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: fileName,
+            }),
+          })
+
+          if (!s3Response.ok) {
+            const s3Error = await s3Response.json()
+            throw new Error(s3Error.error || "Failed to upload document to S3")
+          }
+
+          const s3Data = await s3Response.json()
+          pdfPath = s3Data.url // Use S3 URL for database storage
+
+          // Delete local file after successful S3 upload
+          await fetch("/api/shared/local-document-upload", {
+            method: "DELETE",
+          })
+        }
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // Validate numeric fields
+    const grantSanctioned = data.grant_sanctioned?.trim() ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, '')) : null
+    const grantReceived = data.grant_received?.trim() ? parseFloat(data.grant_received.replace(/[,\s]/g, '')) : null
+    const duration = data.duration && data.duration > 0 ? Math.floor(data.duration) : null
+
+    if (!grantSanctioned || isNaN(grantSanctioned) || grantSanctioned < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Grant Sanctioned is required and must be a valid positive number",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!grantReceived || isNaN(grantReceived) || grantReceived < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Grant Received is required and must be a valid positive number",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!duration || duration <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Duration is required and must be a positive number",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Grant Year: only set if grant_sealed is checked, otherwise null
+    let grantYear = null
+    if (data.grant_sealed && data.grant_year?.trim()) {
+      // Validate it's exactly 4 digits
+      if (!/^\d{4}$/.test(data.grant_year.trim())) {
+        toast({
+          title: "Validation Error",
+          description: "Grant Year must be exactly 4 digits",
+          variant: "destructive",
+        })
+        return
+      }
+      const yearValue = parseInt(data.grant_year)
+      if (!isNaN(yearValue) && yearValue >= 2000 && yearValue <= 2100) {
+        grantYear = yearValue
+      } else {
+        toast({
+          title: "Validation Error",
+          description: "Grant Year must be a valid year between 2000 and 2100",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    const projectData = {
+      title: data.title.trim(),
+      funding_agency: data.funding_agency,
+      grant_sanctioned: grantSanctioned,
+      grant_received: grantReceived,
+      proj_nature: data.proj_nature,
+      duration: duration,
+      status: data.status,
+      start_date: data.start_date,
+      proj_level: data.proj_level,
+      grant_year: grantYear,
+      grant_sealed: data.grant_sealed ?? false,
+      Pdf: pdfPath,
+    }
+
+    // Use mutation instead of direct fetch
+    createResearch.mutate(projectData, {
+      onSuccess: () => {
+        router.push("/teacher/research")
+      },
+    })
   }
 
   return (
@@ -718,8 +669,8 @@ export default function AddResearchPage() {
                 <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto" size="sm">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading} className="w-full sm:w-auto" size="sm">
-                  {isLoading ? (
+                <Button type="submit" disabled={createResearch.isPending} className="w-full sm:w-auto" size="sm">
+                  {createResearch.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       <span className="hidden sm:inline">Adding Project...</span>

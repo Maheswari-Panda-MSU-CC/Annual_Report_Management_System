@@ -16,17 +16,20 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ResearchProjectFormData } from "@/types/interfaces"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { useInvalidateTeacherData } from "@/hooks/use-teacher-data"
+import { useResearchMutations } from "@/hooks/use-teacher-mutations"
+import { useQuery } from "@tanstack/react-query"
+import { teacherQueryKeys } from "@/hooks/use-teacher-data"
 
 export default function EditResearchPage() {
   const router = useRouter()
   const params = useParams()
   const { toast } = useToast()
   const { user } = useAuth()
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string | null>(null)
-  const { invalidateResearch } = useInvalidateTeacherData()
+  const { updateResearch } = useResearchMutations()
+  const teacherId: number = user?.role_id 
+    ? parseInt(user.role_id.toString()) 
+    : parseInt(user?.id?.toString() || '0')
 
   const {
     projectStatusOptions,
@@ -66,13 +69,7 @@ export default function EditResearchPage() {
   // Watch grant_sealed to enable/disable grant_year
   const grantSealed = watch("grant_sealed")
 
-  // Fetch dropdown data
-  useEffect(() => {
-    fetchProjectStatuses()
-    fetchProjectLevels()
-    fetchFundingAgencies()
-    fetchProjectNatures()
-  }, [])
+  // Note: Dropdown data is already available from Context, no need to fetch
 
   // Format date for input helper
   const formatDateForInput = (dateString: string | null | undefined): string => {
@@ -86,71 +83,63 @@ export default function EditResearchPage() {
     }
   }
 
-  // Fetch project data
-  useEffect(() => {
-    const loadProject = async () => {
-      if (!params.id || !user?.role_id) return
-      
-      try {
-        setIsLoading(true)
-        const projectId = params.id as string
-
-        const res = await fetch(`/api/teacher/research?teacherId=${user.role_id}&type=projects`)
-        if (!res.ok) {
-          throw new Error("Failed to fetch research projects")
-        }
-
-        const data = await res.json()
-        const formattedProjects = Array.isArray(data.researchProjects)
-          ? data.researchProjects
-          : [data.researchProjects]
-
-        const project = formattedProjects.find((p: any) => p.projid.toString() === projectId)
-
-        if (!project) {
-          toast({
-            title: "Project not found",
-            description: "The research project you're looking for doesn't exist.",
-            variant: "destructive",
-          })
-          router.push("/teacher/research")
-          return
-        }
-
-        // Reset form with project data
-        const formData = {
-          title: project.title || "",
-          funding_agency: project.funding_agency || null,
-          grant_sanctioned: project.grant_sanctioned?.toString() || "",
-          grant_received: project.grant_received?.toString() || "",
-          proj_nature: project.proj_nature || null,
-          duration: project.duration?.toString() || "",
-          status: project.status || null,
-          start_date: formatDateForInput(project.start_date),
-          proj_level: project.proj_level || null,
-          grant_year: project.grant_year?.toString() || "",
-          grant_sealed: project.grant_sealed || false,
-          Pdf: project.Pdf || "",
-        }
-
-        reset(formData)
-        setDocumentUrl(project.Pdf || null)
-      } catch (error: any) {
-        console.error("Error loading project:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to load research project",
-          variant: "destructive",
-        })
-        router.push("/teacher/research")
-      } finally {
-        setIsLoading(false)
+  // Use React Query to fetch research projects - always fetch fresh data for edit pages
+  const { data: researchData, isLoading: isLoadingResearch } = useQuery({
+    queryKey: teacherQueryKeys.research(teacherId),
+    queryFn: async () => {
+      const res = await fetch(`/api/teacher/research?teacherId=${teacherId}`)
+      if (!res.ok) {
+        throw new Error("Failed to fetch research projects")
       }
+      return res.json()
+    },
+    enabled: !!params.id && !!teacherId && teacherId > 0,
+    staleTime: 0, // Always fetch fresh data for edit pages
+    gcTime: 0, // Don't cache for edit pages
+    refetchOnMount: true, // Always refetch when component mounts
+  })
+
+  // Populate form when data is loaded
+  useEffect(() => {
+    if (!researchData || !params.id) return
+
+    const formattedProjects = Array.isArray(researchData.researchProjects)
+      ? researchData.researchProjects
+      : [researchData.researchProjects]
+
+    const project = formattedProjects.find((p: any) => p.projid.toString() === params.id)
+
+    if (!project) {
+      toast({
+        title: "Project not found",
+        description: "The research project you're looking for doesn't exist.",
+        variant: "destructive",
+      })
+      router.push("/teacher/research")
+      return
     }
 
-    loadProject()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.id, user?.role_id])
+    // Reset form with project data
+    const formData = {
+      title: project.title || "",
+      funding_agency: project.funding_agency || null,
+      grant_sanctioned: project.grant_sanctioned?.toString() || "",
+      grant_received: project.grant_received?.toString() || "",
+      proj_nature: project.proj_nature || null,
+      duration: project.duration?.toString() || "",
+      status: project.status || null,
+      start_date: formatDateForInput(project.start_date),
+      proj_level: project.proj_level || null,
+      grant_year: project.grant_year?.toString() || "",
+      grant_sealed: project.grant_sealed || false,
+      Pdf: project.Pdf || "",
+    }
+
+    reset(formData)
+    setDocumentUrl(project.Pdf || null)
+  }, [researchData, params.id, reset, router, toast])
+
+  const isLoading = isLoadingResearch || !researchData
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = useCallback((fields: Record<string, any>) => {
@@ -229,153 +218,112 @@ export default function EditResearchPage() {
   }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
-    setIsSaving(true)
+    const projectId = params.id as string
 
-    try {
-      const teacherId = user?.role_id
-      const projectId = params.id as string
-
-      if (!teacherId) {
-        setIsSaving(false)
-        toast({
-          title: "Error",
-          description: "User ID not found. Please log in again.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Validate required fields
-      if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date || !data.duration || !data.proj_level || !data.grant_sanctioned || !data.grant_received) {
-        setIsSaving(false)
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date, Duration, Project Level, Grant Sanctioned, Grant Received)",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Validate numeric fields
-      const grantSanctioned = data.grant_sanctioned?.trim() ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, '')) : null
-      const grantReceived = data.grant_received?.trim() ? parseFloat(data.grant_received.replace(/[,\s]/g, '')) : null
-      const duration = data.duration && data.duration > 0 ? Math.floor(data.duration) : null
-
-      if (!grantSanctioned || isNaN(grantSanctioned) || grantSanctioned < 0) {
-        setIsSaving(false)
-        toast({
-          title: "Validation Error",
-          description: "Grant Sanctioned is required and must be a valid positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!grantReceived || isNaN(grantReceived) || grantReceived < 0) {
-        setIsSaving(false)
-        toast({
-          title: "Validation Error",
-          description: "Grant Received is required and must be a valid positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      if (!duration || duration <= 0) {
-        setIsSaving(false)
-        toast({
-          title: "Validation Error",
-          description: "Duration is required and must be a positive number",
-          variant: "destructive",
-        })
-        return
-      }
-
-      // Grant Year: only set if grant_sealed is checked, otherwise null
-      let grantYear = null
-      if (data.grant_sealed && data.grant_year?.trim()) {
-        // Validate it's exactly 4 digits
-        if (!/^\d{4}$/.test(data.grant_year.trim())) {
-          setIsSaving(false)
-          toast({
-            title: "Validation Error",
-            description: "Grant Year must be exactly 4 digits",
-            variant: "destructive",
-          })
-          return
-        }
-        const yearValue = parseInt(data.grant_year)
-        if (!isNaN(yearValue) && yearValue >= 2000 && yearValue <= 2100) {
-          grantYear = yearValue
-        } else {
-          setIsSaving(false)
-          toast({
-            title: "Validation Error",
-            description: "Grant Year must be a valid year between 2000 and 2100",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      // Use document URL from DocumentUpload component
-      // The DocumentUpload component handles S3 upload on form submission
-      const pdfPath = documentUrl || data.Pdf || ""
-
-      // Prepare payload
-      const payload = {
-        teacherId,
-        projectId: parseInt(projectId),
-        project: {
-          title: data.title.trim(),
-          funding_agency: data.funding_agency,
-          grant_sanctioned: grantSanctioned,
-          grant_received: grantReceived,
-          proj_nature: data.proj_nature,
-          duration: duration,
-          status: data.status,
-          start_date: data.start_date,
-          proj_level: data.proj_level,
-          grant_year: grantYear,
-          grant_sealed: data.grant_sealed,
-          Pdf: pdfPath,
-        },
-      }
-
-      console.log("Updating project with payload:", payload)
-
-      const res = await fetch("/api/teacher/research", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      const result = await res.json()
-      console.log("Update API Response:", result)
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || result.message || "Failed to update research project")
-      }
-
-      // Invalidate React Query cache to ensure fresh data
-      await invalidateResearch()
-
-      toast({
-        title: "Success",
-        description: "Research project updated successfully",
-      })
-
-      // Redirect with query parameter to trigger refresh on research page
-      router.push("/teacher/research?updated=true")
-    } catch (error: any) {
+    if (!teacherId) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update research project. Please try again.",
+        description: "User ID not found. Please log in again.",
         variant: "destructive",
       })
-    } finally {
-      setIsSaving(false)
+      return
     }
+
+    // Validate required fields
+    if (!data.title?.trim() || !data.funding_agency || !data.proj_nature || !data.status || !data.start_date || !data.duration || !data.proj_level || !data.grant_sanctioned || !data.grant_received) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields (Title, Funding Agency, Project Nature, Status, Start Date, Duration, Project Level, Grant Sanctioned, Grant Received)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate numeric fields
+    const grantSanctioned = data.grant_sanctioned?.trim() ? parseFloat(data.grant_sanctioned.replace(/[,\s]/g, '')) : null
+    const grantReceived = data.grant_received?.trim() ? parseFloat(data.grant_received.replace(/[,\s]/g, '')) : null
+    const duration = data.duration && data.duration > 0 ? Math.floor(data.duration) : null
+
+    if (!grantSanctioned || isNaN(grantSanctioned) || grantSanctioned < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Grant Sanctioned is required and must be a valid positive number",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!grantReceived || isNaN(grantReceived) || grantReceived < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Grant Received is required and must be a valid positive number",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!duration || duration <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Duration is required and must be a positive number",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Grant Year: only set if grant_sealed is checked, otherwise null
+    let grantYear = null
+    if (data.grant_sealed && data.grant_year?.trim()) {
+      // Validate it's exactly 4 digits
+      if (!/^\d{4}$/.test(data.grant_year.trim())) {
+        toast({
+          title: "Validation Error",
+          description: "Grant Year must be exactly 4 digits",
+          variant: "destructive",
+        })
+        return
+      }
+      const yearValue = parseInt(data.grant_year)
+      if (!isNaN(yearValue) && yearValue >= 2000 && yearValue <= 2100) {
+        grantYear = yearValue
+      } else {
+        toast({
+          title: "Validation Error",
+          description: "Grant Year must be a valid year between 2000 and 2100",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // Use document URL from DocumentUpload component
+    // The DocumentUpload component handles S3 upload on form submission
+    const pdfPath = documentUrl || data.Pdf || ""
+
+    const projectData = {
+      title: data.title.trim(),
+      funding_agency: data.funding_agency,
+      grant_sanctioned: grantSanctioned,
+      grant_received: grantReceived,
+      proj_nature: data.proj_nature,
+      duration: duration,
+      status: data.status,
+      start_date: data.start_date,
+      proj_level: data.proj_level,
+      grant_year: grantYear,
+      grant_sealed: data.grant_sealed,
+      Pdf: pdfPath,
+    }
+
+    // Use mutation instead of direct fetch
+    updateResearch.mutate(
+      { projectId: parseInt(projectId), projectData },
+      {
+        onSuccess: () => {
+          router.push("/teacher/research")
+        },
+      }
+    )
   }
 
   if (isLoading) {
@@ -721,8 +669,8 @@ export default function EditResearchPage() {
                 <Button type="button" variant="outline" onClick={() => router.back()}>
               Cancel
             </Button>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? (
+                <Button type="submit" disabled={updateResearch.isPending}>
+                  {updateResearch.isPending ? (
                 <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Updating...

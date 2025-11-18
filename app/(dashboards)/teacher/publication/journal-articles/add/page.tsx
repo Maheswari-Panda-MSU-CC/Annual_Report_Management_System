@@ -14,8 +14,7 @@ import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
-import { useInvalidateTeacherData, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { useJournalMutations } from "@/hooks/use-teacher-mutations"
 
 interface JournalFormData {
   authors: string
@@ -45,11 +44,8 @@ export default function AddJournalArticlePage() {
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useAuth()
-  const { invalidatePublications } = useInvalidateTeacherData()
-  const queryClient = useQueryClient()
-  const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
+  const { createJournal } = useJournalMutations()
   const [isExtracting, setIsExtracting] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
 
   const {
@@ -94,11 +90,7 @@ export default function AddJournalArticlePage() {
     },
   })
 
-  useEffect(() => {
-    fetchJournalAuthorTypes()
-    fetchJournalEditedTypes()
-    fetchResPubLevels()
-  }, [])
+  // Note: Dropdown data is already available from Context, no need to fetch
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -130,150 +122,102 @@ export default function AddJournalArticlePage() {
       return
     }
 
-    setIsSubmitting(true)
-    try {
-      // Validate required fields
-      if (!data.title || !data.authors || !data.author_type || !data.level || !data.type) {
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Validate document upload is required
-      if (!documentUrl || !documentUrl.startsWith("/uploaded-document/")) {
-        toast({
-          title: "Validation Error",
-          description: "Please upload a supporting document",
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Handle document upload to S3 if a document exists
-      let pdfPath = documentUrl || null
-      
-      if (pdfPath && pdfPath.startsWith("/uploaded-document/")) {
-        try {
-          // Extract fileName from local URL
-          const fileName = pdfPath.split("/").pop()
-          
-          if (fileName) {
-            // Upload to S3 using the file in /public/uploaded-document/
-            const s3Response = await fetch("/api/shared/s3", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: fileName,
-              }),
-            })
-
-            if (!s3Response.ok) {
-              const s3Error = await s3Response.json()
-              throw new Error(s3Error.error || "Failed to upload document to S3")
-            }
-
-            const s3Data = await s3Response.json()
-            pdfPath = s3Data.url // Use S3 URL for database storage
-
-            // Delete local file after successful S3 upload
-            await fetch("/api/shared/local-document-upload", {
-              method: "DELETE",
-            })
-          }
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          setIsSubmitting(false)
-          toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      const payload = {
-        teacherId: user.role_id,
-        journal: {
-          authors: data.authors,
-          author_num: data.author_num || null,
-          title: data.title,
-          isbn: data.isbn || null,
-          journal_name: data.journal_name || null,
-          volume_num: data.volume_num || null,
-          page_num: data.page_num || null,
-          month_year: data.month_year || null,
-          author_type: data.author_type,
-          level: data.level,
-          peer_reviewed: data.peer_reviewed ?? false,
-          h_index: data.h_index || null,
-          impact_factor: data.impact_factor || null,
-          in_scopus: data.in_scopus ?? false,
-          submit_date: new Date(),
-          paid: data.paid ?? false,
-          issn: data.issn || null,
-          type: data.type,
-          Image: pdfPath,
-          in_ugc: data.in_ugc ?? false,
-          in_clarivate: data.in_clarivate ?? false,
-          DOI: data.DOI || null,
-          in_oldUGCList: data.in_oldUGCList ?? false,
-        },
-      }
-
-      const res = await fetch("/api/teacher/publication/journals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add journal")
-      }
-
+    // Validate required fields
+    if (!data.title || !data.authors || !data.author_type || !data.level || !data.type) {
       toast({
-        title: "Success",
-        description: "Journal article added successfully!",
-      })
-
-      // Invalidate and refetch data
-      invalidatePublications()
-
-      // Wait for refetch to complete before navigation
-      await Promise.all([
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.journals(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.books(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.papers(teacherId),
-          exact: true 
-        }),
-      ])
-
-      router.push("/teacher/publication")
-    } catch (error: any) {
-        toast({
-        title: "Error",
-        description: error.message || "Failed to add journal article. Please try again.",
+        title: "Validation Error",
+        description: "Please fill in all required fields",
         variant: "destructive",
       })
-    } finally {
-      setIsSubmitting(false)
+      return
     }
+
+    // Validate document upload is required
+    if (!documentUrl || !documentUrl.startsWith("/uploaded-document/")) {
+      toast({
+        title: "Validation Error",
+        description: "Please upload a supporting document",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Handle document upload to S3 if a document exists
+    let pdfPath = documentUrl || null
+    
+    if (pdfPath && pdfPath.startsWith("/uploaded-document/")) {
+      try {
+        // Extract fileName from local URL
+        const fileName = pdfPath.split("/").pop()
+        
+        if (fileName) {
+          // Upload to S3 using the file in /public/uploaded-document/
+          const s3Response = await fetch("/api/shared/s3", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: fileName,
+            }),
+          })
+
+          if (!s3Response.ok) {
+            const s3Error = await s3Response.json()
+            throw new Error(s3Error.error || "Failed to upload document to S3")
+          }
+
+          const s3Data = await s3Response.json()
+          pdfPath = s3Data.url // Use S3 URL for database storage
+
+          // Delete local file after successful S3 upload
+          await fetch("/api/shared/local-document-upload", {
+            method: "DELETE",
+          })
+        }
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    const journalData = {
+      authors: data.authors,
+      author_num: data.author_num || null,
+      title: data.title,
+      isbn: data.isbn || null,
+      journal_name: data.journal_name || null,
+      volume_num: data.volume_num || null,
+      page_num: data.page_num || null,
+      month_year: data.month_year || null,
+      author_type: data.author_type,
+      level: data.level,
+      peer_reviewed: data.peer_reviewed ?? false,
+      h_index: data.h_index || null,
+      impact_factor: data.impact_factor || null,
+      in_scopus: data.in_scopus ?? false,
+      submit_date: new Date(),
+      paid: data.paid ?? false,
+      issn: data.issn || null,
+      type: data.type,
+      Image: pdfPath,
+      in_ugc: data.in_ugc ?? false,
+      in_clarivate: data.in_clarivate ?? false,
+      DOI: data.DOI || null,
+      in_oldUGCList: data.in_oldUGCList ?? false,
+    }
+
+    // Use mutation instead of direct fetch
+    createJournal.mutate(journalData, {
+      onSuccess: () => {
+        router.push("/teacher/publication")
+      },
+    })
   }
 
   return (
@@ -704,8 +648,8 @@ export default function AddJournalArticlePage() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                  {isSubmitting ? (
+                <Button type="submit" disabled={createJournal.isPending} className="w-full sm:w-auto">
+                  {createJournal.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Saving...

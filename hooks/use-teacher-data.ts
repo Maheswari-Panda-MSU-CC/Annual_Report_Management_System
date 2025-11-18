@@ -78,7 +78,7 @@ export function useTeacherProfile() {
   })
 }
 
-// Publications Hooks - Parallel fetching
+// Publications Hooks - Balanced caching
 export function useTeacherPublications() {
   const { user } = useAuth()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
@@ -87,30 +87,30 @@ export function useTeacherPublications() {
     queryKey: teacherQueryKeys.publications.journals(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/publication/journals?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 0, // Always consider data stale - force refetch after invalidation
-    gcTime: 0, // Don't keep in cache - always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 2 * 60 * 1000, // 2 minutes - data is fresh for 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep in cache for 5 minutes
+    refetchOnMount: true, // ✅ CRITICAL: Refetch when component mounts (after invalidation)
+    refetchOnWindowFocus: false, // Don't refetch on window focus (performance)
   })
 
   const books = useQuery({
     queryKey: teacherQueryKeys.publications.books(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/publication/books?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 0, // Always consider data stale - force refetch after invalidation
-    gcTime: 0, // Don't keep in cache - always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: true, // ✅ CRITICAL
+    refetchOnWindowFocus: false,
   })
 
   const papers = useQuery({
     queryKey: teacherQueryKeys.publications.papers(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/publication/papers?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 0, // Always consider data stale - force refetch after invalidation
-    gcTime: 0, // Don't keep in cache - always fetch fresh data
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: true, // ✅ CRITICAL
+    refetchOnWindowFocus: false,
   })
 
   return {
@@ -128,7 +128,7 @@ export function useTeacherPublications() {
   }
 }
 
-// Research Hook
+// Research Hook - Balanced caching
 export function useTeacherResearch() {
   const { user } = useAuth()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
@@ -137,7 +137,10 @@ export function useTeacherResearch() {
     queryKey: teacherQueryKeys.research(teacherId),
     queryFn: () => fetchAPI(`/api/teacher/research?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: true, // ✅ CRITICAL: Refetch when component mounts (after invalidation)
+    refetchOnWindowFocus: false,
   })
 }
 

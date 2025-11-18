@@ -14,8 +14,9 @@ import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
-import { useInvalidateTeacherData, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { useJournalMutations } from "@/hooks/use-teacher-mutations"
+import { useQuery } from "@tanstack/react-query"
+import { teacherQueryKeys } from "@/hooks/use-teacher-data"
 
 interface JournalFormData {
   authors: string
@@ -46,11 +47,8 @@ export default function EditJournalArticlePage() {
   const { id } = useParams()
   const { toast } = useToast()
   const { user } = useAuth()
-  const { invalidatePublications } = useInvalidateTeacherData()
-  const queryClient = useQueryClient()
+  const { updateJournal } = useJournalMutations()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
 
@@ -72,87 +70,84 @@ export default function EditJournalArticlePage() {
     formState: { errors },
   } = useForm<JournalFormData>()
 
+  // Note: Dropdown data is already available from Context, no need to fetch
+
+  // Use React Query to fetch journals list - always fetch fresh data for edit pages
+  const { data: journalsData, isLoading: isLoadingJournal, refetch: refetchJournal } = useQuery({
+    queryKey: teacherQueryKeys.publications.journals(teacherId),
+    queryFn: async () => {
+      const res = await fetch(`/api/teacher/publication/journals?teacherId=${teacherId}`)
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to fetch journal")
+      }
+      return res.json()
+    },
+    enabled: !!id && !!teacherId && teacherId > 0,
+    staleTime: 0, // Always fetch fresh data for edit pages
+    gcTime: 0, // Don't cache for edit pages
+    refetchOnMount: true, // Always refetch when component mounts
+  })
+
+  // Populate form when data is loaded
   useEffect(() => {
-    fetchJournalAuthorTypes()
-    fetchJournalEditedTypes()
-    fetchResPubLevels()
-  }, [])
+    if (!journalsData || !id) return
 
-  useEffect(() => {
-    if (id && user?.role_id) {
-      fetchJournal()
-    }
-  }, [id, user?.role_id])
+    const journal = journalsData.journals?.find((j: any) => j.id === parseInt(id as string))
 
-  const fetchJournal = async () => {
-    if (!id || !user?.role_id) return
-
-    setIsLoading(true)
-    try {
-      const res = await fetch(`/api/teacher/publication/journals?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch journal")
-      }
-
-      const journal = data.journals.find((j: any) => j.id === parseInt(id as string))
-
-      if (!journal) {
-        throw new Error("Journal not found")
-      }
-
-      // Format date for input
-      const formatDateForInput = (dateStr: string | null) => {
-        if (!dateStr) return ""
-        try {
-          return new Date(dateStr).toISOString().split("T")[0]
-        } catch {
-          return ""
-        }
-      }
-
-      // Set existing document URL if available
-      if (journal.Image) {
-        setExistingDocumentUrl(journal.Image)
-        setDocumentUrl(journal.Image)
-      }
-
-      // Populate form with fetched data
-      reset({
-        authors: journal.authors || "",
-        author_num: journal.author_num || null,
-        title: journal.title || "",
-        isbn: journal.isbn || "",
-        journal_name: journal.journal_name || "",
-        volume_num: journal.volume_num || null,
-        page_num: journal.page_num || "",
-        month_year: formatDateForInput(journal.month_year),
-        author_type: journal.author_type || null,
-        level: journal.level || null,
-        peer_reviewed: journal.peer_reviewed ?? false,
-        h_index: journal.h_index || null,
-        impact_factor: journal.impact_factor || null,
-        in_scopus: journal.in_scopus ?? false,
-        in_ugc: journal.in_ugc ?? false,
-        in_clarivate: journal.in_clarivate ?? false,
-        in_oldUGCList: journal.in_oldUGCList ?? false,
-        paid: journal.paid ?? false,
-        issn: journal.issn || "",
-        type: journal.type || null,
-        DOI: journal.DOI || "",
-      })
-    } catch (error: any) {
+    if (!journal) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to load journal",
+        title: "Journal not found",
+        description: "The journal article you're looking for doesn't exist.",
         variant: "destructive",
       })
       router.push("/teacher/publication")
-    } finally {
-      setIsLoading(false)
+      return
     }
-  }
+
+    // Format date for input
+    const formatDateForInput = (dateStr: string | null) => {
+      if (!dateStr) return ""
+      try {
+        return new Date(dateStr).toISOString().split("T")[0]
+      } catch {
+        return ""
+      }
+    }
+
+    // Set existing document URL if available
+    if (journal.Image) {
+      setExistingDocumentUrl(journal.Image)
+      setDocumentUrl(journal.Image)
+    }
+
+    // Populate form with fetched data
+    reset({
+      authors: journal.authors || "",
+      author_num: journal.author_num || null,
+      title: journal.title || "",
+      isbn: journal.isbn || "",
+      journal_name: journal.journal_name || "",
+      volume_num: journal.volume_num || null,
+      page_num: journal.page_num || "",
+      month_year: formatDateForInput(journal.month_year),
+      author_type: journal.author_type || null,
+      level: journal.level || null,
+      peer_reviewed: journal.peer_reviewed ?? false,
+      h_index: journal.h_index || null,
+      impact_factor: journal.impact_factor || null,
+      in_scopus: journal.in_scopus ?? false,
+      in_ugc: journal.in_ugc ?? false,
+      in_clarivate: journal.in_clarivate ?? false,
+      in_oldUGCList: journal.in_oldUGCList ?? false,
+      paid: journal.paid ?? false,
+      issn: journal.issn || "",
+      type: journal.type || null,
+      DOI: journal.DOI || "",
+    })
+  }, [journalsData, id, reset, router, toast])
+
+  const isLoading = isLoadingJournal || !journalsData
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -168,144 +163,99 @@ export default function EditJournalArticlePage() {
       return
     }
 
-    setIsSubmitting(true)
-    try {
-      // Validate required fields
-      if (!data.title || !data.authors || !data.author_type || !data.level || !data.type) {
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Handle document upload to S3 if a new document was uploaded
-      let pdfPath = existingDocumentUrl || null
-      
-      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
-      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
-        try {
-          // Extract fileName from local URL
-          const fileName = documentUrl.split("/").pop()
-          
-          if (fileName) {
-            // Upload to S3 using the file in /public/uploaded-document/
-            const s3Response = await fetch("/api/shared/s3", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: fileName,
-              }),
-            })
-
-            if (!s3Response.ok) {
-              const s3Error = await s3Response.json()
-              throw new Error(s3Error.error || "Failed to upload document to S3")
-            }
-
-            const s3Data = await s3Response.json()
-            pdfPath = s3Data.url // Use S3 URL for database storage
-
-            // Delete local file after successful S3 upload
-            await fetch("/api/shared/local-document-upload", {
-              method: "DELETE",
-            })
-          }
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          setIsSubmitting(false)
-          toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          return
-        }
-      } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
-        // Keep existing document URL if it's not a new upload
-        pdfPath = documentUrl
-      }
-
-      const payload = {
-        journalId: parseInt(id as string),
-        teacherId: user.role_id,
-        journal: {
-          authors: data.authors,
-          author_num: data.author_num || null,
-          title: data.title,
-          isbn: data.isbn || null,
-          journal_name: data.journal_name || null,
-          volume_num: data.volume_num || null,
-          page_num: data.page_num || null,
-          month_year: data.month_year || null,
-          author_type: data.author_type,
-          level: data.level,
-          peer_reviewed: data.peer_reviewed ?? false,
-          h_index: data.h_index || null,
-          impact_factor: data.impact_factor || null,
-          in_scopus: data.in_scopus ?? false,
-          submit_date: new Date(),
-          paid: data.paid ?? false,
-          issn: data.issn || null,
-          type: data.type,
-          Image: pdfPath,
-          in_ugc: data.in_ugc ?? false,
-          in_clarivate: data.in_clarivate ?? false,
-          DOI: data.DOI || null,
-          in_oldUGCList: data.in_oldUGCList ?? false,
-        },
-      }
-
-      const res = await fetch("/api/teacher/publication/journals", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to update journal")
-      }
-
+    // Validate required fields
+    if (!data.title || !data.authors || !data.author_type || !data.level || !data.type) {
       toast({
-        title: "Success",
-        description: "Journal article updated successfully!",
-      })
-
-      // Invalidate and refetch data
-      invalidatePublications()
-
-      // Wait for refetch to complete before navigation
-      await Promise.all([
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.journals(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.books(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.papers(teacherId),
-          exact: true 
-        }),
-      ])
-
-      router.push("/teacher/publication")
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update journal article. Please try again.",
+        title: "Validation Error",
+        description: "Please fill in all required fields",
         variant: "destructive",
       })
-    } finally {
-      setIsSubmitting(false)
+      return
     }
+
+    // Handle document upload to S3 if a new document was uploaded
+    let pdfPath = existingDocumentUrl || null
+    
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+      try {
+        // Extract fileName from local URL
+        const fileName = documentUrl.split("/").pop()
+        
+        if (fileName) {
+          // Upload to S3 using the file in /public/uploaded-document/
+          const s3Response = await fetch("/api/shared/s3", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: fileName,
+            }),
+          })
+
+          if (!s3Response.ok) {
+            const s3Error = await s3Response.json()
+            throw new Error(s3Error.error || "Failed to upload document to S3")
+          }
+
+          const s3Data = await s3Response.json()
+          pdfPath = s3Data.url // Use S3 URL for database storage
+
+          // Delete local file after successful S3 upload
+          await fetch("/api/shared/local-document-upload", {
+            method: "DELETE",
+          })
+        }
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
+      // Keep existing document URL if it's not a new upload
+      pdfPath = documentUrl
+    }
+
+    const journalData = {
+      authors: data.authors,
+      author_num: data.author_num || null,
+      title: data.title,
+      isbn: data.isbn || null,
+      journal_name: data.journal_name || null,
+      volume_num: data.volume_num || null,
+      page_num: data.page_num || null,
+      month_year: data.month_year || null,
+      author_type: data.author_type,
+      level: data.level,
+      peer_reviewed: data.peer_reviewed ?? false,
+      h_index: data.h_index || null,
+      impact_factor: data.impact_factor || null,
+      in_scopus: data.in_scopus ?? false,
+      submit_date: new Date(),
+      paid: data.paid ?? false,
+      issn: data.issn || null,
+      type: data.type,
+      Image: pdfPath,
+      in_ugc: data.in_ugc ?? false,
+      in_clarivate: data.in_clarivate ?? false,
+      DOI: data.DOI || null,
+      in_oldUGCList: data.in_oldUGCList ?? false,
+    }
+
+    // Use mutation instead of direct fetch
+    updateJournal.mutate(
+      { journalId: parseInt(id as string), journalData },
+      {
+        onSuccess: () => {
+          router.push("/teacher/publication")
+        },
+      }
+    )
   }
 
   if (isLoading) {
@@ -741,8 +691,8 @@ export default function EditJournalArticlePage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting ? (
+              <Button type="submit" disabled={updateJournal.isPending} className="w-full sm:w-auto">
+                {updateJournal.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Saving...

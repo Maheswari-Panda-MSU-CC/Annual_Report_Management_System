@@ -14,8 +14,9 @@ import { toast, useToast } from "@/hooks/use-toast"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { useInvalidateTeacherData, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { useBookMutations } from "@/hooks/use-teacher-mutations"
+import { useQuery } from "@tanstack/react-query"
+import { teacherQueryKeys } from "@/hooks/use-teacher-data"
 
 interface BookFormData {
   authors: string
@@ -38,11 +39,8 @@ export default function EditBookPage() {
   const { id } = useParams()
   const { toast: showToast } = useToast()
   const { user } = useAuth()
-  const { invalidatePublications } = useInvalidateTeacherData()
-  const queryClient = useQueryClient()
+  const { updateBook } = useBookMutations()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
 
@@ -64,79 +62,76 @@ export default function EditBookPage() {
     formState: { errors },
   } = useForm<BookFormData>()
 
+  // Note: Dropdown data is already available from Context, no need to fetch
+
+  // Use React Query to fetch books list - always fetch fresh data for edit pages
+  const { data: booksData, isLoading: isLoadingBook } = useQuery({
+    queryKey: teacherQueryKeys.publications.books(teacherId),
+    queryFn: async () => {
+      const res = await fetch(`/api/teacher/publication/books?teacherId=${teacherId}`)
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to fetch book")
+      }
+      return res.json()
+    },
+    enabled: !!id && !!teacherId && teacherId > 0,
+    staleTime: 0, // Always fetch fresh data for edit pages
+    gcTime: 0, // Don't cache for edit pages
+    refetchOnMount: true, // Always refetch when component mounts
+  })
+
+  // Populate form when data is loaded
   useEffect(() => {
-    fetchJournalAuthorTypes()
-    fetchResPubLevels()
-    fetchBookTypes()
-  }, [])
+    if (!booksData || !id) return
 
-  useEffect(() => {
-    if (id && user?.role_id) {
-      fetchBook()
-    }
-  }, [id, user?.role_id])
+    const book = booksData.books?.find((b: any) => b.bid === parseInt(id as string))
 
-  const fetchBook = async () => {
-    if (!id || !user?.role_id) return
-
-    setIsLoading(true)
-    try {
-      const res = await fetch(`/api/teacher/publication/books?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch book")
-      }
-
-      const book = data.books.find((b: any) => b.bid === parseInt(id as string))
-
-      if (!book) {
-        throw new Error("Book not found")
-      }
-
-      // Format date for input
-      const formatDateForInput = (dateStr: string | null) => {
-        if (!dateStr) return ""
-        try {
-          return new Date(dateStr).toISOString().split("T")[0]
-        } catch {
-          return ""
-        }
-      }
-
-      // Set existing document URL if available
-      if (book.Image) {
-        setExistingDocumentUrl(book.Image)
-        setDocumentUrl(book.Image)
-      }
-
-      // Populate form with fetched data
-      reset({
-        authors: book.authors || "",
-        title: book.title || "",
-        isbn: book.isbn || "",
-        cha: book.cha || "",
-        publisher_name: book.publisher_name || "",
-        submit_date: formatDateForInput(book.submit_date),
-        place: book.place || "",
-        paid: book.paid ?? false,
-        edited: book.edited ?? false,
-        chap_count: book.chap_count || null,
-        publishing_level: book.publishing_level || null,
-        book_type: book.book_type || null,
-        author_type: book.author_type || null,
-      })
-    } catch (error: any) {
+    if (!book) {
       showToast({
-        title: "Error",
-        description: error.message || "Failed to load book",
+        title: "Book not found",
+        description: "The book you're looking for doesn't exist.",
         variant: "destructive",
       })
       router.push("/teacher/publication")
-    } finally {
-      setIsLoading(false)
+      return
     }
-  }
+
+    // Format date for input
+    const formatDateForInput = (dateStr: string | null) => {
+      if (!dateStr) return ""
+      try {
+        return new Date(dateStr).toISOString().split("T")[0]
+      } catch {
+        return ""
+      }
+    }
+
+    // Set existing document URL if available
+    if (book.Image) {
+      setExistingDocumentUrl(book.Image)
+      setDocumentUrl(book.Image)
+    }
+
+    // Populate form with fetched data
+    reset({
+      authors: book.authors || "",
+      title: book.title || "",
+      isbn: book.isbn || "",
+      cha: book.cha || "",
+      publisher_name: book.publisher_name || "",
+      submit_date: formatDateForInput(book.submit_date),
+      place: book.place || "",
+      paid: book.paid ?? false,
+      edited: book.edited ?? false,
+      chap_count: book.chap_count || null,
+      publishing_level: book.publishing_level || null,
+      book_type: book.book_type || null,
+      author_type: book.author_type || null,
+    })
+  }, [booksData, id, reset, router, showToast])
+
+  const isLoading = isLoadingBook || !booksData
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -152,135 +147,90 @@ export default function EditBookPage() {
       return
     }
 
-    setIsSubmitting(true)
-    try {
-      // Validate required fields
-      if (!data.title || !data.authors || !data.publishing_level || !data.book_type || !data.author_type) {
-        showToast({
-          title: "Validation Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Handle document upload to S3 if a new document was uploaded
-      let pdfPath = existingDocumentUrl || null
-      
-      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
-      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
-        try {
-          // Extract fileName from local URL
-          const fileName = documentUrl.split("/").pop()
-          
-          if (fileName) {
-            // Upload to S3 using the file in /public/uploaded-document/
-            const s3Response = await fetch("/api/shared/s3", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: fileName,
-              }),
-            })
-
-            if (!s3Response.ok) {
-              const s3Error = await s3Response.json()
-              throw new Error(s3Error.error || "Failed to upload document to S3")
-            }
-
-            const s3Data = await s3Response.json()
-            pdfPath = s3Data.url // Use S3 URL for database storage
-
-            // Delete local file after successful S3 upload
-            await fetch("/api/shared/local-document-upload", {
-              method: "DELETE",
-            })
-          }
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          setIsSubmitting(false)
-          showToast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          return
-        }
-      } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
-        // Keep existing document URL if it's not a new upload
-        pdfPath = documentUrl
-      }
-
-      const payload = {
-        bookId: parseInt(id as string),
-        teacherId: user.role_id,
-        book: {
-          title: data.title,
-          isbn: data.isbn || null,
-          cha: data.cha || null,
-          publisher_name: data.publisher_name || null,
-          submit_date: data.submit_date || null,
-          place: data.place || null,
-          paid: data.paid ?? false,
-          edited: data.edited ?? false,
-          chap_count: data.chap_count || null,
-          authors: data.authors,
-          publishing_level: data.publishing_level,
-          book_type: data.book_type,
-          author_type: data.author_type,
-          Image: pdfPath,
-        },
-      }
-
-      const res = await fetch("/api/teacher/publication/books", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to update book")
-      }
-
+    // Validate required fields
+    if (!data.title || !data.authors || !data.publishing_level || !data.book_type || !data.author_type) {
       showToast({
-        title: "Success",
-        description: "Book/Book chapter updated successfully!",
-      })
-
-      // Invalidate and refetch data
-      invalidatePublications()
-
-      // Wait for refetch to complete before navigation
-      await Promise.all([
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.journals(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.books(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.papers(teacherId),
-          exact: true 
-        }),
-      ])
-
-      router.push("/teacher/publication")
-    } catch (error: any) {
-      showToast({
-        title: "Error",
-        description: error.message || "Failed to update book. Please try again.",
+        title: "Validation Error",
+        description: "Please fill in all required fields",
         variant: "destructive",
       })
-    } finally {
-      setIsSubmitting(false)
+      return
     }
+
+    // Handle document upload to S3 if a new document was uploaded
+    let pdfPath = existingDocumentUrl || null
+    
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+      try {
+        // Extract fileName from local URL
+        const fileName = documentUrl.split("/").pop()
+        
+        if (fileName) {
+          // Upload to S3 using the file in /public/uploaded-document/
+          const s3Response = await fetch("/api/shared/s3", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: fileName,
+            }),
+          })
+
+          if (!s3Response.ok) {
+            const s3Error = await s3Response.json()
+            throw new Error(s3Error.error || "Failed to upload document to S3")
+          }
+
+          const s3Data = await s3Response.json()
+          pdfPath = s3Data.url // Use S3 URL for database storage
+
+          // Delete local file after successful S3 upload
+          await fetch("/api/shared/local-document-upload", {
+            method: "DELETE",
+          })
+        }
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        showToast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
+      // Keep existing document URL if it's not a new upload
+      pdfPath = documentUrl
+    }
+
+    const bookData = {
+      title: data.title,
+      isbn: data.isbn || null,
+      cha: data.cha || null,
+      publisher_name: data.publisher_name || null,
+      submit_date: data.submit_date || null,
+      place: data.place || null,
+      paid: data.paid ?? false,
+      edited: data.edited ?? false,
+      chap_count: data.chap_count || null,
+      authors: data.authors,
+      publishing_level: data.publishing_level,
+      book_type: data.book_type,
+      author_type: data.author_type,
+      Image: pdfPath,
+    }
+
+    // Use mutation instead of direct fetch
+    updateBook.mutate(
+      { bookId: parseInt(id as string), bookData },
+      {
+        onSuccess: () => {
+          router.push("/teacher/publication")
+        },
+      }
+    )
   }
 
   if (isLoading) {
@@ -333,7 +283,7 @@ export default function EditBookPage() {
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
             <div>
-              <Label htmlFor="authors">Authors *</Label>
+              <Label htmlFor="authors">Author(s) *</Label>
               <Input
                 id="authors"
                 {...register("authors", { 
@@ -349,6 +299,32 @@ export default function EditBookPage() {
               />
               {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
             </div>
+
+            <div>
+              <Label htmlFor="author_type">Author Type *</Label>
+              <Controller
+                name="author_type"
+                control={control}
+                rules={{ 
+                  required: "Author type is required",
+                  validate: (v) => v !== null && v !== undefined || "Author type is required"
+                }}
+                render={({ field }) => (
+                  <SearchableSelect
+                    options={journalAuthorTypeOptions.map((a) => ({
+                      value: a.id,
+                      label: a.name,
+                    }))}
+                    value={field.value?.toString() || ""}
+                    onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                    placeholder="Select author type"
+                    emptyMessage="No author type found"
+                  />
+                )}
+              />
+              {errors.author_type && <p className="text-sm text-red-500 mt-1">{errors.author_type.message}</p>}
+            </div>
+
 
             <div>
               <Label htmlFor="title">Title *</Label>
@@ -393,7 +369,7 @@ export default function EditBookPage() {
               </div>
             </div>
 
-            <div>
+            <div hidden={true}>
               <Label htmlFor="cha">Chapter/Article Title</Label>
               <Input 
                 id="cha" 
@@ -404,6 +380,7 @@ export default function EditBookPage() {
               />
               {errors.cha && <p className="text-sm text-red-500 mt-1">{errors.cha.message}</p>}
             </div>
+            
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -431,6 +408,57 @@ export default function EditBookPage() {
                   placeholder="Enter publishing place" 
                 />
                 {errors.place && <p className="text-sm text-red-500 mt-1">{errors.place.message}</p>}
+              </div>
+
+              <div>
+                <Label htmlFor="publishing_level">Publishing Level *</Label>
+                <Controller
+                  name="publishing_level"
+                  control={control}
+                  rules={{ 
+                    required: "Publishing level is required",
+                    validate: (v) => v !== null && v !== undefined || "Publishing level is required"
+                  }}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      options={resPubLevelOptions.map((l) => ({
+                        value: l.id,
+                        label: l.name,
+                      }))}
+                      value={field.value?.toString() || ""}
+                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      placeholder="Select publishing level"
+                      emptyMessage="No level found"
+                    />
+                  )}
+                />
+                {errors.publishing_level && (
+                  <p className="text-sm text-red-500 mt-1">{errors.publishing_level.message}</p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="book_type">Book Type *</Label>
+                <Controller
+                  name="book_type"
+                  control={control}
+                  rules={{ 
+                    required: "Book type is required",
+                    validate: (v) => v !== null && v !== undefined || "Book type is required"
+                  }}
+                  render={({ field }) => (
+                    <SearchableSelect
+                      options={bookTypeOptions.map((b) => ({
+                        value: b.id,
+                        label: b.name,
+                      }))}
+                      value={field.value?.toString() || ""}
+                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      placeholder="Select book type"
+                      emptyMessage="No book type found"
+                    />
+                  )}
+                />
+                {errors.book_type && <p className="text-sm text-red-500 mt-1">{errors.book_type.message}</p>}
               </div>
             </div>
 
@@ -495,86 +523,13 @@ export default function EditBookPage() {
                 />
                 {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
               </div>
-              <div>
-                <Label htmlFor="publishing_level">Publishing Level *</Label>
-                <Controller
-                  name="publishing_level"
-                  control={control}
-                  rules={{ 
-                    required: "Publishing level is required",
-                    validate: (v) => v !== null && v !== undefined || "Publishing level is required"
-                  }}
-                  render={({ field }) => (
-                    <SearchableSelect
-                      options={resPubLevelOptions.map((l) => ({
-                        value: l.id,
-                        label: l.name,
-                      }))}
-                      value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                      placeholder="Select publishing level"
-                      emptyMessage="No level found"
-                    />
-                  )}
-                />
-                {errors.publishing_level && (
-                  <p className="text-sm text-red-500 mt-1">{errors.publishing_level.message}</p>
-                )}
-              </div>
-              <div>
-                <Label htmlFor="book_type">Book Type *</Label>
-                <Controller
-                  name="book_type"
-                  control={control}
-                  rules={{ 
-                    required: "Book type is required",
-                    validate: (v) => v !== null && v !== undefined || "Book type is required"
-                  }}
-                  render={({ field }) => (
-                    <SearchableSelect
-                      options={bookTypeOptions.map((b) => ({
-                        value: b.id,
-                        label: b.name,
-                      }))}
-                      value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                      placeholder="Select book type"
-                      emptyMessage="No book type found"
-                    />
-                  )}
-                />
-                {errors.book_type && <p className="text-sm text-red-500 mt-1">{errors.book_type.message}</p>}
-              </div>
+             
             </div>
 
-            <div>
-              <Label htmlFor="author_type">Author Type *</Label>
-              <Controller
-                name="author_type"
-                control={control}
-                rules={{ 
-                  required: "Author type is required",
-                  validate: (v) => v !== null && v !== undefined || "Author type is required"
-                }}
-                render={({ field }) => (
-                  <SearchableSelect
-                    options={journalAuthorTypeOptions.map((a) => ({
-                      value: a.id,
-                      label: a.name,
-                    }))}
-                    value={field.value?.toString() || ""}
-                    onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                    placeholder="Select author type"
-                    emptyMessage="No author type found"
-                  />
-                )}
-              />
-              {errors.author_type && <p className="text-sm text-red-500 mt-1">{errors.author_type.message}</p>}
-            </div>
-
+          
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting ? (
+              <Button type="submit" disabled={updateBook.isPending} className="w-full sm:w-auto">
+                {updateBook.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Saving...

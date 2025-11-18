@@ -14,8 +14,9 @@ import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
-import { useInvalidateTeacherData, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { usePaperMutations } from "@/hooks/use-teacher-mutations"
+import { useQuery } from "@tanstack/react-query"
+import { teacherQueryKeys } from "@/hooks/use-teacher-data"
 
 interface PaperFormData {
   authors: string
@@ -33,11 +34,8 @@ export default function EditPaperPage() {
   const { id } = useParams()
   const { toast } = useToast()
   const { user } = useAuth()
-  const { invalidatePublications } = useInvalidateTeacherData()
-  const queryClient = useQueryClient()
+  const { updatePaper } = usePaperMutations()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
 
@@ -52,72 +50,71 @@ export default function EditPaperPage() {
     formState: { errors },
   } = useForm<PaperFormData>()
 
+  // Note: Dropdown data is already available from Context, no need to fetch
+
+  // Use React Query to fetch papers list - always fetch fresh data for edit pages
+  const { data: papersData, isLoading: isLoadingPaper } = useQuery({
+    queryKey: teacherQueryKeys.publications.papers(teacherId),
+    queryFn: async () => {
+      const res = await fetch(`/api/teacher/publication/papers?teacherId=${teacherId}`)
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || "Failed to fetch paper")
+      }
+      return res.json()
+    },
+    enabled: !!id && !!teacherId && teacherId > 0,
+    staleTime: 0, // Always fetch fresh data for edit pages
+    gcTime: 0, // Don't cache for edit pages
+    refetchOnMount: true, // Always refetch when component mounts
+  })
+
+  // Populate form when data is loaded
   useEffect(() => {
-    fetchResPubLevels()
-  }, [])
+    if (!papersData || !id) return
 
-  useEffect(() => {
-    if (id && user?.role_id) {
-      fetchPaper()
-    }
-  }, [id, user?.role_id])
+    const paper = papersData.papers?.find((p: any) => p.papid === parseInt(id as string))
 
-  const fetchPaper = async () => {
-    if (!id || !user?.role_id) return
-
-    setIsLoading(true)
-    try {
-      const res = await fetch(`/api/teacher/publication/papers?teacherId=${user.role_id}`)
-      const data = await res.json()
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to fetch paper")
-      }
-
-      const paper = data.papers.find((p: any) => p.papid === parseInt(id as string))
-
-      if (!paper) {
-        throw new Error("Paper not found")
-      }
-
-      // Format date for input
-      const formatDateForInput = (dateStr: string | null) => {
-        if (!dateStr) return ""
-        try {
-          return new Date(dateStr).toISOString().split("T")[0]
-        } catch {
-          return ""
-        }
-      }
-
-      // Set existing document URL if available
-      if (paper.Image) {
-        setExistingDocumentUrl(paper.Image)
-        setDocumentUrl(paper.Image)
-      }
-
-      // Populate form with fetched data
-      reset({
-        authors: paper.authors || "",
-        theme: paper.theme || "",
-        organising_body: paper.organising_body || "",
-        place: paper.place || "",
-        date: formatDateForInput(paper.date),
-        title_of_paper: paper.title_of_paper || "",
-        level: paper.level || null,
-        mode: paper.mode || "",
-      })
-    } catch (error: any) {
+    if (!paper) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to load paper",
+        title: "Paper not found",
+        description: "The paper you're looking for doesn't exist.",
         variant: "destructive",
       })
       router.push("/teacher/publication")
-    } finally {
-      setIsLoading(false)
+      return
     }
-  }
+
+    // Format date for input
+    const formatDateForInput = (dateStr: string | null) => {
+      if (!dateStr) return ""
+      try {
+        return new Date(dateStr).toISOString().split("T")[0]
+      } catch {
+        return ""
+      }
+    }
+
+    // Set existing document URL if available
+    if (paper.Image) {
+      setExistingDocumentUrl(paper.Image)
+      setDocumentUrl(paper.Image)
+    }
+
+    // Populate form with fetched data
+    reset({
+      authors: paper.authors || "",
+      theme: paper.theme || "",
+      organising_body: paper.organising_body || "",
+      place: paper.place || "",
+      date: formatDateForInput(paper.date),
+      title_of_paper: paper.title_of_paper || "",
+      level: paper.level || null,
+      mode: paper.mode || "",
+    })
+  }, [papersData, id, reset, router, toast])
+
+  const isLoading = isLoadingPaper || !papersData
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -133,130 +130,85 @@ export default function EditPaperPage() {
       return
     }
 
-    setIsSubmitting(true)
-    try {
-      // Validate required fields
-      if (!data.title_of_paper || !data.authors || !data.level) {
-        toast({
-          title: "Validation Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        })
-        setIsSubmitting(false)
-        return
-      }
-
-      // Handle document upload to S3 if a new document was uploaded
-      let pdfPath = existingDocumentUrl || null
-      
-      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
-      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
-        try {
-          // Extract fileName from local URL
-          const fileName = documentUrl.split("/").pop()
-          
-          if (fileName) {
-            // Upload to S3 using the file in /public/uploaded-document/
-            const s3Response = await fetch("/api/shared/s3", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: fileName,
-              }),
-            })
-
-            if (!s3Response.ok) {
-              const s3Error = await s3Response.json()
-              throw new Error(s3Error.error || "Failed to upload document to S3")
-            }
-
-            const s3Data = await s3Response.json()
-            pdfPath = s3Data.url // Use S3 URL for database storage
-
-            // Delete local file after successful S3 upload
-            await fetch("/api/shared/local-document-upload", {
-              method: "DELETE",
-            })
-          }
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          setIsSubmitting(false)
-          toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          return
-        }
-      } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
-        // Keep existing document URL if it's not a new upload
-        pdfPath = documentUrl
-      }
-
-      const payload = {
-        paperId: parseInt(id as string),
-        teacherId: user.role_id,
-        paper: {
-          theme: data.theme || null,
-          organising_body: data.organising_body || null,
-          place: data.place || null,
-          date: data.date || null,
-          title_of_paper: data.title_of_paper,
-          level: data.level,
-          authors: data.authors,
-          Image: pdfPath,
-          mode: data.mode || null,
-        },
-      }
-
-      const res = await fetch("/api/teacher/publication/papers", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to update paper")
-      }
-
+    // Validate required fields
+    if (!data.title_of_paper || !data.authors || !data.level) {
       toast({
-        title: "Success",
-        description: "Paper presentation updated successfully!",
-      })
-
-      // Invalidate and refetch data
-      invalidatePublications()
-
-      // Wait for refetch to complete before navigation
-      await Promise.all([
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.journals(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.books(teacherId),
-          exact: true 
-        }),
-        queryClient.refetchQueries({ 
-          queryKey: teacherQueryKeys.publications.papers(teacherId),
-          exact: true 
-        }),
-      ])
-
-      router.push("/teacher/publication")
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update paper. Please try again.",
+        title: "Validation Error",
+        description: "Please fill in all required fields",
         variant: "destructive",
       })
-    } finally {
-      setIsSubmitting(false)
+      return
     }
+
+    // Handle document upload to S3 if a new document was uploaded
+    let pdfPath = existingDocumentUrl || null
+    
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+      try {
+        // Extract fileName from local URL
+        const fileName = documentUrl.split("/").pop()
+        
+        if (fileName) {
+          // Upload to S3 using the file in /public/uploaded-document/
+          const s3Response = await fetch("/api/shared/s3", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              fileName: fileName,
+            }),
+          })
+
+          if (!s3Response.ok) {
+            const s3Error = await s3Response.json()
+            throw new Error(s3Error.error || "Failed to upload document to S3")
+          }
+
+          const s3Data = await s3Response.json()
+          pdfPath = s3Data.url // Use S3 URL for database storage
+
+          // Delete local file after successful S3 upload
+          await fetch("/api/shared/local-document-upload", {
+            method: "DELETE",
+          })
+        }
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
+      // Keep existing document URL if it's not a new upload
+      pdfPath = documentUrl
+    }
+
+    const paperData = {
+      theme: data.theme || null,
+      organising_body: data.organising_body || null,
+      place: data.place || null,
+      date: data.date || null,
+      title_of_paper: data.title_of_paper,
+      level: data.level,
+      authors: data.authors,
+      Image: pdfPath,
+      mode: data.mode || null,
+    }
+
+    // Use mutation instead of direct fetch
+    updatePaper.mutate(
+      { paperId: parseInt(id as string), paperData },
+      {
+        onSuccess: () => {
+          router.push("/teacher/publication")
+        },
+      }
+    )
   }
 
   if (isLoading) {
@@ -448,8 +400,8 @@ export default function EditPaperPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
-                {isSubmitting ? (
+              <Button type="submit" disabled={updatePaper.isPending} className="w-full sm:w-auto">
+                {updatePaper.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Saving...
