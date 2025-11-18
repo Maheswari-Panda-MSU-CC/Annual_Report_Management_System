@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import PolicyForm from "@/components/forms/PolicyForm"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { usePolicyMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 
 export default function AddPolicyPage() {
   const router = useRouter()
@@ -21,16 +22,11 @@ export default function AddPolicyPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch dropdowns at page level
-  const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+  // Dropdowns - already available from Context, no need to fetch
+  const { resPubLevelOptions } = useDropDowns()
   
-  useEffect(() => {
-    // Fetch dropdowns once when page loads
-    if (resPubLevelOptions.length === 0) {
-      fetchResPubLevels()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Use mutation for creating policy
+  const { create: createPolicy } = usePolicyMutations()
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -126,41 +122,24 @@ export default function AddPolicyPage() {
         doc: docUrl,
       }
 
-      const res = await fetch("/api/teacher/research-contributions/policy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: user.role_id,
-          policy: policyData,
-        }),
+      // Use mutation to create policy
+      createPolicy.mutate(policyData, {
+        onSuccess: () => {
+          // Smooth transition
+          setTimeout(() => {
+            router.push("/teacher/research-contributions?tab=policy")
+          }, 500)
+        },
       })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add policy document")
-      }
-
-      toast({
-        title: "Success",
-        description: "Policy document added successfully!",
-        duration: 3000,
-      })
-      
-      // Smooth transition
-      setTimeout(() => {
-        router.push("/teacher/research-contributions?tab=policy")
-      }, 500)
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add policy document. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
+      // Error is handled by mutation's onError callback
       setIsSubmitting(false)
-      form.reset()
+    } finally {
+      // Only reset if not submitting (mutation handles success/error)
+      if (!createPolicy.isPending) {
+        setIsSubmitting(false)
+        form.reset()
+      }
     }
   }
 
@@ -198,7 +177,7 @@ export default function AddPolicyPage() {
           <PolicyForm
             form={form}
             onSubmit={handleSubmit}
-            isSubmitting={isSubmitting}
+            isSubmitting={isSubmitting || createPolicy.isPending}
             isExtracting={isExtracting}
             selectedFiles={null}
             handleFileSelect={() => {}}

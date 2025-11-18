@@ -11,15 +11,17 @@ import { ArrowLeft } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
+import { useCopyrightMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 
 export default function AddCopyrightsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const form = useForm()
-
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // Use mutation for creating copyright
+  const { create: createCopyright } = useCopyrightMutations()
 
   // Auto-populate form from sessionStorage if dataFields are available
   useEffect(() => {
@@ -72,11 +74,6 @@ export default function AddCopyrightsPage() {
     }
   }, [form])
 
-  const handleDocumentUpload = (files: FileList | null) => {
-    if (files && files.length > 0) {
-      setSelectedFiles(files)
-    }
-  }
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -129,12 +126,67 @@ export default function AddCopyrightsPage() {
       return
     }
 
+    // Validate document upload is required
+    const documentUrl = Array.isArray(data.supportingDocument) && data.supportingDocument.length > 0 
+      ? data.supportingDocument[0] 
+      : null
+
+    if (!documentUrl) {
+      toast({
+        title: "Error",
+        description: "Please upload a supporting document.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      // Handle dummy document upload
-      let docUrl = null
-      if (selectedFiles && selectedFiles.length > 0) {
-        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      // Handle document upload to S3 if a new document was uploaded
+      let docUrl = documentUrl
+
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            docUrl = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
       }
 
       // Map form data to API format
@@ -146,40 +198,22 @@ export default function AddCopyrightsPage() {
         doc: docUrl,
       }
 
-      const res = await fetch("/api/teacher/research-contributions/copyrights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: user.role_id,
-          copyright: copyrightData,
-        }),
+      // Use mutation to create copyright
+      createCopyright.mutate(copyrightData, {
+        onSuccess: () => {
+          // Navigate back to main page
+          router.push("/teacher/research-contributions?tab=copyrights")
+        },
       })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add copyright record")
-      }
-
-      toast({
-        title: "Success",
-        description: "Copyright record added successfully!",
-        duration: 3000,
-      })
-
-      // Navigate back to main page
-      router.push("/teacher/research-contributions?tab=copyrights")
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add copyright record. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
+      // Error is handled by mutation's onError callback
       setIsSubmitting(false)
-      setSelectedFiles(null)
-      form.reset()
+    } finally {
+      // Only reset if not submitting (mutation handles success/error)
+      if (!createCopyright.isPending) {
+        setIsSubmitting(false)
+        form.reset()
+      }
     }
   }
 
@@ -212,10 +246,10 @@ export default function AddCopyrightsPage() {
             <CopyrightForm
               form={form}
               onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
+              isSubmitting={isSubmitting || createCopyright.isPending}
               isExtracting={isExtracting}
-              selectedFiles={selectedFiles}
-              handleFileSelect={handleDocumentUpload}
+              selectedFiles={null}
+              handleFileSelect={() => {}}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
             />

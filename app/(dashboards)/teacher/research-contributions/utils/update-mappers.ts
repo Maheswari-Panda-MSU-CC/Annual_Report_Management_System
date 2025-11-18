@@ -3,7 +3,6 @@
  * Maps form data to API format for update operations
  */
 
-import { handleDocumentUpload } from './api-helpers'
 import type { SectionId } from './research-contributions-config'
 
 export const createUpdateMapper = (
@@ -13,7 +12,8 @@ export const createUpdateMapper = (
   selectedFiles: FileList | null,
   dropdownOptions?: any
 ) => {
-  const docUrl = handleDocumentUpload(selectedFiles, editingItem.doc)
+  // Use docUrl from submitData if provided (from DocumentUpload), otherwise use existing doc
+  const docUrl = submitData.doc || editingItem.doc || editingItem.supportingDocument?.[0] || null
 
   switch (sectionId) {
     case 'patents':

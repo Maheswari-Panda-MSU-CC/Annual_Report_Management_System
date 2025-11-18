@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2 } from "lucide-react"
 import { ConsultancyForm } from "@/components/forms/ConsultancyForm"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
+import { useConsultancyMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 
 export default function AddConsultancyPage() {
   const router = useRouter()
@@ -16,14 +17,10 @@ export default function AddConsultancyPage() {
   const form = useForm()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
 
-  const handleDocumentUpload = (files: FileList | null) => {
-    if (files && files.length > 0) {
-      setSelectedFiles(files)
-    }
-  }
+  // Use mutation for creating consultancy
+  const { create: createConsultancy } = useConsultancyMutations()
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -78,12 +75,67 @@ export default function AddConsultancyPage() {
       return
     }
 
+    // Validate document upload is required
+    const documentUrl = Array.isArray(data.supportingDocument) && data.supportingDocument.length > 0 
+      ? data.supportingDocument[0] 
+      : null
+
+    if (!documentUrl) {
+      toast({
+        title: "Error",
+        description: "Please upload a supporting document.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      // Handle dummy document upload
-      let docUrl = null
-      if (selectedFiles && selectedFiles.length > 0) {
-        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      // Handle document upload to S3 if a new document was uploaded
+      let docUrl = documentUrl
+
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            docUrl = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
       }
 
       const consultancyData = {
@@ -98,42 +150,24 @@ export default function AddConsultancyPage() {
         doc: docUrl,
       }
 
-      const res = await fetch("/api/teacher/research-contributions/consultancy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: user.role_id,
-          consultancy: consultancyData,
-        }),
+      // Use mutation to create consultancy
+      createConsultancy.mutate(consultancyData, {
+        onSuccess: () => {
+          // Smooth transition
+          setTimeout(() => {
+            router.push("/teacher/research-contributions?tab=consultancy")
+          }, 500)
+        },
       })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add consultancy")
-      }
-
-      toast({
-        title: "Success",
-        description: "Consultancy added successfully!",
-        duration: 3000,
-      })
-      
-      // Smooth transition
-      setTimeout(() => {
-        router.push("/teacher/research-contributions?tab=consultancy")
-      }, 500)
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add consultancy. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
+      // Error is handled by mutation's onError callback
       setIsSubmitting(false)
-      setSelectedFiles(null)
-      form.reset()
+    } finally {
+      // Only reset if not submitting (mutation handles success/error)
+      if (!createConsultancy.isPending) {
+        setIsSubmitting(false)
+        form.reset()
+      }
     }
   }
 
@@ -172,10 +206,10 @@ export default function AddConsultancyPage() {
           <ConsultancyForm
               form={form}
               onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
+              isSubmitting={isSubmitting || createConsultancy.isPending}
               isExtracting={isExtracting}
-              selectedFiles={selectedFiles}
-              handleFileSelect={handleDocumentUpload}
+              selectedFiles={null}
+              handleFileSelect={() => {}}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
            />

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form"
 import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { usePhdMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 
 
 
@@ -21,38 +22,15 @@ export default function AddPhdPage() {
   const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm()
 
-  // Fetch dropdowns at page level
-  const { 
-    phdGuidanceStatusOptions,
-    fetchPhdGuidanceStatuses
-  } = useDropDowns()
+  // Dropdowns - already available from Context, no need to fetch
+  const { phdGuidanceStatusOptions } = useDropDowns()
   
-  useEffect(() => {
-    // Fetch dropdowns once when page loads
-    if (phdGuidanceStatusOptions.length === 0) {
-      fetchPhdGuidanceStatuses()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFiles(files)
-  }
+  // Use mutation for creating phd
+  const { create: createPhd } = usePhdMutations()
 
   const handleExtractInfo = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please upload a document first.",
-        variant: "destructive",
-        duration: 3000,
-      })
-      return
-    }
-
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -105,12 +83,67 @@ export default function AddPhdPage() {
       return
     }
 
+    // Validate document upload is required
+    const documentUrl = Array.isArray(data.supportingDocument) && data.supportingDocument.length > 0 
+      ? data.supportingDocument[0] 
+      : null
+
+    if (!documentUrl) {
+      toast({
+        title: "Error",
+        description: "Please upload a supporting document.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      // Handle dummy document upload
-      let docUrl = null
-      if (selectedFiles && selectedFiles.length > 0) {
-        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      // Handle document upload to S3 if a new document was uploaded
+      let docUrl = documentUrl
+
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            docUrl = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
       }
 
       // Map form data to API format
@@ -124,42 +157,24 @@ export default function AddPhdPage() {
         doc: docUrl,
       }
 
-      const res = await fetch("/api/teacher/research-contributions/phd-guidance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: user.role_id,
-          phdStudent: phdStudentData,
-        }),
+      // Use mutation to create phd
+      createPhd.mutate(phdStudentData, {
+        onSuccess: () => {
+          // Smooth transition
+          setTimeout(() => {
+            router.push("/teacher/research-contributions?tab=phd")
+          }, 500)
+        },
       })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add PhD student record")
-      }
-
-      toast({
-        title: "Success",
-        description: "PhD student record added successfully!",
-        duration: 3000,
-      })
-
-      // Smooth transition
-      setTimeout(() => {
-        router.push("/teacher/research-contributions?tab=phd")
-      }, 500)
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add PhD student record. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
+      // Error is handled by mutation's onError callback
       setIsSubmitting(false)
-      setSelectedFiles(null)
-      form.reset()
+    } finally {
+      // Only reset if not submitting (mutation handles success/error)
+      if (!createPhd.isPending) {
+        setIsSubmitting(false)
+        form.reset()
+      }
     }
   }
 
@@ -191,10 +206,10 @@ export default function AddPhdPage() {
             <PhdGuidanceForm
               form={form}
               onSubmit={handleSubmit}
-              isSubmitting={isSubmitting}
-              isExtracting={isExtracting}
-              selectedFiles={selectedFiles}
-              handleFileSelect={handleFileSelect}
+            isSubmitting={isSubmitting || createPhd.isPending}
+            isExtracting={isExtracting}
+            selectedFiles={null}
+            handleFileSelect={() => {}}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
               phdGuidanceStatusOptions={phdGuidanceStatusOptions}

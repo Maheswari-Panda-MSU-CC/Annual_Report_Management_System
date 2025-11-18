@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { useEffect } from "react"
+import { usePatentMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 
 export default function AddPatentsPage() {
   const router = useRouter()
@@ -18,19 +18,11 @@ export default function AddPatentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   
-  // Fetch dropdowns at page level
-  const { resPubLevelOptions, patentStatusOptions, fetchResPubLevels, fetchPatentStatuses } = useDropDowns()
+  // Dropdowns - already available from Context, no need to fetch
+  const { resPubLevelOptions, patentStatusOptions } = useDropDowns()
   
-  useEffect(() => {
-    // Fetch dropdowns once when page loads
-    if (resPubLevelOptions.length === 0) {
-      fetchResPubLevels()
-    }
-    if (patentStatusOptions.length === 0) {
-      fetchPatentStatuses()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // Use mutation for creating patent
+  const { create: createPatent } = usePatentMutations()
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -65,6 +57,8 @@ export default function AddPatentsPage() {
     }
 
     setIsSubmitting(true)
+    
+    // Note: Error handling is done in mutation's onError callback
     try {
       // Handle document upload to S3 if a new document was uploaded
       let docUrl = documentUrl
@@ -123,41 +117,24 @@ export default function AddPatentsPage() {
         doc: docUrl,
       }
 
-      const res = await fetch("/api/teacher/research-contributions/patents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: user.role_id,
-          patent: patentData,
-        }),
+      // Use mutation to create patent
+      createPatent.mutate(patentData, {
+        onSuccess: () => {
+          // Smooth transition with slight delay
+          setTimeout(() => {
+            router.push("/teacher/research-contributions?tab=patents")
+          }, 500)
+        },
       })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add patent")
-      }
-
-      toast({
-        title: "Success",
-        description: "Patent added successfully!",
-        duration: 3000,
-      })
-      
-      // Smooth transition with slight delay
-      setTimeout(() => {
-        router.push("/teacher/research-contributions?tab=patents")
-      }, 500)
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add patent. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
+      // Error is handled by mutation's onError callback
       setIsSubmitting(false)
-      form.reset()
+    } finally {
+      // Only reset if not submitting (mutation handles success/error)
+      if (!createPatent.isPending) {
+        setIsSubmitting(false)
+        form.reset()
+      }
     }
   }
 
@@ -184,7 +161,7 @@ export default function AddPatentsPage() {
     <PatentForm
       form={form}
       onSubmit={handleSubmit}
-      isSubmitting={isSubmitting}
+      isSubmitting={isSubmitting || createPatent.isPending}
       isExtracting={isExtracting}
       selectedFiles={null}
       handleFileSelect={() => {}}

@@ -43,9 +43,32 @@ import { FinancialForm } from "@/components/forms/FinancialFom"
 import { JrfSrfForm } from "@/components/forms/JrfSrfForm"
 import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
-import { fetchSectionData, deleteSectionData } from "./utils/api-helpers"
 import { SECTION_ROUTES, API_ENDPOINTS, type SectionId } from "./utils/research-contributions-config"
 import { createUpdateMapper, UPDATE_REQUEST_BODIES, UPDATE_SUCCESS_MESSAGES } from "./utils/update-mappers"
+import { 
+  useTeacherPatents, 
+  useTeacherPolicy, 
+  useTeacherEContent, 
+  useTeacherConsultancy, 
+  useTeacherCollaborations, 
+  useTeacherVisits, 
+  useTeacherFinancial, 
+  useTeacherJrfSrf, 
+  useTeacherPhd, 
+  useTeacherCopyrights 
+} from "@/hooks/use-teacher-research-contributions-data"
+import { 
+  usePatentMutations, 
+  usePolicyMutations, 
+  useEContentMutations, 
+  useConsultancyMutations, 
+  useCollaborationMutations, 
+  useVisitMutations, 
+  useFinancialMutations, 
+  useJrfSrfMutations, 
+  usePhdMutations, 
+  useCopyrightMutations 
+} from "@/hooks/use-teacher-research-contributions-mutations"
 
 // Initial data structure
 const initialData = {
@@ -251,30 +274,9 @@ export default function ResearchContributionsPage() {
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("patents")
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
-  const [data, setData] = useState(initialData)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [formData, setFormData] = useState<any>({})
-  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({
-    patents: false,
-    policy: false,
-    econtent: false,
-    consultancy: false,
-    collaborations: false,
-    visits: false,
-    financial: false,
-    jrfSrf: false,
-    phd: false,
-    copyrights: false,
-  })
-  // Track which sections have been fetched to avoid re-fetching
-  const [fetchedSections, setFetchedSections] = useState<Set<SectionId>>(new Set())
-  // Use ref to track sections currently being fetched to prevent duplicate requests
-  const fetchingRef = useRef<Set<SectionId>>(new Set())
-  // Track which dropdowns have been fetched to prevent re-fetching
-  const fetchedDropdownsRef = useRef<Set<string>>(new Set())
-  // Track dropdowns currently being fetched to prevent duplicate requests
-  const fetchingDropdownsRef = useRef<Set<string>>(new Set())
   const router = useRouter()
   
   const form=useForm();
@@ -282,7 +284,7 @@ export default function ResearchContributionsPage() {
   
   const [isSubmitting,setIsSubmitting]=useState(false);
   
-  // Fetch dropdowns at page level
+  // Dropdowns - already available from Context, no need to fetch
   const { 
     resPubLevelOptions, 
     patentStatusOptions, 
@@ -295,191 +297,100 @@ export default function ResearchContributionsPage() {
     financialSupportTypeOptions,
     jrfSrfTypeOptions,
     phdGuidanceStatusOptions,
-    fetchResPubLevels, 
-    fetchPatentStatuses, 
-    fetchEContentTypes, 
-    fetchTypeEcontentValues,
-    fetchCollaborationsLevels,
-    fetchCollaborationsOutcomes,
-    fetchCollaborationsTypes,
-    fetchAcademicVisitRoles,
-    fetchFinancialSupportTypes,
-    fetchJrfSrfTypes,
-    fetchPhdGuidanceStatuses
   } = useDropDowns()
   
-  // Mapping of tabs to their required dropdowns (memoized to prevent recreation)
-  const tabDropdownMap = useMemo<Record<string, Array<{ key: string; check: () => boolean; fetch: () => Promise<void> }>>>(() => ({
-    patents: [
-      { key: 'patentStatusOptions', check: () => patentStatusOptions.length === 0, fetch: fetchPatentStatuses },
-      { key: 'resPubLevelOptions', check: () => resPubLevelOptions.length === 0, fetch: fetchResPubLevels },
-    ],
-    policy: [
-      { key: 'resPubLevelOptions', check: () => resPubLevelOptions.length === 0, fetch: fetchResPubLevels },
-    ],
-    econtent: [
-      { key: 'eContentTypeOptions', check: () => eContentTypeOptions.length === 0, fetch: fetchEContentTypes },
-      { key: 'typeEcontentValueOptions', check: () => typeEcontentValueOptions.length === 0, fetch: fetchTypeEcontentValues },
-    ],
-    consultancy: [], // No dropdowns needed
-    collaborations: [
-      { key: 'collaborationsLevelOptions', check: () => collaborationsLevelOptions.length === 0, fetch: fetchCollaborationsLevels },
-      { key: 'collaborationsOutcomeOptions', check: () => collaborationsOutcomeOptions.length === 0, fetch: fetchCollaborationsOutcomes },
-      { key: 'collaborationsTypeOptions', check: () => collaborationsTypeOptions.length === 0, fetch: fetchCollaborationsTypes },
-    ],
-    visits: [
-      { key: 'academicVisitRoleOptions', check: () => academicVisitRoleOptions.length === 0, fetch: fetchAcademicVisitRoles },
-    ],
-    financial: [
-      { key: 'financialSupportTypeOptions', check: () => financialSupportTypeOptions.length === 0, fetch: fetchFinancialSupportTypes },
-    ],
-    jrfSrf: [
-      { key: 'jrfSrfTypeOptions', check: () => jrfSrfTypeOptions.length === 0, fetch: fetchJrfSrfTypes },
-    ],
-    phd: [
-      { key: 'phdGuidanceStatusOptions', check: () => phdGuidanceStatusOptions.length === 0, fetch: fetchPhdGuidanceStatuses },
-    ],
-    copyrights: [], // No dropdowns needed
+  // React Query hooks for data fetching
+  const patentsQuery = useTeacherPatents(resPubLevelOptions)
+  const policyQuery = useTeacherPolicy(resPubLevelOptions)
+  const econtentQuery = useTeacherEContent()
+  const consultancyQuery = useTeacherConsultancy()
+  const collaborationsQuery = useTeacherCollaborations()
+  const visitsQuery = useTeacherVisits()
+  const financialQuery = useTeacherFinancial()
+  const jrfSrfQuery = useTeacherJrfSrf()
+  const phdQuery = useTeacherPhd()
+  const copyrightsQuery = useTeacherCopyrights()
+
+  // Mutations for delete operations
+  const { delete: deletePatent } = usePatentMutations()
+  const { delete: deletePolicy } = usePolicyMutations()
+  const { delete: deleteEContent } = useEContentMutations()
+  const { delete: deleteConsultancy } = useConsultancyMutations()
+  const { delete: deleteCollaboration } = useCollaborationMutations()
+  const { delete: deleteVisit } = useVisitMutations()
+  const { delete: deleteFinancial } = useFinancialMutations()
+  const { delete: deleteJrfSrf } = useJrfSrfMutations()
+  const { delete: deletePhd } = usePhdMutations()
+  const { delete: deleteCopyright } = useCopyrightMutations()
+
+  // Mutations for update operations
+  const { update: updatePatent } = usePatentMutations()
+  const { update: updatePolicy } = usePolicyMutations()
+  const { update: updateEContent } = useEContentMutations()
+  const { update: updateConsultancy } = useConsultancyMutations()
+  const { update: updateCollaboration } = useCollaborationMutations()
+  const { update: updateVisit } = useVisitMutations()
+  const { update: updateFinancial } = useFinancialMutations()
+  const { update: updateJrfSrf } = useJrfSrfMutations()
+  const { update: updatePhd } = usePhdMutations()
+  const { update: updateCopyright } = useCopyrightMutations()
+
+  // Map React Query data to UI format using useMemo
+  const mappedData = useMemo(() => {
+    return {
+      patents: patentsQuery.data || [],
+      policy: policyQuery.data || [],
+      econtent: econtentQuery.data || [],
+      consultancy: consultancyQuery.data || [],
+      collaborations: collaborationsQuery.data || [],
+      visits: visitsQuery.data || [],
+      financial: financialQuery.data || [],
+      jrfSrf: jrfSrfQuery.data || [],
+      phd: phdQuery.data || [],
+      copyrights: copyrightsQuery.data || [],
+    }
+  }, [
+    patentsQuery.data,
+    policyQuery.data,
+    econtentQuery.data,
+    consultancyQuery.data,
+    collaborationsQuery.data,
+    visitsQuery.data,
+    financialQuery.data,
+    jrfSrfQuery.data,
+    phdQuery.data,
+    copyrightsQuery.data,
+  ])
+
+  // Use mapped data instead of state
+  const data = mappedData
+
+  // Loading states from React Query
+  const loadingStates = useMemo(() => ({
+    patents: patentsQuery.isLoading,
+    policy: policyQuery.isLoading,
+    econtent: econtentQuery.isLoading,
+    consultancy: consultancyQuery.isLoading,
+    collaborations: collaborationsQuery.isLoading,
+    visits: visitsQuery.isLoading,
+    financial: financialQuery.isLoading,
+    jrfSrf: jrfSrfQuery.isLoading,
+    phd: phdQuery.isLoading,
+    copyrights: copyrightsQuery.isLoading,
   }), [
-    patentStatusOptions.length,
-    resPubLevelOptions.length,
-    eContentTypeOptions.length,
-    typeEcontentValueOptions.length,
-    collaborationsLevelOptions.length,
-    collaborationsOutcomeOptions.length,
-    collaborationsTypeOptions.length,
-    academicVisitRoleOptions.length,
-    financialSupportTypeOptions.length,
-    jrfSrfTypeOptions.length,
-    phdGuidanceStatusOptions.length,
-    fetchPatentStatuses,
-    fetchResPubLevels,
-    fetchEContentTypes,
-    fetchTypeEcontentValues,
-    fetchCollaborationsLevels,
-    fetchCollaborationsOutcomes,
-    fetchCollaborationsTypes,
-    fetchAcademicVisitRoles,
-    fetchFinancialSupportTypes,
-    fetchJrfSrfTypes,
-    fetchPhdGuidanceStatuses,
+    patentsQuery.isLoading,
+    policyQuery.isLoading,
+    econtentQuery.isLoading,
+    consultancyQuery.isLoading,
+    collaborationsQuery.isLoading,
+    visitsQuery.isLoading,
+    financialQuery.isLoading,
+    jrfSrfQuery.isLoading,
+    phdQuery.isLoading,
+    copyrightsQuery.isLoading,
   ])
   
-  // Function to fetch dropdowns for a specific tab (memoized with useCallback)
-  const fetchDropdownsForTab = useCallback((tab: string) => {
-    const dropdowns = tabDropdownMap[tab] || []
-    
-    const dropdownsToFetch = dropdowns
-      .filter(d => {
-        // Only fetch if not already fetched and not currently fetching
-        const isNotFetched = !fetchedDropdownsRef.current.has(d.key)
-        const isNotFetching = !fetchingDropdownsRef.current.has(d.key)
-        const needsFetch = d.check()
-        return isNotFetched && isNotFetching && needsFetch
-      })
-      .map(d => {
-        // Mark as currently fetching
-        fetchingDropdownsRef.current.add(d.key)
-        return d.fetch()
-          .then(() => {
-            // Mark as fetched after successful load
-            fetchedDropdownsRef.current.add(d.key)
-          })
-          .catch(error => {
-            console.error(`Error fetching dropdown ${d.key}:`, error)
-          })
-          .finally(() => {
-            // Remove from fetching set
-            fetchingDropdownsRef.current.delete(d.key)
-          })
-      })
-    
-    if (dropdownsToFetch.length > 0) {
-      Promise.all(dropdownsToFetch).catch(error => {
-        console.error(`Error fetching dropdowns for tab ${tab}:`, error)
-      })
-    }
-  }, [tabDropdownMap])
-  
-  // Fetch dropdowns for active tab on initial load and when activeTab changes
-  useEffect(() => {
-    if (activeTab) {
-      fetchDropdownsForTab(activeTab)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
-  
-  // Fetch active tab data on initial load and when activeTab changes
-  useEffect(() => {
-    if (user?.role_id && activeTab) {
-      const sectionId = activeTab as SectionId
-      
-      // Only fetch if not already fetched and not currently fetching
-      if (!fetchedSections.has(sectionId) && !fetchingRef.current.has(sectionId)) {
-        // Mark as currently fetching to prevent duplicate requests
-        fetchingRef.current.add(sectionId)
-        setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-        
-        fetchSectionData(sectionId, user.role_id, setData, toast, resPubLevelOptions)
-          .then(() => {
-            // Mark as fetched after successful load
-            setFetchedSections(prev => new Set([...prev, sectionId]))
-          })
-          .catch(error => {
-            console.error(`Error fetching ${sectionId}:`, error)
-          })
-          .finally(() => {
-            // Remove from fetching set and update loading state
-            fetchingRef.current.delete(sectionId)
-            setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
-          })
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role_id, activeTab, resPubLevelOptions])
-
-  // Individual fetch functions for refresh after operations
-  // These also update the fetchedSections state to mark as fetched
-  const fetchPatents = async () => {
-    await fetchSectionData('patents', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'patents']))
-  }
-  const fetchPolicies = async () => {
-    await fetchSectionData('policy', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'policy']))
-  }
-  const fetchEContent = async () => {
-    await fetchSectionData('econtent', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'econtent']))
-  }
-  const fetchConsultancy = async () => {
-    await fetchSectionData('consultancy', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'consultancy']))
-  }
-  const fetchCollaborations = async () => {
-    await fetchSectionData('collaborations', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'collaborations']))
-  }
-  const fetchVisits = async () => {
-    await fetchSectionData('visits', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'visits']))
-  }
-  const fetchFinancialSupport = async () => {
-    await fetchSectionData('financial', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'financial']))
-  }
-  const fetchJrfSrf = async () => {
-    await fetchSectionData('jrfSrf', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'jrfSrf']))
-  }
-  const fetchPhdGuidance = async () => {
-    await fetchSectionData('phd', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'phd']))
-  }
-  const fetchCopyrights = async () => {
-    await fetchSectionData('copyrights', user?.role_id || 0, setData, toast, resPubLevelOptions)
-    setFetchedSections(prev => new Set([...prev, 'copyrights']))
-  }
+  // React Query handles data fetching automatically - no manual fetching needed
 
   // Handle URL tab parameter on initial load
   useEffect(() => {
@@ -489,78 +400,37 @@ export default function ResearchContributionsPage() {
     }
   }, [searchParams])
 
-  // Update URL when tab changes and fetch data if not already fetched
+  // Update URL when tab changes - React Query handles data fetching automatically
   const handleTabChange = (value: string) => {
     setActiveTab(value)
     const url = new URL(window.location.href)
     url.searchParams.set("tab", value)
     window.history.pushState({}, "", url.toString())
-    
-    // Fetch dropdowns for the new tab
-    fetchDropdownsForTab(value)
-    
-    // Fetch data for the new tab if not already fetched and not currently fetching
-    const sectionId = value as SectionId
-    if (user?.role_id && !fetchedSections.has(sectionId) && !fetchingRef.current.has(sectionId)) {
-      // Mark as currently fetching to prevent duplicate requests
-      fetchingRef.current.add(sectionId)
-      setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-      
-      fetchSectionData(sectionId, user.role_id, setData, toast, resPubLevelOptions)
-        .then(() => {
-          // Mark as fetched after successful load
-          setFetchedSections(prev => new Set([...prev, sectionId]))
-        })
-        .catch(error => {
-          console.error(`Error fetching ${sectionId}:`, error)
-        })
-        .finally(() => {
-          // Remove from fetching set and update loading state
-          fetchingRef.current.delete(sectionId)
-          setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
-        })
-    }
   }
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFiles(files)
   }
 
-  // Refresh functions map for delete operations
-  const refreshFunctions: Record<SectionId, () => Promise<void>> = {
-    patents: fetchPatents,
-    policy: fetchPolicies,
-    econtent: fetchEContent,
-    consultancy: fetchConsultancy,
-    collaborations: fetchCollaborations,
-    visits: fetchVisits,
-    financial: fetchFinancialSupport,
-    jrfSrf: fetchJrfSrf,
-    phd: fetchPhdGuidance,
-    copyrights: fetchCopyrights,
+  // Delete handlers using mutations
+  const deleteHandlers: Record<SectionId, (id: number) => void> = {
+    patents: (id) => deletePatent.mutate(id),
+    policy: (id) => deletePolicy.mutate(id),
+    econtent: (id) => deleteEContent.mutate(id),
+    consultancy: (id) => deleteConsultancy.mutate(id),
+    collaborations: (id) => deleteCollaboration.mutate(id),
+    visits: (id) => deleteVisit.mutate(id),
+    financial: (id) => deleteFinancial.mutate(id),
+    jrfSrf: (id) => deleteJrfSrf.mutate(id),
+    phd: (id) => deletePhd.mutate(id),
+    copyrights: (id) => deleteCopyright.mutate(id),
   }
 
-  const handleDelete = async (sectionId: string, itemId: number) => {
-    try {
-      const section = sectionId as SectionId
-      const refreshFn = refreshFunctions[section]
-      
-      if (refreshFn) {
-        await deleteSectionData(section, itemId, refreshFn, toast)
-      } else {
-        // Fallback for unknown sections
-        setData((prevData) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).filter((item: any) => item.id !== itemId),
-        }))
-        toast({
-          title: "Success",
-          description: "Item deleted successfully.",
-          duration: 3000,
-        })
-      }
-    } catch (error: any) {
-      // Error is already handled in deleteSectionData
+  const handleDelete = (sectionId: string, itemId: number) => {
+    const section = sectionId as SectionId
+    const deleteHandler = deleteHandlers[section]
+    if (deleteHandler) {
+      deleteHandler(itemId)
     }
   }
 
@@ -569,6 +439,20 @@ export default function ResearchContributionsPage() {
     setEditingItem({ ...item, sectionId })
     setFormData({ ...item })
     setIsEditDialogOpen(true)
+  }
+
+  // Update handlers using mutations
+  const updateHandlers: Record<SectionId, (id: number, data: any) => void> = {
+    patents: (id, data) => updatePatent.mutate({ id, data }),
+    policy: (id, data) => updatePolicy.mutate({ id, data }),
+    econtent: (id, data) => updateEContent.mutate({ id, data }),
+    consultancy: (id, data) => updateConsultancy.mutate({ id, data }),
+    collaborations: (id, data) => updateCollaboration.mutate({ id, data }),
+    visits: (id, data) => updateVisit.mutate({ id, data }),
+    financial: (id, data) => updateFinancial.mutate({ id, data }),
+    jrfSrf: (id, data) => updateJrfSrf.mutate({ id, data }),
+    phd: (id, data) => updatePhd.mutate({ id, data }),
+    copyrights: (id, data) => updateCopyright.mutate({ id, data }),
   }
 
   const handleSaveEdit = async (data?: any) => {
@@ -594,24 +478,13 @@ export default function ResearchContributionsPage() {
 
     const submitData = data || formData
     const sectionId = editingItem.sectionId as SectionId
-    const refreshFn = refreshFunctions[sectionId]
+    const updateHandler = updateHandlers[sectionId]
 
-    if (!refreshFn) {
-      // Fallback for unknown sections
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).map((item: any) =>
-          item.id === editingItem.id ? { ...item, ...submitData } : item,
-        ),
-      }))
-      setIsEditDialogOpen(false)
-      setEditingItem(null)
-      setFormData({})
-      setSelectedFiles(null)
-      form.reset()
+    if (!updateHandler) {
       toast({
-        title: "Success",
-        description: "Item updated successfully!",
+        title: "Error",
+        description: "Unknown section type.",
+        variant: "destructive",
         duration: 3000,
       })
       return
@@ -619,52 +492,82 @@ export default function ResearchContributionsPage() {
 
     setIsSubmitting(true)
     try {
-      // Create update payload using mapper
+      // Get document URL from form data (DocumentUpload provides this)
+      const documentUrl = Array.isArray(submitData.supportingDocument) && submitData.supportingDocument.length > 0 
+        ? submitData.supportingDocument[0] 
+        : editingItem.doc || editingItem.supportingDocument?.[0] || null
+
+      // Handle document upload to S3 if a new document was uploaded
+      let docUrl = documentUrl
+
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            docUrl = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
+      }
+
+      // Create update payload using mapper - pass docUrl instead of selectedFiles
       const updateData = createUpdateMapper(
         sectionId,
-        submitData,
+        { ...submitData, doc: docUrl },
         editingItem,
-        selectedFiles,
+        null, // selectedFiles no longer needed, docUrl is passed in submitData
         {
           resPubLevelOptions,
           collaborationsTypeOptions,
         }
       )
 
-      // Get request body using configuration
-      const requestBody = UPDATE_REQUEST_BODIES[sectionId](
-        editingItem.id,
-        user.role_id,
-        updateData
-      )
-
-      // Make API call
-      const res = await fetch(API_ENDPOINTS[sectionId], {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || `Failed to update ${sectionId} record`)
+      // Ensure doc is set from our processed docUrl
+      if (docUrl) {
+        updateData.doc = docUrl
       }
 
-      toast({
-        title: "Success",
-        description: UPDATE_SUCCESS_MESSAGES[sectionId],
-        duration: 3000,
-      })
+      // Use mutation to update
+      updateHandler(editingItem.id, updateData)
 
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
       setSelectedFiles(null)
       form.reset()
-
-      // Refresh data
-      await refreshFn()
     } catch (error: any) {
       toast({
         title: "Error",
@@ -677,24 +580,7 @@ export default function ResearchContributionsPage() {
     }
   }
 
-  const handleFileUpload = (sectionId: string, itemId: number) => {
-    if (selectedFiles && selectedFiles.length > 0) {
-      const fileNames = Array.from(selectedFiles).map((f) => f.name)
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).map((item: any) =>
-          item.id === itemId
-            ? { ...item, supportingDocument: [...(item.supportingDocument || []), ...fileNames] }
-            : item,
-        ),
-      }))
-      toast({
-        title: "Success",
-        description: "Supporting documents uploaded successfully!",
-        duration: 3000,
-      })
-    }
-  }
+  // File upload is handled in edit dialog - mutations will update the data automatically
 
   const renderTableData = (section: any, item: any) => {
     switch (section.id) {
@@ -705,7 +591,7 @@ export default function ResearchContributionsPage() {
             <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title}</TableCell>
             <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.level}</TableCell>
             <TableCell className="px-2 sm:px-4">
-              <Badge variant={item.status?.toLowerCase() === "granted" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{item.status}</Badge>
+              <Badge variant={typeof item.status === 'string' && item.status.toLowerCase() === "granted" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{typeof item.status === 'string' ? item.status : item.statusName || item.status || 'N/A'}</Badge>
             </TableCell>
             <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
@@ -1300,7 +1186,7 @@ export default function ResearchContributionsPage() {
                         </TableRow>
                       </TableHeader>
                     <TableBody>
-                      {loadingStates[section.id] ? (
+                      {loadingStates[section.id as SectionId] ? (
                         <TableRow>
                           <TableCell
                             colSpan={section.columns.length}
@@ -1371,13 +1257,7 @@ export default function ResearchContributionsPage() {
                                       <DialogHeader>
                                         <DialogTitle className="text-sm sm:text-base">Upload Supporting Documents</DialogTitle>
                                       </DialogHeader>
-                                      <FileUpload onFileSelect={handleFileSelect} />
-                                      <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
-                                        <Button variant="outline" className="w-full sm:w-auto text-xs sm:text-sm">Cancel</Button>
-                                        <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto text-xs sm:text-sm">
-                                          Upload Files
-                                        </Button>
-                                      </div>
+                                      <p className="text-sm text-muted-foreground">Please edit the item to upload documents</p>
                                     </DialogContent>
                                   </Dialog>
                                 )}
