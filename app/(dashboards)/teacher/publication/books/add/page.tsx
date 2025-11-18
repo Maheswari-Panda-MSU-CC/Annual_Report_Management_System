@@ -54,6 +54,7 @@ export default function AddBookPage() {
     handleSubmit,
     setValue,
     control,
+    watch,
     formState: { errors },
   } = useForm<BookFormData>({
     defaultValues: {
@@ -72,6 +73,9 @@ export default function AddBookPage() {
       author_type: null,
     },
   })
+
+  // Watch edited field for conditional validation
+  const isEdited = watch("edited")
 
   // Note: Dropdown data is already available from Context, no need to fetch
 
@@ -101,21 +105,21 @@ export default function AddBookPage() {
       return
     }
 
-    // Validate required fields
-    if (!data.title || !data.authors || !data.publishing_level || !data.book_type || !data.author_type) {
-      showToast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      })
-      return
-    }
-
     // Validate document upload is required
     if (!documentUrl || !documentUrl.startsWith("/uploaded-document/")) {
       showToast({
         title: "Validation Error",
         description: "Please upload a supporting document",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate conditional requirement: chapter count if edited
+    if (data.edited && (!data.chap_count || data.chap_count <= 0)) {
+      showToast({
+        title: "Validation Error",
+        description: "Chapter count is required when book is edited",
         variant: "destructive",
       })
       return
@@ -238,12 +242,12 @@ export default function AddBookPage() {
                 <Input
                   id="authors"
                   {...register("authors", { 
-                    required: "Authors are required",
-                    minLength: { value: 2, message: "Authors must be at least 2 characters" },
-                    maxLength: { value: 500, message: "Authors must not exceed 500 characters" },
+                    required: "Author(s) is required",
+                    minLength: { value: 2, message: "Author(s) must be at least 2 characters" },
+                    maxLength: { value: 500, message: "Author(s) must not exceed 500 characters" },
                     pattern: {
                       value: /^[a-zA-Z\s,\.&'-]+$/,
-                      message: "Authors can only contain letters, spaces, commas, periods, ampersands, apostrophes, and hyphens"
+                      message: "Author(s) can only contain letters, spaces, commas, periods, ampersands, apostrophes, and hyphens"
                     }
                   })}
                   placeholder="Enter all authors"
@@ -463,15 +467,33 @@ export default function AddBookPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 <div>
-                  <Label htmlFor="chap_count">Chapter Count</Label>
+                  <Label htmlFor="chap_count">
+                    Chapter Count {isEdited ? "*" : ""}
+                  </Label>
                   <Input
                     id="chap_count"
                     type="number"
                     {...register("chap_count", { 
                       valueAsNumber: true,
+                      required: isEdited ? "Chapter count is required when book is edited" : false,
                       min: { value: 1, message: "Chapter count must be at least 1" },
                       max: { value: 1000, message: "Chapter count cannot exceed 1000" },
-                      validate: (v) => v === null || v === undefined || (v > 0 && Number.isInteger(v)) || "Must be a positive integer"
+                      validate: (v) => {
+                        if (isEdited) {
+                          if (v === null || v === undefined) {
+                            return "Chapter count is required when book is edited"
+                          }
+                          if (!Number.isInteger(v) || v <= 0) {
+                            return "Must be a positive integer"
+                          }
+                        }
+                        if (v !== null && v !== undefined) {
+                          if (!Number.isInteger(v) || v <= 0) {
+                            return "Must be a positive integer"
+                          }
+                        }
+                        return true
+                      }
                     })}
                     placeholder="Number of chapters"
                   />

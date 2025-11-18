@@ -59,8 +59,12 @@ export default function EditBookPage() {
     setValue,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<BookFormData>()
+
+  // Watch edited field for conditional validation
+  const isEdited = watch("edited")
 
   // Note: Dropdown data is already available from Context, no need to fetch
 
@@ -147,11 +151,21 @@ export default function EditBookPage() {
       return
     }
 
-    // Validate required fields
-    if (!data.title || !data.authors || !data.publishing_level || !data.book_type || !data.author_type) {
+    // Validate document upload is required (either existing or new)
+    if (!documentUrl) {
       showToast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please upload a supporting document",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate conditional requirement: chapter count if edited
+    if (data.edited && (!data.chap_count || data.chap_count <= 0)) {
+      showToast({
+        title: "Validation Error",
+        description: "Chapter count is required when book is edited",
         variant: "destructive",
       })
       return
@@ -509,19 +523,37 @@ export default function EditBookPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
               <div>
-                <Label htmlFor="chap_count">Chapter Count</Label>
-                <Input
-                  id="chap_count"
-                  type="number"
-                  {...register("chap_count", { 
-                    valueAsNumber: true,
-                    min: { value: 1, message: "Chapter count must be at least 1" },
-                    max: { value: 1000, message: "Chapter count cannot exceed 1000" },
-                    validate: (v) => v === null || v === undefined || (v > 0 && Number.isInteger(v)) || "Must be a positive integer"
-                  })}
-                  placeholder="Number of chapters"
-                />
-                {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
+                <Label htmlFor="chap_count">
+                  Chapter Count {isEdited ? "*" : ""}
+                </Label>
+                  <Input
+                    id="chap_count"
+                    type="number"
+                    {...register("chap_count", { 
+                      valueAsNumber: true,
+                      required: isEdited ? "Chapter count is required when book is edited" : false,
+                      min: { value: 1, message: "Chapter count must be at least 1" },
+                      max: { value: 1000, message: "Chapter count cannot exceed 1000" },
+                      validate: (v) => {
+                        if (isEdited) {
+                          if (v === null || v === undefined) {
+                            return "Chapter count is required when book is edited"
+                          }
+                          if (!Number.isInteger(v) || v <= 0) {
+                            return "Must be a positive integer"
+                          }
+                        }
+                        if (v !== null && v !== undefined) {
+                          if (!Number.isInteger(v) || v <= 0) {
+                            return "Must be a positive integer"
+                          }
+                        }
+                        return true
+                      }
+                    })}
+                    placeholder="Number of chapters"
+                  />
+                  {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
               </div>
              
             </div>

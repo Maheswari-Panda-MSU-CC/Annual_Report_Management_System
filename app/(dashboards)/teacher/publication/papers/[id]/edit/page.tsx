@@ -130,11 +130,11 @@ export default function EditPaperPage() {
       return
     }
 
-    // Validate required fields
-    if (!data.title_of_paper || !data.authors || !data.level) {
+    // Validate document upload is required (either existing or new)
+    if (!documentUrl) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please upload a supporting document",
         variant: "destructive",
       })
       return
@@ -265,12 +265,12 @@ export default function EditPaperPage() {
               <Input
                 id="authors"
                 {...register("authors", { 
-                  required: "Authors are required",
-                  minLength: { value: 2, message: "Authors must be at least 2 characters" },
-                  maxLength: { value: 500, message: "Authors must not exceed 500 characters" },
+                  required: "Author(s) is required",
+                  minLength: { value: 2, message: "Author(s) must be at least 2 characters" },
+                  maxLength: { value: 500, message: "Author(s) must not exceed 500 characters" },
                   pattern: {
                     value: /^[a-zA-Z\s,\.&'-]+$/,
-                    message: "Authors can only contain letters, spaces, commas, periods, ampersands, apostrophes, and hyphens"
+                    message: "Author(s) can only contain letters, spaces, commas, periods, ampersands, apostrophes, and hyphens"
                   }
                 })}
                 placeholder="Enter all authors"
