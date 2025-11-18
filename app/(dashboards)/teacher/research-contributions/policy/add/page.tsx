@@ -17,7 +17,6 @@ export default function AddPolicyPage() {
   const form = useForm()
   const { setValue } = form
 
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -33,52 +32,10 @@ export default function AddPolicyPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleDocumentUpload = (files: FileList | null) => {
-    if (files && files.length > 0) {
-      setSelectedFiles(files)
-    }
-  }
-
   const handleExtractInfo = async () => {
     setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "policy" }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: "policy" }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          form.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-          duration: 3000,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsExtracting(false)
-    }
+    // Extraction is handled by DocumentUpload component
+    setIsExtracting(false)
   }
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
@@ -91,12 +48,67 @@ export default function AddPolicyPage() {
       return
     }
 
+    // Validate document upload is required
+    const documentUrl = Array.isArray(data.supportingDocument) && data.supportingDocument.length > 0 
+      ? data.supportingDocument[0] 
+      : null
+
+    if (!documentUrl) {
+      toast({
+        title: "Error",
+        description: "Please upload a supporting document.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      // Handle dummy document upload
-      let docUrl = null
-      if (selectedFiles && selectedFiles.length > 0) {
-        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
+      // Handle document upload to S3 if a new document was uploaded
+      let docUrl = documentUrl
+
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+        try {
+          // Extract fileName from local URL
+          const fileName = documentUrl.split("/").pop()
+          
+          if (fileName) {
+            // Upload to S3 using the file in /public/uploaded-document/
+            const s3Response = await fetch("/api/shared/s3", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: fileName,
+              }),
+            })
+
+            if (!s3Response.ok) {
+              const s3Error = await s3Response.json()
+              throw new Error(s3Error.error || "Failed to upload document to S3")
+            }
+
+            const s3Data = await s3Response.json()
+            docUrl = s3Data.url // Use S3 URL for database storage
+
+            // Delete local file after successful S3 upload
+            await fetch("/api/shared/local-document-upload", {
+              method: "DELETE",
+            })
+          }
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          setIsSubmitting(false)
+          return
+        }
       }
 
       // Get level name from levelId
@@ -148,7 +160,6 @@ export default function AddPolicyPage() {
       })
     } finally {
       setIsSubmitting(false)
-      setSelectedFiles(null)
       form.reset()
     }
   }
@@ -159,38 +170,38 @@ export default function AddPolicyPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+      <div className="flex items-center gap-2 sm:gap-4">
         <Button
           variant="outline"
           onClick={handleBack}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
           disabled={isLoading || isSubmitting}
         >
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeft className="h-4 w-4" />}
-          Back to Policy Documents
+          {isLoading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />}
+          <span className="hidden sm:inline">Back to </span>Policy Documents
         </Button>
       </div>
 
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Add New Policy Document</h1>
-        <p className="text-muted-foreground">Add details about policy documents you've contributed to or authored</p>
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Add New Policy Document</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">Add details about policy documents you've contributed to or authored</p>
       </div>
 
 
       {/* Render Form Component */}
       <Card>
-        <CardHeader>
-          <CardTitle>Policy Document Information</CardTitle>
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">Policy Document Information</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <PolicyForm
             form={form}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
             isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleDocumentUpload}
+            selectedFiles={null}
+            handleFileSelect={() => {}}
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
             resPubLevelOptions={resPubLevelOptions}

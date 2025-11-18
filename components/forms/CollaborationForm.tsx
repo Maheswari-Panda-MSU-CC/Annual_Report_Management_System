@@ -1,7 +1,7 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Save, Loader2 } from "lucide-react"
 import { Controller } from "react-hook-form"
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import FileUpload from "../shared/FileUpload"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 
@@ -57,6 +57,9 @@ export function CollaborationForm({
   const formData = watch()
   const status = formData.status || ""
   const mouSigned = formData.mouSigned
+  const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+    isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined
+  )
 
   // Use props if provided, otherwise fetch from hook
   const { 
@@ -122,38 +125,48 @@ export function CollaborationForm({
       if (editData.MOU_signed !== undefined) setValue("mouSigned", editData.MOU_signed)
       if (editData.signing_date) setValue("signingDate", editData.signing_date)
       if (editData.doc) setValue("doc", editData.doc)
-      if (editData.supportingDocument) setValue("supportingDocument", editData.supportingDocument)
+      if (editData.supportingDocument) {
+        setValue("supportingDocument", editData.supportingDocument)
+        setDocumentUrl(Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+      }
     }
   }, [isEdit, editData, setValue, collaborationsTypeOptions])
 
+  // Handle extracted fields from DocumentUpload
+  const handleExtractedFields = (fields: Record<string, any>) => {
+    if (handleExtractInfo) {
+      handleExtractInfo()
+    }
+    if (fields.category) setValue("category", fields.category)
+    if (fields.collaboratingInstitute) setValue("collaboratingInstitute", fields.collaboratingInstitute)
+    if (fields.collabName) setValue("collabName", fields.collabName)
+    if (fields.address) setValue("address", fields.address)
+    if (fields.details) setValue("details", fields.details)
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-        <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Collaboration Document</Label>
-        <FileUpload onFileSelect={handleFileSelect} />
-        {selectedFiles && selectedFiles.length > 0 && (
-          <div className="mt-3 flex items-center justify-between">
-            <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-            <Button type="button" variant="outline" size="sm" onClick={handleExtractInfo} disabled={isExtracting}>
-              {isExtracting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Extracting...
-                </>
-              ) : (
-                "Extract Information"
-              )}
-            </Button>
-          </div>
-        )}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
+      <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
+        <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Collaboration Document *</Label>
+        <DocumentUpload
+          documentUrl={documentUrl}
+          category="research-contributions"
+          subCategory="collaborations"
+          onChange={(url) => {
+            setDocumentUrl(url)
+            setValue("supportingDocument", url ? [url] : [])
+          }}
+          onExtract={handleExtractedFields}
+          className="w-full"
+        />
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <Label className="text-lg font-semibold mb-4 block">Step 2: Verify/Complete Collaboration Information</Label>
+      <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-4 sm:space-y-6">
+        <Label className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 block">Step 2: Verify/Complete Collaboration Information</Label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
-            <Label>Category *</Label>
+            <Label className="text-sm sm:text-base">Category *</Label>
             <Controller
               name="category"
               control={control}
@@ -169,42 +182,42 @@ export function CollaborationForm({
               )}
             />
             {errors.category && (
-              <p className="text-sm text-red-600">{errors.category.message?.toString()}</p>
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.category.message?.toString()}</p>
             )}
           </div>
 
           <div>
-            <Label>Collaborating Institute *</Label>
-            <Input {...register("collaboratingInstitute", { required: "Institute is required" })} />
+            <Label className="text-sm sm:text-base">Collaborating Institute *</Label>
+            <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("collaboratingInstitute", { required: "Institute is required" })} />
             {errors.collaboratingInstitute && (
-              <p className="text-sm text-red-600">{errors.collaboratingInstitute.message?.toString()}</p>
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.collaboratingInstitute.message?.toString()}</p>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label>Name of Collaboration</Label>
-            <Input {...register("collabName")} />
+            <Label className="text-sm sm:text-base">Name of Collaboration</Label>
+            <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("collabName")} />
           </div>
           <div>
-            <Label>QS/THE Ranking</Label>
-            <Input {...register("collabRank")} />
+            <Label className="text-sm sm:text-base">QS/THE Ranking</Label>
+            <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("collabRank")} />
           </div>
         </div>
 
         <div className="mt-4">
-          <Label>Address</Label>
-          <Input {...register("address")} />
+          <Label className="text-sm sm:text-base">Address</Label>
+          <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("address")} />
         </div>
 
         <div className="mt-4">
-          <Label>Details</Label>
-          <Textarea rows={3} {...register("details")} />
+          <Label className="text-sm sm:text-base">Details</Label>
+          <Textarea rows={3} className="text-sm sm:text-base mt-1" {...register("details")} />
         </div>
 
         <div className="mt-4">
-          <Label>Collaboration Outcome</Label>
+          <Label className="text-sm sm:text-base">Collaboration Outcome</Label>
           <Controller
             name="collabOutcome"
             control={control}
@@ -220,9 +233,9 @@ export function CollaborationForm({
           />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label>Status</Label>
+            <Label className="text-sm sm:text-base">Status</Label>
             <Select value={formData.status || ""} onValueChange={(val) => {
               setValue("status", val)
               // Clear duration if status is not Completed
@@ -230,7 +243,7 @@ export function CollaborationForm({
                 setValue("duration", null)
               }
             }}>
-              <SelectTrigger>
+              <SelectTrigger className="text-sm sm:text-base h-9 sm:h-10 mt-1">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
@@ -243,16 +256,16 @@ export function CollaborationForm({
             </Select>
           </div>
           <div>
-            <Label>Starting Date</Label>
-            <Input type="date" {...register("startingDate")} />
+            <Label className="text-sm sm:text-base">Starting Date</Label>
+            <Input type="date" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("startingDate")} />
           </div>
           <div>
-            <Label>Duration (months)</Label>
+            <Label className="text-sm sm:text-base">Duration (months)</Label>
             <Input 
               type="number" 
+              className={`text-sm sm:text-base h-9 sm:h-10 mt-1 ${isDurationDisabled ? "bg-gray-100 cursor-not-allowed" : ""}`}
               {...register("duration", { min: 0 })} 
               disabled={isDurationDisabled}
-              className={isDurationDisabled ? "bg-gray-100 cursor-not-allowed" : ""}
             />
             {isDurationDisabled && (
               <p className="text-xs text-gray-500 mt-1">Duration can only be set when status is Completed</p>
@@ -260,9 +273,9 @@ export function CollaborationForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label>Level</Label>
+            <Label className="text-sm sm:text-base">Level</Label>
             <Controller
               name="level"
               control={control}
@@ -278,14 +291,14 @@ export function CollaborationForm({
             />
           </div>
           <div>
-            <Label>No. of Beneficiary</Label>
-            <Input type="number" {...register("noOfBeneficiary", { min: 0 })} />
+            <Label className="text-sm sm:text-base">No. of Beneficiary</Label>
+            <Input type="number" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("noOfBeneficiary", { min: 0 })} />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label>MOU Signed?</Label>
+            <Label className="text-sm sm:text-base">MOU Signed?</Label>
             <Select 
               value={formData.mouSigned !== undefined ? String(formData.mouSigned) : ""} 
               onValueChange={(val) => {
@@ -296,7 +309,7 @@ export function CollaborationForm({
                 }
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger className="text-sm sm:text-base h-9 sm:h-10 mt-1">
                 <SelectValue placeholder="Select option" />
               </SelectTrigger>
               <SelectContent>
@@ -306,12 +319,12 @@ export function CollaborationForm({
             </Select>
           </div>
           <div>
-            <Label>Signing Date</Label>
+            <Label className="text-sm sm:text-base">Signing Date</Label>
             <Input 
               type="date" 
+              className={`text-sm sm:text-base h-9 sm:h-10 mt-1 ${!isSigningDateEnabled ? "bg-gray-100 cursor-not-allowed" : ""}`}
               {...register("signingDate")} 
               disabled={!isSigningDateEnabled}
-              className={!isSigningDateEnabled ? "bg-gray-100 cursor-not-allowed" : ""}
             />
             {!isSigningDateEnabled && (
               <p className="text-xs text-gray-500 mt-1">Signing date is only available when MOU is signed</p>
@@ -320,29 +333,21 @@ export function CollaborationForm({
         </div>
 
 
-        {isEdit && formData?.supportingDocument?.[0] && (
-          <div className="mt-4">
-            <DocumentViewer
-              documentUrl={formData.supportingDocument[0]}
-              documentType={formData.supportingDocument[0].split(".").pop()?.toLowerCase() || ""}
-            />
-          </div>
-        )}
 
         {!isEdit && (
-          <div className="flex justify-end gap-4 mt-6">
-            <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=collaborations")}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=collaborations")} className="w-full sm:w-auto text-xs sm:text-sm">
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin mr-1 sm:mr-2" />
                   Submitting...
                 </>
               ) : (
                 <>
-                  <Save className="h-4 w-4 mr-2" />
+                  <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   Add Collaboration
                 </>
               )}

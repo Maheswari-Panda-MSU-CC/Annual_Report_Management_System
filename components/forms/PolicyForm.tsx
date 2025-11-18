@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Controller } from "react-hook-form"
 import { Save } from "lucide-react"
-import FileUpload from "../shared/FileUpload"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
@@ -28,6 +28,9 @@ export default function PolicyForm({
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
+  const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+    isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined
+  )
 
   // Use props if provided, otherwise fetch from hook
   const { resPubLevelOptions: hookResPubLevelOptions, fetchResPubLevels } = useDropDowns()
@@ -61,7 +64,10 @@ export default function PolicyForm({
       }
       if (editData.organisation) formValues.organisation = editData.organisation
       if (editData.date) formValues.date = editData.date
-      if (editData.supportingDocument) formValues.supportingDocument = editData.supportingDocument
+      if (editData.supportingDocument) {
+        formValues.supportingDocument = editData.supportingDocument
+        setDocumentUrl(Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+      }
       
       // Set all values at once
       Object.keys(formValues).forEach((key) => {
@@ -70,33 +76,46 @@ export default function PolicyForm({
     }
   }, [isEdit, editData, setValue, form, resPubLevelOptions])
 
+  // Handle extracted fields from DocumentUpload
+  const handleExtractedFields = (fields: Record<string, any>) => {
+    if (handleExtractInfo) {
+      handleExtractInfo()
+    }
+    if (fields.title) setValue("title", fields.title)
+    if (fields.level) setValue("level", fields.level)
+    if (fields.organisation) setValue("organisation", fields.organisation)
+    if (fields.date) setValue("date", fields.date)
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
       
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-              <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Policy Document</Label>
-                    <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.doc,.docx" />
-                        {selectedFiles && selectedFiles.length > 0 && (
-                            <div className="mt-3 flex items-center justify-between">
-                            <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-                            <Button type="button" variant="outline" size="sm" onClick={handleExtractInfo} disabled={isExtracting}>
-                                {isExtracting ? "Extracting..." : "Extract Information"}
-                            </Button>
-                            </div>
-                        )}
+          <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
+              <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Policy Document *</Label>
+              <DocumentUpload
+                documentUrl={documentUrl}
+                category="research-contributions"
+                subCategory="policy"
+                onChange={(url) => {
+                  setDocumentUrl(url)
+                  setValue("supportingDocument", url ? [url] : [])
+                }}
+                onExtract={handleExtractedFields}
+                className="w-full"
+              />
             </div>
       
 
-      <div className="bg-gray-50 p-4 rounded-lg space-y-6">
+      <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-4 sm:space-y-6">
         <div>
-          <Label htmlFor="title">Title *</Label>
-          <Input id="title" placeholder="Enter policy title" {...register("title", { required: "Title is required" })} />
-          {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
+          <Label htmlFor="title" className="text-sm sm:text-base">Title *</Label>
+          <Input id="title" placeholder="Enter policy title" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("title", { required: "Title is required" })} />
+          {errors.title && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div>
-            <Label htmlFor="level">Level *</Label>
+            <Label htmlFor="level" className="text-sm sm:text-base">Level *</Label>
             <Controller
               control={control}
               name="level"
@@ -114,53 +133,37 @@ export default function PolicyForm({
                 />
               )}
             />
-            {errors.level && <p className="text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>}
+            {errors.level && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>}
           </div>
 
           <div>
-            <Label htmlFor="organisation">Organisation *</Label>
-            <Input id="organisation" placeholder="Enter organisation" {...register("organisation", { required: "Organisation is required" })} />
-            {errors.organisation && <p className="text-sm text-red-600 mt-1">{errors.organisation.message?.toString()}</p>}
+            <Label htmlFor="organisation" className="text-sm sm:text-base">Organisation *</Label>
+            <Input id="organisation" placeholder="Enter organisation" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("organisation", { required: "Organisation is required" })} />
+            {errors.organisation && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.organisation.message?.toString()}</p>}
           </div>
         </div>
 
         <div>
-          <Label htmlFor="date">Date *</Label>
-          <Input id="date" type="date" {...register("date", { required: "Date is required" })} />
-          {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
+          <Label htmlFor="date" className="text-sm sm:text-base">Date *</Label>
+          <Input id="date" type="date" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("date", { required: "Date is required" })} />
+          {errors.date && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
         </div>
 
-        {/* Optional: Show document viewer in edit mode */}
-        {isEdit && (
-          <div className="mt-4">
-            {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-              <div className="mt-4">
-                <Label>Supporting Document</Label>
-                <div className="mt-2 border rounded-lg p-4">
-                  <DocumentViewer
-                    documentUrl={formData.supportingDocument[0]}
-                    documentType={formData.supportingDocument[0]?.split('.').pop()?.toLowerCase() || 'pdf'}
-                    documentName={formData.title || "Document"}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
        {
         !isEdit && 
-        <div className="flex justify-end gap-4 pt-4">
+        <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-4 border-t">
         <Button
           type="button"
           variant="outline"
           onClick={() => router.push("/teacher/research-contributions?tab=policy")}
           disabled={isSubmitting || isExtracting}
+          className="w-full sm:w-auto text-xs sm:text-sm"
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          <Save className="h-4 w-4 mr-2" />
+        <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
+          <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
           {isEdit ? "Update Policy" : "Add Policy Document"}
         </Button>
       </div>

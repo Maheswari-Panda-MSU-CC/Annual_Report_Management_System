@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label"
 import { Controller } from "react-hook-form"
 import { Save } from "lucide-react"
 import { useRouter } from "next/navigation"
-import FileUpload from "../shared/FileUpload"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { PatentFormProps } from "@/types/interfaces"
@@ -29,6 +29,9 @@ export function PatentForm({
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
     const formData = watch()
+    const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+        isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined
+    )
 
     // Use props if provided, otherwise fetch from hook
     const { resPubLevelOptions: hookResPubLevelOptions, patentStatusOptions: hookPatentStatusOptions, fetchResPubLevels, fetchPatentStatuses } = useDropDowns()
@@ -65,7 +68,10 @@ export function PatentForm({
                 formValues.Earnings_Generate = editData.Earnings_Generate
             }
             if (editData.PatentApplicationNo !== undefined) formValues.PatentApplicationNo = editData.PatentApplicationNo || ""
-            if (editData.supportingDocument) formValues.supportingDocument = editData.supportingDocument
+            if (editData.supportingDocument) {
+                formValues.supportingDocument = editData.supportingDocument
+                setDocumentUrl(Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+            }
             
             // Set all values at once
             Object.keys(formValues).forEach((key) => {
@@ -74,6 +80,19 @@ export function PatentForm({
         }
     }, [isEdit, editData, setValue, form]);
 
+    // Handle extracted fields from DocumentUpload
+    const handleExtractedFields = (fields: Record<string, any>) => {
+        if (handleExtractInfo) {
+            handleExtractInfo()
+        }
+        // Map extracted fields to form fields
+        if (fields.title) setValue("title", fields.title)
+        if (fields.level) setValue("level", fields.level)
+        if (fields.status) setValue("status", fields.status)
+        if (fields.date) setValue("date", fields.date)
+        if (fields.patentApplicationNo) setValue("PatentApplicationNo", fields.patentApplicationNo)
+    }
+
     const onFormSubmit = handleSubmit(
         (data:any) => {
             onSubmit(data)
@@ -81,37 +100,40 @@ export function PatentForm({
     )
 
     return (
-        <form onSubmit={onFormSubmit} className="space-y-6">
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-                <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Patent Document</Label>
-                <FileUpload onFileSelect={handleFileSelect} />
-                {selectedFiles && selectedFiles.length > 0 && (
-                    <div className="mt-3 flex items-center justify-between">
-                        <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-                        <Button type="button" variant="outline" size="sm" onClick={handleExtractInfo} disabled={isExtracting}>
-                            {isExtracting ? "Extracting..." : "Extract Information"}
-                        </Button>
-                    </div>
-                )}
+        <form onSubmit={onFormSubmit} className="space-y-4 sm:space-y-6">
+            <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
+                <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Patent Document *</Label>
+                <DocumentUpload
+                    documentUrl={documentUrl}
+                    category="research-contributions"
+                    subCategory="patents"
+                    onChange={(url) => {
+                        setDocumentUrl(url)
+                        setValue("supportingDocument", url ? [url] : [])
+                    }}
+                    onExtract={handleExtractedFields}
+                    className="w-full"
+                />
             </div>
 
-            <div className="bg-gray-50 p-4 rounded-lg">
-                <Label className="text-lg font-semibold mb-4 block">Step 2: Verify/Complete Patent Information</Label>
+            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-4 sm:space-y-6">
+                <Label className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 block">Step 2: Verify/Complete Patent Information</Label>
 
 
                 <div>
-                    <Label htmlFor="title">Title *</Label>
+                    <Label htmlFor="title" className="text-sm sm:text-base">Title *</Label>
                     <Input 
                         id="title" 
                         placeholder="Enter patent title" 
+                        className="text-sm sm:text-base h-9 sm:h-10 mt-1"
                         {...register("title", { required: "Patent title is required" })} 
                     />
-                    {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
+                    {errors.title && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
                     <div>
-                        <Label htmlFor="level">Level *</Label>
+                        <Label htmlFor="level" className="text-sm sm:text-base">Level *</Label>
                         <Controller
                             control={control}
                             name="level"
@@ -129,11 +151,11 @@ export function PatentForm({
                                 />
                             )}
                         />
-                        {errors.level && <p className="text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>}
+                        {errors.level && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>}
                     </div>
 
                     <div>
-                        <Label htmlFor="status">Status *</Label>
+                        <Label htmlFor="status" className="text-sm sm:text-base">Status *</Label>
                         <Controller
                             control={control}
                             name="status"
@@ -151,90 +173,78 @@ export function PatentForm({
                                 />
                             )}
                         />
-                        {errors.status && <p className="text-sm text-red-600 mt-1">{errors.status.message?.toString()}</p>}
+                        {errors.status && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.status.message?.toString()}</p>}
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
                     <div>
-                        <Label htmlFor="date">Date *</Label>
+                        <Label htmlFor="date" className="text-sm sm:text-base">Date *</Label>
                         <Input 
                             id="date" 
                             type="date" 
+                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
                             {...register("date", { required: "Date is required" })} 
                         />
-                        {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
+                        {errors.date && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
                     </div>
 
                     <div>
-                        <Label htmlFor="Tech_Licence">Transfer of Technology with Licence</Label>
+                        <Label htmlFor="Tech_Licence" className="text-sm sm:text-base">Transfer of Technology with Licence</Label>
                         <Input 
                             id="Tech_Licence" 
                             placeholder="Enter technology licence details" 
+                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
                             {...register("Tech_Licence")} 
                         />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
                     <div>
-                        <Label htmlFor="Earnings_Generate">Earning Generated (Rupees)</Label>
+                        <Label htmlFor="Earnings_Generate" className="text-sm sm:text-base">Earning Generated (Rupees)</Label>
                         <Input 
                             id="Earnings_Generate" 
                             type="number" 
                             placeholder="Enter amount" 
+                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
                             {...register("Earnings_Generate", {
                                 min: { value: 0, message: "Amount must be positive" }
                             })} 
                         />
-                        {errors.Earnings_Generate && <p className="text-sm text-red-600 mt-1">{errors.Earnings_Generate.message?.toString()}</p>}
+                        {errors.Earnings_Generate && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.Earnings_Generate.message?.toString()}</p>}
                     </div>
 
                     <div>
-                        <Label htmlFor="PatentApplicationNo">Patent Application/Publication/Grant No.</Label>
+                        <Label htmlFor="PatentApplicationNo" className="text-sm sm:text-base">Patent Application/Publication/Grant No.</Label>
                         <Input 
                             id="PatentApplicationNo" 
                             placeholder="Enter patent number" 
+                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
                             {...register("PatentApplicationNo")} 
                         />
                     </div>
                 </div>
 
-                {isEdit && (
-                    <div className="mt-4">
-                        {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-                            <div className="mt-4">
-                                <Label>Supporting Document</Label>
-                                <div className="mt-2 border rounded-lg p-4">
-                                    <DocumentViewer
-                                        documentUrl={formData.supportingDocument[0]}
-                                        documentType={formData.supportingDocument[0]?.split('.').pop()?.toLowerCase() || 'pdf'}
-                                        documentName={formData.title || "Document"}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
 
                 {!isEdit && (
-                    <div className="flex justify-end gap-4 mt-6">
-                        <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=patents")}>
+                    <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
+                        <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=patents")} className="w-full sm:w-auto text-xs sm:text-sm">
                             Cancel
                         </Button>
                         <Button 
                             type="submit" 
                             disabled={isSubmitting}
-                            className="transition-all duration-200"
+                            className="transition-all duration-200 w-full sm:w-auto text-xs sm:text-sm"
                         >
                             {isSubmitting ? (
                                 <>
-                                    <Save className="h-4 w-4 mr-2 animate-spin" />
+                                    <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
                                     Submitting...
                                 </>
                             ) : (
                                 <>
-                                    <Save className="h-4 w-4 mr-2" />
+                                    <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                                     Add Patent
                                 </>
                             )}

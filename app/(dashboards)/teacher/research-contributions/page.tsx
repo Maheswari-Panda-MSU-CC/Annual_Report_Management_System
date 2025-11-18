@@ -701,38 +701,38 @@ export default function ResearchContributionsPage() {
       case "patents":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title}</TableCell>
-            <TableCell>{item.level}</TableCell>
-            <TableCell>
-              <Badge variant={item.status?.toLowerCase() === "granted" ? "default" : "secondary"}>{item.status}</Badge>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.level}</TableCell>
+            <TableCell className="px-2 sm:px-4">
+              <Badge variant={item.status?.toLowerCase() === "granted" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{item.status}</Badge>
             </TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date}</span>
+                <span>{item.date}</span>
               </div>
             </TableCell>
-            <TableCell>
-              <Badge variant={item.Tech_Licence ? "default" : "secondary"}>
+            <TableCell className="px-2 sm:px-4">
+              <Badge variant={item.Tech_Licence ? "default" : "secondary"} className="text-[10px] sm:text-xs">
                 {item.Tech_Licence || "No"}
               </Badge>
             </TableCell>
-            <TableCell>₹ {Number.parseInt(item.Earnings_Generate || "0").toLocaleString()}</TableCell>
-            <TableCell>{item.PatentApplicationNo}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">₹ {Number.parseInt(item.Earnings_Generate || "0").toLocaleString()}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.PatentApplicationNo}</TableCell>
           </>
         )
       case "policy":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title}</TableCell>
-            <TableCell>{item.level}</TableCell>
-            <TableCell>{item.organisation}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[150px] sm:max-w-none truncate">{item.title}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.level}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.organisation}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date}</span>
+                <span>{item.date}</span>
               </div>
             </TableCell>
           </>
@@ -740,49 +740,49 @@ export default function ResearchContributionsPage() {
       case "econtent":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title}</TableCell>
-            <TableCell>{item.e_content_type_name || ""}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.Brief_Details}>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.e_content_type_name || ""}</TableCell>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.Brief_Details}>
                 {item.Brief_Details}
               </div>
             </TableCell>
-            <TableCell>{item.Quadrant}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.Quadrant}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.Publishing_date}</span>
+                <span>{item.Publishing_date}</span>
               </div>
             </TableCell>
-            <TableCell>{item.Publishing_Authorities}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.Publishing_Authorities}</TableCell>
+            <TableCell className="px-2 sm:px-4">
               {item.link && (
-                <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs sm:text-sm">
                   Link
                 </a>
               )}
             </TableCell>
-            <TableCell>{item.type_econtent_name || ""}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.type_econtent_name || ""}</TableCell>
           </>
         )
       case "consultancy":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title || item.name}</TableCell>
-            <TableCell>{item.collaboratingInstitute || item.collaborating_inst}</TableCell>
-            <TableCell>{item.address}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title || item.name}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.collaboratingInstitute || item.collaborating_inst}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.address}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.startDate || item.Start_Date}</span>
+                <span>{item.startDate || item.Start_Date}</span>
               </div>
             </TableCell>
-            <TableCell>{item.duration ? `${item.duration} months` : "-"}</TableCell>
-            <TableCell>{item.amount ? `₹ ${Number(item.amount).toLocaleString()}` : "-"}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.detailsOutcome || item.outcome}>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.duration ? `${item.duration} months` : "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.amount ? `₹ ${Number(item.amount).toLocaleString()}` : "-"}</TableCell>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.detailsOutcome || item.outcome}>
                 {item.detailsOutcome || item.outcome || "-"}
               </div>
             </TableCell>
@@ -791,41 +791,41 @@ export default function ResearchContributionsPage() {
       case "collaborations":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell>{item.category}</TableCell>
-            <TableCell className="font-medium">{item.collaboratingInstitute}</TableCell>
-            <TableCell>{item.nameOfCollaborator || item.collab_name || "-"}</TableCell>
-            <TableCell>{item.qsTheRanking || item.collab_rank || "-"}</TableCell>
-            <TableCell>{item.address || "-"}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.details}>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.category}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.collaboratingInstitute}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.nameOfCollaborator || item.collab_name || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.qsTheRanking || item.collab_rank || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.address || "-"}</TableCell>
+            <TableCell className="max-w-[80px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.details}>
                 {item.details || "-"}
               </div>
             </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.collaborationOutcome}>
+            <TableCell className="max-w-[80px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.collaborationOutcome}>
                 {item.collaborationOutcome || "-"}
               </div>
             </TableCell>
-            <TableCell>
-              <Badge variant={item.status === "Active" ? "default" : "secondary"}>{item.status || "-"}</Badge>
+            <TableCell className="px-2 sm:px-4">
+              <Badge variant={item.status === "Active" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{item.status || "-"}</Badge>
             </TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.startingDate || "-"}</span>
+                <span>{item.startingDate || "-"}</span>
               </div>
             </TableCell>
-            <TableCell>{item.duration ? `${item.duration} months` : "-"}</TableCell>
-            <TableCell>{item.levelName || "-"}</TableCell>
-            <TableCell>{item.noOfBeneficiary || item.beneficiary_num || "-"}</TableCell>
-            <TableCell>
-              <Badge variant={item.mouSigned === "Yes" ? "default" : "secondary"}>{item.mouSigned || "No"}</Badge>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.duration ? `${item.duration} months` : "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.levelName || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.noOfBeneficiary || item.beneficiary_num || "-"}</TableCell>
+            <TableCell className="px-2 sm:px-4">
+              <Badge variant={item.mouSigned === "Yes" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{item.mouSigned || "No"}</Badge>
             </TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.signingDate || "-"}</span>
+                <span>{item.signingDate || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -833,20 +833,20 @@ export default function ResearchContributionsPage() {
       case "visits":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.instituteVisited || item.Institute_visited || "-"}</TableCell>
-            <TableCell>{item.durationOfVisit || item.duration ? `${item.durationOfVisit || item.duration} days` : "-"}</TableCell>
-            <TableCell>{item.roleName || "-"}</TableCell>
-            <TableCell>{item.sponsoredBy || item.Sponsored_by || "-"}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.remarks}>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.instituteVisited || item.Institute_visited || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.durationOfVisit || item.duration ? `${item.durationOfVisit || item.duration} days` : "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.roleName || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.sponsoredBy || item.Sponsored_by || "-"}</TableCell>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.remarks}>
                 {item.remarks || "-"}
               </div>
             </TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date || "-"}</span>
+                <span>{item.date || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -854,25 +854,25 @@ export default function ResearchContributionsPage() {
       case "financial":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfSupport || item.name || "-"}</TableCell>
-            <TableCell>{item.typeName || "-"}</TableCell>
-            <TableCell>{item.supportingAgency || item.support || "-"}</TableCell>
-            <TableCell>{item.grantReceived || item.grant_received ? `₹ ${Number(item.grantReceived || item.grant_received).toLocaleString()}` : "-"}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.detailsOfEvent || item.details}>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.nameOfSupport || item.name || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.typeName || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.supportingAgency || item.support || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.grantReceived || item.grant_received ? `₹ ${Number(item.grantReceived || item.grant_received).toLocaleString()}` : "-"}</TableCell>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.detailsOfEvent || item.details}>
                 {item.detailsOfEvent || item.details || "-"}
               </div>
             </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.purposeOfGrant || item.purpose}>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.purposeOfGrant || item.purpose}>
                 {item.purposeOfGrant || item.purpose || "-"}
               </div>
             </TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date || "-"}</span>
+                <span>{item.date || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -880,22 +880,22 @@ export default function ResearchContributionsPage() {
       case "jrfSrf":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.nameOfFellow || item.name || "-"}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{item.typeName || "-"}</Badge>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.nameOfFellow || item.name || "-"}</TableCell>
+            <TableCell className="px-2 sm:px-4">
+              <Badge variant="outline" className="text-[10px] sm:text-xs">{item.typeName || "-"}</Badge>
             </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.projectTitle || item.title}>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.projectTitle || item.title}>
                 {item.projectTitle || item.title || "-"}
               </div>
             </TableCell>
-            <TableCell>{item.duration ? `${item.duration} months` : "-"}</TableCell>
-            <TableCell>{item.monthlyStipend || item.stipend ? `₹ ${Number(item.monthlyStipend || item.stipend).toLocaleString()}` : "-"}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.duration ? `${item.duration} months` : "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.monthlyStipend || item.stipend ? `₹ ${Number(item.monthlyStipend || item.stipend).toLocaleString()}` : "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date || "-"}</span>
+                <span>{item.date || "-"}</span>
               </div>
             </TableCell>
           </>
@@ -903,45 +903,45 @@ export default function ResearchContributionsPage() {
       case "phd":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell>{item.regNo || item.regno || "-"}</TableCell>
-            <TableCell className="font-medium">{item.nameOfStudent || item.name || "-"}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.regNo || item.regno || "-"}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.nameOfStudent || item.name || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.dateOfRegistration || item.start_date || "-"}</span>
+                <span>{item.dateOfRegistration || item.start_date || "-"}</span>
               </div>
             </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.topic}>
+            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
+              <div className="truncate text-xs sm:text-sm" title={item.topic}>
                 {item.topic || "-"}
               </div>
             </TableCell>
-            <TableCell>
-              <Badge variant="outline">{item.statusName || "-"}</Badge>
+            <TableCell className="px-2 sm:px-4">
+              <Badge variant="outline" className="text-[10px] sm:text-xs">{item.statusName || "-"}</Badge>
             </TableCell>
-            <TableCell>{item.yearOfCompletion || item.year_of_completion || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.yearOfCompletion || item.year_of_completion || "-"}</TableCell>
           </>
         )
       case "copyrights":
         return (
           <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.title || item.Title || "-"}</TableCell>
-            <TableCell>{item.referenceNo || item.RefNo || "-"}</TableCell>
-            <TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
+            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title || item.Title || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.referenceNo || item.RefNo || "-"}</TableCell>
+            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
               <div className="flex items-center gap-1">
                 <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.publicationDate || item.PublicationDate || "-"}</span>
+                <span>{item.publicationDate || item.PublicationDate || "-"}</span>
               </div>
             </TableCell>
-            <TableCell>
+            <TableCell className="px-2 sm:px-4">
               {item.link || item.Link ? (
                 <a 
                   href={item.link || item.Link} 
                   target="_blank" 
                   rel="noopener noreferrer" 
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 hover:underline text-xs sm:text-sm"
                 >
                   Link
                 </a>
@@ -1241,24 +1241,24 @@ export default function ResearchContributionsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Research & Academic Contributions</h1>
-        <p className="text-muted-foreground">Manage your research contributions, patents, and academic activities</p>
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Research & Academic Contributions</h1>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">Manage your research contributions, patents, and academic activities</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-        <div className="border-b mb-4">
-          <div className="overflow-x-auto pb-2">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-3 sm:space-y-4">
+        <div className="border-b mb-3 sm:mb-4">
+          <div className="overflow-x-auto pb-2 -mx-2 sm:mx-0 px-2 sm:px-0">
             <TabsList className="inline-flex min-w-max w-full">
               {sections.map((section) => (
                 <TabsTrigger
                   key={section.id}
                   value={section.id}
-                  className="flex items-center gap-2 whitespace-nowrap px-3 py-2"
+                  className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm"
                 >
-                  <section.icon className="h-4 w-4" />
-                  <span className="text-xs">{section.title}</span>
+                  <section.icon className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span>{section.title}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -1268,33 +1268,37 @@ export default function ResearchContributionsPage() {
         {sections.map((section) => (
           <TabsContent key={section.id} value={section.id}>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <section.icon className="h-5 w-5" />
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4 p-4 sm:p-6">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <section.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   {section.title}
                 </CardTitle>
                 <Button
+                  size="sm"
+                  className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-10"
                   onClick={() => {
                     const route = SECTION_ROUTES[section.id as SectionId]
                     router.push(route || "/teacher/research-contributions")
                   }}
                 >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add {section.title}
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">Add </span>
+                  {section.title}
                 </Button>
               </CardHeader>
-              <CardContent>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {section.columns.map((column) => (
-                          <TableHead key={column} className="whitespace-nowrap">
-                            {column}
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
+              <CardContent className="p-3 sm:p-6">
+                <div className="rounded-md border overflow-x-auto -mx-2 sm:mx-0">
+                  <div className="inline-block min-w-full align-middle">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          {section.columns.map((column) => (
+                            <TableHead key={column} className="whitespace-nowrap text-xs sm:text-sm px-2 sm:px-4">
+                              {column}
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
                     <TableBody>
                       {loadingStates[section.id] ? (
                         <TableRow>
@@ -1303,8 +1307,8 @@ export default function ResearchContributionsPage() {
                             className="h-24 text-center text-muted-foreground"
                           >
                             <div className="flex items-center justify-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Loading...
+                              <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                              <span className="text-xs sm:text-sm">Loading...</span>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1313,7 +1317,7 @@ export default function ResearchContributionsPage() {
                         <TableRow>
                           <TableCell
                             colSpan={section.columns.length}
-                            className="h-24 text-center text-muted-foreground"
+                            className="h-24 text-center text-muted-foreground text-xs sm:text-sm px-2 sm:px-4"
                           >
                             No {section.title.toLowerCase()} found. Click "Add {section.title}" to get started.
                           </TableCell>
@@ -1322,26 +1326,26 @@ export default function ResearchContributionsPage() {
                         data[section.id as keyof typeof data].map((item: any) => (
                           <TableRow key={item.id}>
                             {renderTableData(section, item)}
-                            <TableCell>
-                              <div className="flex items-center gap-2">
+                            <TableCell className="px-2 sm:px-4">
+                              <div className="flex items-center gap-1 sm:gap-2">
                                 {item.supportingDocument && item.supportingDocument.length > 0 ? (
                                   <>
                                     <Dialog>
                                       <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" title="View Document">
-                                          <FileText className="h-4 w-4" />
+                                        <Button variant="ghost" size="sm" title="View Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                          <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
                                         </Button>
                                       </DialogTrigger>
                                       <DialogContent
-                                        className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden"
+                                        className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
                                         style={{ display: "flex", flexDirection: "column" }}
                                       >
-                                        <DialogHeader className="p-4 border-b">
-                                          <DialogTitle>View Document</DialogTitle>
+                                        <DialogHeader className="p-3 sm:p-4 border-b">
+                                          <DialogTitle className="text-sm sm:text-base">View Document</DialogTitle>
                                         </DialogHeader>
 
                                         {/* Scrollable Content */}
-                                        <div className="flex-1 overflow-y-auto p-4">
+                                        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
                                           <div className="w-full h-full">
                                             <DocumentViewer
                                               documentUrl={item.supportingDocument[0]}
@@ -1352,25 +1356,25 @@ export default function ResearchContributionsPage() {
                                       </DialogContent>
                                     </Dialog>
 
-                                    <Badge variant="outline" className="text-xs">
+                                    <Badge variant="outline" className="text-[10px] sm:text-xs">
                                       {item.supportingDocument.length} file(s)
                                     </Badge>
                                   </>
                                 ) : (
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" title="Upload Document">
-                                        <Upload className="h-4 w-4" />
+                                      <Button variant="ghost" size="sm" title="Upload Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                        <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
                                       </Button>
                                     </DialogTrigger>
-                                    <DialogContent>
+                                    <DialogContent className="w-[95vw] sm:max-w-md">
                                       <DialogHeader>
-                                        <DialogTitle>Upload Supporting Documents</DialogTitle>
+                                        <DialogTitle className="text-sm sm:text-base">Upload Supporting Documents</DialogTitle>
                                       </DialogHeader>
                                       <FileUpload onFileSelect={handleFileSelect} />
-                                      <div className="flex justify-end gap-2 mt-4">
-                                        <Button variant="outline">Cancel</Button>
-                                        <Button onClick={() => handleFileUpload(section.id, item.id)}>
+                                      <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
+                                        <Button variant="outline" className="w-full sm:w-auto text-xs sm:text-sm">Cancel</Button>
+                                        <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto text-xs sm:text-sm">
                                           Upload Files
                                         </Button>
                                       </div>
@@ -1382,16 +1386,16 @@ export default function ResearchContributionsPage() {
 
 
 
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>
-                                  <Edit className="h-4 w-4" />
+                            <TableCell className="px-2 sm:px-4">
+                              <div className="flex items-center gap-1 sm:gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                                 </Button>
 
                                 <ConfirmDeleteModal
-                                  itemName={item.title} // or whatever field you want
-                                  trigger={<Button variant="ghost" size="sm" >
-                                    <Trash2 className="h-4 w-4" />
+                                  itemName={item.title}
+                                  trigger={<Button variant="ghost" size="sm" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                                   </Button>}
                                   onConfirm={() => handleDelete(section.id, item.id)}
                                 />
@@ -1402,6 +1406,7 @@ export default function ResearchContributionsPage() {
                       )}
                     </TableBody>
                   </Table>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1411,17 +1416,17 @@ export default function ResearchContributionsPage() {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent className="w-[95vw] sm:w-[90vw] max-w-4xl max-h-[95vh] sm:max-h-[90vh] p-2 sm:p-4 md:p-6 overflow-hidden flex flex-col">
+          <DialogHeader className="pb-2 sm:pb-3 md:pb-4 flex-shrink-0">
+            <DialogTitle className="text-sm sm:text-base md:text-lg">
               Edit {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto max-h-[70vh] pr-2">
+          <div className="overflow-y-auto flex-1 min-h-0 pr-1 sm:pr-2 -mx-2 sm:mx-0 px-2 sm:px-0">
             {editingItem && renderForm(editingItem.sectionId, true)}
           </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+          <div className="flex flex-col sm:flex-row justify-end gap-2 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t flex-shrink-0">
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-10">
               Cancel
             </Button>
             <Button 
@@ -1434,17 +1439,17 @@ export default function ResearchContributionsPage() {
                 }
               }}
               disabled={isSubmitting}
-              className="transition-all duration-200"
+              className="transition-all duration-200 w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-10"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Updating...
+                  <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
+                  <span className="text-xs sm:text-sm">Updating...</span>
                 </>
               ) : (
                 <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Update {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
+                  <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="text-xs sm:text-sm">Update {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}</span>
                 </>
               )}
             </Button>

@@ -162,22 +162,22 @@ export default function AddEContentPage() {
   }
 
   return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
+      <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
             onClick={handleBack}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
             disabled={isLoading || isSubmitting}
           >
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowLeft className="h-4 w-4" />}
-            Back to E-Content Development
+            {isLoading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />}
+            <span className="hidden sm:inline">Back to </span>E-Content Development
           </Button>
         </div>
 
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Add New E-Content</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Add New E-Content</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Add details about your e-learning content, online courses, or digital educational materials
           </p>
         </div>
@@ -185,10 +185,10 @@ export default function AddEContentPage() {
       
 
         <Card>
-          <CardHeader>
-            <CardTitle>E-Content Information</CardTitle>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">E-Content Information</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
            <EContentForm
               form={form}
               onSubmit={handleSubmit}

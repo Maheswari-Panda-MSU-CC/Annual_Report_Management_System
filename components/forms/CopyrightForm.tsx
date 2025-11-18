@@ -1,13 +1,13 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Save, Loader2 } from "lucide-react"
-import FileUpload from "../shared/FileUpload"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 
 interface CopyrightFormProps {
@@ -43,6 +43,9 @@ export function CopyrightForm({
   } = form
 
   const formData = watch()
+  const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+    isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined
+  )
 
   useEffect(() => {
     if (isEdit && editData) {
@@ -55,39 +58,50 @@ export function CopyrightForm({
       }
       if (editData.Link) setValue("link", editData.Link)
       if (editData.doc) setValue("doc", editData.doc)
-      if (editData.supportingDocument) setValue("supportingDocument", editData.supportingDocument)
+      if (editData.supportingDocument) {
+        setValue("supportingDocument", editData.supportingDocument)
+        setDocumentUrl(Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+      }
     }
   }, [isEdit, editData, setValue])
 
+  // Handle extracted fields from DocumentUpload
+  const handleExtractedFields = (fields: Record<string, any>) => {
+    if (handleExtractInfo) {
+      handleExtractInfo()
+    }
+    if (fields.title) setValue("title", fields.title)
+    if (fields.referenceNo) setValue("referenceNo", fields.referenceNo)
+    if (fields.publicationDate) setValue("publicationDate", fields.publicationDate)
+    if (fields.link) setValue("link", fields.link)
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-        <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Copyright Document</Label>
-        <FileUpload onFileSelect={handleFileSelect} />
-        {selectedFiles && selectedFiles.length > 0 && (
-          <div className="mt-3 flex items-center justify-between">
-            <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExtractInfo}
-              disabled={isExtracting}
-            >
-              {isExtracting ? "Extracting..." : "Extract Information"}
-            </Button>
-          </div>
-        )}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">
+      <div className="bg-blue-50 p-3 sm:p-4 rounded-lg border border-blue-200 mb-4 sm:mb-6">
+        <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Copyright Document *</Label>
+        <DocumentUpload
+          documentUrl={documentUrl}
+          category="research-contributions"
+          subCategory="copyrights"
+          onChange={(url) => {
+            setDocumentUrl(url)
+            setValue("supportingDocument", url ? [url] : [])
+          }}
+          onExtract={handleExtractedFields}
+          className="w-full"
+        />
       </div>
 
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <Label className="text-lg font-semibold mb-4 block">Step 2: Verify/Complete Copyright Information</Label>
+      <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-4 sm:space-y-6">
+        <Label className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 block">Step 2: Verify/Complete Copyright Information</Label>
 
         <div>
-          <Label htmlFor="title">Title *</Label>
+          <Label htmlFor="title" className="text-sm sm:text-base">Title *</Label>
           <Input
             id="title"
             placeholder="Enter copyright title"
+            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
             {...register("title", { 
               required: "Copyright title is required",
               minLength: {
@@ -97,16 +111,17 @@ export function CopyrightForm({
             })}
           />
           {errors.title && (
-            <p className="text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>
+            <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label htmlFor="referenceNo">Reference Number *</Label>
+            <Label htmlFor="referenceNo" className="text-sm sm:text-base">Reference Number *</Label>
             <Input
               id="referenceNo"
               placeholder="Enter reference number"
+              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
               {...register("referenceNo", { 
                 required: "Reference number is required",
                 minLength: {
@@ -116,15 +131,16 @@ export function CopyrightForm({
               })}
             />
             {errors.referenceNo && (
-              <p className="text-sm text-red-600 mt-1">{errors.referenceNo.message?.toString()}</p>
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.referenceNo.message?.toString()}</p>
             )}
           </div>
 
           <div>
-            <Label htmlFor="publicationDate">Publication Date</Label>
+            <Label htmlFor="publicationDate" className="text-sm sm:text-base">Publication Date</Label>
             <Input
               id="publicationDate"
               type="date"
+              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
               max={new Date().toISOString().split('T')[0]}
               {...register("publicationDate", {
                 validate: (value) => {
@@ -136,17 +152,18 @@ export function CopyrightForm({
               })}
             />
             {errors.publicationDate && (
-              <p className="text-sm text-red-600 mt-1">{errors.publicationDate.message?.toString()}</p>
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.publicationDate.message?.toString()}</p>
             )}
           </div>
         </div>
 
         <div className="mt-4">
-          <Label htmlFor="link">Link</Label>
+          <Label htmlFor="link" className="text-sm sm:text-base">Link</Label>
           <Input
             id="link"
             type="url"
             placeholder="Enter registry link (optional)"
+            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
             {...register("link", {
               validate: (value) => {
                 if (value && value.trim() !== "") {
@@ -162,18 +179,10 @@ export function CopyrightForm({
             })}
           />
           {errors.link && (
-            <p className="text-sm text-red-600 mt-1">{errors.link.message?.toString()}</p>
+            <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.link.message?.toString()}</p>
           )}
         </div>
 
-        {isEdit && Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-          <div className="mt-4">
-            <DocumentViewer
-              documentUrl={formData.supportingDocument[0]}
-              documentType={formData.supportingDocument[0].split('.').pop()?.toLowerCase() || ""}
-            />
-          </div>
-        )}
 
         {!isEdit && (
           <div className="flex justify-end gap-4 mt-6">

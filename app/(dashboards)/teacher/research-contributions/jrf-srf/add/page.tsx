@@ -161,30 +161,30 @@ export default function AddJrfSrfPage() {
 
   return (
     <>
-    <div className="space-y-6">
-         <div className="flex items-center gap-4">
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+         <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
             onClick={() => router.push("/teacher/research-contributions?tab=jrfSrf")}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Jrf/Srf Details
+            <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">Back to </span>Jrf/Srf Details
           </Button>
         </div>
 
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Add New Jrf/Srf</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Add New Jrf/Srf</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
             Add details about your jrf/srf details here
           </p>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>JRF/SRF Fellowship Details</CardTitle>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">JRF/SRF Fellowship Details</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
           <JrfSrfForm
             form={form}
             onSubmit={handleSubmit}
