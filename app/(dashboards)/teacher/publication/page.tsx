@@ -355,7 +355,6 @@ export default function PublicationsPage() {
   // Note: Mutations handle cache invalidation automatically
   // Removed all manual refetch logic - React Query handles it
   
-
   // Handle URL tab parameter
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -363,6 +362,12 @@ export default function PublicationsPage() {
       setActiveTab(tab)
     }
   }, [searchParams])
+
+  // Show loading skeleton during initial data fetch
+  // ✅ All hooks must be called before any conditional returns (Rules of Hooks)
+  if (isInitialLoading) {
+    return <TableLoadingSkeleton />
+  }
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
@@ -538,13 +543,6 @@ export default function PublicationsPage() {
       default:
         return null
     }
-  }
-
-
-  // Show loading only on initial load (when no cached data exists)
-  // If we have cached data, show it immediately even if refetching
-  if (isInitialLoading) {
-    return <TableLoadingSkeleton />
   }
 
   return (

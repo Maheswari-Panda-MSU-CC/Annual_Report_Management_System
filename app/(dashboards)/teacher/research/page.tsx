@@ -67,6 +67,12 @@ export default function ResearchProjectsPage() {
     }
   }, [refreshKey, user?.role_id])
 
+  // Show loading skeleton during initial data fetch
+  // ✅ All hooks must be called before any conditional returns (Rules of Hooks)
+  if (researchLoading && !researchData) {
+    return <PageLoadingSkeleton />
+  }
+
   // Handle save (PUT / PATCH API call)
   const handleSaveMetrics = async () => {
     setIsSaving(true)

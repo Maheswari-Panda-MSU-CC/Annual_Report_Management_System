@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import { useNavigationWithLoading } from "@/hooks/use-navigation-with-loading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -280,6 +281,7 @@ export default function ResearchContributionsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [formData, setFormData] = useState<any>({})
   const router = useRouter()
+  const { navigate, isPending: isNavigating } = useNavigationWithLoading()
   
   const form=useForm();
   const [isExtracting,setIsExtracting]=useState(false);
@@ -974,7 +976,7 @@ export default function ResearchContributionsPage() {
       })
       
       // Navigate back to main page
-      router.push("/teacher/research-contributions?tab=patents")
+      navigate("/teacher/research-contributions?tab=patents")
     } catch (error: any) {
       toast({
         title: "Error",
@@ -1190,12 +1192,22 @@ export default function ResearchContributionsPage() {
                   className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-10"
                   onClick={() => {
                     const route = SECTION_ROUTES[section.id as SectionId]
-                    router.push(route || "/teacher/research-contributions")
+                    navigate(route || "/teacher/research-contributions")
                   }}
+                  disabled={isNavigating}
                 >
-                  <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Add </span>
-                  {section.title}
+                  {isNavigating ? (
+                    <>
+                      <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
+                      <span className="hidden sm:inline">Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Add </span>
+                      {section.title}
+                    </>
+                  )}
                 </Button>
               </CardHeader>
               <CardContent className="p-3 sm:p-6">
