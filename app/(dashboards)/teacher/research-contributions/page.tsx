@@ -273,6 +273,8 @@ export default function ResearchContributionsPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("patents")
+  // Track which sections have been fetched to enable lazy loading
+  const [fetchedSections, setFetchedSections] = useState<Set<string>>(new Set(["patents"]))
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -299,17 +301,37 @@ export default function ResearchContributionsPage() {
     phdGuidanceStatusOptions,
   } = useDropDowns()
   
-  // React Query hooks for data fetching
-  const patentsQuery = useTeacherPatents(resPubLevelOptions)
-  const policyQuery = useTeacherPolicy(resPubLevelOptions)
-  const econtentQuery = useTeacherEContent()
-  const consultancyQuery = useTeacherConsultancy()
-  const collaborationsQuery = useTeacherCollaborations()
-  const visitsQuery = useTeacherVisits()
-  const financialQuery = useTeacherFinancial()
-  const jrfSrfQuery = useTeacherJrfSrf()
-  const phdQuery = useTeacherPhd()
-  const copyrightsQuery = useTeacherCopyrights()
+  // React Query hooks for data fetching - LAZY LOADING: Only fetch active tab and previously fetched tabs
+  const patentsQuery = useTeacherPatents(resPubLevelOptions, { 
+    enabled: activeTab === 'patents' || fetchedSections.has('patents') 
+  })
+  const policyQuery = useTeacherPolicy(resPubLevelOptions, { 
+    enabled: activeTab === 'policy' || fetchedSections.has('policy') 
+  })
+  const econtentQuery = useTeacherEContent({ 
+    enabled: activeTab === 'econtent' || fetchedSections.has('econtent') 
+  })
+  const consultancyQuery = useTeacherConsultancy({ 
+    enabled: activeTab === 'consultancy' || fetchedSections.has('consultancy') 
+  })
+  const collaborationsQuery = useTeacherCollaborations({ 
+    enabled: activeTab === 'collaborations' || fetchedSections.has('collaborations') 
+  })
+  const visitsQuery = useTeacherVisits({ 
+    enabled: activeTab === 'visits' || fetchedSections.has('visits') 
+  })
+  const financialQuery = useTeacherFinancial({ 
+    enabled: activeTab === 'financial' || fetchedSections.has('financial') 
+  })
+  const jrfSrfQuery = useTeacherJrfSrf({ 
+    enabled: activeTab === 'jrfSrf' || fetchedSections.has('jrfSrf') 
+  })
+  const phdQuery = useTeacherPhd({ 
+    enabled: activeTab === 'phd' || fetchedSections.has('phd') 
+  })
+  const copyrightsQuery = useTeacherCopyrights({ 
+    enabled: activeTab === 'copyrights' || fetchedSections.has('copyrights') 
+  })
 
   // Mutations for delete operations
   const { delete: deletePatent } = usePatentMutations()
@@ -397,12 +419,16 @@ export default function ResearchContributionsPage() {
     const tab = searchParams.get("tab")
     if (tab && sections.find((s) => s.id === tab)) {
       setActiveTab(tab)
+      // Mark the tab from URL as fetched
+      setFetchedSections(prev => new Set([...prev, tab]))
     }
   }, [searchParams])
 
-  // Update URL when tab changes - React Query handles data fetching automatically
+  // Update URL when tab changes - Enable lazy loading for new tabs
   const handleTabChange = (value: string) => {
     setActiveTab(value)
+    // Mark this tab as fetched so data will load
+    setFetchedSections(prev => new Set([...prev, value]))
     const url = new URL(window.location.href)
     url.searchParams.set("tab", value)
     window.history.pushState({}, "", url.toString())

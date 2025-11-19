@@ -30,16 +30,12 @@ export const researchContributionsQueryKeys = {
     ['teacher', teacherId, 'research-contributions', 'copyrights'] as const,
 }
 
-// API Fetch Helper
+// API Fetch Helper - Removed cache busting for better performance
+// React Query handles caching, so we don't need cache busting or no-store
 const fetchAPI = async (url: string) => {
-  const separator = url.includes('?') ? '&' : '?'
-  const cacheBuster = `${separator}_cb=${Date.now()}`
-  const response = await fetch(`${url}${cacheBuster}`, {
-    cache: 'no-store',
-    headers: {
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-    },
+  const response = await fetch(url, {
+    // Let browser and React Query handle caching
+    // Removed 'no-store' and cache busters for better performance
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: "Failed to fetch data" }))
@@ -50,12 +46,22 @@ const fetchAPI = async (url: string) => {
 
 /**
  * Generic hook to fetch research contributions data for a specific section
+ * @param sectionId - The section identifier
+ * @param resPubLevelOptions - Optional level options for policy section
+ * @param options - Optional query options including enabled flag for lazy loading
  */
-export function useTeacherResearchContributions(sectionId: SectionId, resPubLevelOptions?: any[]) {
+export function useTeacherResearchContributions(
+  sectionId: SectionId, 
+  resPubLevelOptions?: any[],
+  options?: { enabled?: boolean }
+) {
   const { user } = useAuth()
   const teacherId: number = user?.role_id 
     ? parseInt(user.role_id.toString()) 
     : parseInt(user?.id?.toString() || '0')
+
+  // Determine if query should be enabled
+  const isEnabled = (!!teacherId && teacherId > 0) && (options?.enabled !== false)
 
   return useQuery({
     queryKey: researchContributionsQueryKeys.section(teacherId, sectionId),
@@ -86,54 +92,55 @@ export function useTeacherResearchContributions(sectionId: SectionId, resPubLeve
 
       return mappedData
     },
-    enabled: !!teacherId && teacherId > 0,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-    gcTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnMount: true,
+    enabled: isEnabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes - increased for better caching
+    gcTime: 10 * 60 * 1000, // 10 minutes - increased cache time
+    refetchOnMount: false, // Don't refetch if data is fresh (was causing delays)
     refetchOnWindowFocus: false,
   })
 }
 
 /**
  * Individual hooks for each section (for convenience)
+ * All hooks now support lazy loading via options parameter
  */
-export function useTeacherPatents(resPubLevelOptions?: any[]) {
-  return useTeacherResearchContributions('patents', resPubLevelOptions)
+export function useTeacherPatents(resPubLevelOptions?: any[], options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('patents', resPubLevelOptions, options)
 }
 
-export function useTeacherPolicy(resPubLevelOptions?: any[]) {
-  return useTeacherResearchContributions('policy', resPubLevelOptions)
+export function useTeacherPolicy(resPubLevelOptions?: any[], options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('policy', resPubLevelOptions, options)
 }
 
-export function useTeacherEContent() {
-  return useTeacherResearchContributions('econtent')
+export function useTeacherEContent(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('econtent', undefined, options)
 }
 
-export function useTeacherConsultancy() {
-  return useTeacherResearchContributions('consultancy')
+export function useTeacherConsultancy(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('consultancy', undefined, options)
 }
 
-export function useTeacherCollaborations() {
-  return useTeacherResearchContributions('collaborations')
+export function useTeacherCollaborations(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('collaborations', undefined, options)
 }
 
-export function useTeacherVisits() {
-  return useTeacherResearchContributions('visits')
+export function useTeacherVisits(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('visits', undefined, options)
 }
 
-export function useTeacherFinancial() {
-  return useTeacherResearchContributions('financial')
+export function useTeacherFinancial(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('financial', undefined, options)
 }
 
-export function useTeacherJrfSrf() {
-  return useTeacherResearchContributions('jrfSrf')
+export function useTeacherJrfSrf(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('jrfSrf', undefined, options)
 }
 
-export function useTeacherPhd() {
-  return useTeacherResearchContributions('phd')
+export function useTeacherPhd(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('phd', undefined, options)
 }
 
-export function useTeacherCopyrights() {
-  return useTeacherResearchContributions('copyrights')
+export function useTeacherCopyrights(options?: { enabled?: boolean }) {
+  return useTeacherResearchContributions('copyrights', undefined, options)
 }
 
