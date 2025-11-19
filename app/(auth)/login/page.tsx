@@ -69,7 +69,7 @@ export default function LoginPage() {
                 support@msubaroda.ac.in
               </a>
             </p>
-            <p>© 2024 The Maharaja Sayajirao University of Baroda. All rights reserved.</p>
+            <p>© 2025 The Maharaja Sayajirao University of Baroda. All rights reserved.</p>
           </div>
         </div>
       </div>

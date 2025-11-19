@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
@@ -14,7 +14,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/components/ui/use-toast"
 import { ArrowLeft, Mail, Lock, CheckCircle, AlertCircle, KeyRound } from "lucide-react"
 
-export default function ChangePasswordPage() {
+// Component that uses useSearchParams - must be wrapped in Suspense
+function ChangePasswordContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const token = useMemo(() => searchParams.get("token"), [searchParams])
@@ -347,5 +348,46 @@ export default function ChangePasswordPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Loading fallback component
+function ChangePasswordLoading() {
+  return (
+    <div className="min-h-screen flex flex-col lg:flex-row bg-gray-50">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background flex-col justify-center items-center p-6 lg:p-8">
+        <div className="max-w-md text-center space-y-4 lg:space-y-6">
+          <div className="flex justify-center">
+            <Image
+              src="/images/msu-logo.png"
+              alt="MSU Baroda Logo"
+              width={120}
+              height={120}
+              className="object-contain"
+            />
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <div className="w-full max-w-md space-y-6">
+          <Card className="border-0 shadow-lg lg:shadow-xl">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 pt-6">
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Main page component with Suspense boundary
+export default function ChangePasswordPage() {
+  return (
+    <Suspense fallback={<ChangePasswordLoading />}>
+      <ChangePasswordContent />
+    </Suspense>
   )
 }

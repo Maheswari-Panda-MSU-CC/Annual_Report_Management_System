@@ -9,16 +9,17 @@ const config: sql.config = {
   options: {
     encrypt: false,
     trustServerCertificate: true,
+    enableArithAbort: true, // Performance optimization
   },
   pool: {
     max: 20, // Increased from 10 to 20 for better concurrency
-    min: 5,  // Keep minimum connections alive (was 0)
+    min: 2,  // ✅ REDUCED from 5 to 2 - faster initialization (connections created on-demand)
     idleTimeoutMillis: 30000,
-    acquireTimeoutMillis: 30000,
-    createTimeoutMillis: 30000,
+    acquireTimeoutMillis: 10000, // ✅ REDUCED from 30000 - faster failure detection
+    createTimeoutMillis: 10000, // ✅ REDUCED from 30000 - faster failure detection
   },
-  requestTimeout: 30000,
-  connectionTimeout: 30000,
+  requestTimeout: 15000, // ✅ REDUCED from 30000 - faster timeout
+  connectionTimeout: 10000, // ✅ REDUCED from 30000 - faster connection timeout
 };
 
 // Singleton connection pool - reused across all API calls
@@ -26,6 +27,7 @@ let pool: ConnectionPool | null = null;
 let isConnecting = false; // Prevent multiple simultaneous connection attempts
 
 export async function connectToDatabase(): Promise<ConnectionPool> {
+  const startTime = Date.now();
   try {
     // If pool exists and appears to be connected, reuse it
     if (pool) {
@@ -36,37 +38,58 @@ export async function connectToDatabase(): Promise<ConnectionPool> {
       if (pool.connected !== false) {
         // Pool exists and is not explicitly disconnected, reuse it
         // mssql will handle reconnection internally if needed
+        const elapsed = Date.now() - startTime;
+        if (elapsed > 50 || process.env.NODE_ENV === 'development') {
+          console.log(`[DB] Pool reused (${elapsed}ms)`);
+        }
         return pool;
       } else {
         // Pool is explicitly disconnected, reset it
-        console.warn('Pool is disconnected, recreating...');
+        console.warn('[DB] Pool is disconnected, recreating...');
         pool = null;
       }
     }
 
     // Prevent multiple simultaneous connection attempts
     if (isConnecting) {
-      // Wait for existing connection attempt (max 5 seconds)
+      // ✅ REDUCED wait time from 5 seconds to 2 seconds
+      const waitStart = Date.now();
       let waitCount = 0;
-      while (isConnecting && !pool && waitCount < 50) {
+      while (isConnecting && !pool && waitCount < 20) { // 20 * 100ms = 2 seconds
         await new Promise(resolve => setTimeout(resolve, 100));
         waitCount++;
       }
-      if (pool) return pool;
+      const waitTime = Date.now() - waitStart;
+      if (waitTime > 100) {
+        console.log(`[DB] Waited for connection: ${waitTime}ms`);
+      }
+      if (pool) {
+        const elapsed = Date.now() - startTime;
+        console.log(`[DB] Got pool after wait (${elapsed}ms total)`);
+        return pool;
+      }
+      // If still connecting after 2 seconds, proceed with new attempt
+      if (waitTime >= 2000) {
+        console.warn('[DB] Connection taking too long, proceeding with new attempt');
+      }
     }
 
     // Create new connection pool
     isConnecting = true;
+    const connectStart = Date.now();
     try {
       pool = await sql.connect(config);
-      console.log('DB Connection Pool Created!');
+      const connectTime = Date.now() - connectStart;
+      const totalTime = Date.now() - startTime;
+      console.log(`[DB] Connection Pool Created in ${connectTime}ms (total: ${totalTime}ms)`);
       return pool;
     } finally {
       isConnecting = false;
     }
   } catch (error) {
     isConnecting = false;
-    console.error('DB Connection Error:', error);
+    const totalTime = Date.now() - startTime;
+    console.error(`[DB] Connection Error after ${totalTime}ms:`, error);
     pool = null; // Reset pool on error
     throw error;
   }
@@ -78,9 +101,26 @@ export async function closeDatabaseConnection(): Promise<void> {
     try {
       await pool.close();
       pool = null;
-      console.log('DB Connection Pool Closed');
+      console.log('[DB] Connection Pool Closed');
     } catch (error) {
-      console.error('Error closing DB connection:', error);
+      console.error('[DB] Error closing connection:', error);
     }
   }
+}
+
+// Pre-warm connection pool on server startup (Next.js server-side only)
+// This ensures the pool is ready before the first API request
+if (typeof window === 'undefined') {
+  // Server-side only - pre-warm connection pool asynchronously
+  // Don't block server startup if connection fails
+  const preWarmStart = Date.now();
+  connectToDatabase()
+    .then(() => {
+      const preWarmTime = Date.now() - preWarmStart;
+      console.log(`[DB] Connection pool pre-warmed successfully in ${preWarmTime}ms`);
+    })
+    .catch((error) => {
+      const preWarmTime = Date.now() - preWarmStart;
+      console.warn(`[DB] Pre-warming failed after ${preWarmTime}ms (will connect on first request):`, error.message);
+    });
 }
