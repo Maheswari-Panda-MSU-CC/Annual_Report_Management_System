@@ -18,14 +18,14 @@ export default function LoginPage() {
             />
           </div>
           <div className="space-y-4">
-            <h1 className="text-3xl font-bold text-gray-900">Welcome to MSU Baroda</h1>
-            <p className="text-lg text-gray-600">Annual Report Management System</p>
-            <p className="text-sm text-gray-500 leading-relaxed">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Welcome to MSU Baroda</h1>
+            <p className="text-base sm:text-lg text-gray-600">Annual Report Management System</p>
+            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
               Streamline your academic reporting process with our comprehensive management system designed for faculty
               and administrators.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-4 text-center text-sm text-gray-600">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 text-center text-xs sm:text-sm text-gray-600">
             <div className="bg-white/50 rounded-lg p-3">
               <div className="font-semibold text-primary">500+</div>
               <div>Faculty Members</div>
@@ -47,13 +47,13 @@ export default function LoginPage() {
           </div>
 
           <Card className="border-0 shadow-lg lg:shadow-xl">
-            <CardHeader className="space-y-1 pb-6">
-              <CardTitle className="text-2xl font-bold text-center text-gray-900">Sign In</CardTitle>
-              <CardDescription className="text-center text-gray-600">
+            <CardHeader className="space-y-1 pb-4 sm:pb-6">
+              <CardTitle className="text-xl sm:text-2xl font-bold text-center text-gray-900">Sign In</CardTitle>
+              <CardDescription className="text-center text-xs sm:text-sm text-gray-600">
                 Access the Annual Report Management System
               </CardDescription>
             </CardHeader>
-            <CardContent className="px-6 pb-6">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               <LoginForm />
             </CardContent>
           </Card>

@@ -64,7 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isLoading) return;
     if (!pathname) return;
 
-    const isAuthRoute = pathname === "/login" || pathname.startsWith("/(auth)");
+    // Allow access to login and change-password pages without authentication
+    // Note: Route groups like (auth) don't appear in pathname, so we check explicitly
+    const isAuthRoute = pathname === "/login" || pathname === "/change-password";
     if (isAuthRoute) return;
 
     if (!user) {

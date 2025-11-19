@@ -133,13 +133,13 @@ export default function ChangePasswordPage() {
   const renderStepContent = () => {
     if (!token) {
         return (
-          <form onSubmit={handleSendResetLink} className="space-y-6">
+          <form onSubmit={handleSendResetLink} className="space-y-4 sm:space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="email" className="text-xs sm:text-sm font-medium text-gray-700">
                 Email Address
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
                 <Input
                   id="email"
                   type="email"
@@ -148,25 +148,25 @@ export default function ChangePasswordPage() {
                   placeholder="Enter your email address"
                   required
                   disabled={isLoading}
-                  className="pl-10 h-12 text-base border-gray-300 focus:border-primary focus:ring-primary"
+                  className="pl-9 sm:pl-10 h-10 sm:h-12 text-sm sm:text-base border-gray-300 focus:border-primary focus:ring-primary"
                 />
               </div>
-              <p className="text-sm text-muted-foreground">We'll send a password reset link to this email address</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">We'll send a password reset link to this email address</p>
             </div>
 
             <Button
               type="submit"
-              className="w-full h-12 text-base font-medium bg-primary hover:bg-primary/90 focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200"
+              className="w-full h-10 sm:h-12 text-sm sm:text-base font-medium bg-primary hover:bg-primary/90 focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all duration-200"
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
-                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
+                  <div className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
                   Sending link...
                 </>
               ) : (
                 <>
-                  <Mail className="mr-2 h-4 w-4" />
+                  <Mail className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                   Send Reset Link
                 </>
               )}
@@ -176,14 +176,14 @@ export default function ChangePasswordPage() {
     }
 
     return (
-          <form onSubmit={handleChangePassword} className="space-y-6">
-            <div className="space-y-4">
+          <form onSubmit={handleChangePassword} className="space-y-4 sm:space-y-6">
+            <div className="space-y-3 sm:space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="newPassword" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="newPassword" className="text-xs sm:text-sm font-medium text-gray-700">
                   New Password
                 </Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
                   <Input
                     id="newPassword"
                     type="password"
@@ -192,18 +192,18 @@ export default function ChangePasswordPage() {
                     placeholder="Enter new password"
                     required
                     disabled={isLoading}
-                    className="pl-10 h-12 text-base border-gray-300 focus:border-primary focus:ring-primary"
+                    className="pl-9 sm:pl-10 h-10 sm:h-12 text-sm sm:text-base border-gray-300 focus:border-primary focus:ring-primary"
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">Password must be at least 8 characters long</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Password must be at least 8 characters long</p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+                <Label htmlFor="confirmPassword" className="text-xs sm:text-sm font-medium text-gray-700">
                   Confirm New Password
                 </Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
                   <Input
                     id="confirmPassword"
                     type="password"
@@ -212,31 +212,31 @@ export default function ChangePasswordPage() {
                     placeholder="Confirm new password"
                     required
                     disabled={isLoading}
-                    className="pl-10 h-12 text-base border-gray-300 focus:border-primary focus:ring-primary"
+                    className="pl-9 sm:pl-10 h-10 sm:h-12 text-sm sm:text-base border-gray-300 focus:border-primary focus:ring-primary"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <Button
                 type="button"
                 variant="outline"
                 onClick={handleBack}
                 disabled={isLoading}
-                className="flex-1 h-12 bg-transparent"
+                className="flex-1 h-10 sm:h-12 text-sm sm:text-base bg-transparent"
               >
                 Back
               </Button>
-              <Button type="submit" className="flex-1 h-12 bg-primary hover:bg-primary/90" disabled={isLoading}>
+              <Button type="submit" className="flex-1 h-10 sm:h-12 text-sm sm:text-base bg-primary hover:bg-primary/90" disabled={isLoading}>
                 {isLoading ? (
                   <>
-                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
+                    <div className="mr-2 h-3 w-3 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-background border-t-foreground" />
                     Updating...
                   </>
                 ) : (
                   <>
-                    <KeyRound className="mr-2 h-4 w-4" />
+                    <KeyRound className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
                     Change Password
                   </>
                 )}
@@ -259,8 +259,8 @@ export default function ChangePasswordPage() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-gray-50">
       {/* Left side - Branding/Image */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background flex-col justify-center items-center p-8">
-        <div className="max-w-md text-center space-y-6">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background flex-col justify-center items-center p-6 lg:p-8">
+        <div className="max-w-md text-center space-y-4 lg:space-y-6">
           <div className="flex justify-center">
             <Image
               src="/images/msu-logo.png"
@@ -270,16 +270,16 @@ export default function ChangePasswordPage() {
               className="object-contain"
             />
           </div>
-          <div className="space-y-4">
-            <h1 className="text-3xl font-bold text-gray-900">Secure Password Reset</h1>
-            <p className="text-lg text-gray-600">MSU Baroda Annual Report System</p>
-            <p className="text-sm text-gray-500 leading-relaxed">
+          <div className="space-y-3 sm:space-y-4">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Secure Password Reset</h1>
+            <p className="text-base sm:text-lg text-gray-600">MSU Baroda Annual Report System</p>
+            <p className="text-xs sm:text-sm text-gray-500 leading-relaxed">
               Follow our secure process to reset your password and regain access to your account.
             </p>
           </div>
-          <div className="bg-white/50 rounded-lg p-4 text-sm text-gray-600">
+          <div className="bg-white/50 rounded-lg p-3 sm:p-4 text-xs sm:text-sm text-gray-600">
             <div className="flex items-center justify-center space-x-2 mb-2">
-              <Lock className="h-4 w-4 text-primary" />
+              <Lock className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
               <span className="font-semibold">Secure Process</span>
             </div>
             <p>Your security is our priority. We use industry-standard verification methods.</p>
@@ -292,38 +292,38 @@ export default function ChangePasswordPage() {
         <div className="w-full max-w-md space-y-6">
           {/* Mobile logo */}
           <div className="flex justify-center lg:hidden">
-            <Image src="/images/msu-logo.png" alt="MSU Baroda Logo" width={80} height={80} className="object-contain" />
+            <Image src="/images/msu-logo.png" alt="MSU Baroda Logo" width={60} height={60} className="object-contain sm:w-20 sm:h-20" />
           </div>
 
           {/* Back to Login Link */}
           <div className="flex items-center">
             <Link
               href="/login"
-              className="flex items-center text-sm text-gray-600 hover:text-primary transition-colors duration-200"
+              className="flex items-center text-xs sm:text-sm text-gray-600 hover:text-primary transition-colors duration-200"
             >
-              <ArrowLeft className="h-4 w-4 mr-1" />
+              <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
               Back to Login
             </Link>
           </div>
 
           <Card className="border-0 shadow-lg lg:shadow-xl">
-            <CardHeader className="space-y-1 pb-6">
-              <CardTitle className="text-2xl font-bold text-center text-gray-900">{getStepTitle()}</CardTitle>
-              <CardDescription className="text-center text-gray-600">{getStepDescription()}</CardDescription>
+            <CardHeader className="space-y-1 pb-4 sm:pb-6">
+              <CardTitle className="text-xl sm:text-2xl font-bold text-center text-gray-900">{getStepTitle()}</CardTitle>
+              <CardDescription className="text-center text-xs sm:text-sm text-gray-600">{getStepDescription()}</CardDescription>
        
             </CardHeader>
-            <CardContent className="px-6 pb-6">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               {error && (
                 <Alert variant="destructive" className="mb-4">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <AlertDescription className="text-xs sm:text-sm">{error}</AlertDescription>
                 </Alert>
               )}
 
               {success && (
                 <Alert className="mb-4 border-green-200 bg-green-50 text-green-800">
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>{success}</AlertDescription>
+                  <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <AlertDescription className="text-xs sm:text-sm">{success}</AlertDescription>
                 </Alert>
               )}
 
@@ -332,7 +332,7 @@ export default function ChangePasswordPage() {
           </Card>
 
           {/* Additional help text */}
-          <div className="text-center text-xs text-gray-500 space-y-2">
+          <div className="text-center text-[10px] sm:text-xs text-gray-500 space-y-1 sm:space-y-2">
             <p>
               Need help? Contact{" "}
               <a
