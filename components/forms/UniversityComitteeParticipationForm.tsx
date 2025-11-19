@@ -100,7 +100,7 @@ export function UniversityCommitteeParticipationForm({
       <div className="bg-gray-50 p-4 rounded-lg">
         <Label className="text-lg font-semibold mb-4 block">Step 2: Verify/Complete Details</Label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name *</Label>
             <Input 

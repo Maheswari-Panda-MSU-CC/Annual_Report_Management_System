@@ -91,7 +91,7 @@ export function RefresherOrientationForm({
           Step 2: Verify/Complete Course Details
         </Label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name *</Label>
             <Input 
@@ -166,9 +166,18 @@ export function RefresherOrientationForm({
             <Label htmlFor="university">Organizing University *</Label>
             <Input 
               id="university" 
+              placeholder="Enter university name"
+              maxLength={200}
               {...register("university", { 
                 required: "Organizing University is required",
-                minLength: { value: 2, message: "University name must be at least 2 characters" }
+                minLength: { value: 2, message: "University name must be at least 2 characters" },
+                maxLength: { value: 200, message: "University name must not exceed 200 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "University name cannot be only whitespace"
+                  }
+                  return true
+                }
               })} 
             />
             {errors.university && (
@@ -180,9 +189,18 @@ export function RefresherOrientationForm({
             <Label htmlFor="institute">Organizing Institute *</Label>
             <Input 
               id="institute" 
+              placeholder="Enter institute name"
+              maxLength={200}
               {...register("institute", { 
                 required: "Organizing Institute is required",
-                minLength: { value: 2, message: "Institute name must be at least 2 characters" }
+                minLength: { value: 2, message: "Institute name must be at least 2 characters" },
+                maxLength: { value: 200, message: "Institute name must not exceed 200 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Institute name cannot be only whitespace"
+                  }
+                  return true
+                }
               })} 
             />
             {errors.institute && (
@@ -194,9 +212,18 @@ export function RefresherOrientationForm({
             <Label htmlFor="department">Organizing Department *</Label>
             <Input 
               id="department" 
+              placeholder="Enter department name"
+              maxLength={200}
               {...register("department", { 
                 required: "Organizing Department is required",
-                minLength: { value: 2, message: "Department name must be at least 2 characters" }
+                minLength: { value: 2, message: "Department name must be at least 2 characters" },
+                maxLength: { value: 200, message: "Department name must not exceed 200 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Department name cannot be only whitespace"
+                  }
+                  return true
+                }
               })} 
             />
             {errors.department && (
@@ -206,7 +233,23 @@ export function RefresherOrientationForm({
 
           <div className="space-y-2">
             <Label htmlFor="centre">Centre</Label>
-            <Input id="centre" {...register("centre")} />
+            <Input 
+              id="centre" 
+              placeholder="Enter centre name (optional)"
+              maxLength={200}
+              {...register("centre", {
+                maxLength: { value: 200, message: "Centre name must not exceed 200 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length > 0 && value.trim().length < 2) {
+                    return "Centre name must be at least 2 characters if provided"
+                  }
+                  return true
+                }
+              })} 
+            />
+            {errors.centre && (
+              <p className="text-sm text-red-600 mt-1">{errors.centre.message?.toString()}</p>
+            )}
           </div>
         </div>
 
@@ -223,13 +266,17 @@ export function RefresherOrientationForm({
 
         {/* Submit Buttons */}
         {!isEdit && (
-        <div className="flex justify-end gap-4 mt-6">
-         
-            <Button type="button" variant="outline" onClick={() => router.back()}>
-              Cancel
-            </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Submitting..." : (
+        <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-6">
+          <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto">
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Submitting...
+              </>
+            ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
                 {isEdit ? "Update Entry" : "Add Entry"}
@@ -237,7 +284,6 @@ export function RefresherOrientationForm({
             )}
           </Button>
         </div>
-        
     )}
       </div>
     </form>

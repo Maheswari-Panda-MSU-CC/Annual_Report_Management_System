@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,15 +44,17 @@ import { UniversityCommitteeParticipationForm } from "@/components/forms/Univers
 import { AcademicTalkForm } from "@/components/forms/AcademicTalkForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useTeacherTalksEvents, teacherQueryKeys } from "@/hooks/use-teacher-data"
+import { useQueryClient } from "@tanstack/react-query"
+import {
+  useRefresherMutations,
+  useAcademicProgramMutations,
+  useAcademicBodiesMutations,
+  useCommitteeMutations,
+  useTalksMutations,
+} from "@/hooks/use-teacher-talks-events-mutations"
 
-// Sample data for each section - Updated to match add-event page structure
-const initialSampleData = {
-  refresher: [],
-  "academic-programs": [],
-  "academic-bodies": [],
-  committees: [],
-  talks: [],
-}
+// Data is now fetched using React Query hooks (useTeacherTalksEvents)
 
 const sections = [
   {
@@ -144,7 +146,6 @@ export default function TalksEventsPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("refresher")
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
-  const [data, setData] = useState(initialSampleData)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -152,36 +153,37 @@ export default function TalksEventsPage() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
   const [formData, setFormData] = useState<any>({})
-  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({
-    refresher: false,
-    "academic-programs": false,
-    "academic-bodies": false,
-    committees: false,
-    talks: false,
-  })
-  const [fetchedSections, setFetchedSections] = useState<Set<string>>(new Set())
-  const fetchingRef = useRef<Set<string>>(new Set())
-  const fetchedDropdownsRef = useRef<Set<string>>(new Set())
-  const fetchingDropdownsRef = useRef<Set<string>>(new Set())
   const form = useForm()
   const router = useRouter()
+  const queryClient = useQueryClient()
+  const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   
-  // Fetch dropdowns
+  // Use React Query hook for data fetching
+  const {
+    talks: talksQuery,
+    academicContri: academicContriQuery,
+    academicParticipation: academicParticipationQuery,
+    committees: committeesQuery,
+    refresher: refresherQuery,
+    isLoading: isDataLoading,
+  } = useTeacherTalksEvents()
+
+  // Mutations for each section
+  const refresherMutations = useRefresherMutations()
+  const academicProgramMutations = useAcademicProgramMutations()
+  const academicBodiesMutations = useAcademicBodiesMutations()
+  const committeeMutations = useCommitteeMutations()
+  const talksMutations = useTalksMutations()
+  
+  // Fetch dropdowns (simplified - useDropDowns handles caching internally)
   const { 
     refresherTypeOptions,
-    fetchRefresherTypes,
     academicProgrammeOptions,
     participantTypeOptions,
-    fetchAcademicProgrammes,
-    fetchParticipantTypes,
     reportYearsOptions,
-    fetchReportYears,
     committeeLevelOptions,
-    fetchCommitteeLevels,
     talksProgrammeTypeOptions,
     talksParticipantTypeOptions,
-    fetchTalksProgrammeTypes,
-    fetchTalksParticipantTypes
   } = useDropDowns()
 
   // Handle URL tab parameter
@@ -192,221 +194,19 @@ export default function TalksEventsPage() {
     }
   }, [searchParams])
 
-  // Fetch dropdowns for tabs
-  const fetchDropdownsForTab = useCallback((tab: string) => {
-    if (tab === "refresher") {
-      if (!fetchedDropdownsRef.current.has("refresherTypeOptions") && 
-          !fetchingDropdownsRef.current.has("refresherTypeOptions") &&
-          refresherTypeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("refresherTypeOptions")
-        fetchRefresherTypes()
-          .then(() => {
-            fetchedDropdownsRef.current.add("refresherTypeOptions")
-          })
-          .catch(error => {
-            console.error("Error fetching refresher types:", error)
-          })
-          .finally(() => {
-            fetchingDropdownsRef.current.delete("refresherTypeOptions")
-          })
-      }
-    } else if (tab === "academic-programs") {
-      const dropdownsToFetch = []
-      
-      if (!fetchedDropdownsRef.current.has("academicProgrammeOptions") && 
-          !fetchingDropdownsRef.current.has("academicProgrammeOptions") &&
-          academicProgrammeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("academicProgrammeOptions")
-        dropdownsToFetch.push(
-          fetchAcademicProgrammes()
-            .then(() => {
-              fetchedDropdownsRef.current.add("academicProgrammeOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching academic programmes:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("academicProgrammeOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("participantTypeOptions") && 
-          !fetchingDropdownsRef.current.has("participantTypeOptions") &&
-          participantTypeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("participantTypeOptions")
-        dropdownsToFetch.push(
-          fetchParticipantTypes()
-            .then(() => {
-              fetchedDropdownsRef.current.add("participantTypeOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching participant types:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("participantTypeOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("reportYearsOptions") && 
-          !fetchingDropdownsRef.current.has("reportYearsOptions") &&
-          reportYearsOptions.length === 0) {
-        fetchingDropdownsRef.current.add("reportYearsOptions")
-        dropdownsToFetch.push(
-          fetchReportYears()
-            .then(() => {
-              fetchedDropdownsRef.current.add("reportYearsOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching report years:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("reportYearsOptions")
-            })
-        )
-      }
-      
-      if (dropdownsToFetch.length > 0) {
-        Promise.all(dropdownsToFetch).catch(error => {
-          console.error("Error fetching dropdowns for academic-programs:", error)
-        })
-      }
-    } else if (tab === "academic-bodies") {
-      if (!fetchedDropdownsRef.current.has("reportYearsOptions") && 
-          !fetchingDropdownsRef.current.has("reportYearsOptions") &&
-          reportYearsOptions.length === 0) {
-        fetchingDropdownsRef.current.add("reportYearsOptions")
-        fetchReportYears()
-          .then(() => {
-            fetchedDropdownsRef.current.add("reportYearsOptions")
-          })
-          .catch(error => {
-            console.error("Error fetching report years:", error)
-          })
-          .finally(() => {
-            fetchingDropdownsRef.current.delete("reportYearsOptions")
-          })
-      }
-    } else if (tab === "committees") {
-      const dropdownsToFetch = []
-      
-      if (!fetchedDropdownsRef.current.has("reportYearsOptions") && 
-          !fetchingDropdownsRef.current.has("reportYearsOptions") &&
-          reportYearsOptions.length === 0) {
-        fetchingDropdownsRef.current.add("reportYearsOptions")
-        dropdownsToFetch.push(
-          fetchReportYears()
-            .then(() => {
-              fetchedDropdownsRef.current.add("reportYearsOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching report years:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("reportYearsOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("committeeLevelOptions") && 
-          !fetchingDropdownsRef.current.has("committeeLevelOptions") &&
-          committeeLevelOptions.length === 0) {
-        fetchingDropdownsRef.current.add("committeeLevelOptions")
-        dropdownsToFetch.push(
-          fetchCommitteeLevels()
-            .then(() => {
-              fetchedDropdownsRef.current.add("committeeLevelOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching committee levels:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("committeeLevelOptions")
-            })
-        )
-      }
-      
-      if (dropdownsToFetch.length > 0) {
-        Promise.all(dropdownsToFetch).catch(error => {
-          console.error("Error fetching dropdowns for committees:", error)
-        })
-      }
-    } else if (tab === "talks") {
-      const dropdownsToFetch = []
-      
-      if (!fetchedDropdownsRef.current.has("talksProgrammeTypeOptions") && 
-          !fetchingDropdownsRef.current.has("talksProgrammeTypeOptions") &&
-          talksProgrammeTypeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("talksProgrammeTypeOptions")
-        dropdownsToFetch.push(
-          fetchTalksProgrammeTypes()
-            .then(() => {
-              fetchedDropdownsRef.current.add("talksProgrammeTypeOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching talks programme types:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("talksProgrammeTypeOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("talksParticipantTypeOptions") && 
-          !fetchingDropdownsRef.current.has("talksParticipantTypeOptions") &&
-          talksParticipantTypeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("talksParticipantTypeOptions")
-        dropdownsToFetch.push(
-          fetchTalksParticipantTypes()
-            .then(() => {
-              fetchedDropdownsRef.current.add("talksParticipantTypeOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching talks participant types:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("talksParticipantTypeOptions")
-            })
-        )
-      }
-      
-      if (dropdownsToFetch.length > 0) {
-        Promise.all(dropdownsToFetch).catch(error => {
-          console.error("Error fetching dropdowns for talks:", error)
-        })
-      }
+  // Map React Query data to UI format
+  const data = useMemo(() => {
+    const mappedData: any = {
+      refresher: [],
+      "academic-programs": [],
+      "academic-bodies": [],
+      committees: [],
+      talks: [],
     }
-  }, [refresherTypeOptions.length, academicProgrammeOptions.length, participantTypeOptions.length, reportYearsOptions.length, committeeLevelOptions.length, talksProgrammeTypeOptions.length, talksParticipantTypeOptions.length, fetchRefresherTypes, fetchAcademicProgrammes, fetchParticipantTypes, fetchReportYears, fetchCommitteeLevels, fetchTalksProgrammeTypes, fetchTalksParticipantTypes])
 
-  // Fetch dropdowns when tab changes
-  useEffect(() => {
-    if (activeTab) {
-      fetchDropdownsForTab(activeTab)
-    }
-  }, [activeTab, fetchDropdownsForTab])
-
-  // Fetch refresher details from API
-  const fetchRefresherDetails = useCallback(async () => {
-    if (!user?.role_id || activeTab !== "refresher") return
-    
-    const sectionId = "refresher"
-    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
-
-    fetchingRef.current.add(sectionId)
-    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-
-    try {
-      const currentYear = new Date().getFullYear()
-      const res = await fetch(`/api/teacher/talks-events/refresher-details?teacherId=${user.role_id}&year=${currentYear}`)
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to fetch refresher details")
-      }
-
-      // Map API response to UI format
-      const mappedData = (result.refresherDetails || []).map((item: any, index: number) => ({
+    // Map refresher details
+    if (refresherQuery.data?.refresherDetails) {
+      mappedData.refresher = refresherQuery.data.refresherDetails.map((item: any, index: number) => ({
         id: item.Id,
         srNo: index + 1,
         name: item.name || "",
@@ -427,46 +227,11 @@ export default function TalksEventsPage() {
         department: item.department || "",
         supporting_doc: item.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
       }))
-
-      setData((prev: any) => ({
-        ...prev,
-        refresher: mappedData,
-      }))
-      setFetchedSections(prev => new Set([...prev, sectionId]))
-    } catch (error: any) {
-      console.error("Error fetching refresher details:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load refresher details",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      fetchingRef.current.delete(sectionId)
-      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab])
 
-  // Fetch academic contributions from API
-  const fetchAcademicContributions = useCallback(async () => {
-    if (!user?.role_id || activeTab !== "academic-programs") return
-    
-    const sectionId = "academic-programs"
-    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
-
-    fetchingRef.current.add(sectionId)
-    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-
-    try {
-      const res = await fetch(`/api/teacher/talks-events/academic-contri?teacherId=${user.role_id}`)
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to fetch academic contributions")
-      }
-
-      // Map API response to UI format
-      const mappedData = (result.academicContributions || []).map((item: any, index: number) => ({
+    // Map academic contributions
+    if (academicContriQuery.data?.academicContributions) {
+      mappedData["academic-programs"] = academicContriQuery.data.academicContributions.map((item: any, index: number) => ({
         id: item.id,
         srNo: index + 1,
         name: item.name || "",
@@ -481,157 +246,32 @@ export default function TalksEventsPage() {
         supportingDocument: item.supporting_doc ? [item.supporting_doc] : [],
         supporting_doc: item.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
       }))
-
-      setData((prev: any) => ({
-        ...prev,
-        "academic-programs": mappedData,
-      }))
-      setFetchedSections(prev => new Set([...prev, sectionId]))
-    } catch (error: any) {
-      console.error("Error fetching academic contributions:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load academic contributions",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      fetchingRef.current.delete(sectionId)
-      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
-  // Fetch academic bodies participation from API
-  const fetchAcademicBodiesParticipation = useCallback(async () => {
-    if (!user?.role_id || activeTab !== "academic-bodies") return
-    
-    const sectionId = "academic-bodies"
-    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
-
-    fetchingRef.current.add(sectionId)
-    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-
-    try {
-      const res = await fetch(`/api/teacher/talks-events/acad-bodies-parti?teacherId=${user.role_id}`)
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to fetch academic bodies participation")
-      }
-
-      // Map API response to UI format
-      const mappedData = (result.academicBodiesParticipation || []).map((item: any, index: number) => ({
+    // Map academic bodies participation
+    if (academicParticipationQuery.data?.academicBodiesParticipation) {
+      mappedData["academic-bodies"] = academicParticipationQuery.data.academicBodiesParticipation.map((item: any, index: number) => ({
         id: item.id,
         srNo: index + 1,
         name: item.name || "",
-        courseTitle: item.name || "", // For backward compatibility with table
+        courseTitle: item.name || "",
         acad_body: item.acad_body || "",
-        academicBody: item.acad_body || "", // For backward compatibility with table
+        academicBody: item.acad_body || "",
         place: item.place || "",
         participated_as: item.participated_as || "",
-        participatedAs: item.participated_as || "", // For backward compatibility with table
+        participatedAs: item.participated_as || "",
         submit_date: item.submit_date ? new Date(item.submit_date).toISOString().split('T')[0] : "",
-        date: item.submit_date ? new Date(item.submit_date).toISOString().split('T')[0] : "", // For backward compatibility
+        date: item.submit_date ? new Date(item.submit_date).toISOString().split('T')[0] : "",
         year: item.year_name?.toString() || "",
         year_name: item.year_name || new Date().getFullYear(),
         supportingDocument: item.supporting_doc ? [item.supporting_doc] : [],
         supporting_doc: item.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
       }))
-
-      setData((prev: any) => ({
-        ...prev,
-        "academic-bodies": mappedData,
-      }))
-      setFetchedSections(prev => new Set([...prev, sectionId]))
-    } catch (error: any) {
-      console.error("Error fetching academic bodies participation:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load academic bodies participation",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      fetchingRef.current.delete(sectionId)
-      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
-  // Fetch teacher talks from API
-  const fetchTeacherTalks = useCallback(async () => {
-    if (!user?.role_id || activeTab !== "talks") return
-    
-    const sectionId = "talks"
-    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
-
-    fetchingRef.current.add(sectionId)
-    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-
-    try {
-      const res = await fetch(`/api/teacher/talks-events/teacher-talks?teacherId=${user.role_id}`)
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to fetch teacher talks")
-      }
-
-      // Map API response to UI format
-      const mappedData = (result.teacherTalks || []).map((item: any, index: number) => ({
-        id: item.id,
-        srNo: index + 1,
-        name: item.name || "",
-        programme: item.teacher_talks_prog_name || "",
-        programmeId: item.programme,
-        place: item.place || "",
-        date: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
-        talkDate: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
-        title: item.title || "",
-        titleOfEvent: item.title || "",
-        participated_as: item.participated_as,
-        participatedAs: item.teacher_talks_parti_name || "",
-        Image: item.Image || "http://localhost:3000/assets/demo_document.pdf",
-        supportingDocument: item.Image ? [item.Image] : [],
-      }))
-
-      setData((prev: any) => ({
-        ...prev,
-        talks: mappedData,
-      }))
-      setFetchedSections(prev => new Set([...prev, sectionId]))
-    } catch (error: any) {
-      console.error("Error fetching teacher talks:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load teacher talks",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      fetchingRef.current.delete(sectionId)
-      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
-    }
-  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
-
-  // Fetch university committees from API
-  const fetchUniversityCommittees = useCallback(async () => {
-    if (!user?.role_id || activeTab !== "committees") return
-    
-    const sectionId = "committees"
-    if (fetchedSections.has(sectionId) || fetchingRef.current.has(sectionId)) return
-
-    fetchingRef.current.add(sectionId)
-    setLoadingStates(prev => ({ ...prev, [sectionId]: true }))
-
-    try {
-      const res = await fetch(`/api/teacher/talks-events/parti-university-committes?teacherId=${user.role_id}`)
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to fetch university committees")
-      }
-
-      // Map API response to UI format
-      const mappedData = (result.universityCommittees || []).map((item: any, index: number) => ({
+    // Map university committees
+    if (committeesQuery.data?.universityCommittees) {
+      mappedData.committees = committeesQuery.data.universityCommittees.map((item: any, index: number) => ({
         id: item.id,
         srNo: index + 1,
         name: item.name || "",
@@ -651,44 +291,71 @@ export default function TalksEventsPage() {
         supportingDocument: item.supporting_doc ? [item.supporting_doc] : [],
         supporting_doc: item.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
       }))
+    }
 
-      setData((prev: any) => ({
-        ...prev,
-        committees: mappedData,
+    // Map teacher talks
+    if (talksQuery.data?.teacherTalks) {
+      mappedData.talks = talksQuery.data.teacherTalks.map((item: any, index: number) => ({
+        id: item.id,
+        srNo: index + 1,
+        name: item.name || "",
+        programme: item.teacher_talks_prog_name || "",
+        programmeId: item.programme,
+        place: item.place || "",
+        date: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        talkDate: item.date ? new Date(item.date).toISOString().split('T')[0] : "",
+        title: item.title || "",
+        titleOfEvent: item.title || "",
+        participated_as: item.participated_as,
+        participatedAs: item.teacher_talks_parti_name || "",
+        Image: item.Image || "http://localhost:3000/assets/demo_document.pdf",
+        supportingDocument: item.Image ? [item.Image] : [],
       }))
-      setFetchedSections(prev => new Set([...prev, sectionId]))
-    } catch (error: any) {
-      console.error("Error fetching university committees:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load university committees",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      fetchingRef.current.delete(sectionId)
-      setLoadingStates(prev => ({ ...prev, [sectionId]: false }))
     }
-  }, [user?.role_id, activeTab]) // Removed toast - it's stable and doesn't need to be in deps
 
-  // Fetch data when tab changes
-  useEffect(() => {
-    if (!user?.role_id) return
-    
-    // Only fetch if we haven't fetched this section yet and it's the active tab
-    if (activeTab === "refresher" && !fetchedSections.has("refresher") && !fetchingRef.current.has("refresher")) {
-      fetchRefresherDetails()
-    } else if (activeTab === "academic-programs" && !fetchedSections.has("academic-programs") && !fetchingRef.current.has("academic-programs")) {
-      fetchAcademicContributions()
-    } else if (activeTab === "academic-bodies" && !fetchedSections.has("academic-bodies") && !fetchingRef.current.has("academic-bodies")) {
-      fetchAcademicBodiesParticipation()
-    } else if (activeTab === "committees" && !fetchedSections.has("committees") && !fetchingRef.current.has("committees")) {
-      fetchUniversityCommittees()
-    } else if (activeTab === "talks" && !fetchedSections.has("talks") && !fetchingRef.current.has("talks")) {
-      fetchTeacherTalks()
+    return mappedData
+  }, [
+    refresherQuery.data,
+    academicContriQuery.data,
+    academicParticipationQuery.data,
+    committeesQuery.data,
+    talksQuery.data,
+  ])
+
+  // Get loading states for each section
+  const loadingStates = useMemo(() => ({
+    refresher: refresherQuery.isLoading || refresherQuery.isFetching,
+    "academic-programs": academicContriQuery.isLoading || academicContriQuery.isFetching,
+    "academic-bodies": academicParticipationQuery.isLoading || academicParticipationQuery.isFetching,
+    committees: committeesQuery.isLoading || committeesQuery.isFetching,
+    talks: talksQuery.isLoading || talksQuery.isFetching,
+  }), [
+    refresherQuery.isLoading,
+    refresherQuery.isFetching,
+    academicContriQuery.isLoading,
+    academicContriQuery.isFetching,
+    academicParticipationQuery.isLoading,
+    academicParticipationQuery.isFetching,
+    committeesQuery.isLoading,
+    committeesQuery.isFetching,
+    talksQuery.isLoading,
+    talksQuery.isFetching,
+  ])
+
+  // Helper function to invalidate queries for a specific section
+  const invalidateSection = (sectionId: string) => {
+    if (sectionId === "refresher") {
+      queryClient.invalidateQueries({ queryKey: teacherQueryKeys.talks.refresher(teacherId) })
+    } else if (sectionId === "academic-programs") {
+      queryClient.invalidateQueries({ queryKey: [...teacherQueryKeys.talks.all(teacherId), "academic-contri"] })
+    } else if (sectionId === "academic-bodies") {
+      queryClient.invalidateQueries({ queryKey: [...teacherQueryKeys.talks.all(teacherId), "academic-participation"] })
+    } else if (sectionId === "committees") {
+      queryClient.invalidateQueries({ queryKey: [...teacherQueryKeys.talks.all(teacherId), "committees"] })
+    } else if (sectionId === "talks") {
+      queryClient.invalidateQueries({ queryKey: teacherQueryKeys.talks.talks(teacherId) })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role_id, activeTab]) // Fetch functions are useCallbacks with their own dependencies
+  }
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
@@ -710,199 +377,33 @@ export default function TalksEventsPage() {
     if (!deleteConfirm) return
 
     const { sectionId, itemId } = deleteConfirm
+    setIsDeleting(true)
 
-    if (sectionId === "refresher") {
-      try {
-        setIsDeleting(true)
-        const res = await fetch(`/api/teacher/talks-events/refresher-details?refresherDetailId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete refresher detail")
-        }
-
-        setData((prevData: any) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
-        }))
-        
-        toast({
-          title: "Success",
-          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
-          duration: 3000,
-        })
-        
-        setDeleteConfirm(null)
-      } catch (error: any) {
-        console.error("Error deleting refresher detail:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete refresher detail",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsDeleting(false)
+    try {
+      // Get the appropriate mutation based on section
+      let deleteMutation
+      if (sectionId === "refresher") {
+        deleteMutation = refresherMutations.deleteMutation
+      } else if (sectionId === "academic-programs") {
+        deleteMutation = academicProgramMutations.deleteMutation
+      } else if (sectionId === "academic-bodies") {
+        deleteMutation = academicBodiesMutations.deleteMutation
+      } else if (sectionId === "committees") {
+        deleteMutation = committeeMutations.deleteMutation
+      } else if (sectionId === "talks") {
+        deleteMutation = talksMutations.deleteMutation
+      } else {
+        throw new Error(`Unknown section: ${sectionId}`)
       }
-    } else if (sectionId === "academic-programs") {
-      try {
-        setIsDeleting(true)
-        const res = await fetch(`/api/teacher/talks-events/academic-contri?academicContriId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
 
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete academic contribution")
-        }
-
-        setData((prevData: any) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
-        }))
-        
-        toast({
-          title: "Success",
-          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
-          duration: 3000,
-        })
-        
-        setDeleteConfirm(null)
-      } catch (error: any) {
-        console.error("Error deleting academic contribution:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete academic contribution",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsDeleting(false)
-      }
-    } else if (sectionId === "academic-bodies") {
-      try {
-        setIsDeleting(true)
-        const res = await fetch(`/api/teacher/talks-events/acad-bodies-parti?partiAcadsId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete academic bodies participation")
-        }
-
-        setData((prevData: any) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
-        }))
-        
-        toast({
-          title: "Success",
-          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
-          duration: 3000,
-        })
-        
-        setDeleteConfirm(null)
-      } catch (error: any) {
-        console.error("Error deleting academic bodies participation:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete academic bodies participation",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsDeleting(false)
-      }
-    } else if (sectionId === "committees") {
-      try {
-        setIsDeleting(true)
-        const res = await fetch(`/api/teacher/talks-events/parti-university-committes?partiCommiId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete university committee participation")
-        }
-
-        setData((prevData: any) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
-        }))
-        
-        toast({
-          title: "Success",
-          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
-          duration: 3000,
-        })
-        
-        setDeleteConfirm(null)
-      } catch (error: any) {
-        console.error("Error deleting university committee participation:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete university committee participation",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsDeleting(false)
-      }
-    } else if (sectionId === "talks") {
-      try {
-        setIsDeleting(true)
-        const res = await fetch(`/api/teacher/talks-events/teacher-talks?teacherTalkId=${itemId}`, {
-          method: "DELETE",
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to delete teacher talk")
-        }
-
-        setData((prevData: any) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
-        }))
-        
-        toast({
-          title: "Success",
-          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
-          duration: 3000,
-        })
-        
-        setDeleteConfirm(null)
-      } catch (error: any) {
-        console.error("Error deleting teacher talk:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete teacher talk",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsDeleting(false)
-      }
-    } else {
-      // Handle other sections (keep existing logic for now)
-      setIsDeleting(true)
-      try {
-        setData((prevData: any) => ({
-          ...prevData,
-          [sectionId]: (prevData[sectionId] || []).filter((item: any) => item.id !== itemId),
-        }))
-        toast({
-          title: "Success",
-          description: `"${deleteConfirm.itemName}" has been deleted successfully!`,
-          duration: 3000,
-        })
-        setDeleteConfirm(null)
-      } finally {
-        setIsDeleting(false)
-      }
+      // Execute delete mutation (toast and UI update handled by mutation)
+      await deleteMutation.mutateAsync(itemId)
+      setDeleteConfirm(null)
+    } catch (error: any) {
+      // Error toast is handled by mutation, but we can add additional handling if needed
+      console.error("Error deleting:", error)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -970,323 +471,91 @@ export default function TalksEventsPage() {
   const handleSaveEdit = async () => {
     if (!editingItem || !user?.role_id) return
 
-    if (editingItem.sectionId === "refresher") {
-      try {
-        setIsSubmitting(true)
-        
-        const formValues = form.getValues()
-        const payload = {
-          refresherDetailId: editingItem.id,
-          teacherId: user.role_id,
-          refresherDetail: {
-            name: formValues.name,
-            refresher_type: formValues.refresher_type,
-            startdate: formValues.startdate,
-            enddate: formValues.enddate || null,
-            university: formValues.university,
-            institute: formValues.institute,
-            department: formValues.department,
-            centre: formValues.centre || null,
-            supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
-          },
+    setIsSubmitting(true)
+
+    try {
+      const formValues = form.getValues()
+      let updateMutation
+      let updateData: any
+
+      // Prepare data and get appropriate mutation based on section
+      if (editingItem.sectionId === "refresher") {
+        updateMutation = refresherMutations.updateMutation
+        updateData = {
+          name: formValues.name,
+          refresher_type: formValues.refresher_type,
+          startdate: formValues.startdate,
+          enddate: formValues.enddate || null,
+          university: formValues.university || null,
+          institute: formValues.institute || null,
+          department: formValues.department || null,
+          centre: formValues.centre && formValues.centre.trim() !== "" ? formValues.centre.trim() : null,
+          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
         }
-
-        const res = await fetch("/api/teacher/talks-events/refresher-details", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update refresher detail")
+      } else if (editingItem.sectionId === "academic-programs") {
+        updateMutation = academicProgramMutations.updateMutation
+        updateData = {
+          name: formValues.name,
+          programme: formValues.programme,
+          place: formValues.place,
+          date: formValues.date,
+          participated_as: formValues.participated_as,
+          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          year_name: formValues.year_name || new Date().getFullYear(),
         }
-
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("refresher")
-          return newSet
-        })
-        await fetchRefresherDetails()
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-        
-        toast({
-          title: "Success",
-          description: `"${formValues.name}" has been updated successfully!`,
-          duration: 3000,
-        })
-      } catch (error: any) {
-        console.error("Error updating refresher detail:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update refresher detail",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
+      } else if (editingItem.sectionId === "academic-bodies") {
+        updateMutation = academicBodiesMutations.updateMutation
+        updateData = {
+          name: formValues.name,
+          acad_body: formValues.acad_body,
+          place: formValues.place,
+          participated_as: formValues.participated_as,
+          submit_date: formValues.submit_date,
+          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          year_name: formValues.year_name || new Date().getFullYear(),
+        }
+      } else if (editingItem.sectionId === "committees") {
+        updateMutation = committeeMutations.updateMutation
+        updateData = {
+          name: formValues.name,
+          committee_name: formValues.committee_name,
+          level: formValues.level,
+          participated_as: formValues.participated_as,
+          submit_date: formValues.submit_date,
+          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          BOS: formValues.BOS || false,
+          FB: formValues.FB || false,
+          CDC: formValues.CDC || false,
+          year_name: formValues.year_name || new Date().getFullYear(),
+        }
+      } else if (editingItem.sectionId === "talks") {
+        updateMutation = talksMutations.updateMutation
+        updateData = {
+          name: formValues.name,
+          programme: formValues.programme,
+          place: formValues.place,
+          date: formValues.date,
+          title: formValues.title,
+          participated_as: formValues.participated_as,
+          Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
+        }
+      } else {
+        throw new Error(`Unknown section: ${editingItem.sectionId}`)
       }
-    } else if (editingItem.sectionId === "academic-programs") {
-      try {
-        setIsSubmitting(true)
-        
-        const formValues = form.getValues()
-        const payload = {
-          academicContriId: editingItem.id,
-          teacherId: user.role_id,
-          academicContri: {
-            name: formValues.name,
-            programme: formValues.programme,
-            place: formValues.place,
-            date: formValues.date,
-            participated_as: formValues.participated_as,
-            supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
-            year_name: formValues.year_name || new Date().getFullYear(),
-          },
-        }
 
-        const res = await fetch("/api/teacher/talks-events/academic-contri", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
+      // Execute update mutation (toast and UI update handled by mutation)
+      await updateMutation.mutateAsync({ id: editingItem.id, data: updateData })
 
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update academic contribution")
-        }
-
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("academic-programs")
-          return newSet
-        })
-        await fetchAcademicContributions()
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-        
-        toast({
-          title: "Success",
-          description: `"${formValues.name}" has been updated successfully!`,
-          duration: 3000,
-        })
-      } catch (error: any) {
-        console.error("Error updating academic contribution:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update academic contribution",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else if (editingItem.sectionId === "academic-bodies") {
-      try {
-        setIsSubmitting(true)
-        
-        const formValues = form.getValues()
-        const payload = {
-          partiAcadsId: editingItem.id,
-          teacherId: user.role_id,
-          partiAcads: {
-            name: formValues.name,
-            acad_body: formValues.acad_body,
-            place: formValues.place,
-            participated_as: formValues.participated_as,
-            submit_date: formValues.submit_date,
-            supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
-            year_name: formValues.year_name || new Date().getFullYear(),
-          },
-        }
-
-        const res = await fetch("/api/teacher/talks-events/acad-bodies-parti", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update academic bodies participation")
-        }
-
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("academic-bodies")
-          return newSet
-        })
-        await fetchAcademicBodiesParticipation()
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-        
-        toast({
-          title: "Success",
-          description: `"${formValues.name}" has been updated successfully!`,
-          duration: 3000,
-        })
-      } catch (error: any) {
-        console.error("Error updating academic bodies participation:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update academic bodies participation",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else if (editingItem.sectionId === "committees") {
-      try {
-        setIsSubmitting(true)
-        
-        const formValues = form.getValues()
-        const payload = {
-          partiCommiId: editingItem.id,
-          teacherId: user.role_id,
-          partiCommi: {
-            name: formValues.name,
-            committee_name: formValues.committee_name,
-            level: formValues.level,
-            participated_as: formValues.participated_as,
-            submit_date: formValues.submit_date,
-            supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
-            BOS: formValues.BOS || false,
-            FB: formValues.FB || false,
-            CDC: formValues.CDC || false,
-            year_name: formValues.year_name || new Date().getFullYear(),
-          },
-        }
-
-        const res = await fetch("/api/teacher/talks-events/parti-university-committes", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update university committee participation")
-        }
-
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("committees")
-          return newSet
-        })
-        await fetchUniversityCommittees()
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-        
-        toast({
-          title: "Success",
-          description: `"${formValues.name}" has been updated successfully!`,
-          duration: 3000,
-        })
-      } catch (error: any) {
-        console.error("Error updating university committee participation:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update university committee participation",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else if (editingItem.sectionId === "talks") {
-      try {
-        setIsSubmitting(true)
-        
-        const formValues = form.getValues()
-        const payload = {
-          teacherTalkId: editingItem.id,
-          teacherId: user.role_id,
-          teacherTalk: {
-            name: formValues.name,
-            programme: formValues.programme,
-            place: formValues.place,
-            date: formValues.date,
-            title: formValues.title,
-            participated_as: formValues.participated_as,
-            Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
-          },
-        }
-
-        const res = await fetch("/api/teacher/talks-events/teacher-talks", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update teacher talk")
-        }
-
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("talks")
-          return newSet
-        })
-        await fetchTeacherTalks()
-
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-        
-        toast({
-          title: "Success",
-          description: `"${formValues.name}" has been updated successfully!`,
-          duration: 3000,
-        })
-      } catch (error: any) {
-        console.error("Error updating teacher talk:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update teacher talk",
-          variant: "destructive",
-          duration: 3000,
-        })
-      } finally {
-        setIsSubmitting(false)
-      }
-    } else {
-      // Handle other sections (keep existing logic for now)
-      setData((prevData) => ({
-        ...prevData,
-        [editingItem.sectionId]: (prevData[editingItem.sectionId as keyof typeof prevData] || []).map((item: any) =>
-          item.id === editingItem.id ? { ...item, ...formData } : item,
-        ),
-      }))
-
+      // Close dialog and reset form
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
-      toast({
-        title: "Success",
-        description: "Item updated successfully!",
-        duration: 2000,
-      })
+      form.reset()
+    } catch (error: any) {
+      // Error toast is handled by mutation, but we can add additional handling if needed
+      console.error("Error updating:", error)
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -1337,13 +606,8 @@ export default function TalksEventsPage() {
           throw new Error(result.error || "Failed to update document")
         }
 
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("refresher")
-          return newSet
-        })
-        await fetchRefresherDetails()
+        // Refresh data using React Query invalidation
+        invalidateSection("refresher")
 
         toast({
           title: "Success",
@@ -1394,13 +658,8 @@ export default function TalksEventsPage() {
           throw new Error(result.error || "Failed to update document")
         }
 
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("academic-programs")
-          return newSet
-        })
-        await fetchAcademicContributions()
+        // Refresh data using React Query invalidation
+        invalidateSection("academic-programs")
 
         toast({
           title: "Success",
@@ -1451,13 +710,8 @@ export default function TalksEventsPage() {
           throw new Error(result.error || "Failed to update document")
         }
 
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("academic-bodies")
-          return newSet
-        })
-        await fetchAcademicBodiesParticipation()
+        // Refresh data using React Query invalidation
+        invalidateSection("academic-bodies")
 
         toast({
           title: "Success",
@@ -1511,13 +765,8 @@ export default function TalksEventsPage() {
           throw new Error(result.error || "Failed to update document")
         }
 
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("committees")
-          return newSet
-        })
-        await fetchUniversityCommittees()
+        // Refresh data using React Query invalidation
+        invalidateSection("committees")
 
         toast({
           title: "Success",
@@ -1568,13 +817,8 @@ export default function TalksEventsPage() {
           throw new Error(result.error || "Failed to update document")
         }
 
-        // Refresh data
-        setFetchedSections(prev => {
-          const newSet = new Set(prev)
-          newSet.delete("talks")
-          return newSet
-        })
-        await fetchTeacherTalks()
+        // Refresh data using React Query invalidation
+        invalidateSection("talks")
 
         toast({
           title: "Success",
@@ -1591,16 +835,9 @@ export default function TalksEventsPage() {
         })
       }
     } else {
-      // Handle other sections (keep existing logic for now)
-      const fileNames = Array.from(selectedFiles).map((f) => f.name)
-      setData((prevData) => ({
-        ...prevData,
-        [sectionId]: (prevData[sectionId as keyof typeof prevData] || []).map((item: any) =>
-          item.id === itemId
-            ? { ...item, supportingDocument: [...(item.supportingDocument || []), ...fileNames] }
-            : item,
-        ),
-      }))
+      // Handle other sections (fallback - should not be reached with current sections)
+      // Data is now managed by React Query, so we invalidate the query instead
+      invalidateSection(sectionId)
       toast({
         title: "Files Uploaded",
         description: "Supporting documents uploaded successfully!",
@@ -1927,16 +1164,17 @@ export default function TalksEventsPage() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
           <div className="border-b mb-4">
-            <div className="overflow-x-auto pb-2">
-              <TabsList className="inline-flex min-w-max w-full">
+            <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+              <TabsList className="inline-flex min-w-max w-full sm:w-auto">
                 {sections.map((section) => (
                   <TabsTrigger
                     key={section.id}
                     value={section.id}
-                    className="flex items-center gap-2 whitespace-nowrap px-3 py-2"
+                    className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm"
                   >
-                    <section.icon className="h-4 w-4" />
-                    <span className="text-xs">{section.title}</span>
+                    <section.icon className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline">{section.title}</span>
+                    <span className="xs:hidden">{section.title.split(' ')[0]}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -1946,18 +1184,21 @@ export default function TalksEventsPage() {
           {sections.map((section) => (
             <TabsContent key={section.id} value={section.id}>
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <section.icon className="h-5 w-5" />
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                    <section.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     {section.title}
                   </CardTitle>
                   <Button
                     onClick={() => {
                       router.push(`/teacher/talks-events/add?tab=${section.id}`)
                     }}
+                    className="w-full sm:w-auto"
+                    size="sm"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Add {section.title}
+                    <span className="hidden sm:inline">Add {section.title}</span>
+                    <span className="sm:hidden">Add</span>
                   </Button>
                 </CardHeader>
                 <CardContent>
@@ -1973,7 +1214,7 @@ export default function TalksEventsPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {loadingStates[section.id] ? (
+                        {loadingStates[section.id as keyof typeof loadingStates ] ? (
                           <TableRow>
                             <TableCell
                               colSpan={section.columns.length}
@@ -2040,7 +1281,7 @@ export default function TalksEventsPage() {
                                         <Upload className="h-4 w-4" />
                                       </Button>
                                     </DialogTrigger>
-                                    <DialogContent>
+                                    <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
                                       <DialogHeader>
                                         <DialogTitle>Upload Supporting Documents</DialogTitle>
                                       </DialogHeader>
@@ -2084,20 +1325,20 @@ export default function TalksEventsPage() {
 
         {/* Edit Dialog */}
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-lg sm:text-xl">
                 Edit {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
               </DialogTitle>
             </DialogHeader>
-            <div className="overflow-y-auto max-h-[70vh] pr-2">
+            <div className="overflow-y-auto max-h-[60vh] sm:max-h-[70vh] pr-2 -mr-2 sm:mr-0">
               {editingItem && renderForm(editingItem.sectionId, true)}
             </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 pt-4 border-t">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
                 Cancel
               </Button>
-              <Button onClick={handleSaveEdit} disabled={isSubmitting}>
+              <Button onClick={handleSaveEdit} disabled={isSubmitting} className="w-full sm:w-auto">
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -2116,7 +1357,7 @@ export default function TalksEventsPage() {
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-w-[95vw] sm:max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
