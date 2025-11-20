@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useArticlesMutations, useBooksMutations, useMagazinesMutations, useTechReportsMutations } from "@/hooks/use-teacher-academic-recommendations-mutations"
 import { JournalArticlesForm } from "@/components/forms/JournalArticlesForm"
 import { BooksForm } from "@/components/forms/BooksForm"
 import { MagazinesForm } from "@/components/forms/MagazinesForm"
@@ -23,23 +24,29 @@ export default function AddAcademicRecommendationsPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("articles")
   const [isExtracting, setIsExtracting] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm({
     mode: "onSubmit",
     reValidateMode: "onChange",
   })
-  const fetchedDropdownsRef = useRef<Set<string>>(new Set())
-  const fetchingDropdownsRef = useRef<Set<string>>(new Set())
 
-  // Fetch dropdowns
+  // Mutation hooks
+  const articlesMutations = useArticlesMutations()
+  const booksMutations = useBooksMutations()
+  const magazinesMutations = useMagazinesMutations()
+  const techReportsMutations = useTechReportsMutations()
+
+  // Derive submitting state from mutations
+  const isSubmitting = articlesMutations.createMutation.isPending || 
+                       booksMutations.createMutation.isPending || 
+                       magazinesMutations.createMutation.isPending || 
+                       techReportsMutations.createMutation.isPending
+
+  // Fetch dropdowns (handled internally by useDropDowns hook)
   const {
     resPubLevelOptions,
     journalEditedTypeOptions,
     bookTypeOptions,
-    fetchResPubLevels,
-    fetchJournalEditedTypes,
-    fetchBookTypes,
   } = useDropDowns()
 
   // Handle URL tab parameter
@@ -55,106 +62,6 @@ export default function AddAcademicRecommendationsPage() {
     form.reset()
     form.clearErrors()
   }, [activeTab, form])
-
-  // Fetch dropdowns for tabs
-  const fetchDropdownsForTab = useCallback((tab: string) => {
-    if (tab === "articles") {
-      const dropdownsToFetch = []
-      
-      if (!fetchedDropdownsRef.current.has("resPubLevelOptions") &&
-          !fetchingDropdownsRef.current.has("resPubLevelOptions") &&
-          resPubLevelOptions.length === 0) {
-        fetchingDropdownsRef.current.add("resPubLevelOptions")
-        dropdownsToFetch.push(
-          fetchResPubLevels()
-            .then(() => {
-              fetchedDropdownsRef.current.add("resPubLevelOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching res pub levels:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("resPubLevelOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("journalEditedTypeOptions") &&
-          !fetchingDropdownsRef.current.has("journalEditedTypeOptions") &&
-          journalEditedTypeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("journalEditedTypeOptions")
-        dropdownsToFetch.push(
-          fetchJournalEditedTypes()
-            .then(() => {
-              fetchedDropdownsRef.current.add("journalEditedTypeOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching journal edited types:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("journalEditedTypeOptions")
-            })
-        )
-      }
-      
-      if (dropdownsToFetch.length > 0) {
-        Promise.all(dropdownsToFetch).catch(error => {
-          console.error("Error fetching dropdowns for articles:", error)
-        })
-      }
-    } else if (tab === "books") {
-      const dropdownsToFetch = []
-      
-      if (!fetchedDropdownsRef.current.has("resPubLevelOptions") &&
-          !fetchingDropdownsRef.current.has("resPubLevelOptions") &&
-          resPubLevelOptions.length === 0) {
-        fetchingDropdownsRef.current.add("resPubLevelOptions")
-        dropdownsToFetch.push(
-          fetchResPubLevels()
-            .then(() => {
-              fetchedDropdownsRef.current.add("resPubLevelOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching res pub levels:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("resPubLevelOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("bookTypeOptions") &&
-          !fetchingDropdownsRef.current.has("bookTypeOptions") &&
-          bookTypeOptions.length === 0) {
-        fetchingDropdownsRef.current.add("bookTypeOptions")
-        dropdownsToFetch.push(
-          fetchBookTypes()
-            .then(() => {
-              fetchedDropdownsRef.current.add("bookTypeOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching book types:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("bookTypeOptions")
-            })
-        )
-      }
-      
-      if (dropdownsToFetch.length > 0) {
-        Promise.all(dropdownsToFetch).catch(error => {
-          console.error("Error fetching dropdowns for books:", error)
-        })
-      }
-    }
-  }, [resPubLevelOptions.length, journalEditedTypeOptions.length, bookTypeOptions.length, fetchResPubLevels, fetchJournalEditedTypes, fetchBookTypes])
-
-  // Fetch dropdowns when tab changes
-  useEffect(() => {
-    if (activeTab) {
-      fetchDropdownsForTab(activeTab)
-    }
-  }, [activeTab, fetchDropdownsForTab])
 
   const handleFileSelect = (files: FileList | null) => {
     setSelectedFiles(files)
@@ -201,108 +108,77 @@ export default function AddAcademicRecommendationsPage() {
       return
     }
 
-    setIsSubmitting(true)
     try {
-      let apiUrl = ""
       let payload: any = {}
 
       if (activeTab === "articles") {
-        apiUrl = "/api/teacher/academic-recommendations/journal-articles"
         payload = {
-          teacherId: user.role_id,
-          journal: {
-            title: data.title,
-            issn: data.issn || null,
-            eISSN: data.eISSN || null,
-            publisherName: data.publisherName || null,
-            volume_num: data.volume_num ? parseInt(data.volume_num) : null,
-            level: data.level || null,
-            peer_reviewed: data.peer_reviewed || false,
-            h_index: data.h_index ? parseFloat(data.h_index) : null,
-            impact_factor: data.impact_factor ? parseFloat(data.impact_factor) : null,
-            in_scopus: data.in_scopus || false,
-            type: data.type || null,
-            in_ugc: data.in_ugc || false,
-            in_clarivate: data.in_clarivate || false,
-            doi: data.doi || null,
-            in_oldUGCList: data.in_oldUGCList || false,
-            noofIssuePerYr: data.noofIssuePerYr ? parseInt(data.noofIssuePerYr) : null,
-            price: data.price ? parseFloat(data.price) : null,
-            currency: data.currency || null,
-          },
+          title: data.title,
+          issn: data.issn || null,
+          eISSN: data.eISSN || null,
+          publisherName: data.publisherName || null,
+          volume_num: data.volume_num ? parseInt(data.volume_num) : null,
+          level: data.level || null,
+          peer_reviewed: data.peer_reviewed || false,
+          h_index: data.h_index ? parseFloat(data.h_index) : null,
+          impact_factor: data.impact_factor ? parseFloat(data.impact_factor) : null,
+          in_scopus: data.in_scopus || false,
+          type: data.type || null,
+          in_ugc: data.in_ugc || false,
+          in_clarivate: data.in_clarivate || false,
+          doi: data.doi || null,
+          in_oldUGCList: data.in_oldUGCList || false,
+          noofIssuePerYr: data.noofIssuePerYr ? parseInt(data.noofIssuePerYr) : null,
+          price: data.price ? parseFloat(data.price) : null,
+          currency: data.currency || null,
         }
+        await articlesMutations.createMutation.mutateAsync(payload)
       } else if (activeTab === "books") {
-        apiUrl = "/api/teacher/academic-recommendations/books"
         payload = {
-          teacherId: user.role_id,
-          book: {
-            title: data.title,
-            authors: data.authors || null,
-            isbn: data.isbn || null,
-            book_category: data.book_category || null,
-            publisher_name: data.publisher_name || null,
-            publishing_level: data.publishing_level || null,
-            book_type: data.book_type || null,
-            edition: data.edition || null,
-            volume: data.volume || null,
-            ebook: data.ebook || null,
-            digital_media: data.digital_media || null,
-            approx_price: data.approx_price ? parseFloat(data.approx_price) : null,
-            currency: data.currency || null,
-            publication_date: data.publication_date || null,
-            proposed_ay: data.proposed_ay || null,
-          },
+          title: data.title,
+          authors: data.authors || null,
+          isbn: data.isbn || null,
+          book_category: data.book_category || null,
+          publisher_name: data.publisher_name || null,
+          publishing_level: data.publishing_level || null,
+          book_type: data.book_type || null,
+          edition: data.edition || null,
+          volume: data.volume || null,
+          ebook: data.ebook || null,
+          digital_media: data.digital_media || null,
+          approx_price: data.approx_price ? parseFloat(data.approx_price) : null,
+          currency: data.currency || null,
+          publication_date: data.publication_date || null,
+          proposed_ay: data.proposed_ay || null,
         }
+        await booksMutations.createMutation.mutateAsync(payload)
       } else if (activeTab === "magazines") {
-        apiUrl = "/api/teacher/academic-recommendations/magazines"
         payload = {
-          teacherId: user.role_id,
-          magazine: {
-            title: data.title,
-            mode: data.mode || null,
-            category: data.category || null,
-            is_additional_attachment: data.is_additional_attachment || false,
-            additional_attachment: data.additional_attachment || null,
-            publication_date: data.publication_date || null,
-            publishing_agency: data.publishing_agency || null,
-            volume: data.volume || null,
-            no_of_issue_per_yr: data.no_of_issue_per_yr ? parseInt(data.no_of_issue_per_yr) : null,
-            price: data.price ? parseFloat(data.price) : null,
-            currency: data.currency || null,
-          },
+          title: data.title,
+          mode: data.mode || null,
+          category: data.category || null,
+          is_additional_attachment: data.is_additional_attachment || false,
+          additional_attachment: data.additional_attachment || null,
+          publication_date: data.publication_date || null,
+          publishing_agency: data.publishing_agency || null,
+          volume: data.volume || null,
+          no_of_issue_per_yr: data.no_of_issue_per_yr ? parseInt(data.no_of_issue_per_yr) : null,
+          price: data.price ? parseFloat(data.price) : null,
+          currency: data.currency || null,
         }
+        await magazinesMutations.createMutation.mutateAsync(payload)
       } else if (activeTab === "technical") {
-        apiUrl = "/api/teacher/academic-recommendations/tech-reports"
         payload = {
-          teacherId: user.role_id,
-          techReport: {
-            title: data.title,
-            subject: data.subject || null,
-            publisher_name: data.publisher_name || null,
-            publication_date: data.publication_date || null,
-            no_of_issue_per_year: data.no_of_issue_per_year ? parseInt(data.no_of_issue_per_year) : null,
-            price: data.price ? parseFloat(data.price) : null,
-            currency: data.currency || null,
-          },
+          title: data.title,
+          subject: data.subject || null,
+          publisher_name: data.publisher_name || null,
+          publication_date: data.publication_date || null,
+          no_of_issue_per_year: data.no_of_issue_per_year ? parseInt(data.no_of_issue_per_year) : null,
+          price: data.price ? parseFloat(data.price) : null,
+          currency: data.currency || null,
         }
+        await techReportsMutations.createMutation.mutateAsync(payload)
       }
-
-      const res = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add record")
-      }
-
-          toast({
-            title: "Success",
-        description: `"${data.title}" has been added successfully!`,
-        duration: 3000,
-      })
 
       // Reset form
       form.reset()
@@ -312,16 +188,8 @@ export default function AddAcademicRecommendationsPage() {
       setTimeout(() => {
         router.push(`/teacher/academic-recommendations?tab=${activeTab}`)
       }, 1000)
-    } catch (error: any) {
-      console.error("Error adding record:", error)
-        toast({
-          title: "Error",
-        description: error.message || "Failed to add record",
-          variant: "destructive",
-        duration: 3000,
-        })
-      } finally {
-      setIsSubmitting(false)
+    } catch (error) {
+      // Error handling is done in the mutation hook
     }
   }
 
@@ -416,28 +284,28 @@ export default function AddAcademicRecommendationsPage() {
   ]
 
   return (
-      <div className="container mx-auto p-6 max-w-6xl">
+      <div className="container mx-auto p-3 sm:p-4 md:p-6 max-w-6xl">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2 w-full sm:w-auto">
             <ArrowLeft className="h-4 w-4" />
-            Back
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <div>
-            <h1 className="text-3xl font-bold">
+          <div className="flex-1">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold">
               Add Teacher's Recommendation(s) for Journals/Databases and other Learning Resources
             </h1>
-            <p className="text-muted-foreground">Add recommendations for academic resources</p>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">Add recommendations for academic resources</p>
           </div>
         </div>
 
         {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 overflow-x-auto">
           {sections.map((section) => (
-            <TabsTrigger key={section.id} value={section.id} className="flex items-center gap-2">
-              <section.icon className="h-4 w-4" />
-              {section.title}
+            <TabsTrigger key={section.id} value={section.id} className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <section.icon className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="truncate">{section.title}</span>
             </TabsTrigger>
           ))}
           </TabsList>
@@ -446,11 +314,11 @@ export default function AddAcademicRecommendationsPage() {
           <TabsContent key={section.id} value={section.id}>
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg md:text-xl">
                   <section.icon className="h-5 w-5" />
                   {section.title}
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs sm:text-sm">
                   Fill in the details below to add a new {section.title.toLowerCase()} recommendation
                 </CardDescription>
               </CardHeader>

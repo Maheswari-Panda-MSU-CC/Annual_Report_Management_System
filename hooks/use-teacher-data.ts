@@ -30,19 +30,19 @@ export const teacherQueryKeys = {
   },
   academicRecommendations: {
     all: (teacherId: number) => [...teacherQueryKeys.all, "academic-recommendations", teacherId] as const,
+    articles: (teacherId: number) => [...teacherQueryKeys.academicRecommendations.all(teacherId), "articles"] as const,
+    books: (teacherId: number) => [...teacherQueryKeys.academicRecommendations.all(teacherId), "books"] as const,
+    magazines: (teacherId: number) => [...teacherQueryKeys.academicRecommendations.all(teacherId), "magazines"] as const,
+    technical: (teacherId: number) => [...teacherQueryKeys.academicRecommendations.all(teacherId), "technical"] as const,
   },
 }
 
-// API Fetch Helper with cache-busting
-const fetchAPI = async (url: string) => {
-  // Add cache-busting parameter to prevent any caching
-  const separator = url.includes('?') ? '&' : '?'
-  const cacheBuster = `${separator}_cb=${Date.now()}`
-  const response = await fetch(`${url}${cacheBuster}`, {
-    cache: 'no-store', // Disable browser cache
+// API Fetch Helper with AbortController support
+const fetchAPI = async (url: string, signal?: AbortSignal) => {
+  const response = await fetch(url, {
+    signal,
     headers: {
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
+      'Content-Type': 'application/json',
     },
   })
   if (!response.ok) {
@@ -299,6 +299,60 @@ export function useTeacherTalksEvents() {
       academicBodiesParticipation: academicParticipation.data?.academicBodiesParticipation || [],
       universityCommittees: committees.data?.universityCommittees || [],
       refresherDetails: refresher.data?.refresherDetails || [],
+    }
+  }
+}
+
+// Academic Recommendations Hooks
+export function useTeacherAcademicRecommendations() {
+  const { user } = useAuth()
+  const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
+
+  const articles = useQuery({
+    queryKey: teacherQueryKeys.academicRecommendations.articles(teacherId),
+    queryFn: ({ signal }) => fetchAPI(`/api/teacher/academic-recommendations/journal-articles?teacherId=${teacherId}`, signal),
+    enabled: !!teacherId && teacherId > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnMount: false,
+  })
+
+  const books = useQuery({
+    queryKey: teacherQueryKeys.academicRecommendations.books(teacherId),
+    queryFn: ({ signal }) => fetchAPI(`/api/teacher/academic-recommendations/books?teacherId=${teacherId}`, signal),
+    enabled: !!teacherId && teacherId > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnMount: false,
+  })
+
+  const magazines = useQuery({
+    queryKey: teacherQueryKeys.academicRecommendations.magazines(teacherId),
+    queryFn: ({ signal }) => fetchAPI(`/api/teacher/academic-recommendations/magazines?teacherId=${teacherId}`, signal),
+    enabled: !!teacherId && teacherId > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnMount: false,
+  })
+
+  const technical = useQuery({
+    queryKey: teacherQueryKeys.academicRecommendations.technical(teacherId),
+    queryFn: ({ signal }) => fetchAPI(`/api/teacher/academic-recommendations/tech-reports?teacherId=${teacherId}`, signal),
+    enabled: !!teacherId && teacherId > 0,
+    staleTime: 3 * 60 * 1000,
+    refetchOnMount: false,
+  })
+
+  return {
+    articles,
+    books,
+    magazines,
+    technical,
+    isLoading: articles.isLoading || books.isLoading || magazines.isLoading || technical.isLoading,
+    isFetching: articles.isFetching || books.isFetching || magazines.isFetching || technical.isFetching,
+    isError: articles.isError || books.isError || magazines.isError || technical.isError,
+    data: {
+      journals: articles.data?.journals || [],
+      books: books.data?.books || [],
+      magazines: magazines.data?.magazines || [],
+      techReports: technical.data?.techReports || [],
     }
   }
 }
