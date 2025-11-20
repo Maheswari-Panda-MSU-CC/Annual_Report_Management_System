@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { usePerformanceMutations, useAwardsMutations, useExtensionMutations } from "@/hooks/use-teacher-awards-recognition-mutations"
 import { PerformanceTeacherForm } from "@/components/forms/PerformanceTeacherForm"
 import { AwardsFellowshipForm } from "@/components/forms/AwardsFellowshipForm"
 import { ExtensionActivityForm } from "@/components/forms/ExtensionActivityForm"
@@ -39,22 +40,26 @@ export default function AddAwardsPage() {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("performance")
   const [isExtracting, setIsExtracting] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
   const [extractionSuccess, setExtractionSuccess] = useState<string | null>(null)
   const form = useForm({
     mode: "onSubmit",
     reValidateMode: "onChange",
   })
-  const fetchedDropdownsRef = useRef<Set<string>>(new Set())
-  const fetchingDropdownsRef = useRef<Set<string>>(new Set())
 
-  // Fetch dropdowns
+  // Mutation hooks
+  const performanceMutations = usePerformanceMutations()
+  const awardsMutations = useAwardsMutations()
+  const extensionMutations = useExtensionMutations()
+
+  // Derive submitting state from mutations
+  const isSubmitting = performanceMutations.createMutation.isPending || 
+                       awardsMutations.createMutation.isPending || 
+                       extensionMutations.createMutation.isPending
+  // Fetch dropdowns (handled internally by useDropDowns hook)
   const { 
     awardFellowLevelOptions,
-    sponserNameOptions,
-    fetchAwardFellowLevels,
-    fetchSponserNames
+    sponserNameOptions
   } = useDropDowns()
 
   // Handle URL tab parameter on component mount
@@ -86,71 +91,6 @@ export default function AddAwardsPage() {
     // Clear form errors
     form.clearErrors()
   }, [activeTab])
-
-  // Fetch dropdowns for tabs
-  useEffect(() => {
-    if (activeTab === "awards") {
-      if (!fetchedDropdownsRef.current.has("awardFellowLevelOptions") && 
-          !fetchingDropdownsRef.current.has("awardFellowLevelOptions") &&
-          awardFellowLevelOptions.length === 0) {
-        fetchingDropdownsRef.current.add("awardFellowLevelOptions")
-        fetchAwardFellowLevels()
-          .then(() => {
-            fetchedDropdownsRef.current.add("awardFellowLevelOptions")
-          })
-          .catch(error => {
-            console.error("Error fetching award fellow levels:", error)
-          })
-          .finally(() => {
-            fetchingDropdownsRef.current.delete("awardFellowLevelOptions")
-          })
-      }
-    } else if (activeTab === "extension") {
-      const dropdownsToFetch = []
-      
-      if (!fetchedDropdownsRef.current.has("awardFellowLevelOptions") && 
-          !fetchingDropdownsRef.current.has("awardFellowLevelOptions") &&
-          awardFellowLevelOptions.length === 0) {
-        fetchingDropdownsRef.current.add("awardFellowLevelOptions")
-        dropdownsToFetch.push(
-          fetchAwardFellowLevels()
-            .then(() => {
-              fetchedDropdownsRef.current.add("awardFellowLevelOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching award fellow levels:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("awardFellowLevelOptions")
-            })
-        )
-      }
-      
-      if (!fetchedDropdownsRef.current.has("sponserNameOptions") && 
-          !fetchingDropdownsRef.current.has("sponserNameOptions") &&
-          sponserNameOptions.length === 0) {
-        fetchingDropdownsRef.current.add("sponserNameOptions")
-        dropdownsToFetch.push(
-          fetchSponserNames()
-            .then(() => {
-              fetchedDropdownsRef.current.add("sponserNameOptions")
-            })
-            .catch(error => {
-              console.error("Error fetching sponser names:", error)
-            })
-            .finally(() => {
-              fetchingDropdownsRef.current.delete("sponserNameOptions")
-            })
-        )
-      }
-      
-      if (dropdownsToFetch.length > 0) {
-        Promise.all(dropdownsToFetch).catch(error => {
-          console.error("Error fetching dropdowns for extension:", error)
-        })
-      }
-    }
-  }, [activeTab, awardFellowLevelOptions.length, sponserNameOptions.length, fetchAwardFellowLevels, fetchSponserNames])
 
   // Track uploaded files separately
   const [uploadedFiles, setUploadedFiles] = useState<UploadStatus>({
@@ -332,35 +272,16 @@ export default function AddAwardsPage() {
       return
     }
 
-    setIsSubmitting(true)
     try {
       const payload = {
-        teacherId: user.role_id,
-        perfTeacher: {
-          name: data.name,
-          place: data.place,
-          date: data.date,
-          perf_nature: data.perf_nature,
-          Image: "http://localhost:3000/assets/demo_document.pdf",
-        },
+        name: data.name,
+        place: data.place,
+        date: data.date,
+        perf_nature: data.perf_nature,
+        Image: "http://localhost:3000/assets/demo_document.pdf",
       }
 
-      const res = await fetch("/api/teacher/awards-recognition/performance-teacher", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add performance teacher")
-      }
-
-      toast({
-        title: "Success",
-        description: `"${data.name}" has been added successfully!`,
-        duration: 3000,
-      })
+      await performanceMutations.createMutation.mutateAsync(payload)
 
       // Reset form
       form.reset()
@@ -371,16 +292,8 @@ export default function AddAwardsPage() {
       setTimeout(() => {
         router.push("/teacher/awards-recognition?tab=performance")
       }, 1000)
-    } catch (error: any) {
-      console.error("Error adding performance teacher:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add performance teacher",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsSubmitting(false)
+    } catch (error) {
+      // Error handling is done in the mutation hook
     }
   }
 
@@ -394,37 +307,18 @@ export default function AddAwardsPage() {
       return
     }
 
-    setIsSubmitting(true)
     try {
       const payload = {
-        teacherId: user.role_id,
-        awardsFellow: {
-          name: data.name,
-          details: data.details || "",
-          organization: data.organization,
-          address: data.address || "",
-          date_of_award: data.date_of_award,
-          level: data.level,
-          Image: "http://localhost:3000/assets/demo_document.pdf",
-        },
+        name: data.name,
+        details: data.details || "",
+        organization: data.organization,
+        address: data.address || "",
+        date_of_award: data.date_of_award,
+        level: data.level,
+        Image: "http://localhost:3000/assets/demo_document.pdf",
       }
 
-      const res = await fetch("/api/teacher/awards-recognition/awards-fellow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add awards/fellows")
-      }
-
-      toast({
-        title: "Success",
-        description: `"${data.name}" has been added successfully!`,
-        duration: 3000,
-      })
+      await awardsMutations.createMutation.mutateAsync(payload)
 
       // Reset form
       form.reset()
@@ -435,16 +329,8 @@ export default function AddAwardsPage() {
       setTimeout(() => {
         router.push("/teacher/awards-recognition?tab=awards")
       }, 1000)
-    } catch (error: any) {
-      console.error("Error adding awards/fellows:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add awards/fellows",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsSubmitting(false)
+    } catch (error) {
+      // Error handling is done in the mutation hook
     }
   }
 
@@ -458,37 +344,18 @@ export default function AddAwardsPage() {
       return
     }
 
-    setIsSubmitting(true)
     try {
       const payload = {
-        teacherId: user.role_id,
-        extensionAct: {
-          names: data.names,
-          place: data.place,
-          date: data.date,
-          name_of_activity: data.name_of_activity,
-          sponsered: data.sponsered,
-          level: data.level,
-          Image: "http://localhost:3000/assets/demo_document.pdf",
-        },
+        names: data.names,
+        place: data.place,
+        date: data.date,
+        name_of_activity: data.name_of_activity,
+        sponsered: data.sponsered,
+        level: data.level,
+        Image: "http://localhost:3000/assets/demo_document.pdf",
       }
 
-      const res = await fetch("/api/teacher/awards-recognition/extensions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add extension activity")
-      }
-
-      toast({
-        title: "Success",
-        description: `"${data.name_of_activity}" has been added successfully!`,
-        duration: 3000,
-      })
+      await extensionMutations.createMutation.mutateAsync(payload)
 
       // Reset form
       form.reset()
@@ -499,16 +366,8 @@ export default function AddAwardsPage() {
       setTimeout(() => {
         router.push("/teacher/awards-recognition?tab=extension")
       }, 1000)
-    } catch (error: any) {
-      console.error("Error adding extension activity:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add extension activity",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsSubmitting(false)
+    } catch (error) {
+      // Error handling is done in the mutation hook
     }
   }
 
@@ -535,39 +394,45 @@ export default function AddAwardsPage() {
   }
 
   return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Awards & Recognition
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+          <Button variant="outline" onClick={() => router.back()} className="text-xs sm:text-sm w-full sm:w-auto">
+            <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Back to Awards & Recognition</span>
+            <span className="sm:hidden">Back</span>
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900">Add Awards & Recognition</h1>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Add Awards & Recognition</h1>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-3 min-w-[600px]">
-              <TabsTrigger value="performance" className="text-xs px-2 py-2">
-                <FileText className="mr-1 h-3 w-3" />
-                Performance
-              </TabsTrigger>
-              <TabsTrigger value="awards" className="text-xs px-2 py-2">
-                <Award className="mr-1 h-3 w-3" />
-                Awards/Fellowship/Recognition
-              </TabsTrigger>
-              <TabsTrigger value="extension" className="text-xs px-2 py-2">
-                <Users className="mr-1 h-3 w-3" />
-                Extension
-              </TabsTrigger>
-            </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+          <div className="border-b mb-4">
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-2">
+              <TabsList className="inline-flex min-w-max w-full sm:w-auto">
+                <TabsTrigger value="performance" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
+                  <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">Performance</span>
+                  <span className="sm:hidden">Performance</span>
+                </TabsTrigger>
+                <TabsTrigger value="awards" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
+                  <Award className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden lg:inline">Awards/Fellowship/Recognition</span>
+                  <span className="hidden sm:inline lg:hidden">Awards/Fellowship/Recognition</span>
+                  <span className="sm:hidden">Awards/Fellowship/Recognition</span>
+                </TabsTrigger>
+                <TabsTrigger value="extension" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
+                  <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="text-xs sm:text-sm">Extension</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
           </div>
 
           {/* Performance Tab */}
           <TabsContent value="performance" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                   Performance by Individual/Group
                 </CardTitle>
               </CardHeader>
@@ -598,8 +463,8 @@ export default function AddAwardsPage() {
           <TabsContent value="awards">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Award className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <Award className="h-4 w-4 sm:h-5 sm:w-5" />
                   Awards/Fellowship/Recognition
                 </CardTitle>
               </CardHeader>
@@ -631,8 +496,8 @@ export default function AddAwardsPage() {
           <TabsContent value="extension">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5" />
                   Extension
                 </CardTitle>
               </CardHeader>

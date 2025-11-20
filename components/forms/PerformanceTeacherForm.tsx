@@ -53,16 +53,16 @@ export function PerformanceTeacherForm({
           </Label>
           <FileUpload onFileSelect={handleFileSelect} />
           {selectedFiles && selectedFiles.length > 0 && (
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleExtractInfo}
-                disabled={isExtracting}
-                className="flex items-center gap-2"
-              >
+          <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+            <p className="text-xs sm:text-sm text-green-600 truncate flex-1">{selectedFiles[0].name}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExtractInfo}
+              disabled={isExtracting}
+              className="flex items-center gap-2 w-full sm:w-auto"
+            >
                 {isExtracting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -86,7 +86,7 @@ export function PerformanceTeacherForm({
           {isEdit ? "Edit Performance Details" : "Step 2: Verify/Complete Performance Details"}
         </Label>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
           <div className="space-y-2">
             <Label htmlFor="name">Title of Performance *</Label>
             <Input
@@ -176,8 +176,8 @@ export function PerformanceTeacherForm({
 
       {/* Submit Button - Only show in add mode, edit mode uses dialog button */}
       {!isEdit && (
-        <div className="flex justify-end gap-4">
-          <Button type="submit" disabled={isSubmitting}>
+        <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4">
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
