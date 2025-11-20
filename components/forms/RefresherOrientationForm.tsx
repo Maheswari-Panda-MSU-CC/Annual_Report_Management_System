@@ -1,14 +1,13 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Controller } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Save, Loader2, Brain } from "lucide-react"
-import FileUpload from "../shared/FileUpload"
-import { DocumentViewer } from "../document-viewer"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
@@ -41,14 +40,29 @@ export function RefresherOrientationForm({
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
+  const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+    isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
+  )
 
   useEffect(() => {
     if (isEdit && editData) {
       Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
+        setValue(key, value, { shouldValidate: false }) // Don't validate on initial load
       })
+      // Set document URL if exists
+      if (editData.supporting_doc) {
+        setDocumentUrl(editData.supporting_doc)
+        setValue("supporting_doc", editData.supporting_doc, { shouldValidate: false })
+      }
     }
   }, [isEdit, editData, setValue])
+
+  // Re-validate end date when start date changes
+  useEffect(() => {
+    if (formData.startdate && formData.enddate) {
+      form.trigger("enddate")
+    }
+  }, [formData.startdate, form])
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -57,31 +71,45 @@ export function RefresherOrientationForm({
         <Label className="text-lg font-semibold mb-3 block">
           Step 1: Upload Supporting Document
         </Label>
-        <FileUpload onFileSelect={handleFileSelect} />
-        {selectedFiles && selectedFiles.length > 0 && (
-          <div className="mt-3 flex items-center justify-between">
-            <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExtractInfo}
-              disabled={isExtracting}
-              className="flex items-center gap-2"
-            >
-              {isExtracting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                <>
-                  <Brain className="h-4 w-4" />
-                  Extract Information
-                </>
-              )}
-            </Button>
-          </div>
+        <DocumentUpload
+          documentUrl={documentUrl}
+          category="talks-events"
+          subCategory="refresher"
+          onChange={(url) => {
+            setDocumentUrl(url)
+            setValue("supporting_doc", url, { shouldValidate: true })
+          }}
+          onExtract={(fields) => {
+            Object.entries(fields).forEach(([key, value]) => {
+              setValue(key, value)
+            })
+            if (handleExtractInfo) {
+              handleExtractInfo()
+            }
+          }}
+          allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+          maxFileSize={5 * 1024 * 1024} // 5MB
+          className="w-full"
+        />
+        {/* Hidden input for form validation */}
+        <input
+          type="hidden"
+          {...register("supporting_doc", {
+            required: "Supporting document is required",
+            validate: (value) => {
+              if (!value || (typeof value === 'string' && value.trim() === '')) {
+                return "Please upload a supporting document"
+              }
+              // Check if it's a valid URL or local path
+              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document'))) {
+                return true
+              }
+              return "Invalid document URL"
+            }
+          })}
+        />
+        {errors.supporting_doc && (
+          <p className="text-sm text-red-600 mt-1">{errors.supporting_doc.message?.toString()}</p>
         )}
       </div>
 
@@ -96,9 +124,18 @@ export function RefresherOrientationForm({
             <Label htmlFor="name">Name *</Label>
             <Input 
               id="name" 
+              placeholder="Enter course name"
+              maxLength={500}
               {...register("name", { 
                 required: "Name is required",
-                minLength: { value: 2, message: "Name must be at least 2 characters" }
+                minLength: { value: 2, message: "Name must be at least 2 characters" },
+                maxLength: { value: 500, message: "Name must not exceed 500 characters" },
+                validate: (value) => {
+                  if (value && value.trim().length < 2) {
+                    return "Name cannot be only whitespace"
+                  }
+                  return true
+                }
               })} 
             />
             {errors.name && (
@@ -111,12 +148,26 @@ export function RefresherOrientationForm({
             <Controller
               name="refresher_type"
               control={control}
-              rules={{ required: "Course type is required" }}
+              rules={{ 
+                required: "Course type is required",
+                validate: (value) => {
+                  if (!value || value === "" || value === null || value === undefined) {
+                    return "Course type is required"
+                  }
+                  return true
+                }
+              }}
               render={({ field }) => (
                 <SearchableSelect
                   options={refresherTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value)
+                    // Clear error when value is selected
+                    if (value) {
+                      form.clearErrors("refresher_type")
+                    }
+                  }}
                   placeholder="Select course type"
                   emptyMessage="No course type found"
                 />
@@ -132,8 +183,25 @@ export function RefresherOrientationForm({
             <Input 
               id="startdate" 
               type="date" 
+              max={new Date().toISOString().split('T')[0]}
               {...register("startdate", { 
-                required: "Start date is required"
+                required: "Start date is required",
+                validate: (value) => {
+                  if (!value) {
+                    return "Start date is required"
+                  }
+                  const date = new Date(value)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today
+                  
+                  if (date > today) {
+                    return "Start date cannot be in the future"
+                  }
+                  if (date.getFullYear() < 1900) {
+                    return "Start date must be after 1900"
+                  }
+                  return true
+                }
               })} 
             />
             {errors.startdate && (
@@ -146,13 +214,36 @@ export function RefresherOrientationForm({
             <Input 
               id="enddate" 
               type="date" 
+              max={new Date().toISOString().split('T')[0]}
               {...register("enddate", {
                 validate: (value) => {
-                  if (!value) return true
-                  const startDate = formData.startdate
-                  if (startDate && value < startDate) {
-                    return "End date must be after start date"
+                  if (!value) return true // Optional field
+                  
+                  const endDate = new Date(value)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999)
+                  
+                  // Check if end date is in the future
+                  if (endDate > today) {
+                    return "End date cannot be in the future"
                   }
+                  
+                  // Check if end date is before 1900
+                  if (endDate.getFullYear() < 1900) {
+                    return "End date must be after 1900"
+                  }
+                  
+                  // Check if end date is before start date
+                  const startDate = formData.startdate
+                  if (startDate) {
+                    const start = new Date(startDate)
+                    start.setHours(0, 0, 0, 0) // Normalize to start of day
+                    endDate.setHours(0, 0, 0, 0) // Normalize to start of day
+                    if (endDate < start) {
+                      return "End date must be after or equal to start date"
+                    }
+                  }
+                  
                   return true
                 }
               })} 
@@ -252,17 +343,6 @@ export function RefresherOrientationForm({
             )}
           </div>
         </div>
-
-        {isEdit && (
-          <div className="mt-4">
-            {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-              <DocumentViewer
-                documentUrl={formData.supportingDocument[0]}
-                documentType={formData.supportingDocument[0].split('.').pop()?.toLowerCase() || ''}
-              />
-            )}
-          </div>
-        )}
 
         {/* Submit Buttons */}
         {!isEdit && (

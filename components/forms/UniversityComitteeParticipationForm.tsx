@@ -2,7 +2,7 @@
 
 import { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 import { Input } from "@/components/ui/input"
@@ -10,8 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 
-import FileUpload from "../shared/FileUpload"
-import { DocumentViewer } from "../document-viewer"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { Save, Brain, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
@@ -54,12 +53,20 @@ export function UniversityCommitteeParticipationForm({
   } = form
 
   const formData = watch()
+  const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+    isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
+  )
 
   useEffect(() => {
     if (isEdit && editData) {
       Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
+        setValue(key, value, { shouldValidate: false }) // Don't validate on initial load
       })
+      // Set document URL if exists
+      if (editData.supporting_doc) {
+        setDocumentUrl(editData.supporting_doc)
+        setValue("supporting_doc", editData.supporting_doc, { shouldValidate: false })
+      }
     }
   }, [isEdit, editData, setValue])
 
@@ -68,31 +75,45 @@ export function UniversityCommitteeParticipationForm({
       {/* Step 1: Upload */}
       <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
         <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Supporting Document</Label>
-        <FileUpload onFileSelect={handleFileSelect} />
-        {selectedFiles && selectedFiles.length > 0 && (
-          <div className="mt-3 flex items-center justify-between">
-            <p className="text-sm text-green-600">{selectedFiles[0].name}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExtractInfo}
-              disabled={isExtracting}
-              className="flex items-center gap-2"
-            >
-              {isExtracting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                <>
-                  <Brain className="h-4 w-4" />
-                  Extract Information
-                </>
-              )}
-            </Button>
-          </div>
+        <DocumentUpload
+          documentUrl={documentUrl}
+          category="talks-events"
+          subCategory="committees"
+          onChange={(url) => {
+            setDocumentUrl(url)
+            setValue("supporting_doc", url, { shouldValidate: true })
+          }}
+          onExtract={(fields) => {
+            Object.entries(fields).forEach(([key, value]) => {
+              setValue(key, value)
+            })
+            if (handleExtractInfo) {
+              handleExtractInfo()
+            }
+          }}
+          allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+          maxFileSize={5 * 1024 * 1024} // 5MB
+          className="w-full"
+        />
+        {/* Hidden input for form validation */}
+        <input
+          type="hidden"
+          {...register("supporting_doc", {
+            required: "Supporting document is required",
+            validate: (value) => {
+              if (!value || (typeof value === 'string' && value.trim() === '')) {
+                return "Please upload a supporting document"
+              }
+              // Check if it's a valid URL or local path
+              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document'))) {
+                return true
+              }
+              return "Invalid document URL"
+            }
+          })}
+        />
+        {errors.supporting_doc && (
+          <p className="text-sm text-red-600 mt-1">{errors.supporting_doc.message?.toString()}</p>
         )}
       </div>
 
@@ -148,12 +169,26 @@ export function UniversityCommitteeParticipationForm({
             <Controller
               name="level"
               control={control}
-              rules={{ required: "Level is required" }}
+              rules={{ 
+                required: "Level is required",
+                validate: (value) => {
+                  if (!value || value === "" || value === null || value === undefined) {
+                    return "Level is required"
+                  }
+                  return true
+                }
+              }}
               render={({ field }) => (
                 <SearchableSelect
                   options={committeeLevelOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value)
+                    // Clear error when value is selected
+                    if (value) {
+                      form.clearErrors("level")
+                    }
+                  }}
                   placeholder="Select level"
                   emptyMessage="No level found"
                 />
@@ -192,10 +227,17 @@ export function UniversityCommitteeParticipationForm({
               {...register("submit_date", { 
                 required: "Submit date is required",
                 validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
+                  if (!value) {
+                    return "Submit date is required"
+                  }
+                  const date = new Date(value)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999)
+                  
+                  if (date > today) {
                     return "Submit date cannot be in the future"
                   }
-                  if (value && new Date(value).getFullYear() < 1900) {
+                  if (date.getFullYear() < 1900) {
                     return "Submit date must be after 1900"
                   }
                   return true
@@ -210,12 +252,26 @@ export function UniversityCommitteeParticipationForm({
             <Controller
               name="year_name"
               control={control}
-              rules={{ required: "Year is required" }}
+              rules={{ 
+                required: "Year is required",
+                validate: (value) => {
+                  if (!value || value === "" || value === null || value === undefined) {
+                    return "Year is required"
+                  }
+                  return true
+                }
+              }}
               render={({ field }) => (
                 <SearchableSelect
                   options={reportYearsOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value)
+                    // Clear error when value is selected
+                    if (value) {
+                      form.clearErrors("year_name")
+                    }
+                  }}
                   placeholder="Select year"
                   emptyMessage="No year found"
                 />
@@ -273,16 +329,6 @@ export function UniversityCommitteeParticipationForm({
           </div>
         </div>
 
-        {isEdit && (
-          <div className="mt-6">
-            {Array.isArray(formData.supportingDocument) && formData.supportingDocument.length > 0 && (
-              <DocumentViewer
-                documentUrl={formData.supportingDocument[0]}
-                documentType={formData.supportingDocument[0].split('.').pop()?.toLowerCase() || ''}
-              />
-            )}
-          </div>
-        )}
 
         {!isEdit && (
           <div className="flex justify-end gap-4 mt-6">

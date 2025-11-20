@@ -468,6 +468,56 @@ export default function TalksEventsPage() {
     setIsEditDialogOpen(true)
   }
 
+  // Helper function to upload document to S3
+  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+    if (!documentUrl) {
+      return "http://localhost:3000/assets/demo_document.pdf"
+    }
+
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl.startsWith("/uploaded-document/")) {
+      try {
+        const fileName = documentUrl.split("/").pop()
+        if (!fileName) {
+          throw new Error("Invalid file name")
+        }
+
+        const s3Response = await fetch("/api/shared/s3", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName }),
+        })
+
+        if (!s3Response.ok) {
+          const s3Error = await s3Response.json()
+          throw new Error(s3Error.error || "Failed to upload document to S3")
+        }
+
+        const s3Data = await s3Response.json()
+        const s3Url = s3Data.url
+
+        // Delete local file after successful S3 upload
+        await fetch("/api/shared/local-document-upload", {
+          method: "DELETE",
+        })
+
+        return s3Url
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Using existing URL.",
+          variant: "destructive",
+        })
+        // Return existing URL if S3 upload fails
+        return documentUrl
+      }
+    }
+
+    // If it's already an S3 URL or external URL, return as is
+    return documentUrl
+  }
+
   const handleSaveEdit = async () => {
     if (!editingItem || !user?.role_id) return
 
@@ -481,6 +531,8 @@ export default function TalksEventsPage() {
       // Prepare data and get appropriate mutation based on section
       if (editingItem.sectionId === "refresher") {
         updateMutation = refresherMutations.updateMutation
+        // Handle document upload to S3
+        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           refresher_type: formValues.refresher_type,
@@ -490,39 +542,42 @@ export default function TalksEventsPage() {
           institute: formValues.institute || null,
           department: formValues.department || null,
           centre: formValues.centre && formValues.centre.trim() !== "" ? formValues.centre.trim() : null,
-          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          supporting_doc: docUrl,
         }
       } else if (editingItem.sectionId === "academic-programs") {
         updateMutation = academicProgramMutations.updateMutation
+        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           programme: formValues.programme,
           place: formValues.place,
           date: formValues.date,
           participated_as: formValues.participated_as,
-          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          supporting_doc: docUrl,
           year_name: formValues.year_name || new Date().getFullYear(),
         }
       } else if (editingItem.sectionId === "academic-bodies") {
         updateMutation = academicBodiesMutations.updateMutation
+        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           acad_body: formValues.acad_body,
           place: formValues.place,
           participated_as: formValues.participated_as,
           submit_date: formValues.submit_date,
-          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          supporting_doc: docUrl,
           year_name: formValues.year_name || new Date().getFullYear(),
         }
       } else if (editingItem.sectionId === "committees") {
         updateMutation = committeeMutations.updateMutation
+        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           committee_name: formValues.committee_name,
           level: formValues.level,
           participated_as: formValues.participated_as,
           submit_date: formValues.submit_date,
-          supporting_doc: formValues.supporting_doc || "http://localhost:3000/assets/demo_document.pdf",
+          supporting_doc: docUrl,
           BOS: formValues.BOS || false,
           FB: formValues.FB || false,
           CDC: formValues.CDC || false,
@@ -530,6 +585,7 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "talks") {
         updateMutation = talksMutations.updateMutation
+        const docUrl = await uploadDocumentToS3(formValues.Image || formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           programme: formValues.programme,
@@ -537,7 +593,7 @@ export default function TalksEventsPage() {
           date: formValues.date,
           title: formValues.title,
           participated_as: formValues.participated_as,
-          Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
+          Image: docUrl,
         }
       } else {
         throw new Error(`Unknown section: ${editingItem.sectionId}`)
@@ -559,6 +615,63 @@ export default function TalksEventsPage() {
     }
   }
 
+  // Helper function to upload File to local storage then S3
+  const uploadFileToS3 = async (file: File): Promise<string> => {
+    try {
+      // Step 1: Upload to local storage
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const localResponse = await fetch("/api/shared/local-document-upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!localResponse.ok) {
+        const localError = await localResponse.json()
+        throw new Error(localError.error || "Failed to upload file to local storage")
+      }
+
+      const localData = await localResponse.json()
+      const localUrl = localData.url
+
+      // Step 2: Upload to S3
+      const fileName = localUrl.split("/").pop()
+      if (!fileName) {
+        throw new Error("Invalid file name")
+      }
+
+      const s3Response = await fetch("/api/shared/s3", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName }),
+      })
+
+      if (!s3Response.ok) {
+        const s3Error = await s3Response.json()
+        throw new Error(s3Error.error || "Failed to upload document to S3")
+      }
+
+      const s3Data = await s3Response.json()
+      const s3Url = s3Data.url
+
+      // Step 3: Delete local file after successful S3 upload
+      await fetch("/api/shared/local-document-upload", {
+        method: "DELETE",
+      })
+
+      return s3Url
+    } catch (error: any) {
+      console.error("File upload error:", error)
+      toast({
+        title: "Document Upload Error",
+        description: error.message || "Failed to upload document. Please try again.",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
   const handleFileUpload = async (sectionId: string, itemId: number) => {
     if (!selectedFiles || selectedFiles.length === 0) {
       toast({
@@ -569,280 +682,110 @@ export default function TalksEventsPage() {
       return
     }
 
-    if (sectionId === "refresher") {
-      try {
-        // Update document URL with dummy URL
-        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
-        
+    try {
+      // Upload file to S3
+      const docUrl = await uploadFileToS3(selectedFiles[0])
+
+      if (sectionId === "refresher") {
         const item: any = data.refresher.find((r: any) => r.id === itemId)
         if (!item) {
           throw new Error("Item not found")
         }
 
-        const payload = {
-          refresherDetailId: itemId,
-          teacherId: user?.role_id,
-          refresherDetail: {
-            name: item.name,
-            refresher_type: item.refresher_type || item.courseTypeId,
-            startdate: item.startdate || item.startDate,
-            enddate: item.enddate || item.endDate || null,
-            university: item.university || item.organizingUniversity,
-            institute: item.institute || item.organizingInstitute,
-            department: item.department || item.organizingDepartment,
-            centre: item.centre || null,
-            supporting_doc: dummyUrl,
-          },
+        const updateData = {
+          name: item.name,
+          refresher_type: item.refresher_type || item.courseTypeId,
+          startdate: item.startdate || item.startDate,
+          enddate: item.enddate || item.endDate || null,
+          university: item.university || item.organizingUniversity,
+          institute: item.institute || item.organizingInstitute,
+          department: item.department || item.organizingDepartment,
+          centre: item.centre && item.centre.trim() !== "" ? item.centre.trim() : null,
+          supporting_doc: docUrl,
         }
 
-        const res = await fetch("/api/teacher/talks-events/refresher-details", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update document")
-        }
-
-        // Refresh data using React Query invalidation
-        invalidateSection("refresher")
-
-        toast({
-          title: "Success",
-          description: "Document updated successfully!",
-          duration: 2000,
-        })
-      } catch (error: any) {
-        console.error("Error updating document:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update document",
-          variant: "destructive",
-          duration: 3000,
-        })
-      }
-    } else if (sectionId === "academic-programs") {
-      try {
-        // Update document URL with dummy URL
-        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
-        
+        // Use mutation to update
+        await refresherMutations.updateMutation.mutateAsync({ id: itemId, data: updateData })
+        setSelectedFiles(null)
+      } else if (sectionId === "academic-programs") {
         const item: any = data["academic-programs"].find((r: any) => r.id === itemId)
         if (!item) {
           throw new Error("Item not found")
         }
 
-        const payload = {
-          academicContriId: itemId,
-          teacherId: user?.role_id,
-          academicContri: {
-            name: item.name,
-            programme: item.programmeId || item.programme,
-            place: item.place,
-            date: item.date,
-            participated_as: item.participated_as || item.participatedAs,
-            supporting_doc: dummyUrl,
-            year_name: item.year_name || item.year ? parseInt(item.year) : new Date().getFullYear(),
-          },
+        const updateData = {
+          name: item.name,
+          programme: item.programmeId || item.programme,
+          place: item.place,
+          date: item.date,
+          participated_as: item.participated_as || item.participatedAs,
+          supporting_doc: docUrl,
+          year_name: item.year_name || item.year ? parseInt(item.year) : new Date().getFullYear(),
         }
 
-        const res = await fetch("/api/teacher/talks-events/academic-contri", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update document")
-        }
-
-        // Refresh data using React Query invalidation
-        invalidateSection("academic-programs")
-
-        toast({
-          title: "Success",
-          description: "Document updated successfully!",
-          duration: 2000,
-        })
-      } catch (error: any) {
-        console.error("Error updating document:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update document",
-          variant: "destructive",
-          duration: 3000,
-        })
-      }
-    } else if (sectionId === "academic-bodies") {
-      try {
-        // Update document URL with dummy URL
-        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
-        
+        await academicProgramMutations.updateMutation.mutateAsync({ id: itemId, data: updateData })
+        setSelectedFiles(null)
+      } else if (sectionId === "academic-bodies") {
         const item: any = data["academic-bodies"].find((r: any) => r.id === itemId)
         if (!item) {
           throw new Error("Item not found")
         }
 
-        const payload = {
-          partiAcadsId: itemId,
-          teacherId: user?.role_id,
-          partiAcads: {
-            name: item.name,
-            acad_body: item.acad_body || item.academicBody,
-            place: item.place,
-            participated_as: item.participated_as || item.participatedAs,
-            submit_date: item.submit_date || item.date,
-            supporting_doc: dummyUrl,
-            year_name: item.year_name || item.year ? parseInt(item.year) : new Date().getFullYear(),
-          },
+        const updateData = {
+          name: item.name,
+          acad_body: item.acad_body || item.academicBody,
+          place: item.place,
+          participated_as: item.participated_as || item.participatedAs,
+          submit_date: item.submit_date || item.date,
+          supporting_doc: docUrl,
+          year_name: item.year_name || item.year ? parseInt(item.year) : new Date().getFullYear(),
         }
 
-        const res = await fetch("/api/teacher/talks-events/acad-bodies-parti", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update document")
-        }
-
-        // Refresh data using React Query invalidation
-        invalidateSection("academic-bodies")
-
-        toast({
-          title: "Success",
-          description: "Document updated successfully!",
-          duration: 2000,
-        })
-      } catch (error: any) {
-        console.error("Error updating document:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update document",
-          variant: "destructive",
-          duration: 3000,
-        })
-      }
-    } else if (sectionId === "committees") {
-      try {
-        // Update document URL with dummy URL
-        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
-        
+        await academicBodiesMutations.updateMutation.mutateAsync({ id: itemId, data: updateData })
+        setSelectedFiles(null)
+      } else if (sectionId === "committees") {
         const item: any = data.committees.find((r: any) => r.id === itemId)
         if (!item) {
           throw new Error("Item not found")
         }
 
-        const payload = {
-          partiCommiId: itemId,
-          teacherId: user?.role_id,
-          partiCommi: {
-            name: item.name,
-            committee_name: item.committee_name || item.committeeName,
-            level: item.levelId || item.level,
-            participated_as: item.participated_as || item.participatedAs,
-            submit_date: item.submit_date || item.date,
-            supporting_doc: dummyUrl,
-            BOS: item.BOS || false,
-            FB: item.FB || false,
-            CDC: item.CDC || false,
-            year_name: item.year_name || item.year ? parseInt(item.year) : new Date().getFullYear(),
-          },
+        const updateData = {
+          name: item.name,
+          committee_name: item.committee_name || item.committeeName,
+          level: item.levelId || item.level,
+          participated_as: item.participated_as || item.participatedAs,
+          submit_date: item.submit_date || item.date,
+          supporting_doc: docUrl,
+          BOS: item.BOS || false,
+          FB: item.FB || false,
+          CDC: item.CDC || false,
+          year_name: item.year_name || item.year ? parseInt(item.year) : new Date().getFullYear(),
         }
 
-        const res = await fetch("/api/teacher/talks-events/parti-university-committes", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update document")
-        }
-
-        // Refresh data using React Query invalidation
-        invalidateSection("committees")
-
-        toast({
-          title: "Success",
-          description: "Document updated successfully!",
-          duration: 2000,
-        })
-      } catch (error: any) {
-        console.error("Error updating document:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update document",
-          variant: "destructive",
-          duration: 3000,
-        })
-      }
-    } else if (sectionId === "talks") {
-      try {
-        // Update document URL with dummy URL
-        const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
-        
+        await committeeMutations.updateMutation.mutateAsync({ id: itemId, data: updateData })
+        setSelectedFiles(null)
+      } else if (sectionId === "talks") {
         const item: any = data.talks.find((r: any) => r.id === itemId)
         if (!item) {
           throw new Error("Item not found")
         }
 
-        const payload = {
-          teacherTalkId: itemId,
-          teacherId: user?.role_id,
-          teacherTalk: {
-            name: item.name,
-            programme: item.programmeId || item.programme,
-            place: item.place,
-            date: item.date || item.talkDate,
-            title: item.title || item.titleOfEvent,
-            participated_as: item.participated_as || item.participatedAs,
-            Image: dummyUrl,
-          },
+        const updateData = {
+          name: item.name,
+          programme: item.programmeId || item.programme,
+          place: item.place,
+          date: item.date || item.talkDate,
+          title: item.title || item.titleOfEvent,
+          participated_as: item.participated_as || item.participatedAs,
+          Image: docUrl,
         }
 
-        const res = await fetch("/api/teacher/talks-events/teacher-talks", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        const result = await res.json()
-
-        if (!res.ok || !result.success) {
-          throw new Error(result.error || "Failed to update document")
-        }
-
-        // Refresh data using React Query invalidation
-        invalidateSection("talks")
-
-        toast({
-          title: "Success",
-          description: "Document updated successfully!",
-          duration: 2000,
-        })
-      } catch (error: any) {
-        console.error("Error updating document:", error)
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update document",
-          variant: "destructive",
-          duration: 3000,
-        })
+        await talksMutations.updateMutation.mutateAsync({ id: itemId, data: updateData })
+        setSelectedFiles(null)
       }
-    } else {
-      // Handle other sections (fallback - should not be reached with current sections)
-      // Data is now managed by React Query, so we invalidate the query instead
-      invalidateSection(sectionId)
-      toast({
-        title: "Files Uploaded",
-        description: "Supporting documents uploaded successfully!",
-        duration: 2000,
-      })
+    } catch (error: any) {
+      // Error toast is handled by mutation and uploadFileToS3
+      console.error("Error updating document:", error)
     }
   }
 
@@ -1165,16 +1108,16 @@ export default function TalksEventsPage() {
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
           <div className="border-b mb-4">
             <div className="overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
-              <TabsList className="inline-flex min-w-max w-full sm:w-auto">
+              <TabsList className="flex flex-wrap min-w-max w-full sm:w-auto">
                 {sections.map((section) => (
                   <TabsTrigger
                     key={section.id}
                     value={section.id}
-                    className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm"
+                    className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm flex-1 sm:flex-none"
                   >
                     <section.icon className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span className="hidden xs:inline">{section.title}</span>
-                    <span className="xs:hidden">{section.title.split(' ')[0]}</span>
+                    <span className="xs:hidden">{section.title}</span>
                   </TabsTrigger>
                 ))}
               </TabsList>

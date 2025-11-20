@@ -37,7 +37,6 @@ import {
   UserPlus,
   UserCog,
   Download,
-  LogOut,
   Shield,
   ClipboardList,
   Activity,
@@ -502,7 +501,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const pathname = usePathname()
   const [expandedItems, setExpandedItems] = useState<string[]>([])
 
@@ -675,16 +674,6 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 </ul>
               </li>
 
-              {/* Logout button at bottom */}
-              <li className="mt-auto">
-                <button
-                  onClick={logout}
-                  className="group flex w-full gap-x-3 rounded-md p-2 text-sm leading-6 font-semibold text-gray-700 hover:text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                >
-                  <LogOut className="h-6 w-6 shrink-0 text-gray-400 group-hover:text-red-600" />
-                  Logout
-                </button>
-              </li>
             </ul>
           </nav>
 

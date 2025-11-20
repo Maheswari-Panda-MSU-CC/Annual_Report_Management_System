@@ -268,6 +268,55 @@ export default function AddEventPage() {
     }
   }
 
+  // Helper function to upload document to S3
+  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+    if (!documentUrl) {
+      return "http://localhost:3000/assets/demo_document.pdf"
+    }
+
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl.startsWith("/uploaded-document/")) {
+      try {
+        const fileName = documentUrl.split("/").pop()
+        if (!fileName) {
+          throw new Error("Invalid file name")
+        }
+
+        const s3Response = await fetch("/api/shared/s3", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName }),
+        })
+
+        if (!s3Response.ok) {
+          const s3Error = await s3Response.json()
+          throw new Error(s3Error.error || "Failed to upload document to S3")
+        }
+
+        const s3Data = await s3Response.json()
+        const s3Url = s3Data.url
+
+        // Delete local file after successful S3 upload
+        await fetch("/api/shared/local-document-upload", {
+          method: "DELETE",
+        })
+
+        return s3Url
+      } catch (docError: any) {
+        console.error("Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document. Using default.",
+          variant: "destructive",
+        })
+        return "http://localhost:3000/assets/demo_document.pdf"
+      }
+    }
+
+    // If it's already an S3 URL or external URL, return as is
+    return documentUrl
+  }
+
   // Submit handlers using mutations
   const handleRefresherSubmit = async (data: any) => {
     if (!user?.role_id) {
@@ -280,6 +329,9 @@ export default function AddEventPage() {
     }
 
     try {
+      // Handle document upload to S3
+      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+
       const payload = {
         name: data.name,
         refresher_type: data.refresher_type,
@@ -288,8 +340,8 @@ export default function AddEventPage() {
         university: data.university,
         institute: data.institute,
         department: data.department,
-        centre: data.centre || null,
-        supporting_doc: "http://localhost:3000/assets/demo_document.pdf",
+        centre: data.centre && data.centre.trim() !== "" ? data.centre.trim() : null,
+        supporting_doc: docUrl,
       }
 
       // Use mutation (toast and UI update handled by mutation)
@@ -320,13 +372,16 @@ export default function AddEventPage() {
     }
 
     try {
+      // Handle document upload to S3
+      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+
       const payload = {
         name: data.name,
         programme: data.programme,
         place: data.place,
         date: data.date,
         participated_as: data.participated_as,
-        supporting_doc: "http://localhost:3000/assets/demo_document.pdf",
+        supporting_doc: docUrl,
         year_name: data.year_name || new Date().getFullYear(),
       }
 
@@ -358,13 +413,16 @@ export default function AddEventPage() {
     }
 
     try {
+      // Handle document upload to S3
+      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+
       const payload = {
         name: data.name,
         acad_body: data.acad_body,
         place: data.place,
         participated_as: data.participated_as,
         submit_date: data.submit_date,
-        supporting_doc: "http://localhost:3000/assets/demo_document.pdf",
+        supporting_doc: docUrl,
         year_name: data.year_name || new Date().getFullYear(),
       }
 
@@ -396,13 +454,16 @@ export default function AddEventPage() {
     }
 
     try {
+      // Handle document upload to S3
+      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+
       const payload = {
         name: data.name,
         committee_name: data.committee_name,
         level: data.level,
         participated_as: data.participated_as,
         submit_date: data.submit_date,
-        supporting_doc: "http://localhost:3000/assets/demo_document.pdf",
+        supporting_doc: docUrl,
         BOS: data.BOS || false,
         FB: data.FB || false,
         CDC: data.CDC || false,
@@ -437,6 +498,9 @@ export default function AddEventPage() {
     }
 
     try {
+      // Handle document upload to S3 (talks uses Image field)
+      const docUrl = await uploadDocumentToS3(data.supporting_doc || data.Image)
+
       const payload = {
         name: data.name,
         programme: data.programme,
@@ -444,7 +508,7 @@ export default function AddEventPage() {
         date: data.date,
         title: data.title,
         participated_as: data.participated_as,
-        Image: "http://localhost:3000/assets/demo_document.pdf",
+        Image: docUrl,
       }
 
       // Use mutation (toast and UI update handled by mutation)
