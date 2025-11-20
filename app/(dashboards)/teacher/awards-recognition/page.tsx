@@ -65,8 +65,7 @@ const sections = [
       "Title of Performance",
       "Place",
       "Performance Date",
-      "Nature of Performance",
-      "Image (JPEG/BMP/PNG) OR PDF",
+      "Document",
       "Actions",
     ],
   },
@@ -82,7 +81,7 @@ const sections = [
       "Address of Awarding Agency",
       "Date of Award",
       "Level",
-      "Image (JPEG/BMP/PNG) OR PDF",
+      "Document",
       "Actions",
     ],
   },
@@ -98,7 +97,7 @@ const sections = [
       "Sponsored By",
       "Place",
       "Date",
-      "Image (JPEG/BMP/PNG) OR PDF",
+      "Document",
       "Actions",
     ],
   },
@@ -145,7 +144,10 @@ export default function AwardsRecognitionPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
 
   const [formData, setFormData] = useState<any>({})
-  const form = useForm()
+  const form = useForm({
+    mode: "onSubmit", // Only validate on submit, not on change
+    reValidateMode: "onChange", // Re-validate on change after first submit
+  })
 
   // React Query hooks
   const { performance, awards, extension, isLoading, isFetching, data: queryData } = useTeacherAwardsRecognition()
@@ -293,6 +295,7 @@ export default function AwardsRecognitionPage() {
         place: item.place,
         date: item.date || item.performanceDate,
         perf_nature: item.perf_nature || item.natureOfPerformance,
+        Image: item.Image || null, // Include Image for DocumentUpload component
       }
     } else if (sectionId === "awards") {
       formItem = {
@@ -302,6 +305,7 @@ export default function AwardsRecognitionPage() {
         address: item.address || item.addressOfAwardingAgency || "",
         date_of_award: item.date_of_award || item.dateOfAward,
         level: item.levelId || item.level,
+        Image: item.Image || null, // Include Image for DocumentUpload component
       }
     } else if (sectionId === "extension") {
       formItem = {
@@ -311,6 +315,7 @@ export default function AwardsRecognitionPage() {
         date: item.date,
         sponsered: item.sponseredId || item.sponsered,
         level: item.levelId || item.level,
+        Image: item.Image || null, // Include Image for DocumentUpload component
       }
     } else {
       formItem = { ...item }
@@ -321,79 +326,157 @@ export default function AwardsRecognitionPage() {
     setIsEditDialogOpen(true)
   }
 
+  // Helper function to upload document to S3 (matches research module pattern)
+  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+    if (!documentUrl) {
+      return "http://localhost:3000/assets/demo_document.pdf"
+    }
+
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl.startsWith("/uploaded-document/")) {
+      // Extract fileName from local URL
+      const fileName = documentUrl.split("/").pop()
+      
+      if (!fileName) {
+        throw new Error("Invalid file name")
+      }
+
+      // Upload to S3 using the file in /public/uploaded-document/
+      const s3Response = await fetch("/api/shared/s3", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: fileName,
+        }),
+      })
+
+      if (!s3Response.ok) {
+        const s3Error = await s3Response.json()
+        throw new Error(s3Error.error || "Failed to upload document to S3")
+      }
+
+      const s3Data = await s3Response.json()
+      const s3Url = s3Data.url // Use S3 URL for database storage
+
+      // Delete local file after successful S3 upload
+      await fetch("/api/shared/local-document-upload", {
+        method: "DELETE",
+      })
+
+      return s3Url
+    }
+
+    // If it's already an S3 URL or external URL, return as is
+    return documentUrl
+  }
+
+  // Helper function to upload file to S3 (for direct file uploads from table)
+  const uploadFileToS3 = async (file: File): Promise<string> => {
+    try {
+      // First upload to local storage
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const localResponse = await fetch("/api/shared/local-document-upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!localResponse.ok) {
+        const error = await localResponse.json()
+        throw new Error(error.error || "Failed to upload file to local storage")
+      }
+
+      const localData = await localResponse.json()
+      const localUrl = localData.url
+
+      // Then use uploadDocumentToS3 to handle S3 upload
+      return await uploadDocumentToS3(localUrl)
+    } catch (error: any) {
+      console.error("File upload error:", error)
+      toast({
+        title: "File Upload Error",
+        description: error.message || "Failed to upload file. Please try again.",
+        variant: "destructive",
+      })
+      throw error
+    }
+  }
+
   const handleSaveEdit = async () => {
     if (!editingItem || !user?.role_id) return
 
     const formValues = form.getValues()
     let updateData: any = {}
 
-    if (editingItem.sectionId === "performance") {
-      updateData = {
-        name: formValues.name,
-        place: formValues.place,
-        date: formValues.date,
-        perf_nature: formValues.perf_nature,
-        Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
+    try {
+      // Handle document upload to S3 if a document exists (matches research module pattern)
+      let docUrl = formValues.Image || null
+
+      if (docUrl && docUrl.startsWith("/uploaded-document/")) {
+        try {
+          docUrl = await uploadDocumentToS3(docUrl)
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return // Stop update if S3 upload fails (matches research pattern)
+        }
       }
-      
-      try {
+
+      if (editingItem.sectionId === "performance") {
+        updateData = {
+          name: formValues.name,
+          place: formValues.place,
+          date: formValues.date,
+          perf_nature: formValues.perf_nature,
+          Image: docUrl,
+        }
         await performanceMutations.updateMutation.mutateAsync({
           id: editingItem.id,
           data: updateData,
         })
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-      } catch (error) {
-        // Error handling is done in the mutation hook
-      }
-    } else if (editingItem.sectionId === "awards") {
-      updateData = {
-        name: formValues.name,
-        details: formValues.details || "",
-        organization: formValues.organization,
-        address: formValues.address || "",
-        date_of_award: formValues.date_of_award,
-        level: formValues.level,
-        Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
-      }
-      
-      try {
+      } else if (editingItem.sectionId === "awards") {
+        updateData = {
+          name: formValues.name,
+          details: formValues.details || "",
+          organization: formValues.organization,
+          address: formValues.address || "",
+          date_of_award: formValues.date_of_award,
+          level: formValues.level,
+          Image: docUrl,
+        }
         await awardsMutations.updateMutation.mutateAsync({
           id: editingItem.id,
           data: updateData,
         })
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-      } catch (error) {
-        // Error handling is done in the mutation hook
-      }
-    } else if (editingItem.sectionId === "extension") {
-      updateData = {
-        names: formValues.names,
-        place: formValues.place,
-        date: formValues.date,
-        name_of_activity: formValues.name_of_activity,
-        sponsered: formValues.sponsered,
-        level: formValues.level,
-        Image: formValues.Image || "http://localhost:3000/assets/demo_document.pdf",
-      }
-      
-      try {
+      } else if (editingItem.sectionId === "extension") {
+        updateData = {
+          names: formValues.names,
+          place: formValues.place,
+          date: formValues.date,
+          name_of_activity: formValues.name_of_activity,
+          sponsered: formValues.sponsered,
+          level: formValues.level,
+          Image: docUrl,
+        }
         await extensionMutations.updateMutation.mutateAsync({
           id: editingItem.id,
           data: updateData,
         })
-        setIsEditDialogOpen(false)
-        setEditingItem(null)
-        setFormData({})
-        form.reset()
-      } catch (error) {
-        // Error handling is done in the mutation hook
       }
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      setFormData({})
+      form.reset()
+    } catch (error: any) {
+      console.error("Error updating record:", error)
+      // Toast handled by mutation hook
     }
   }
 
@@ -407,92 +490,86 @@ export default function AwardsRecognitionPage() {
       return
     }
 
-    const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
     let updateData: any = {}
     let item: any = null
 
-    if (sectionId === "performance") {
-      item = data.performance.find((r: any) => r.id === itemId)
-      if (!item) {
-        toast({
-          title: "Error",
-          description: "Item not found",
-          variant: "destructive",
-        })
-        return
-      }
-      updateData = {
-        name: item.name || item.titleOfPerformance,
-        place: item.place,
-        date: item.date || item.performanceDate,
-        perf_nature: item.perf_nature || item.natureOfPerformance,
-        Image: dummyUrl,
-      }
-      try {
+    try {
+      // Upload file to S3
+      const docUrl = await uploadFileToS3(selectedFiles[0])
+
+      if (sectionId === "performance") {
+        item = data.performance.find((r: any) => r.id === itemId)
+        if (!item) {
+          toast({
+            title: "Error",
+            description: "Item not found",
+            variant: "destructive",
+          })
+          return
+        }
+        updateData = {
+          name: item.name || item.titleOfPerformance,
+          place: item.place,
+          date: item.date || item.performanceDate,
+          perf_nature: item.perf_nature || item.natureOfPerformance,
+          Image: docUrl,
+        }
         await performanceMutations.updateMutation.mutateAsync({
           id: itemId,
           data: updateData,
         })
         setSelectedFiles(null)
-      } catch (error) {
-        // Error handling is done in the mutation hook
-      }
-    } else if (sectionId === "awards") {
-      item = data.awards.find((r: any) => r.id === itemId)
-      if (!item) {
-        toast({
-          title: "Error",
-          description: "Item not found",
-          variant: "destructive",
-        })
-        return
-      }
-      updateData = {
-        name: item.name || item.nameOfAwardFellowship,
-        details: item.details || "",
-        organization: item.organization || item.nameOfAwardingAgency,
-        address: item.address || item.addressOfAwardingAgency || "",
-        date_of_award: item.date_of_award || item.dateOfAward,
-        level: item.levelId || item.level,
-        Image: dummyUrl,
-      }
-      try {
+      } else if (sectionId === "awards") {
+        item = data.awards.find((r: any) => r.id === itemId)
+        if (!item) {
+          toast({
+            title: "Error",
+            description: "Item not found",
+            variant: "destructive",
+          })
+          return
+        }
+        updateData = {
+          name: item.name || item.nameOfAwardFellowship,
+          details: item.details || "",
+          organization: item.organization || item.nameOfAwardingAgency,
+          address: item.address || item.addressOfAwardingAgency || "",
+          date_of_award: item.date_of_award || item.dateOfAward,
+          level: item.levelId || item.level,
+          Image: docUrl,
+        }
         await awardsMutations.updateMutation.mutateAsync({
           id: itemId,
           data: updateData,
         })
         setSelectedFiles(null)
-      } catch (error) {
-        // Error handling is done in the mutation hook
-      }
-    } else if (sectionId === "extension") {
-      item = data.extension.find((r: any) => r.id === itemId)
-      if (!item) {
-        toast({
-          title: "Error",
-          description: "Item not found",
-          variant: "destructive",
-        })
-        return
-      }
-      updateData = {
-        names: item.names || item.natureOfActivity,
-        place: item.place,
-        date: item.date,
-        name_of_activity: item.nameOfActivity || item.name_of_activity,
-        sponsered: item.sponseredId || item.sponsered,
-        level: item.levelId || item.level,
-        Image: dummyUrl,
-      }
-      try {
+      } else if (sectionId === "extension") {
+        item = data.extension.find((r: any) => r.id === itemId)
+        if (!item) {
+          toast({
+            title: "Error",
+            description: "Item not found",
+            variant: "destructive",
+          })
+          return
+        }
+        updateData = {
+          names: item.names || item.natureOfActivity,
+          place: item.place,
+          date: item.date,
+          name_of_activity: item.nameOfActivity || item.name_of_activity,
+          sponsered: item.sponseredId || item.sponsered,
+          level: item.levelId || item.level,
+          Image: docUrl,
+        }
         await extensionMutations.updateMutation.mutateAsync({
           id: itemId,
           data: updateData,
         })
         setSelectedFiles(null)
-      } catch (error) {
-        // Error handling is done in the mutation hook
       }
+    } catch (error) {
+      // Error handling is done in uploadFileToS3 and mutation hook
     }
   }
 
@@ -587,8 +664,6 @@ export default function AwardsRecognitionPage() {
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
             isExtracting={false}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
             handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
@@ -601,8 +676,6 @@ export default function AwardsRecognitionPage() {
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
             isExtracting={false}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
             handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
@@ -616,8 +689,6 @@ export default function AwardsRecognitionPage() {
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
             isExtracting={false}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
             handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
@@ -734,7 +805,6 @@ export default function AwardsRecognitionPage() {
                                       <DialogTrigger asChild>
                                         <Button variant="ghost" size="sm" title="View Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
                                           <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                                          <span className="hidden sm:inline ml-1">View</span>
                                         </Button>
                                       </DialogTrigger>
                                       <DialogContent
@@ -789,7 +859,6 @@ export default function AwardsRecognitionPage() {
                                 <div className="flex items-center gap-1 sm:gap-2">
                                   <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
                                     <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    <span className="hidden sm:inline ml-1">Edit</span>
                                   </Button>
                                   <Button 
                                     variant="ghost" 
@@ -798,7 +867,6 @@ export default function AwardsRecognitionPage() {
                                     className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
                                   >
                                     <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                    <span className="hidden sm:inline ml-1">Delete</span>
                                   </Button>
                                 </div>
                               </TableCell>
@@ -814,19 +882,37 @@ export default function AwardsRecognitionPage() {
           ))}
         </Tabs>
 
-        {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] p-4 sm:p-6">
-            <DialogHeader>
-              <DialogTitle className="text-lg sm:text-xl">
+        {/* Edit Dialog - Fully Responsive */}
+        <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+          if (!open) {
+            setIsEditDialogOpen(false)
+            setEditingItem(null)
+            setFormData({})
+            form.reset()
+          } else {
+            setIsEditDialogOpen(true)
+          }
+        }}>
+          <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] p-3 sm:p-4 md:p-6 flex flex-col gap-3 sm:gap-4">
+            <DialogHeader className="pb-0 sm:pb-2 shrink-0">
+              <DialogTitle className="text-base sm:text-lg md:text-xl">
                 Edit {editingItem ? sections.find((s) => s.id === editingItem.sectionId)?.title : "Item"}
               </DialogTitle>
             </DialogHeader>
-            <div className="overflow-y-auto max-h-[60vh] sm:max-h-[70vh] pr-1 sm:pr-2 -mr-1 sm:mr-0">
+            <div className="flex-1 overflow-y-auto pr-1 sm:pr-2 -mr-1 sm:mr-0 min-h-0">
               {editingItem && renderForm(editingItem.sectionId, true)}
             </div>
-            <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2 sm:pt-3 border-t shrink-0">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setIsEditDialogOpen(false)
+                  setEditingItem(null)
+                  setFormData({})
+                  form.reset()
+                }} 
+                className="w-full sm:w-auto order-2 sm:order-1 text-sm sm:text-base"
+              >
                 Cancel
               </Button>
               <Button 
@@ -835,17 +921,17 @@ export default function AwardsRecognitionPage() {
                   form.handleSubmit(handleSaveEdit)()
                 }} 
                 disabled={isSubmitting}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto order-1 sm:order-2 text-sm sm:text-base"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Updating...
+                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-2 animate-spin" />
+                    <span>Updating...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
+                    <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                    <span>Save Changes</span>
                   </>
                 )}
               </Button>

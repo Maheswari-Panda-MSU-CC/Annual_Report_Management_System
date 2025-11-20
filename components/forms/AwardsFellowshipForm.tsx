@@ -1,15 +1,14 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Controller } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { Save, Loader2, Brain } from "lucide-react"
-import FileUpload from "../shared/FileUpload"
-import { DocumentViewer } from "../document-viewer"
+import { Save, Loader2 } from "lucide-react"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
 
@@ -38,53 +37,76 @@ export function AwardsFellowshipForm({
   editData = {},
   awardFellowLevelOptions = [],
 }: AwardsFellowshipFormProps) {
-  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
+  const { register, handleSubmit, setValue, watch, control, clearErrors, formState: { errors } } = form
   const formData = watch()
+  const [documentUrl, setDocumentUrl] = useState<string | undefined>(
+    isEdit && editData?.Image ? editData.Image : undefined
+  )
 
   useEffect(() => {
     if (isEdit && editData) {
+      // Set all form values without validation to prevent false errors
       Object.entries(editData).forEach(([key, value]) => {
-        setValue(key, value)
+        setValue(key, value, { shouldValidate: false, shouldDirty: false })
       })
+      // Set document URL if exists
+      if (editData.Image) {
+        setDocumentUrl(editData.Image)
+        setValue("Image", editData.Image, { shouldValidate: false, shouldDirty: false })
+      }
+      // Clear any existing errors when loading edit data
+      clearErrors()
     }
-  }, [isEdit, editData, setValue])
+  }, [isEdit, editData, setValue, clearErrors])
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Step 1: Upload */}
-      {!isEdit && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
-          <Label className="text-lg font-semibold mb-3 block">
-            Step 1: Upload Supporting Document
-          </Label>
-          <FileUpload onFileSelect={handleFileSelect} />
-          {selectedFiles && selectedFiles.length > 0 && (
-            <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-              <p className="text-xs sm:text-sm text-green-600 truncate flex-1">{selectedFiles[0].name}</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleExtractInfo}
-                disabled={isExtracting}
-                className="flex items-center gap-2 w-full sm:w-auto"
-              >
-                {isExtracting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Extracting...
-                  </>
-                ) : (
-                  <>
-                    <Brain className="h-4 w-4" />
-                    Extract Information
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-6">
+        <Label className="text-lg font-semibold mb-3 block">
+          {isEdit ? "Supporting Document" : "Step 1: Upload Supporting Document"}
+        </Label>
+        <DocumentUpload
+          documentUrl={documentUrl}
+          category="awards-recognition"
+          subCategory="awards"
+          onChange={(url) => {
+            setDocumentUrl(url)
+            setValue("Image", url, { shouldValidate: true })
+          }}
+          onExtract={(fields) => {
+            Object.entries(fields).forEach(([key, value]) => {
+              setValue(key, value)
+            })
+            if (handleExtractInfo) {
+              handleExtractInfo()
+            }
+          }}
+          allowedFileTypes={["pdf", "jpg", "jpeg", "png", "bmp"]}
+          maxFileSize={10 * 1024 * 1024} // 10MB
+          className="w-full"
+        />
+        {/* Hidden input for form validation */}
+        <input
+          type="hidden"
+          {...register("Image", {
+            required: "Supporting document is required",
+            validate: (value) => {
+              if (!value || (typeof value === 'string' && value.trim() === '')) {
+                return "Please upload a supporting document"
+              }
+              // Check if it's a valid URL or local path
+              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document'))) {
+                return true
+              }
+              return "Invalid document URL"
+            }
+          })}
+        />
+        {errors.Image && (
+          <p className="text-sm text-red-600 mt-1">{errors.Image.message?.toString()}</p>
+        )}
+      </div>
 
       {/* Step 2: Form Fields */}
       <div className="bg-gray-50 p-4 rounded-lg">
@@ -167,7 +189,13 @@ export function AwardsFellowshipForm({
                 <SearchableSelect
                   options={awardFellowLevelOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value)
+                    // Clear error when value changes in edit mode
+                    if (isEdit && errors.level) {
+                      clearErrors("level")
+                    }
+                  }}
                   placeholder="Select level"
                   emptyMessage="No level found"
                 />
@@ -181,11 +209,18 @@ export function AwardsFellowshipForm({
           <Label htmlFor="details">Details</Label>
           <Textarea
             id="details"
-            placeholder="Enter award details"
+            placeholder="Enter award details (optional)"
             maxLength={500}
             rows={3}
             {...register("details", {
-              maxLength: { value: 500, message: "Details must not exceed 500 characters" }
+              maxLength: { value: 500, message: "Details must not exceed 500 characters" },
+              validate: (value) => {
+                // If provided, must not be only whitespace
+                if (value && value.trim().length === 0) {
+                  return "Details cannot be only whitespace"
+                }
+                return true
+              }
             })}
           />
           {errors.details && <p className="text-sm text-red-600 mt-1">{errors.details.message?.toString()}</p>}
@@ -195,11 +230,18 @@ export function AwardsFellowshipForm({
           <Label htmlFor="address">Address of Awarding Agency</Label>
           <Textarea
             id="address"
-            placeholder="Enter address of awarding agency"
+            placeholder="Enter address of awarding agency (optional)"
             maxLength={500}
             rows={2}
             {...register("address", {
-              maxLength: { value: 500, message: "Address must not exceed 500 characters" }
+              maxLength: { value: 500, message: "Address must not exceed 500 characters" },
+              validate: (value) => {
+                // If provided, must not be only whitespace
+                if (value && value.trim().length === 0) {
+                  return "Address cannot be only whitespace"
+                }
+                return true
+              }
             })}
           />
           {errors.address && <p className="text-sm text-red-600 mt-1">{errors.address.message?.toString()}</p>}

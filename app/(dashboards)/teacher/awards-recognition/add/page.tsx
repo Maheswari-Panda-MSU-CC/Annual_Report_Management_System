@@ -261,6 +261,52 @@ export default function AddAwardsPage() {
     [toast, uploadedFiles, awardFellowLevelOptions, sponserNameOptions, form],
   )
 
+  // Helper function to upload document to S3 (matches research module pattern)
+  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+    if (!documentUrl) {
+      return "http://localhost:3000/assets/demo_document.pdf"
+    }
+
+    // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+    if (documentUrl.startsWith("/uploaded-document/")) {
+      // Extract fileName from local URL
+      const fileName = documentUrl.split("/").pop()
+      
+      if (!fileName) {
+        throw new Error("Invalid file name")
+      }
+
+      // Upload to S3 using the file in /public/uploaded-document/
+      const s3Response = await fetch("/api/shared/s3", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fileName: fileName,
+        }),
+      })
+
+      if (!s3Response.ok) {
+        const s3Error = await s3Response.json()
+        throw new Error(s3Error.error || "Failed to upload document to S3")
+      }
+
+      const s3Data = await s3Response.json()
+      const s3Url = s3Data.url // Use S3 URL for database storage
+
+      // Delete local file after successful S3 upload
+      await fetch("/api/shared/local-document-upload", {
+        method: "DELETE",
+      })
+
+      return s3Url
+    }
+
+    // If it's already an S3 URL or external URL, return as is
+    return documentUrl
+  }
+
   // Form handlers
   const handlePerformanceSubmit = async (data: any) => {
     if (!user?.role_id) {
@@ -273,12 +319,29 @@ export default function AddAwardsPage() {
     }
 
     try {
+      // Handle document upload to S3 if a document exists (matches research module pattern)
+      let docUrl = data.Image || null
+      
+      if (docUrl && docUrl.startsWith("/uploaded-document/")) {
+        try {
+          docUrl = await uploadDocumentToS3(docUrl)
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return // Stop submission if S3 upload fails (matches research pattern)
+        }
+      }
+
       const payload = {
         name: data.name,
         place: data.place,
         date: data.date,
         perf_nature: data.perf_nature,
-        Image: "http://localhost:3000/assets/demo_document.pdf",
+        Image: docUrl,
       }
 
       await performanceMutations.createMutation.mutateAsync(payload)
@@ -308,6 +371,23 @@ export default function AddAwardsPage() {
     }
 
     try {
+      // Handle document upload to S3 if a document exists (matches research module pattern)
+      let docUrl = data.Image || null
+      
+      if (docUrl && docUrl.startsWith("/uploaded-document/")) {
+        try {
+          docUrl = await uploadDocumentToS3(docUrl)
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return // Stop submission if S3 upload fails (matches research pattern)
+        }
+      }
+
       const payload = {
         name: data.name,
         details: data.details || "",
@@ -315,7 +395,7 @@ export default function AddAwardsPage() {
         address: data.address || "",
         date_of_award: data.date_of_award,
         level: data.level,
-        Image: "http://localhost:3000/assets/demo_document.pdf",
+        Image: docUrl,
       }
 
       await awardsMutations.createMutation.mutateAsync(payload)
@@ -345,6 +425,23 @@ export default function AddAwardsPage() {
     }
 
     try {
+      // Handle document upload to S3 if a document exists (matches research module pattern)
+      let docUrl = data.Image || null
+      
+      if (docUrl && docUrl.startsWith("/uploaded-document/")) {
+        try {
+          docUrl = await uploadDocumentToS3(docUrl)
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document. Please try again.",
+            variant: "destructive",
+          })
+          return // Stop submission if S3 upload fails (matches research pattern)
+        }
+      }
+
       const payload = {
         names: data.names,
         place: data.place,
@@ -352,7 +449,7 @@ export default function AddAwardsPage() {
         name_of_activity: data.name_of_activity,
         sponsered: data.sponsered,
         level: data.level,
-        Image: "http://localhost:3000/assets/demo_document.pdf",
+        Image: docUrl,
       }
 
       await extensionMutations.createMutation.mutateAsync(payload)
@@ -407,7 +504,7 @@ export default function AddAwardsPage() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
           <div className="border-b mb-4">
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-2">
-              <TabsList className="inline-flex min-w-max w-full sm:w-auto">
+              <TabsList className="flex flex-wrap min-w-max w-full sm:w-auto">
                 <TabsTrigger value="performance" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
                   <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
                   <span className="hidden sm:inline">Performance</span>
