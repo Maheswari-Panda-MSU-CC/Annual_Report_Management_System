@@ -333,10 +333,7 @@ export default function GenerateCVPage() {
             <p className="text-muted-foreground">Create a professional CV with your selected information</p>
           </div>
         </div>
-        <Button variant="outline" onClick={testDocumentGeneration} className="flex items-center gap-2 bg-transparent">
-          <Settings className="h-4 w-4" />
-          Test Browser
-        </Button>
+      
       </div>
 
       {/* Error Alert */}

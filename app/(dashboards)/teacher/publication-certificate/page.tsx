@@ -9,10 +9,12 @@ import { Download, Loader2, CheckSquare, Square, Eye, Search, Filter, X, BookOpe
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useToast } from "@/components/ui/use-toast"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { useTeacherProfile, useTeacherPublications } from "@/hooks/use-teacher-data"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { jsPDF } from "jspdf"
-import html2canvas from "html2canvas"
-import { useState, useMemo, useRef, useEffect, useCallback } from "react"
+// OLD CLIENT-SIDE PDF GENERATION - COMMENTED OUT (Now using server-side Puppeteer)
+// import { jsPDF } from "jspdf"
+// import html2canvas from "html2canvas"
+import { useState, useMemo, useRef, useEffect } from "react"
 import Image from "next/image"
 
 interface JournalArticle {
@@ -54,13 +56,14 @@ export default function PublicationCertificate() {
   const { user } = useAuth()
   const { toast } = useToast()
   const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+  
+  // React Query hooks for data fetching
+  const { data: profileData, isLoading: profileLoading, isError: profileError } = useTeacherProfile()
+  const { journals, papers, isLoading: publicationsLoading, isFetching: publicationsFetching, isError: publicationsError, data: publicationsData } = useTeacherPublications()
+
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const [selectedPublications, setSelectedPublications] = useState<string[]>([])
   const [selectAll, setSelectAll] = useState(false)
-  const [publishedArticles, setPublishedArticles] = useState<JournalArticle[]>([])
-  const [papersPresented, setPapersPresented] = useState<PaperPresented[]>([])
-  const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null)
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState("")
@@ -70,6 +73,9 @@ export default function PublicationCertificate() {
   // Ref for certificate preview section
   const certificatePreviewRef = useRef<HTMLDivElement>(null)
 
+  // Derived loading state
+  const isLoading = profileLoading || publicationsLoading
+
   // Fetch dropdowns on mount
   useEffect(() => {
     if (resPubLevelOptions.length === 0) {
@@ -77,140 +83,107 @@ export default function PublicationCertificate() {
     }
   }, [resPubLevelOptions.length, fetchResPubLevels])
 
-  // Fetch teacher profile to get full name
-  const fetchTeacherProfile = useCallback(async () => {
-    if (!user?.role_id) return
-
-    try {
-      const res = await fetch(`/api/teacher/profile?teacherId=${user.role_id}`)
-      if (!res.ok) {
-        throw new Error("Failed to fetch teacher profile")
-      }
-      const data = await res.json()
-      if (data.teacherInfo) {
-        setTeacherInfo({
-          fname: data.teacherInfo.fname || "",
-          mname: data.teacherInfo.mname || "",
-          lname: data.teacherInfo.lname || "",
-        })
-      }
-    } catch (error: any) {
-      console.error("Error fetching teacher profile:", error)
+  // Show error toast if data fetching fails
+  useEffect(() => {
+    if (profileError) {
       toast({
         title: "Error",
         description: "Failed to load teacher profile information",
         variant: "destructive",
       })
     }
-  }, [user?.role_id, toast])
+  }, [profileError, toast])
 
-  // Fetch publications data
-  const fetchPublications = useCallback(async () => {
-    if (!user?.role_id) return
-
-    setIsLoading(true)
-    try {
-      // Fetch journals and papers in parallel
-      const [journalsRes, papersRes] = await Promise.all([
-        fetch(`/api/teacher/publication/journals?teacherId=${user.role_id}`),
-        fetch(`/api/teacher/publication/papers?teacherId=${user.role_id}`),
-      ])
-
-      const journalsData = await journalsRes.json()
-      const papersData = await papersRes.json()
-
-      if (!journalsRes.ok || !journalsData.success) {
-        throw new Error(journalsData.error || "Failed to fetch journal articles")
-      }
-
-      if (!papersRes.ok || !papersData.success) {
-        throw new Error(papersData.error || "Failed to fetch papers")
-      }
-
-      // Map journal articles to simplified format
-      const mappedArticles: JournalArticle[] = (journalsData.journals || []).map((item: any, index: number) => {
-        const publishedYear = item.month_year
-          ? new Date(item.month_year).getFullYear().toString()
-          : ""
-
-        // Build indexing string
-        const indexingParts = []
-        if (item.in_scopus) indexingParts.push("In Scopus: Yes")
-        else indexingParts.push("In Scopus: No")
-        if (item.in_ugc) indexingParts.push("In UGC CARE: Yes")
-        else indexingParts.push("In UGC CARE: No")
-        if (item.in_clarivate) indexingParts.push("In Clarivate: Yes")
-        else indexingParts.push("In Clarivate: No")
-
-        // Build journal name, ISSN, and volume string
-        const journalParts = []
-        if (item.journal_name) journalParts.push(`Journal Name: ${item.journal_name}`)
-        if (item.issn) journalParts.push(`ISSN: ${item.issn}`)
-        if (item.volume_num) journalParts.push(`Volume No.: ${item.volume_num}`)
-
-        return {
-          id: item.id,
-          type: "article" as const,
-          srNo: index + 1,
-          authors: item.authors || "",
-          paperTitle: item.title || "",
-          journalNameISSNVolume: journalParts.join(", "),
-          publishedYear,
-          doi: item.DOI || "",
-          indexing: indexingParts.join(", "),
-          documentSubmitted: item.Image ? "Submitted" : "Not Submitted",
-          level: item.Res_Pub_Level_Name || "",
-          levelId: item.level || null,
-        }
-      })
-
-      // Map papers to simplified format
-      const mappedPapers: PaperPresented[] = (papersData.papers || []).map((item: any, index: number) => {
-        const dateOfPublication = item.date
-          ? new Date(item.date).toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })
-          : ""
-
-        return {
-          id: item.papid,
-          type: "paper" as const,
-          srNo: index + 1,
-          authors: item.authors || "",
-          paperTitle: item.title_of_paper || "",
-          paperTheme: item.theme || "",
-          organisingBody: item.organising_body || "",
-          dateOfPublication,
-          documentsSubmitted: item.Image ? "Submitted" : "Not Submitted",
-          level: item.Res_Pub_Level_Name || "",
-          levelId: item.level || null,
-        }
-      })
-
-      setPublishedArticles(mappedArticles)
-      setPapersPresented(mappedPapers)
-    } catch (error: any) {
-      console.error("Error fetching publications:", error)
+  useEffect(() => {
+    if (publicationsError) {
       toast({
         title: "Error",
-        description: error.message || "Failed to load publications",
+        description: "Failed to load publications",
         variant: "destructive",
         duration: 3000,
       })
-    } finally {
-      setIsLoading(false)
     }
-  }, [user?.role_id, toast])
+  }, [publicationsError, toast])
 
-  // Fetch data on component mount
-  useEffect(() => {
-    if (user?.role_id) {
-      fetchTeacherProfile()
-      fetchPublications()
+  // Transform teacher info from React Query data
+  const teacherInfo = useMemo<TeacherInfo | null>(() => {
+    if (!profileData?.teacherInfo) return null
+    return {
+      fname: profileData.teacherInfo.fname || "",
+      mname: profileData.teacherInfo.mname || "",
+      lname: profileData.teacherInfo.lname || "",
     }
-  }, [user?.role_id, fetchTeacherProfile, fetchPublications])
+  }, [profileData])
+
+  // Transform journal articles from React Query data
+  const publishedArticles = useMemo<JournalArticle[]>(() => {
+    if (!publicationsData?.journals) return []
+    
+    return (publicationsData.journals || []).map((item: any, index: number) => {
+      const publishedYear = item.month_year
+        ? new Date(item.month_year).getFullYear().toString()
+        : ""
+
+      // Build indexing string
+      const indexingParts = []
+      if (item.in_scopus) indexingParts.push("In Scopus: Yes")
+      else indexingParts.push("In Scopus: No")
+      if (item.in_ugc) indexingParts.push("In UGC CARE: Yes")
+      else indexingParts.push("In UGC CARE: No")
+      if (item.in_clarivate) indexingParts.push("In Clarivate: Yes")
+      else indexingParts.push("In Clarivate: No")
+
+      // Build journal name, ISSN, and volume string
+      const journalParts = []
+      if (item.journal_name) journalParts.push(`Journal Name: ${item.journal_name}`)
+      if (item.issn) journalParts.push(`ISSN: ${item.issn}`)
+      if (item.volume_num) journalParts.push(`Volume No.: ${item.volume_num}`)
+
+      return {
+        id: item.id,
+        type: "article" as const,
+        srNo: index + 1,
+        authors: item.authors || "",
+        paperTitle: item.title || "",
+        journalNameISSNVolume: journalParts.join(", "),
+        publishedYear,
+        doi: item.DOI || "",
+        indexing: indexingParts.join(", "),
+        documentSubmitted: item.Image ? "Submitted" : "Not Submitted",
+        level: item.Res_Pub_Level_Name || "",
+        levelId: item.level || null,
+      }
+    })
+  }, [publicationsData?.journals])
+
+  // Transform papers from React Query data
+  const papersPresented = useMemo<PaperPresented[]>(() => {
+    if (!publicationsData?.papers) return []
+    
+    return (publicationsData.papers || []).map((item: any, index: number) => {
+      const dateOfPublication = item.date
+        ? new Date(item.date).toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })
+        : ""
+
+      return {
+        id: item.papid,
+        type: "paper" as const,
+        srNo: index + 1,
+        authors: item.authors || "",
+        paperTitle: item.title_of_paper || "",
+        paperTheme: item.theme || "",
+        organisingBody: item.organising_body || "",
+        dateOfPublication,
+        documentsSubmitted: item.Image ? "Submitted" : "Not Submitted",
+        level: item.Res_Pub_Level_Name || "",
+        levelId: item.level || null,
+      }
+    })
+  }, [publicationsData?.papers])
 
   // Combined publications for selection
   const allPublications = useMemo(
@@ -293,11 +266,135 @@ export default function PublicationCertificate() {
     try {
       setIsGeneratingPDF(true)
 
+      // Prepare data for API
+      const requestData = {
+        teacherInfo,
+        selectedArticles,
+        selectedPapers,
+        userName: user?.name,
+      }
+
+      // Call server-side API to generate PDF
+      const response = await fetch("/api/teacher/publication-certificate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to generate PDF" }))
+        throw new Error(errorData.error || "Failed to generate PDF")
+      }
+
+      // Get PDF blob
+      const blob = await response.blob()
+
+      // Generate filename
+      const currentDate = new Date().toISOString().split("T")[0]
+      const teacherName = teacherInfo
+        ? `${teacherInfo.fname}_${teacherInfo.lname}`.replace(/\s+/g, "_")
+        : user?.name?.replace(/\s+/g, "_") || "Faculty"
+      const filename = `Publication_Certificate_${teacherName}_${currentDate}.pdf`
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      toast({
+        title: "Success",
+        description: "PDF certificate downloaded successfully!",
+        duration: 3000,
+      })
+    } catch (error: any) {
+      console.error("Error generating PDF:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to generate PDF. Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      setIsGeneratingPDF(false)
+    }
+  }
+
+  /* ============================================
+   * OLD CLIENT-SIDE PDF GENERATION CODE (COMMENTED OUT)
+   * This code used jsPDF and html2canvas for client-side PDF generation.
+   * It has been replaced with server-side Puppeteer generation for better
+   * formatting, multi-page handling, and consistency with preview.
+   * ============================================
+   * 
+  const handleDownloadPDF_OLD = async () => {
+    if (selectedPublications.length === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select at least one publication to generate the certificate.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
+    try {
+      setIsGeneratingPDF(true)
+
       // Get the certificate content element
       const certificateElement = document.getElementById("certificate-content")
       if (!certificateElement) {
         throw new Error("Certificate content not found")
       }
+
+      // Store original styles to restore later
+      const originalOverflow = certificateElement.style.overflow
+      const originalOverflowX = certificateElement.style.overflowX
+      const originalOverflowY = certificateElement.style.overflowY
+      const originalMaxWidth = certificateElement.style.maxWidth
+      const originalWidth = certificateElement.style.width
+
+      // Temporarily modify styles for PDF generation
+      certificateElement.style.overflow = 'visible'
+      certificateElement.style.overflowX = 'visible'
+      certificateElement.style.overflowY = 'visible'
+      certificateElement.style.maxWidth = '210mm'
+      certificateElement.style.width = '100%'
+
+      // Remove overflow from all table containers and ensure proper layout
+      const tableContainers = certificateElement.querySelectorAll('div[style*="overflow"]')
+      const originalTableContainerStyles: Array<{ element: HTMLElement; overflow: string; overflowX: string; overflowY: string }> = []
+      tableContainers.forEach((container) => {
+        const el = container as HTMLElement
+        const computedStyle = window.getComputedStyle(el)
+        if (computedStyle.overflow !== 'visible' || computedStyle.overflowX !== 'visible') {
+          originalTableContainerStyles.push({
+            element: el,
+            overflow: el.style.overflow || '',
+            overflowX: el.style.overflowX || '',
+            overflowY: el.style.overflowY || '',
+          })
+          el.style.overflow = 'visible'
+          el.style.overflowX = 'visible'
+          el.style.overflowY = 'visible'
+        }
+      })
+
+      // Ensure tables have proper width and layout
+      const tables = certificateElement.querySelectorAll('table')
+      tables.forEach((table) => {
+        const tableEl = table as HTMLElement
+        tableEl.style.width = '100%'
+        tableEl.style.tableLayout = 'fixed'
+        tableEl.style.minWidth = '100%'
+        tableEl.style.maxWidth = '100%'
+      })
 
       // Wait for images to load
       await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -316,22 +413,71 @@ export default function PublicationCertificate() {
       })
       await Promise.all(imagePromises)
 
-      // Create canvas from certificate content
+      // Get actual content dimensions
+      const contentWidth = Math.max(
+        certificateElement.scrollWidth,
+        certificateElement.offsetWidth,
+        certificateElement.clientWidth
+      )
+      const contentHeight = Math.max(
+        certificateElement.scrollHeight,
+        certificateElement.offsetHeight,
+        certificateElement.clientHeight
+      )
+
+      // Create canvas from certificate content with proper dimensions
       const canvas = await html2canvas(certificateElement, {
         scale: 2,
         useCORS: true,
         allowTaint: false,
         backgroundColor: "#ffffff",
-        width: certificateElement.scrollWidth,
-        height: certificateElement.scrollHeight,
+        width: contentWidth,
+        height: contentHeight,
         x: 0,
         y: 0,
         scrollX: 0,
         scrollY: 0,
-        windowWidth: certificateElement.scrollWidth,
-        windowHeight: certificateElement.scrollHeight,
+        windowWidth: contentWidth,
+        windowHeight: contentHeight,
         logging: false,
         removeContainer: false,
+        ignoreElements: (element) => {
+          // Ignore buttons and other non-content elements
+          return element.classList.contains('no-print') || 
+                 element.tagName === 'BUTTON' ||
+                 (element as HTMLElement).style.display === 'none'
+        },
+        onclone: (clonedDoc) => {
+          // Ensure cloned document also has proper styles
+          const clonedElement = clonedDoc.getElementById("certificate-content")
+          if (clonedElement) {
+            const clonedEl = clonedElement as HTMLElement
+            clonedEl.style.overflow = 'visible'
+            clonedEl.style.overflowX = 'visible'
+            clonedEl.style.overflowY = 'visible'
+            clonedEl.style.maxWidth = '210mm'
+            clonedEl.style.width = '100%'
+
+            // Fix table containers in cloned document
+            const clonedTableContainers = clonedElement.querySelectorAll('div[style*="overflow"]')
+            clonedTableContainers.forEach((container) => {
+              const el = container as HTMLElement
+              el.style.overflow = 'visible'
+              el.style.overflowX = 'visible'
+              el.style.overflowY = 'visible'
+            })
+
+            // Fix tables in cloned document
+            const clonedTables = clonedElement.querySelectorAll('table')
+            clonedTables.forEach((table) => {
+              const tableEl = table as HTMLElement
+              tableEl.style.width = '100%'
+              tableEl.style.tableLayout = 'fixed'
+              tableEl.style.minWidth = '100%'
+              tableEl.style.maxWidth = '100%'
+            })
+          }
+        },
       })
 
       // Create PDF
@@ -342,18 +488,49 @@ export default function PublicationCertificate() {
         compress: true,
       })
 
+      // Restore original styles
+      certificateElement.style.overflow = originalOverflow
+      certificateElement.style.overflowX = originalOverflowX
+      certificateElement.style.overflowY = originalOverflowY
+      certificateElement.style.maxWidth = originalMaxWidth
+      certificateElement.style.width = originalWidth
+
+      // Restore table container styles
+      originalTableContainerStyles.forEach(({ element, overflow, overflowX, overflowY }) => {
+        element.style.overflow = overflow
+        element.style.overflowX = overflowX
+        element.style.overflowY = overflowY
+      })
+
       // A4 dimensions in mm
       const pageWidth = 210
       const pageHeight = 297
-      const margin = 10 // Margin for better appearance
+      const margin = 10 // Standard margin
 
       // Calculate dimensions to fit A4 with margins
-      const imgWidth = pageWidth - 2 * margin
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const availableWidth = pageWidth - 2 * margin
+      const availableHeight = pageHeight - 2 * margin
+      
+      // Convert canvas dimensions to mm
+      // html2canvas uses device pixel ratio, so we need to account for scale
+      // At scale 2, canvas is 2x the element size
+      // Assuming 96 DPI: 1px = 0.264583mm (25.4mm / 96px)
+      const pxToMm = 25.4 / 96
+      const canvasWidthMm = (canvas.width / 2) * pxToMm
+      const canvasHeightMm = (canvas.height / 2) * pxToMm
+      
+      // Calculate scale to fit width (maintain aspect ratio)
+      // We want the content to fit within available width
+      const scaleX = availableWidth / canvasWidthMm
+      const scaleY = availableHeight / canvasHeightMm
+      const scale = Math.min(scaleX, scaleY) // Use smaller scale to fit both dimensions
+      
+      // Final image dimensions in mm
+      const imgWidth = canvasWidthMm * scale
+      const imgHeight = canvasHeightMm * scale
 
       // Calculate pages needed
-      const usablePageHeight = pageHeight - 2 * margin
-      const pagesNeeded = Math.ceil(imgHeight / usablePageHeight)
+      const pagesNeeded = Math.ceil(imgHeight / availableHeight)
 
       let sourceY = 0
 
@@ -363,17 +540,23 @@ export default function PublicationCertificate() {
           pdf.addPage()
         }
 
-        // Calculate content height for this page
-        const remainingHeight = canvas.height - sourceY
-        const pageContentHeight = Math.min(
-          (usablePageHeight * canvas.width) / imgWidth,
-          remainingHeight
-        )
+        // Calculate content height for this page (in mm)
+        const remainingHeight = imgHeight - sourceY
+        const pageContentHeight = Math.min(availableHeight, remainingHeight)
+
+        // Convert mm back to canvas pixels for cropping
+        // sourceY is in mm (scaled), we need to find the pixel position in original canvas
+        // imgHeight is scaled canvas height in mm, canvas.height is in pixels at scale 2
+        const sourceYRatio = sourceY / imgHeight // Ratio of where we are in the scaled image
+        const pageContentHeightRatio = pageContentHeight / imgHeight // Ratio of page height
+        
+        const sourceYInCanvasPx = canvas.height * sourceYRatio
+        const pageContentHeightInCanvasPx = canvas.height * pageContentHeightRatio
 
         // Create temporary canvas for this page
         const pageCanvas = document.createElement("canvas")
         pageCanvas.width = canvas.width
-        pageCanvas.height = pageContentHeight
+        pageCanvas.height = Math.ceil(pageContentHeightInCanvasPx)
         const pageCtx = pageCanvas.getContext("2d")
 
         if (pageCtx) {
@@ -381,28 +564,33 @@ export default function PublicationCertificate() {
           pageCtx.drawImage(
             canvas,
             0,
-            sourceY,
+            sourceYInCanvasPx,
             canvas.width,
-            pageContentHeight,
+            pageContentHeightInCanvasPx,
             0,
             0,
             canvas.width,
-            pageContentHeight
+            pageContentHeightInCanvasPx
           )
 
           const pageImgData = pageCanvas.toDataURL("image/png", 1.0)
-          const pageImgHeightMM = (pageCanvas.height * imgWidth) / pageCanvas.width
+          
+          // Calculate dimensions for PDF (in mm)
+          // The page image should be scaled the same as the full image
+          const pageImgWidthMM = imgWidth
+          const pageImgHeightMM = pageContentHeight
 
-          // Add image to PDF centered horizontally
-          const xPosition = margin
+          // Center horizontally if content is narrower than page
+          const xPosition = margin + (availableWidth - pageImgWidthMM) / 2
           const yPosition = margin
+
           pdf.addImage(
             pageImgData,
             "PNG",
             xPosition,
             yPosition,
-            imgWidth,
-            Math.min(pageImgHeightMM, usablePageHeight)
+            pageImgWidthMM,
+            Math.min(pageImgHeightMM, availableHeight)
           )
         }
 
@@ -436,6 +624,7 @@ export default function PublicationCertificate() {
       setIsGeneratingPDF(false)
     }
   }
+  * ============================================ */
 
   const handleSelectPublication = (publicationId: string, checked: boolean) => {
     if (checked) {
@@ -469,17 +658,18 @@ export default function PublicationCertificate() {
   const selectedPapers = papersPresented.filter((pub) => selectedPublications.includes(pub.id.toString()))
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Publication Certificate Generator</h1>
-          <p className="text-gray-600 mt-1">Select publications and generate your certificate</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">Publication Certificate Generator</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Select publications and generate your certificate</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 w-full sm:w-auto">
             <Filter className="h-4 w-4" />
-            Filters
+            <span className="hidden sm:inline">Filters</span>
+            <span className="sm:hidden">Filter</span>
             {hasActiveFilters && (
               <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-xs">
                 {[searchTerm, levelFilter !== "all" && levelFilter !== ""].filter(Boolean).length}
@@ -489,10 +679,11 @@ export default function PublicationCertificate() {
           <Button
             onClick={handlePreviewCertificate}
             disabled={selectedPublications.length === 0}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full sm:w-auto"
           >
             <Eye className="h-4 w-4" />
-            Preview Certificate
+            <span className="hidden sm:inline">Preview Certificate</span>
+            <span className="sm:hidden">Preview</span>
           </Button>
         </div>
       </div>
@@ -500,18 +691,19 @@ export default function PublicationCertificate() {
       {/* Filter Section */}
       {showFilters && (
         <Card className="border-blue-200 bg-blue-50/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Search & Filter Publications
+          <CardHeader className="pb-3 sm:pb-4 p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                <Search className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden sm:inline">Search & Filter Publications</span>
+                <span className="sm:hidden">Search & Filter</span>
               </CardTitle>
               {hasActiveFilters && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={clearFilters}
-                  className="text-blue-600 hover:text-blue-700"
+                  className="text-blue-600 hover:text-blue-700 w-full sm:w-auto"
                 >
                   <X className="h-4 w-4 mr-1" />
                   Clear All
@@ -519,25 +711,25 @@ export default function PublicationCertificate() {
               )}
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="space-y-4 p-3 sm:p-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Search Input */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Search Publications</label>
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Search Publications</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     placeholder="Title, authors, journal..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 text-sm"
                   />
                 </div>
               </div>
 
               {/* Publication Level Filter */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">Publication Level</label>
+                <label className="text-xs sm:text-sm font-medium text-gray-700">Publication Level</label>
                 <SearchableSelect
                   options={[
                     { value: "all", label: "All Levels" },
@@ -556,7 +748,7 @@ export default function PublicationCertificate() {
 
             {/* Filter Results Summary */}
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-blue-200">
-              <span className="text-sm text-gray-600">
+              <span className="text-xs sm:text-sm text-gray-600">
                 Showing {filteredPublications.length} of {allPublications.length} publications
               </span>
               {hasActiveFilters && (
@@ -580,38 +772,42 @@ export default function PublicationCertificate() {
 
       {/* Selection Summary and Action Buttons */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <span className="flex items-center gap-2">
-              Select Publications
-              <Badge variant="secondary" className="text-sm">
+        <CardHeader className="p-3 sm:p-6">
+          <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <span className="flex items-center gap-2 text-base sm:text-lg">
+              <span className="hidden sm:inline">Select Publications</span>
+              <span className="sm:hidden">Select</span>
+              <Badge variant="secondary" className="text-xs sm:text-sm">
                 {selectedPublications.length} of {filteredPublications.length} selected
               </Badge>
             </span>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
                 onClick={handlePreviewCertificate}
                 disabled={selectedPublications.length === 0}
-                className="flex items-center gap-2 bg-transparent"
+                className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
               >
                 <Eye className="h-4 w-4" />
-                Preview Certificate
+                <span className="hidden sm:inline">Preview Certificate</span>
+                <span className="sm:hidden">Preview</span>
               </Button>
               <Button
                 onClick={handleDownloadPDF}
                 disabled={isGeneratingPDF || selectedPublications.length === 0}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 w-full sm:w-auto"
               >
                 {isGeneratingPDF ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Generating...
+                    <span className="hidden sm:inline">Generating...</span>
+                    <span className="sm:hidden">Generating</span>
                   </>
                 ) : (
                   <>
                     <Download className="h-4 w-4" />
-                    Download PDF ({selectedPublications.length})
+                    <span className="hidden sm:inline">Download PDF ({selectedPublications.length})</span>
+                    <span className="sm:hidden">Download ({selectedPublications.length})</span>
                   </>
                 )}
               </Button>
@@ -649,18 +845,19 @@ export default function PublicationCertificate() {
 
               {filteredPublications.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  <Search className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p className="text-lg font-medium">No publications found</p>
-                  <p className="text-sm">Try adjusting your search criteria or filters</p>
+                  <Search className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-base sm:text-lg font-medium">No publications found</p>
+                  <p className="text-xs sm:text-sm">Try adjusting your search criteria or filters</p>
                 </div>
               ) : (
                 <>
                   {/* Published Articles Section */}
                   {filteredPublications.some((pub) => pub.type === "article") && (
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-gray-800 border-b-2 border-blue-200 pb-2 flex items-center gap-2">
-                        <BookOpen className="h-5 w-5 text-blue-600" />
-                        Published Articles/Papers in Journals
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-800 border-b-2 border-blue-200 pb-2 flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                        <span className="hidden sm:inline">Published Articles/Papers in Journals</span>
+                        <span className="sm:hidden">Published Articles</span>
                       </h3>
                       <div className="overflow-x-auto max-h-96">
                         <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm">
@@ -766,9 +963,10 @@ export default function PublicationCertificate() {
                   {/* Papers Presented Section */}
                   {filteredPublications.some((pub) => pub.type === "paper") && (
                     <div className="space-y-3">
-                      <h3 className="text-base font-semibold text-gray-800 border-b-2 border-blue-200 pb-2 flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-blue-600" />
-                        Papers Presented in Conference/Symposia/Seminar
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-800 border-b-2 border-blue-200 pb-2 flex items-center gap-2">
+                        <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                        <span className="hidden sm:inline">Papers Presented in Conference/Symposia/Seminar</span>
+                        <span className="sm:hidden">Papers Presented</span>
                       </h3>
                       <div className="overflow-x-auto max-h-96">
                         <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm">
@@ -868,88 +1066,103 @@ export default function PublicationCertificate() {
       {selectedPublications.length > 0 && (
         <div ref={certificatePreviewRef}>
           <Card className="max-w-full mx-auto shadow-lg">
-            <CardHeader className="text-center pb-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1" />
-                <CardTitle className="text-xl font-bold text-gray-800">Certificate Preview</CardTitle>
+            <CardHeader className="text-center pb-3 sm:pb-4 p-3 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                <div className="flex-1 hidden sm:block" />
+                <CardTitle className="text-base sm:text-xl font-bold text-gray-800">Certificate Preview</CardTitle>
                 <div className="flex-1 flex justify-end">
-                  <Button onClick={handleDownloadPDF} disabled={isGeneratingPDF} className="flex items-center gap-2">
+                  <Button onClick={handleDownloadPDF} disabled={isGeneratingPDF} className="flex items-center gap-2 w-full sm:w-auto">
                     {isGeneratingPDF ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Generating...
+                        <span className="hidden sm:inline">Generating...</span>
+                        <span className="sm:hidden">Generating</span>
                       </>
                     ) : (
                       <>
                         <Download className="h-4 w-4" />
-                        Download
+                        <span className="hidden sm:inline">Download</span>
+                        <span className="sm:hidden">Download PDF</span>
                       </>
                     )}
                   </Button>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-4 sm:p-8" id="certificate-content" style={{ position: "relative", margin: "0 auto", maxWidth: "210mm" }}>
+            <CardContent className="p-3 sm:p-4 md:p-8" id="certificate-content" style={{ position: "relative", margin: "0 auto", maxWidth: "210mm", width: "100%", backgroundColor: "#ffffff", overflow: "visible" }}>
+              <style dangerouslySetInnerHTML={{__html: `
+                #certificate-content table {
+                  table-layout: fixed !important;
+                  width: 100% !important;
+                }
+                #certificate-content table td,
+                #certificate-content table th {
+                  overflow-wrap: break-word !important;
+                  word-break: break-word !important;
+                  hyphens: auto;
+                }
+              `}} />
               {/* Header */}
-              <div className="text-center mb-8">
+              <div className="text-center mb-6 sm:mb-8">
                 {/* University Logo */}
-                <div className="flex justify-center mb-4">
+                <div className="flex justify-center mb-3 sm:mb-4">
                   <Image
                     src="/images/msu-logo.png"
                     alt="MSU Baroda Logo"
                     width={80}
                     height={80}
-                    className="object-contain"
+                    className="object-contain w-16 h-16 sm:w-20 sm:h-20"
                     priority
                   />
                 </div>
 
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+                <h1 className="text-base sm:text-xl md:text-2xl font-bold text-gray-800 mb-2">
                   MAHARAJA SAIYAJIRAO UNIVERSITY OF BARODA
                 </h1>
 
-                <h2 className="text-lg sm:text-xl font-semibold text-blue-600 mb-6 border-b-2 border-blue-200 pb-2">
+                <h2 className="text-sm sm:text-lg md:text-xl font-semibold text-blue-600 mb-4 sm:mb-6 border-b-2 border-blue-200 pb-2">
                   PUBLICATION CERTIFICATE
                 </h2>
               </div>
 
               {/* Supervisor Information */}
-              <div className="mb-6">
-                <p className="text-base sm:text-lg font-medium text-gray-700">
+              <div className="mb-4 sm:mb-6">
+                <p className="text-sm sm:text-base md:text-lg font-medium text-gray-700">
                   <span className="font-semibold">Name of Ph.D. Supervisor:</span> {getSalutation()}
                 </p>
               </div>
 
               {/* Published Articles Section */}
               {selectedArticles.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2">
-                    Published Articles/Papers in Journals
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-3 sm:mb-4 border-b border-gray-300 pb-2">
+                    <span className="hidden sm:inline">Published Articles/Papers in Journals</span>
+                    <span className="sm:hidden">Published Articles</span>
                   </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm">
+                  <div style={{ width: "100%", overflow: "visible" }}>
+                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm" style={{ width: "100%", tableLayout: "fixed" }}>
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "5%", whiteSpace: "nowrap" }}>
                             Sr No.
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Author(s)
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Paper Title
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Journal Name & ISSN & Volume No.
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "8%", whiteSpace: "nowrap" }}>
                             Published Year
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">DOI</th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>DOI</th>
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "15%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Index in Scopus/UGC CARE/Clarivate
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Document Submitted?
                           </th>
                         </tr>
@@ -957,29 +1170,34 @@ export default function PublicationCertificate() {
                       <tbody>
                         {selectedArticles.map((publication) => (
                           <tr key={publication.id} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.srNo}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.authors}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.paperTitle}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "nowrap", width: "5%" }}>
+                              {publication.srNo}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
+                              {publication.authors}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
+                              {publication.paperTitle}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
                               {publication.journalNameISSNVolume}
                             </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.publishedYear}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "nowrap", width: "8%" }}>
+                              {publication.publishedYear}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
                               {publication.doi ? (
-                                <a
-                                  href={`https://doi.org/${publication.doi}`}
-                                  className="text-blue-600 hover:underline break-all"
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
+                                <span className="text-blue-600 break-all">
                                   {publication.doi}
-                                </a>
+                                </span>
                               ) : (
                                 "-"
                               )}
                             </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.indexing}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "15%" }}>
+                              {publication.indexing}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
                               <Badge
                                 variant={publication.documentSubmitted === "Submitted" ? "default" : "destructive"}
                                 className="text-xs"
@@ -997,33 +1215,34 @@ export default function PublicationCertificate() {
 
               {/* Papers Presented Section */}
               {selectedPapers.length > 0 && (
-                <div className="mb-8">
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4 border-b border-gray-300 pb-2">
-                    Papers Presented in Conference/Symposia/Seminar
+                <div className="mb-6 sm:mb-8">
+                  <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-3 sm:mb-4 border-b border-gray-300 pb-2">
+                    <span className="hidden sm:inline">Papers Presented in Conference/Symposia/Seminar</span>
+                    <span className="sm:hidden">Papers Presented</span>
                   </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm">
+                  <div style={{ width: "100%", overflow: "visible" }}>
+                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm" style={{ width: "100%", tableLayout: "fixed" }}>
                       <thead>
                         <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "5%", whiteSpace: "nowrap" }}>
                             Sr No.
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "15%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Authors
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "20%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Paper Title
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Paper Theme
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Organising Body
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Date of Publication
                           </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold">
+                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
                             Documents Submitted?
                           </th>
                         </tr>
@@ -1031,15 +1250,25 @@ export default function PublicationCertificate() {
                       <tbody>
                         {selectedPapers.map((publication) => (
                           <tr key={publication.id} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.srNo}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.authors}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.paperTitle}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.paperTheme}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">{publication.organisingBody}</td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "nowrap", width: "5%" }}>
+                              {publication.srNo}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "15%" }}>
+                              {publication.authors}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "20%" }}>
+                              {publication.paperTitle}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
+                              {publication.paperTheme}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
+                              {publication.organisingBody}
+                            </td>
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
                               {publication.dateOfPublication}
                             </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2">
+                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
                               <Badge
                                 variant={publication.documentsSubmitted === "Submitted" ? "default" : "destructive"}
                                 className="text-xs"
@@ -1056,8 +1285,8 @@ export default function PublicationCertificate() {
               )}
 
               {/* Declaration */}
-              <div className="mb-8">
-                <p className="text-sm text-gray-700 leading-relaxed">
+              <div className="mb-6 sm:mb-8">
+                <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">
                   I Undersign, agree that all submitted information in above format is true as per my knowledge and
                   belief.
                 </p>
@@ -1066,15 +1295,15 @@ export default function PublicationCertificate() {
               {/* Signature */}
               <div className="flex justify-end">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-700 mb-8">{getSalutation()}</p>
-                  <div className="border-b border-gray-400 w-48 mb-2"></div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-700 mb-6 sm:mb-8">{getSalutation()}</p>
+                  <div className="border-b border-gray-400 w-32 sm:w-48 mb-2"></div>
                   <p className="text-xs text-gray-500">Signature</p>
                 </div>
               </div>
 
               {/* Date */}
-              <div className="mt-8 text-right">
-                <p className="text-sm text-gray-600">Date: {new Date().toLocaleDateString("en-GB")}</p>
+              <div className="mt-6 sm:mt-8 text-right">
+                <p className="text-xs sm:text-sm text-gray-600">Date: {new Date().toLocaleDateString("en-GB")}</p>
               </div>
             </CardContent>
           </Card>

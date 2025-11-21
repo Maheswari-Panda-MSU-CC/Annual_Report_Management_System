@@ -802,7 +802,7 @@ export default function AcademicRecommendationsPage() {
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6">
       <div>
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">
-          Teacher's Recommendation(s) for Journals/Databases and other Learning Resources
+          Teacher's Recommendations for Learning Resources
         </h1>
         <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">
           Manage your academic recommendations for articles, books, magazines, and technical reports
