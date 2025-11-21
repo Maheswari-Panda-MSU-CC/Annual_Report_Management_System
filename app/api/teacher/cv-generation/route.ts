@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { generateCVHTML } from "@/app/api/teacher/cv-generation/cv-html-generator"
 import { generateWordDocument } from "@/app/api/teacher/cv-generation/cv-word-generator"
+import { generateCVPDF } from "@/app/api/teacher/cv-generation/cv-pdf-puppeteer"
 import { type CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
 
 interface CVGenerationRequest {
@@ -92,16 +93,15 @@ export async function POST(request: Request) {
         },
       })
     } else {
-      // Generate PDF - return HTML that can be converted to PDF
-      // For server-side PDF generation, you would use puppeteer here
-      // For now, we'll return HTML that the frontend can convert
-      const html = generateCVHTML(cvData, template, selectedSections)
+      // Generate PDF using server-side Puppeteer (replaces old client-side generation)
+      const pdfBuffer = await generateCVPDF(cvData, template, selectedSections)
 
-      return NextResponse.json({
-        success: true,
-        html: html,
-        format: "pdf",
-        filename: `CV_${cvData.personal.name.replace(/\s+/g, "_")}_${template}_${new Date().toISOString().split("T")[0]}.pdf`,
+      // Return PDF as response
+      return new NextResponse(pdfBuffer as unknown as BodyInit, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="CV_${cvData.personal.name.replace(/\s+/g, "_")}_${template}_${new Date().toISOString().split("T")[0]}.pdf"`,
+        },
       })
     }
   } catch (error: any) {

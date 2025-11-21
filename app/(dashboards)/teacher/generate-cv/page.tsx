@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useTeacherCVData } from "@/hooks/use-teacher-cv-data"
 import { CVPreviewTwoColumn } from "@/components/cv/cv-preview-two-column"
-import { generatePDFFromElement } from "@/app/api/teacher/cv-generation/cv-pdf-generator"
+// OLD CLIENT-SIDE PDF GENERATION - COMMENTED OUT (Now using server-side Puppeteer)
+// import { generatePDFFromElement } from "@/app/api/teacher/cv-generation/cv-pdf-generator"
 import type { CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
 import { saveAs } from "file-saver"
 
@@ -149,6 +150,63 @@ export default function GenerateCVPage() {
 
     try {
       setIsGenerating(true)
+
+      // Call server-side API to generate PDF using Puppeteer
+      const response = await fetch("/api/teacher/cv-generation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cvData,
+          template: cvTemplate,
+          format: "pdf",
+          selectedSections,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || errorData.error || "Failed to generate PDF")
+      }
+
+      // Get PDF blob from response
+      const blob = await response.blob()
+      const fileName = `CV_${cvData.personal.name.replace(/\s+/g, "_")}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.pdf`
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+
+      return true
+    } catch (error) {
+      console.error("PDF generation error:", error)
+      throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  /* ============================================
+   * OLD CLIENT-SIDE PDF GENERATION CODE (COMMENTED OUT)
+   * This code used html2canvas and jsPDF for client-side PDF generation.
+   * It has been replaced with server-side Puppeteer generation for better
+   * reliability, consistency, and performance.
+   * ============================================
+   * 
+  const handleGeneratePDF_OLD = async () => {
+    if (!cvData.personal) {
+      throw new Error("Personal information not available. Please wait for data to load.")
+    }
+
+    try {
+      setIsGenerating(true)
       setShowPreview(true) // Ensure preview is shown before export
       await new Promise((resolve) => setTimeout(resolve, 500)) // Wait for preview to render
 
@@ -213,6 +271,7 @@ export default function GenerateCVPage() {
       setIsGenerating(false)
     }
   }
+  * ============================================ */
 
   const handleGenerateCV = async () => {
     if (selectedSections.length === 0) {
@@ -261,7 +320,7 @@ export default function GenerateCVPage() {
       if (success) {
         toast({
           title: "CV Generated Successfully!",
-          description: `Your ${cvTemplate} template CV with ${selectedSections.length} sections has been generated. ${downloadFormat === "pdf" ? "Use your browser's print dialog to save as PDF." : "The file should download automatically."}`,
+          description: `Your ${cvTemplate} template CV with ${selectedSections.length} sections has been generated. The file should download automatically.`,
           duration: 5000,
         })
       }
@@ -457,11 +516,11 @@ export default function GenerateCVPage() {
               </RadioGroup>
               <div className="mt-2 text-xs text-muted-foreground">
                 {downloadFormat === "pdf" && (
-                  <p>PDF generation uses your browser's print dialog. Select "Save as PDF" when prompted.</p>
+                  <p>PDF generation is done server-side for consistent, high-quality output. No preview visibility required.</p>
                 )}
                 {downloadFormat === "word" && (
                   <p>
-                    Word document will be downloaded as .doc file compatible with Microsoft Word and similar editors.
+                    Word document will be downloaded as .docx file compatible with Microsoft Word and similar editors.
                   </p>
                 )}
               </div>
@@ -546,9 +605,9 @@ export default function GenerateCVPage() {
             <CardContent>
               <div className="space-y-2 text-xs text-muted-foreground">
                 <p>• Modern browser required (Chrome, Firefox, Safari, Edge)</p>
-                <p>• Allow popups for PDF generation</p>
+                <p>• PDF generation is server-side for consistent output</p>
                 <p>• Word documents compatible with MS Word, LibreOffice, Google Docs</p>
-                <p>• PDF generation uses browser's print functionality</p>
+                <p>• No preview visibility required for PDF generation</p>
                 <p>• Template styling preserved in downloaded documents</p>
               </div>
             </CardContent>
