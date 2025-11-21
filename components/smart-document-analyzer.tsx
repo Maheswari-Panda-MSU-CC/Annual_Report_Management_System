@@ -7,10 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
-import FileUpload from "@/components/shared/FileUpload"
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { Loader2, Brain, FileText, ArrowRight } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useRouter } from "next/navigation"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 interface ClassificationData {
   category: string
@@ -29,11 +30,13 @@ interface DocumentAnalysis {
 
 export function SmartDocumentAnalyzer() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
   const [progress, setProgress] = useState(0)
   const { toast } = useToast()
   const router = useRouter()
+  const { setDocumentData } = useDocumentAnalysis()
 
   // Helper function to calculate field similarity between extracted fields and expected fields
   const calculateFieldSimilarity = (
@@ -528,29 +531,15 @@ export function SmartDocumentAnalyzer() {
   const [selectedSubcategoryKey, setSelectedSubcategoryKey] = useState<string | null>(null)
   const [isClassificationCorrect, setIsClassificationCorrect] = useState<boolean | null>(null)
 
-  const handleFileSelect = (files: FileList | null) => {
-    if (files && files.length > 0) {
-      const file = files[0]
-      const allowedTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg']
-      if (!allowedTypes.includes(file.type)) {
-        toast({
-          title: "Invalid File Type",
-          description: "Only PDF, PNG, JPG, and JPEG files are allowed.",
-          variant: "destructive",
-        })
-        return
-      }
-      if (file.size > 1024 * 1024) {
-        toast({
-          title: "File Too Large",
-          description: "Maximum file size is 1MB.",
-          variant: "destructive",
-        })
-        return
-      }
-      setSelectedFile(file)
-      setAnalysis(null)
-    }
+  // Handle file selection from DocumentUpload
+  const handleFileSelect = (file: File) => {
+    setSelectedFile(file)
+    setAnalysis(null)
+  }
+
+  // Handle document URL change from DocumentUpload (after upload completes)
+  const handleDocumentChange = (url: string) => {
+    setLocalFileUrl(url)
   }
 
   const handleAnalyze = async () => {
@@ -566,11 +555,25 @@ export function SmartDocumentAnalyzer() {
         method: "POST",
         body: formData,
       })
+      
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        let errorMessage = "Document analysis failed."
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData?.error?.message || errorData?.message || errorData?.error || errorMessage
+        } catch {
+          // If response is not JSON, use status text
+          errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+
       const result = await response.json()
       
-      if (!response.ok || !result.success) {
-        console.error(result.error);
-        throw new Error(result.error.message || "Document analysis failed.");
+      if (!result.success) {
+        const errorMessage = result?.error?.message || result?.error || result?.message || "Document analysis failed."
+        throw new Error(errorMessage)
       }
 
       setAnalysis(result)
@@ -582,21 +585,51 @@ export function SmartDocumentAnalyzer() {
 
       toast({
         title: "Document Analyzed Successfully",
-        description: `Category: ${result.classification.category}`,
+        description: `Category: ${result.classification?.category || "Unknown"}`,
       })
     } catch (error: any) {
-      console.error("Analysis error:", error);
+      console.error("Analysis error:", error)
     
+      const errorMessage = error?.message || error?.toString() || "The document could not be analyzed. Please try again later."
+      
       toast({
         title: "Analysis Failed",
-        description:
-          error?.message || "The document could not be analyzed. Please try again later.",
+        description: errorMessage,
         variant: "destructive",
-      });
+      })
     
     } finally {
       setIsAnalyzing(false)
     }
+  }
+
+  // Helper to store data in context and navigate
+  const storeAndNavigate = async (route: string, category: string, subCategory: string, dataFields: Record<string, string>) => {
+    if (!selectedFile || !localFileUrl) return
+
+    // Convert file to data URL for storage
+    const fileDataUrl = await new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target?.result as string)
+      reader.onerror = () => resolve("")
+      reader.readAsDataURL(selectedFile)
+    })
+
+    // Store in context
+    setDocumentData({
+      file: {
+        dataUrl: fileDataUrl,
+        name: selectedFile.name,
+        type: selectedFile.type,
+      },
+      category,
+      subCategory,
+      dataFields,
+      analysis,
+      autoFill: true,
+    })
+
+    router.push(route)
   }
 
   return (
@@ -612,35 +645,17 @@ export function SmartDocumentAnalyzer() {
       </CardHeader>
 
       <CardContent className="space-y-6">
-        {/* File Upload */}
+        {/* Document Upload */}
         <div className="space-y-4">
-          <FileUpload
+          <DocumentUpload
+            documentUrl={localFileUrl || undefined}
             onFileSelect={handleFileSelect}
-            acceptedTypes=".pdf,.png,.jpg,.jpeg"
-            multiple={false}
+            onChange={handleDocumentChange}
+            allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+            maxFileSize={1 * 1024 * 1024}
+            className="w-full"
+            hideExtractButton={true}
           />
-
-          {selectedFile && (
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{selectedFile.name}</span>
-                <Badge variant="secondary">
-                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                </Badge>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelectedFile(null)
-                  setAnalysis(null)
-                }}
-                disabled={isAnalyzing}
-              >
-                Remove
-              </Button>
-            </div>
-          )}
 
           <Button
             onClick={handleAnalyze}
@@ -740,29 +755,8 @@ export function SmartDocumentAnalyzer() {
                               return
                             }
 
-                            // Store file for document viewer
-                            if (selectedFile) {
-                              await new Promise<void>((resolve) => {
-                                const reader = new FileReader()
-                                reader.onload = function (e) {
-                                  sessionStorage.setItem("arms_uploaded_file", e.target?.result as string)
-                                  sessionStorage.setItem("arms_uploaded_file_name", selectedFile.name)
-                                  sessionStorage.setItem("arms_uploaded_file_type", selectedFile.type)
-                                  resolve()
-                                }
-                                reader.onerror = () => resolve() // Resolve even on error to not block navigation
-                                reader.readAsDataURL(selectedFile)
-                              })
-                            }
-
-                            // Store analysis data for form population
-                            sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
-                            sessionStorage.setItem("arms_dataFields", JSON.stringify(dataFields))
-                            sessionStorage.setItem("arms_category", category.toLowerCase())
-                            sessionStorage.setItem("arms_subcategory", subCategory.toLowerCase())
-                            sessionStorage.setItem("arms_auto_fill", "true")
-
-                            router.push(match.route)
+                            // Store data in context and navigate
+                            await storeAndNavigate(match.route, category.toLowerCase(), subCategory.toLowerCase(), dataFields)
                             toast({
                               title: "Redirecting...",
                               description: `Taking you to ${match.label} page with auto-filled data`,
@@ -873,29 +867,13 @@ export function SmartDocumentAnalyzer() {
                                   }
                                 }
 
-                                // Store file for document viewer
-                                if (selectedFile) {
-                                  await new Promise<void>((resolve) => {
-                                    const reader = new FileReader()
-                                    reader.onload = function (e) {
-                                      sessionStorage.setItem("arms_uploaded_file", e.target?.result as string)
-                                      sessionStorage.setItem("arms_uploaded_file_name", selectedFile.name)
-                                      sessionStorage.setItem("arms_uploaded_file_type", selectedFile.type)
-                                      resolve()
-                                    }
-                                    reader.onerror = () => resolve() // Resolve even on error to not block navigation
-                                    reader.readAsDataURL(selectedFile)
-                                  })
-                                }
-
-                                // Store analysis data for form population
-                                sessionStorage.setItem("arms_last_analysis", JSON.stringify(analysis))
-                                sessionStorage.setItem("arms_dataFields", JSON.stringify(analysis.classification.dataFields || {}))
-                                sessionStorage.setItem("arms_category", selectedCategoryKey)
-                                sessionStorage.setItem("arms_subcategory", selectedSubcategoryKey || "")
-                                sessionStorage.setItem("arms_auto_fill", "true")
-
-                                router.push(targetRoute)
+                                // Store data in context and navigate
+                                await storeAndNavigate(
+                                  targetRoute,
+                                  selectedCategoryKey,
+                                  selectedSubcategoryKey || "",
+                                  analysis.classification.dataFields || {}
+                                )
                                 toast({
                                   title: "Redirecting...",
                                   description: `Taking you to ${selectedSubcategoryKey ? chosenCategory.subcategories?.find(s => s.key === selectedSubcategoryKey)?.label : chosenCategory.label} page with auto-filled data`,

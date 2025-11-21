@@ -14,6 +14,7 @@ interface DocumentUploadProps {
   category?: string
   subCategory?: string
   onChange?: (url: string) => void
+  onFileSelect?: (file: File) => void // New optional callback for File object
   onExtract?: (fields: Record<string, any>) => void
   allowedFileTypes?: string[]
   maxFileSize?: number
@@ -21,6 +22,7 @@ interface DocumentUploadProps {
   predictedSubCategory?: string
   extractedFields?: Record<string, any>
   className?: string
+  hideExtractButton?: boolean // Flag to hide Extract Data Fields button
 }
 
 export function DocumentUpload({
@@ -28,6 +30,7 @@ export function DocumentUpload({
   category,
   subCategory,
   onChange,
+  onFileSelect, // New prop
   onExtract,
   allowedFileTypes = ["pdf", "jpg", "jpeg", "png"],
   maxFileSize = 1 * 1024 * 1024, // 1MB default
@@ -35,6 +38,7 @@ export function DocumentUpload({
   predictedSubCategory,
   extractedFields: initialExtractedFields,
   className = "",
+  hideExtractButton = false, // Default to false to maintain existing behavior
 }: DocumentUploadProps) {
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(initialDocumentUrl)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -212,11 +216,17 @@ export function DocumentUpload({
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0]
         setUploadedFile(file)
+        
+        // Call onFileSelect callback if provided (for SmartDocumentAnalyzer)
+        if (onFileSelect) {
+          onFileSelect(file)
+        }
+        
         handleFileUpload(file)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [onFileSelect]
   )
 
   // Configure dropzone - only allow jpg, png, pdf
@@ -435,19 +445,21 @@ export function DocumentUpload({
               <RefreshCw className="h-4 w-4" />
               Update Document
             </Button>
-            <Button
-              variant="outline"
-              onClick={handleExtractData}
-              disabled={isExtracting || isUploading}
-              className="flex items-center gap-2"
-            >
-              {isExtracting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              Extract Data Fields
-            </Button>
+            {!hideExtractButton && (
+              <Button
+                variant="outline"
+                onClick={handleExtractData}
+                disabled={isExtracting || isUploading}
+                className="flex items-center gap-2"
+              >
+                {isExtracting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                Extract Data Fields
+              </Button>
+            )}
             <Button
               variant="ghost"
               onClick={handleClearDocument}

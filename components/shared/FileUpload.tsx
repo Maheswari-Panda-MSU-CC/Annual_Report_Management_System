@@ -4,9 +4,22 @@ interface FileUploadProps {
     onFileSelect: (files: FileList | null) => void
     acceptedTypes?: string
     multiple?: boolean
+    hideAfterUpload?: boolean // New prop to control visibility
+    isFileSelected?: boolean // New prop to indicate if file is selected
   }
 
-function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", multiple = true }: FileUploadProps) {
+function FileUpload({ 
+  onFileSelect, 
+  acceptedTypes = ".pdf,.jpg,.jpeg,.png", 
+  multiple = true,
+  hideAfterUpload = false,
+  isFileSelected = false
+}: FileUploadProps) {
+    // Hide upload UI if file is selected and hideAfterUpload is true
+    if (hideAfterUpload && isFileSelected) {
+      return null
+    }
+
     return (
       <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
         <Upload className="mx-auto h-12 w-12 text-gray-400" />

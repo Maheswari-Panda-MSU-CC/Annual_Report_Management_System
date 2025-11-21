@@ -4,6 +4,7 @@ import { Inter } from "next/font/google"
 import { AuthProvider } from "@/app/api/auth/auth-provider"
 import { ReactQueryProvider } from "@/lib/react-query-provider"
 import { DropdownsProvider } from "@/contexts/dropdowns-provider"
+import { DocumentAnalysisProvider } from "@/contexts/document-analysis-context"
 import { Toaster } from "@/components/ui/toaster"
 import type { Metadata } from "next"
 
@@ -42,8 +43,10 @@ export default function RootLayout({
         <ReactQueryProvider>
           <AuthProvider>
             <DropdownsProvider>
-              {children}
-              <Toaster />
+              <DocumentAnalysisProvider>
+                {children}
+                <Toaster />
+              </DocumentAnalysisProvider>
             </DropdownsProvider>
           </AuthProvider>
         </ReactQueryProvider>
