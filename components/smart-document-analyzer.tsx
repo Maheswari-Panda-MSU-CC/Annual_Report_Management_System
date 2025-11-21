@@ -607,18 +607,11 @@ export function SmartDocumentAnalyzer() {
   const storeAndNavigate = async (route: string, category: string, subCategory: string, dataFields: Record<string, string>) => {
     if (!selectedFile || !localFileUrl) return
 
-    // Convert file to data URL for storage
-    const fileDataUrl = await new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target?.result as string)
-      reader.onerror = () => resolve("")
-      reader.readAsDataURL(selectedFile)
-    })
-
-    // Store in context
+    // Store in context with local file URL (for DocumentUpload component)
+    // The localFileUrl is already uploaded to /uploaded-document/ folder
     setDocumentData({
       file: {
-        dataUrl: fileDataUrl,
+        dataUrl: localFileUrl, // Use local URL for DocumentUpload component
         name: selectedFile.name,
         type: selectedFile.type,
       },

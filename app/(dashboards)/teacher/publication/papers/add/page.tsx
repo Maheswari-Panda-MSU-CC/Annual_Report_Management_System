@@ -15,6 +15,7 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
 import { usePaperMutations } from "@/hooks/use-teacher-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 interface PaperFormData {
   authors: string
@@ -36,6 +37,44 @@ export default function AddConferencePaperPage() {
   const [documentUrl, setDocumentUrl] = useState<string>("")
 
   const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+    formType
+  } = useAutoFillData({
+    formType: "papers", // Explicit form type
+    dropdownOptions: {
+      level: resPubLevelOptions,
+    },
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.authors) setValue("authors", String(fields.authors))
+      if (fields.theme) setValue("theme", String(fields.theme))
+      if (fields.organising_body) setValue("organising_body", String(fields.organising_body))
+      if (fields.place) setValue("place", String(fields.place))
+      if (fields.date) setValue("date", String(fields.date))
+      if (fields.title_of_paper) setValue("title_of_paper", String(fields.title_of_paper))
+      if (fields.mode) setValue("mode", String(fields.mode))
+      if (fields.level !== undefined && fields.level !== null) {
+        setValue("level", Number(fields.level))
+      }
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const {
     register,
@@ -59,6 +98,13 @@ export default function AddConferencePaperPage() {
   useEffect(() => {
     fetchResPubLevels()
   }, [])
+
+  // Update documentUrl when auto-fill data is available
+  useEffect(() => {
+    if (autoFillDocumentUrl && !documentUrl) {
+      setDocumentUrl(autoFillDocumentUrl)
+    }
+  }, [autoFillDocumentUrl, documentUrl])
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -187,7 +233,7 @@ export default function AddConferencePaperPage() {
               Step 1: Upload Supporting Document *
             </Label>
             <DocumentUpload
-              documentUrl={documentUrl}
+              documentUrl={documentUrl || autoFillDocumentUrl || undefined}
               category="papers"
               subCategory="papers"
               onChange={handleDocumentChange}
