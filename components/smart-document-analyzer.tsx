@@ -163,7 +163,10 @@ export function SmartDocumentAnalyzer() {
               normalizedSubcatLabel.toLowerCase().includes(normalizedSubCategory) ||
               // Check for plural/singular variations
               normalizedSubCategory.includes(normalizedSubcatKey.replace(/-/g, "")) ||
-              normalizedSubCategory.replace(/s$/, "").includes(normalizedSubcatKey.replace(/-/g, ""))
+              normalizedSubCategory.replace(/s$/, "").includes(normalizedSubcatKey.replace(/-/g, "")) ||
+              // Check if normalized subcategory contains key parts without hyphens/spaces (e.g., "e-content" should match "econtent")
+              normalizedSubCategory.replace(/[-\s]/g, "").includes(normalizedSubcatKey.replace(/[-\s]/g, "")) ||
+              normalizedSubcatKey.replace(/[-\s]/g, "").includes(normalizedSubCategory.replace(/[-\s]/g, ""))
             ) {
               return { route: subcat.route, label: subcat.label }
             }
@@ -190,14 +193,49 @@ export function SmartDocumentAnalyzer() {
       }
     }
 
-    // Special handling for research contributions variations
+    // Special handling for research contributions variations - ONLY as fallback if teacherCategories didn't match
+    // This should only run if the category wasn't found in teacherCategories
     if (
       normalizedCategory.includes("research") &&
       (normalizedCategory.includes("contribution") ||
         normalizedCategory.includes("consultancy") ||
         normalizedCategory.includes("academic"))
     ) {
+      // Use getResearchContributionsRoute but verify the route exists in teacherCategories
       const route = getResearchContributionsRoute(normalizedSubCategory || normalizedCategory, true)
+      
+      // Verify the route exists by checking teacherCategories
+      const researchContribCategory = teacherCategories.find(cat => 
+        normalizeString(cat.key).includes("research") && 
+        normalizeString(cat.key).includes("contribution")
+      )
+      
+      if (researchContribCategory?.subcategories) {
+        // Check if the generated route matches any subcategory route
+        const matchingSubcat = researchContribCategory.subcategories.find(subcat => 
+          subcat.route === route
+        )
+        
+        if (matchingSubcat) {
+          return { route: matchingSubcat.route, label: matchingSubcat.label }
+        }
+        
+        // If route doesn't match, try to find by tab name
+        const tabName = route.split('/').slice(-2, -1)[0] // Extract tab from route
+        const matchingSubcatByTab = researchContribCategory.subcategories.find(subcat => 
+          normalizeString(subcat.key) === normalizeString(tabName) ||
+          normalizeString(subcat.label).includes(normalizeString(tabName)) ||
+          normalizeString(tabName).includes(normalizeString(subcat.key)) ||
+          normalizeString(tabName).includes(normalizeString(subcat.label))
+        )
+        
+        if (matchingSubcatByTab) {
+          return { route: matchingSubcatByTab.route, label: matchingSubcatByTab.label }
+        }
+      }
+      
+      // If we can't verify, still return the route but log a warning
+      console.warn(`Route ${route} not found in teacherCategories, using generated route`)
       return { route, label: "Research Contributions" }
     }
 
@@ -303,6 +341,7 @@ export function SmartDocumentAnalyzer() {
       "visits": "visits",
       "financial support": "financial",
       "financial": "financial",
+      "aid received": "financial", // Add this for "Aid Received" variations
       "jrf": "jrf-srf",
       "srf": "jrf-srf",
       "jrfsrf": "jrf-srf",
@@ -313,7 +352,83 @@ export function SmartDocumentAnalyzer() {
       "copyright": "copyrights",
     }
     const normalized = normalizeString(subCategory)
-    const tab = subCategoryMap[normalized] || normalized
+    
+    // First try exact match
+    let tab = subCategoryMap[normalized]
+    
+    // If no exact match, try partial matching - check if normalized contains any map key
+    if (!tab) {
+      // Sort keys by length (longest first) to match more specific terms first
+      const sortedKeys = Object.keys(subCategoryMap).sort((a, b) => b.length - a.length)
+      
+      for (const key of sortedKeys) {
+        // Normalize the key for comparison (since normalizeString removes hyphens)
+        const normalizedKey = normalizeString(key)
+        if (normalized.includes(normalizedKey) || normalizedKey.includes(normalized)) {
+          tab = subCategoryMap[key]
+          break
+        }
+      }
+    }
+    
+    // Validate that the tab exists in teacherCategories and use the exact key
+    const researchContribCategory = teacherCategories.find(cat => 
+      normalizeString(cat.key).includes("research") && 
+      normalizeString(cat.key).includes("contribution")
+    )
+    
+    if (researchContribCategory?.subcategories) {
+      // Find the matching subcategory using the tab value
+      let matchingSubcat = researchContribCategory.subcategories.find(subcat => 
+        // Exact match
+        subcat.key === tab ||
+        normalizeString(subcat.key) === normalizeString(tab || "") ||
+        // Handle hyphen/space variations (e.g., "e-content" vs "econtent")
+        normalizeString(subcat.key).replace(/[-\s]/g, "") === normalizeString(tab || "").replace(/[-\s]/g, "")
+      )
+      
+      // If no exact match, try partial matching
+      if (!matchingSubcat && tab) {
+        matchingSubcat = researchContribCategory.subcategories.find(subcat => 
+          normalizeString(subcat.key).includes(normalizeString(tab)) ||
+          normalizeString(subcat.label).includes(normalizeString(tab)) ||
+          normalizeString(tab).includes(normalizeString(subcat.key)) ||
+          normalizeString(tab).includes(normalizeString(subcat.label)) ||
+          // Handle hyphen variations (e.g., "e-content" vs "econtent")
+          normalizeString(subcat.key).replace(/[-\s]/g, "") === normalizeString(tab).replace(/[-\s]/g, "") ||
+          normalizeString(subcat.label).replace(/[-\s]/g, "").includes(normalizeString(tab).replace(/[-\s]/g, ""))
+        )
+      }
+      
+      // If still no match, try with normalized input
+      if (!matchingSubcat) {
+        matchingSubcat = researchContribCategory.subcategories.find(subcat => 
+          normalizeString(subcat.key).replace(/[-\s]/g, "") === normalized.replace(/[-\s]/g, "") ||
+          normalized.replace(/[-\s]/g, "").includes(normalizeString(subcat.key).replace(/[-\s]/g, ""))
+        )
+      }
+      
+      // Use the exact key from teacherCategories if we found a match
+      if (matchingSubcat) {
+        tab = matchingSubcat.key // Use the actual key, not normalized
+      } else {
+        // Fallback: log warning and try to find closest match
+        console.warn(`Tab "${tab}" not found in teacherCategories, attempting to find closest match`)
+        // Try one more time with the normalized input
+        const closestMatch = researchContribCategory.subcategories.find(subcat => 
+          normalizeString(subcat.key).replace(/[-\s]/g, "").includes(normalized.replace(/[-\s]/g, "")) ||
+          normalized.replace(/[-\s]/g, "").includes(normalizeString(subcat.key).replace(/[-\s]/g, ""))
+        )
+        if (closestMatch) {
+          tab = closestMatch.key
+        } else {
+          tab = normalized
+        }
+      }
+    } else {
+      // If no researchContribCategory found, fallback to normalized
+      tab = tab || normalized
+    }
     
     if (useAddRoute) {
       return `/teacher/research-contributions/${tab}/add`
@@ -622,7 +737,20 @@ export function SmartDocumentAnalyzer() {
       autoFill: true,
     })
 
-    router.push(route)
+    // CRITICAL FIX: Ensure sessionStorage is written before navigation
+    // Use requestAnimationFrame to ensure state update and sessionStorage write complete
+    requestAnimationFrame(() => {
+      // Double-check sessionStorage was written
+      const stored = sessionStorage.getItem("arms_uploaded_file")
+      if (stored || localFileUrl) {
+        router.push(route)
+      } else {
+        // If sessionStorage write failed, try again after a small delay
+        setTimeout(() => {
+          router.push(route)
+        }, 100)
+      }
+    })
   }
 
   return (

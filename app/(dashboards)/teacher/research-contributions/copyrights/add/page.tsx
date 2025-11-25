@@ -12,67 +12,48 @@ import { useForm } from "react-hook-form"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useCopyrightMutations } from "@/hooks/use-teacher-research-contributions-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddCopyrightsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const form = useForm()
+  const { setValue, watch } = form
   const [isExtracting, setIsExtracting] = useState(false)
 
   // Use mutation for creating copyright
   const { create: createCopyright } = useCopyrightMutations()
 
-  // Auto-populate form from sessionStorage if dataFields are available
-  useEffect(() => {
-    try {
-      const storedDataFields = sessionStorage.getItem("arms_dataFields")
-      const storedAnalysis = sessionStorage.getItem("arms_last_analysis")
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "copyrights", // Explicit form type
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.title || fields.Title) setValue("title", String(fields.title || fields.Title))
+      if (fields.referenceNo || fields.Reference_No) setValue("referenceNo", String(fields.referenceNo || fields.Reference_No))
+      if (fields.publicationDate || fields.Publication_Date) setValue("publicationDate", String(fields.publicationDate || fields.Publication_Date))
+      if (fields.link || fields.Link) setValue("link", String(fields.link || fields.Link))
       
-      if (storedDataFields && storedAnalysis) {
-        const dataFields = JSON.parse(storedDataFields)
-        const analysis = JSON.parse(storedAnalysis)
-        
-        // Map extracted fields to form fields
-        const fieldMapping: Record<string, string> = {
-          "Reference No.": "referenceNo",
-          "Reference No": "referenceNo",
-          "Reference Number": "referenceNo",
-          "ReferenceNumber": "referenceNo",
-          "Title": "title",
-          "Publication Date": "publicationDate",
-          "PublicationDate": "publicationDate",
-          "Date": "publicationDate",
-          "Link": "link",
-        }
-        
-        let fieldsPopulated = 0
-        
-        Object.entries(dataFields).forEach(([key, value]) => {
-          const mappedKey = fieldMapping[key] || key.toLowerCase().replace(/\s+/g, "")
-          if (mappedKey === "referenceNo" || mappedKey === "title" || mappedKey === "publicationDate" || mappedKey === "link") {
-            form.setValue(mappedKey, value)
-            fieldsPopulated++
-          }
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
         })
-        
-        if (fieldsPopulated > 0) {
-          toast({
-            title: "Form Auto-filled",
-            description: `Populated ${fieldsPopulated} field(s) from document analysis.`,
-          })
-          
-          // Clear sessionStorage after use
-          sessionStorage.removeItem("arms_dataFields")
-          sessionStorage.removeItem("arms_last_analysis")
-          sessionStorage.removeItem("arms_category")
-          sessionStorage.removeItem("arms_subcategory")
-        }
       }
-    } catch (error) {
-      console.error("Error auto-populating form:", error)
-    }
-  }, [form])
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
 
   const handleExtractInfo = async () => {
@@ -252,6 +233,7 @@ export default function AddCopyrightsPage() {
               handleFileSelect={() => {}}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
+              initialDocumentUrl={autoFillDocumentUrl}
             />
           </CardContent>
         </Card>

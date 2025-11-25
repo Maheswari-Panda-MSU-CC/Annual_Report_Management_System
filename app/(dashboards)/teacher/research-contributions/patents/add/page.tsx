@@ -10,11 +10,13 @@ import { ArrowLeft } from "lucide-react"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { usePatentMutations } from "@/hooks/use-teacher-research-contributions-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddPatentsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const form = useForm()
+  const { setValue, watch } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   
@@ -23,6 +25,45 @@ export default function AddPatentsPage() {
   
   // Use mutation for creating patent
   const { create: createPatent } = usePatentMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "patents", // Explicit form type
+    dropdownOptions: {
+      level: resPubLevelOptions,
+      status: patentStatusOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.title) setValue("title", String(fields.title))
+      if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
+      if (fields.status !== undefined && fields.status !== null) setValue("status", Number(fields.status))
+      if (fields.date) setValue("date", String(fields.date))
+      if (fields.transfer_of_technology) setValue("Tech_Licence", String(fields.transfer_of_technology))
+      if (fields.earning_generated !== undefined && fields.earning_generated !== null) {
+        setValue("Earnings_Generate", Number(fields.earning_generated))
+      }
+      if (fields.PatentApplicationNo) setValue("PatentApplicationNo", String(fields.PatentApplicationNo))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -169,6 +210,7 @@ export default function AddPatentsPage() {
       isEdit={false}
       resPubLevelOptions={resPubLevelOptions}
       patentStatusOptions={patentStatusOptions}
+      initialDocumentUrl={autoFillDocumentUrl}
     />
     </div>
   );

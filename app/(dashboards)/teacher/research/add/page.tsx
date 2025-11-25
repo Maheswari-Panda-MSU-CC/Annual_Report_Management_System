@@ -17,6 +17,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { ResearchProjectFormData } from "@/types/interfaces"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { useResearchMutations } from "@/hooks/use-teacher-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddResearchPage() {
   const router = useRouter()
@@ -29,10 +30,6 @@ export default function AddResearchPage() {
     projectLevelOptions,
     fundingAgencyOptions,
     projectNatureOptions,
-    fetchProjectStatuses,
-    fetchProjectLevels,
-    fetchFundingAgencies,
-    fetchProjectNatures,
   } = useDropDowns()
 
   const {
@@ -62,6 +59,56 @@ export default function AddResearchPage() {
   const grantSealed = watch("grant_sealed")
 
   // Note: Dropdown data is already available from Context, no need to fetch
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "research", // Explicit form type
+    dropdownOptions: {
+      funding_agency: fundingAgencyOptions,
+      proj_nature: projectNatureOptions,
+      proj_level: projectLevelOptions,
+      status: projectStatusOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.title) setValue("title", String(fields.title))
+      if (fields.funding_agency !== undefined && fields.funding_agency !== null) setValue("funding_agency", Number(fields.funding_agency))
+      if (fields.grant_sanctioned) setValue("grant_sanctioned", String(fields.grant_sanctioned))
+      if (fields.grant_received) setValue("grant_received", String(fields.grant_received))
+      if (fields.proj_nature !== undefined && fields.proj_nature !== null) setValue("proj_nature", Number(fields.proj_nature))
+      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
+      if (fields.status !== undefined && fields.status !== null) setValue("status", Number(fields.status))
+      if (fields.start_date) setValue("start_date", String(fields.start_date))
+      if (fields.proj_level !== undefined && fields.proj_level !== null) setValue("proj_level", Number(fields.proj_level))
+      if (fields.grant_year) setValue("grant_year", String(fields.grant_year))
+      if (fields.grant_sealed !== undefined) setValue("grant_sealed", Boolean(fields.grant_sealed))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
+
+  // Update Pdf field when auto-fill document URL is available
+  useEffect(() => {
+    if (autoFillDocumentUrl) {
+      setValue("Pdf", autoFillDocumentUrl)
+    }
+  }, [autoFillDocumentUrl, setValue])
 
   // Handle extracted fields from DocumentUpload component
   const handleExtractFields = useCallback((fields: Record<string, any>) => {
@@ -339,7 +386,7 @@ export default function AddResearchPage() {
               render={({ field }) => (
                 <div>
                   <DocumentUpload
-                    documentUrl={field.value || undefined}
+                    documentUrl={field.value || autoFillDocumentUrl || undefined}
                     category="research"
                     subCategory="research-project"
                     onChange={(url) => {

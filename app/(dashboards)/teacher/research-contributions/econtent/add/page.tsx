@@ -11,13 +11,13 @@ import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useEContentMutations } from "@/hooks/use-teacher-research-contributions-mutations"
-
-
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddEContentPage() {
   const router = useRouter()
   const { user } = useAuth()
   const form = useForm()
+  const { setValue, watch } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -27,6 +27,45 @@ export default function AddEContentPage() {
   
   // Use mutation for creating econtent
   const { create: createEContent } = useEContentMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "econtent", // Explicit form type
+    dropdownOptions: {
+      type: eContentTypeOptions,
+      typeEcontentValue: typeEcontentValueOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.title || fields.Title) setValue("title", String(fields.title || fields.Title))
+      if (fields.type !== undefined && fields.type !== null) {
+        setValue("type", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+      }
+      if (fields.brief_details || fields.Brief_Details) setValue("briefDetails", String(fields.brief_details || fields.Brief_Details))
+      if (fields.quadrant || fields.Quadrant) setValue("quadrant", String(fields.quadrant || fields.Quadrant))
+      if (fields.Publishing_date || fields.publishingDate) setValue("publishingDate", String(fields.Publishing_date || fields.publishingDate))
+      if (fields.Publishing_Authorities || fields.publishingAuthorities) setValue("publishingAuthorities", String(fields.Publishing_Authorities || fields.publishingAuthorities))
+      if (fields.link || fields.Link) setValue("link", String(fields.link || fields.Link))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
  
 
@@ -224,6 +263,7 @@ export default function AddEContentPage() {
               isEdit={false}
               eContentTypeOptions={eContentTypeOptions}
               typeEcontentValueOptions={typeEcontentValueOptions}
+              initialDocumentUrl={autoFillDocumentUrl}
            />
           </CardContent>
         </Card>

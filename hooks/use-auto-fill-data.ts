@@ -15,6 +15,10 @@ interface AutoFillOptions {
     // Map of field names to dropdown options
     [fieldName: string]: Array<{ id: number | string; name: string }>
   }
+  // NEW: Function to get current form values to check if fields are empty
+  getFormValues?: () => Record<string, any>
+  // NEW: Only auto-fill empty fields (default: true to prevent overwriting user input)
+  onlyFillEmpty?: boolean
 }
 
 /**
@@ -46,13 +50,17 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
     fieldMapping: customFieldMapping, 
     clearAfterUse = false,
     formType: providedFormType,
-    dropdownOptions = {}
+    dropdownOptions = {},
+    getFormValues, // NEW: Function to get current form values
+    onlyFillEmpty = true, // NEW: Default to true to prevent overwriting user input
   } = options
 
   // Track if auto-fill has been applied to prevent infinite loops
   const hasAutoFilledRef = useRef(false)
   const lastDataFieldsHashRef = useRef<string>("")
   const lastProcessedFieldsRef = useRef<Record<string, any>>({})
+  // NEW: Track if component has mounted to ensure we only auto-fill once on initial mount
+  const hasMountedRef = useRef(false)
 
   // Auto-detect form type from category/subcategory
   const formType = useMemo(() => {
@@ -172,51 +180,150 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
     }
   }, [processedDataFields])
 
-  // Auto-apply data fields when component mounts and data is available
-  // Only run once when data first becomes available to prevent infinite loops
+  // Mark component as mounted
   useEffect(() => {
-    // Check if we have new data that hasn't been processed yet
-    const hasNewData = hasDocumentData && 
-                       dataFieldsHash !== lastDataFieldsHashRef.current &&
-                       dataFieldsHash !== "" &&
-                       Object.keys(lastProcessedFieldsRef.current).length > 0
+    hasMountedRef.current = true
+  }, [])
 
-    if (hasNewData && onAutoFill) {
-      // Mark as applied before calling onAutoFill to prevent re-triggering
-      hasAutoFilledRef.current = true
-      lastDataFieldsHashRef.current = dataFieldsHash
+  // Helper function to check if a value is empty
+  const isEmpty = (value: any): boolean => {
+    if (value === undefined || value === null) return true
+    if (typeof value === "string" && value.trim() === "") return true
+    if (typeof value === "number" && isNaN(value)) return true
+    if (Array.isArray(value) && value.length === 0) return true
+    return false
+  }
 
-      // Call onAutoFill with the processed fields from ref
-      onAutoFill(lastProcessedFieldsRef.current)
-      
-      if (clearAfterUse) {
-        clearDocumentData()
-        hasAutoFilledRef.current = false
-        lastDataFieldsHashRef.current = ""
-        lastProcessedFieldsRef.current = {}
+  // Auto-apply data fields ONLY ONCE when component first mounts with data
+  // This ensures it only runs when first navigating to the page, not on subsequent updates
+  useEffect(() => {
+    // Only proceed if:
+    // 1. Component has mounted
+    // 2. We have document data
+    // 3. We haven't already auto-filled
+    // 4. We have processed fields
+    // 5. This is the first time we're seeing this data (hash is new or empty)
+    const shouldAutoFill = hasMountedRef.current &&
+                          hasDocumentData &&
+                          !hasAutoFilledRef.current &&
+                          dataFieldsHash !== "" &&
+                          Object.keys(processedDataFields).length > 0 &&
+                          (lastDataFieldsHashRef.current === "" || dataFieldsHash !== lastDataFieldsHashRef.current)
+
+    if (!shouldAutoFill || !onAutoFill) return
+
+    // Get current form values if we should only fill empty fields
+    // If onlyFillEmpty is true but getFormValues is not provided, default to filling all fields (backward compatibility)
+    const shouldCheckEmpty = onlyFillEmpty && getFormValues
+    let currentFormValues: Record<string, any> = {}
+    if (shouldCheckEmpty) {
+      try {
+        currentFormValues = getFormValues()
+      } catch (error) {
+        console.warn("Error getting form values for auto-fill:", error)
+        // If error getting form values, fall back to filling all fields
       }
     }
 
-    // Reset flag if data is cleared
+    // Filter fields to only include empty ones (if onlyFillEmpty is true AND getFormValues is provided)
+    const fieldsToFill: Record<string, any> = {}
+    Object.entries(processedDataFields).forEach(([key, value]) => {
+      if (shouldCheckEmpty) {
+        const currentValue = currentFormValues[key]
+        // Only include if field is empty
+        if (isEmpty(currentValue)) {
+          fieldsToFill[key] = value
+        }
+      } else {
+        // If onlyFillEmpty is false or getFormValues is not provided, include all fields (for backward compatibility)
+        fieldsToFill[key] = value
+      }
+    })
+
+    // Only proceed if there are fields to fill
+    if (Object.keys(fieldsToFill).length === 0) {
+      // Mark as filled even if no fields were filled to prevent re-checking
+      hasAutoFilledRef.current = true
+      lastDataFieldsHashRef.current = dataFieldsHash
+      return
+    }
+
+    // Mark as applied BEFORE calling onAutoFill to prevent re-triggering
+    hasAutoFilledRef.current = true
+    lastDataFieldsHashRef.current = dataFieldsHash
+
+    // Call onAutoFill with only the fields that should be filled
+    onAutoFill(fieldsToFill)
+    
+    // Update ref for future checks
+    lastProcessedFieldsRef.current = processedDataFields
+    
+    if (clearAfterUse) {
+      clearDocumentData()
+      hasAutoFilledRef.current = false
+      lastDataFieldsHashRef.current = ""
+      lastProcessedFieldsRef.current = {}
+    }
+  }, [
+    hasDocumentData, 
+    dataFieldsHash, 
+    processedDataFields, 
+    onAutoFill, 
+    clearAfterUse, 
+    clearDocumentData,
+    onlyFillEmpty,
+    getFormValues
+  ])
+
+  // Reset flag if data is cleared (allows re-filling if new document is uploaded)
+  useEffect(() => {
     if (!hasDocumentData && dataFieldsHash === "") {
       hasAutoFilledRef.current = false
       lastDataFieldsHashRef.current = ""
       lastProcessedFieldsRef.current = {}
     }
-  }, [hasDocumentData, dataFieldsHash, onAutoFill, clearAfterUse, clearDocumentData])
+  }, [hasDocumentData, dataFieldsHash])
 
-  // Manual apply function
+  // Manual apply function (for explicit user action)
   const applyAutoFill = useCallback(() => {
     if (processedDataFields && Object.keys(processedDataFields).length > 0 && onAutoFill) {
-      onAutoFill(processedDataFields)
-      
-      if (clearAfterUse) {
-        clearDocumentData()
+      // Get current form values if we should only fill empty fields
+      // If onlyFillEmpty is true but getFormValues is not provided, default to filling all fields (backward compatibility)
+      const shouldCheckEmpty = onlyFillEmpty && getFormValues
+      let currentFormValues: Record<string, any> = {}
+      if (shouldCheckEmpty) {
+        try {
+          currentFormValues = getFormValues()
+        } catch (error) {
+          console.warn("Error getting form values for manual auto-fill:", error)
+          // If error getting form values, fall back to filling all fields
+        }
       }
-      return true
+
+      // Filter fields to only include empty ones (if onlyFillEmpty is true AND getFormValues is provided)
+      const fieldsToFill: Record<string, any> = {}
+      Object.entries(processedDataFields).forEach(([key, value]) => {
+        if (shouldCheckEmpty) {
+          const currentValue = currentFormValues[key]
+          if (isEmpty(currentValue)) {
+            fieldsToFill[key] = value
+          }
+        } else {
+          fieldsToFill[key] = value
+        }
+      })
+
+      if (Object.keys(fieldsToFill).length > 0) {
+        onAutoFill(fieldsToFill)
+        
+        if (clearAfterUse) {
+          clearDocumentData()
+        }
+        return true
+      }
     }
     return false
-  }, [processedDataFields, onAutoFill, clearAfterUse, clearDocumentData])
+  }, [processedDataFields, onAutoFill, clearAfterUse, clearDocumentData, onlyFillEmpty, getFormValues])
 
   return {
     // Data

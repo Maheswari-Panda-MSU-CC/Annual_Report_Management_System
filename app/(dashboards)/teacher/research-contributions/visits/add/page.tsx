@@ -13,8 +13,7 @@ import { AcademicVisitForm } from "@/components/forms/AcademicVisitForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useVisitMutations } from "@/hooks/use-teacher-research-contributions-mutations"
-
-
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddVisitsPage() {
   const router = useRouter()
@@ -23,12 +22,48 @@ export default function AddVisitsPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const form = useForm()
+  const { setValue, watch } = form
 
   // Dropdowns - already available from Context, no need to fetch
   const { academicVisitRoleOptions } = useDropDowns()
   
   // Use mutation for creating visit
   const { create: createVisit } = useVisitMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "visits", // Explicit form type
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.Institute_visited || fields.instituteVisited) setValue("instituteVisited", String(fields.Institute_visited || fields.instituteVisited))
+      if (fields.duration || fields.durationOfVisit) setValue("durationOfVisit", String(fields.duration || fields.durationOfVisit))
+      if (fields.role || fields.Acad_research_Role_Id) {
+        const roleValue = fields.role || fields.Acad_research_Role_Id
+        setValue("role", typeof roleValue === 'number' ? roleValue : Number(roleValue))
+      }
+      if (fields.Sponsored_by || fields.sponsoredBy) setValue("sponsoredBy", String(fields.Sponsored_by || fields.sponsoredBy))
+      if (fields.remarks) setValue("remarks", String(fields.remarks))
+      if (fields.date) setValue("date", String(fields.date))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -213,6 +248,7 @@ export default function AddVisitsPage() {
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
             academicVisitRoleOptions={academicVisitRoleOptions}
+            initialDocumentUrl={autoFillDocumentUrl}
           />
           </CardContent>
         </Card>

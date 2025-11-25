@@ -14,6 +14,7 @@ import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useCollaborationMutations } from "@/hooks/use-teacher-research-contributions-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddCollaborationsPage() {
   const router = useRouter()
@@ -21,6 +22,7 @@ export default function AddCollaborationsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const form = useForm()
+  const { setValue, watch } = form
 
   const [isExtracting, setIsExtracting] = useState(false)
 
@@ -33,6 +35,54 @@ export default function AddCollaborationsPage() {
   
   // Use mutation for creating collaboration
   const { create: createCollaboration } = useCollaborationMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "collaborations", // Explicit form type
+    dropdownOptions: {
+      level: collaborationsLevelOptions,
+      outcome: collaborationsOutcomeOptions,
+      type: collaborationsTypeOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.category || fields.Category) setValue("category", String(fields.category || fields.Category))
+      if (fields.collaborating_inst || fields.Collaborating_Institute) setValue("collaboratingInstitute", String(fields.collaborating_inst || fields.Collaborating_Institute))
+      if (fields.collab_name || fields.Name_of_Collaborator) setValue("collaboratorName", String(fields.collab_name || fields.Name_of_Collaborator))
+      if (fields.qs_ranking || fields.QS_THE_World_University_Ranking) setValue("qsRanking", String(fields.qs_ranking || fields.QS_THE_World_University_Ranking))
+      if (fields.address || fields.Address) setValue("address", String(fields.address || fields.Address))
+      if (fields.details || fields.Details) setValue("details", String(fields.details || fields.Details))
+      if (fields.outcome !== undefined && fields.outcome !== null) {
+        setValue("outcome", typeof fields.outcome === 'number' ? fields.outcome : Number(fields.outcome))
+      }
+      if (fields.status !== undefined && fields.status !== null) {
+        setValue("status", typeof fields.status === 'number' ? fields.status : Number(fields.status))
+      }
+      if (fields.starting_date || fields.Starting_Date) setValue("startingDate", String(fields.starting_date || fields.Starting_Date))
+      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
+      if (fields.signing_date || fields.Signing_Date) setValue("signingDate", String(fields.signing_date || fields.Signing_Date))
+      if (fields.beneficiary_num !== undefined && fields.beneficiary_num !== null) setValue("noOfBeneficiary", Number(fields.beneficiary_num))
+      if (fields.MOU_signed !== undefined) setValue("mouSigned", Boolean(fields.MOU_signed))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -239,6 +289,7 @@ export default function AddCollaborationsPage() {
             isEdit={false}
             collaborationsLevelOptions={collaborationsLevelOptions}
             collaborationsOutcomeOptions={collaborationsOutcomeOptions}
+            initialDocumentUrl={autoFillDocumentUrl || (undefined as unknown as string)}
             collaborationsTypeOptions={collaborationsTypeOptions}
           />
           </CardContent>

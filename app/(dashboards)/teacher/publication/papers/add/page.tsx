@@ -38,6 +38,26 @@ export default function AddConferencePaperPage() {
 
   const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
 
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    control,
+    watch,
+    formState: { errors },
+  } = useForm<PaperFormData>({
+    defaultValues: {
+      authors: "",
+      theme: "",
+      organising_body: "",
+      place: "",
+      date: "",
+      title_of_paper: "",
+      level: null,
+      mode: "",
+    },
+  })
+
   // Use auto-fill hook for document analysis data
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -49,6 +69,8 @@ export default function AddConferencePaperPage() {
     dropdownOptions: {
       level: resPubLevelOptions,
     },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
       if (fields.authors) setValue("authors", String(fields.authors))
@@ -76,32 +98,15 @@ export default function AddConferencePaperPage() {
     clearAfterUse: false, // Keep data for manual editing
   })
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    control,
-    formState: { errors },
-  } = useForm<PaperFormData>({
-    defaultValues: {
-      authors: "",
-      theme: "",
-      organising_body: "",
-      place: "",
-      date: "",
-      title_of_paper: "",
-      level: null,
-      mode: "",
-    },
-  })
-
   useEffect(() => {
     fetchResPubLevels()
   }, [])
 
   // Update documentUrl when auto-fill data is available
+  // Always update if autoFillDocumentUrl is provided and different from current value
+  // This handles cases where autoFillDocumentUrl becomes available after component mount
   useEffect(() => {
-    if (autoFillDocumentUrl && !documentUrl) {
+    if (autoFillDocumentUrl && documentUrl !== autoFillDocumentUrl) {
       setDocumentUrl(autoFillDocumentUrl)
     }
   }, [autoFillDocumentUrl, documentUrl])

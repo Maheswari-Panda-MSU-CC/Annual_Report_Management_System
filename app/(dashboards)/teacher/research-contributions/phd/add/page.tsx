@@ -13,9 +13,7 @@ import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { usePhdMutations } from "@/hooks/use-teacher-research-contributions-mutations"
-
-
-
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddPhdPage() {
   const router = useRouter()
@@ -23,12 +21,50 @@ export default function AddPhdPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
+  const { setValue, watch } = form
 
   // Dropdowns - already available from Context, no need to fetch
   const { phdGuidanceStatusOptions } = useDropDowns()
   
   // Use mutation for creating phd
   const { create: createPhd } = usePhdMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "phd", // Explicit form type
+    dropdownOptions: {
+      status: phdGuidanceStatusOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.regno || fields.Reg_No) setValue("regno", String(fields.regno || fields.Reg_No))
+      if (fields.name || fields.Name_of_Student) setValue("name", String(fields.name || fields.Name_of_Student))
+      if (fields.start_date || fields.Date_of_Registration) setValue("startDate", String(fields.start_date || fields.Date_of_Registration))
+      if (fields.topic || fields.Topic) setValue("topic", String(fields.topic || fields.Topic))
+      if (fields.status !== undefined && fields.status !== null) {
+        setValue("status", typeof fields.status === 'number' ? fields.status : Number(fields.status))
+      }
+      if (fields.completion_year || fields.Year_of_Completion) setValue("completionYear", String(fields.completion_year || fields.Year_of_Completion))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -213,6 +249,7 @@ export default function AddPhdPage() {
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
               phdGuidanceStatusOptions={phdGuidanceStatusOptions}
+              initialDocumentUrl={autoFillDocumentUrl}
             />
           </CardContent>
         </Card>

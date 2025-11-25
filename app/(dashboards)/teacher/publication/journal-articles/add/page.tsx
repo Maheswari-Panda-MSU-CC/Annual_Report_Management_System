@@ -15,6 +15,7 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
 import { useJournalMutations } from "@/hooks/use-teacher-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 interface JournalFormData {
   authors: string
@@ -63,6 +64,7 @@ export default function AddJournalArticlePage() {
     setValue,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<JournalFormData>({
     defaultValues: {
@@ -91,6 +93,67 @@ export default function AddJournalArticlePage() {
   })
 
   // Note: Dropdown data is already available from Context, no need to fetch
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "journal-articles", // Explicit form type
+    dropdownOptions: {
+      level: resPubLevelOptions,
+      author_type: journalAuthorTypeOptions,
+      type: journalEditedTypeOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.authors) setValue("authors", String(fields.authors))
+      if (fields.author_num !== undefined && fields.author_num !== null) setValue("author_num", Number(fields.author_num))
+      if (fields.title) setValue("title", String(fields.title))
+      if (fields.isbn) setValue("isbn", String(fields.isbn))
+      if (fields.journal_name) setValue("journal_name", String(fields.journal_name))
+      if (fields.volume_num !== undefined && fields.volume_num !== null) setValue("volume_num", Number(fields.volume_num))
+      if (fields.page_num) setValue("page_num", String(fields.page_num))
+      if (fields.month_year) setValue("month_year", String(fields.month_year))
+      if (fields.author_type !== undefined && fields.author_type !== null) setValue("author_type", Number(fields.author_type))
+      if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
+      if (fields.peer_reviewed !== undefined) setValue("peer_reviewed", Boolean(fields.peer_reviewed))
+      if (fields.h_index !== undefined && fields.h_index !== null) setValue("h_index", Number(fields.h_index))
+      if (fields.impact_factor !== undefined && fields.impact_factor !== null) setValue("impact_factor", Number(fields.impact_factor))
+      if (fields.in_scopus !== undefined) setValue("in_scopus", Boolean(fields.in_scopus))
+      if (fields.in_ugc !== undefined) setValue("in_ugc", Boolean(fields.in_ugc))
+      if (fields.in_clarivate !== undefined) setValue("in_clarivate", Boolean(fields.in_clarivate))
+      if (fields.in_oldUGCList !== undefined) setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
+      if (fields.paid !== undefined) setValue("paid", Boolean(fields.paid))
+      if (fields.issn) setValue("issn", String(fields.issn))
+      if (fields.type !== undefined && fields.type !== null) setValue("type", Number(fields.type))
+      if (fields.DOI) setValue("DOI", String(fields.DOI))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
+
+  // Update documentUrl when auto-fill data is available
+  // Always update if autoFillDocumentUrl is provided and different from current value
+  // This handles cases where autoFillDocumentUrl becomes available after component mount
+  useEffect(() => {
+    if (autoFillDocumentUrl && documentUrl !== autoFillDocumentUrl) {
+      setDocumentUrl(autoFillDocumentUrl)
+    }
+  }, [autoFillDocumentUrl, documentUrl])
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -248,7 +311,7 @@ export default function AddJournalArticlePage() {
               Step 1: Upload Supporting Document *
             </Label>
             <DocumentUpload
-              documentUrl={documentUrl}
+              documentUrl={documentUrl || autoFillDocumentUrl || undefined}
               category="journal-articles"
               subCategory="journals"
               onChange={handleDocumentChange}

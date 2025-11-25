@@ -10,17 +10,54 @@ import { ConsultancyForm } from "@/components/forms/ConsultancyForm"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useConsultancyMutations } from "@/hooks/use-teacher-research-contributions-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function AddConsultancyPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { toast } = useToast()
   const form = useForm()
+  const { setValue, watch } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
 
   // Use mutation for creating consultancy
   const { create: createConsultancy } = useConsultancyMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "consultancy", // Explicit form type
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.name || fields.title) setValue("title", String(fields.name || fields.title))
+      if (fields.collaborating_inst || fields.collaboratingInstitute) setValue("collaboratingInstitute", String(fields.collaborating_inst || fields.collaboratingInstitute))
+      if (fields.address) setValue("address", String(fields.address))
+      if (fields.Start_Date || fields.startDate) setValue("startDate", String(fields.Start_Date || fields.startDate))
+      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
+      if (fields.amount !== undefined && fields.amount !== null) setValue("amount", String(fields.amount))
+      if (fields.details || fields.detailsOutcome) setValue("detailsOutcome", String(fields.details || fields.detailsOutcome))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -212,6 +249,7 @@ export default function AddConsultancyPage() {
               handleFileSelect={() => {}}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
+              initialDocumentUrl={autoFillDocumentUrl}
            />
           </CardContent>
         </Card>

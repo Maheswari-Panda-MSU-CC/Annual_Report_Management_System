@@ -11,6 +11,7 @@ import { JrfSrfForm } from "@/components/forms/JrfSrfForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useJrfSrfMutations } from "@/hooks/use-teacher-research-contributions-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddJrfSrfPage() {
   const router = useRouter()
@@ -18,12 +19,50 @@ export default function AddJrfSrfPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
+  const { setValue, watch } = form
 
   // Dropdowns - already available from Context, no need to fetch
   const { jrfSrfTypeOptions } = useDropDowns()
   
   // Use mutation for creating jrf-srf
   const { create: createJrfSrf } = useJrfSrfMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "jrf-srf", // Explicit form type
+    dropdownOptions: {
+      type: jrfSrfTypeOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.name || fields.Name_Of_Fellow) setValue("name", String(fields.name || fields.Name_Of_Fellow))
+      if (fields.type !== undefined && fields.type !== null) {
+        setValue("type", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+      }
+      if (fields.project_title || fields.Project_Title) setValue("projectTitle", String(fields.project_title || fields.Project_Title))
+      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
+      if (fields.stipend || fields.Monthly_Stipend) setValue("monthlyStipend", String(fields.stipend || fields.Monthly_Stipend))
+      if (fields.date) setValue("date", String(fields.date))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -209,6 +248,7 @@ export default function AddJrfSrfPage() {
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
             jrfSrfTypeOptions={jrfSrfTypeOptions}
+            initialDocumentUrl={autoFillDocumentUrl}
           />
           </CardContent>
         </Card>

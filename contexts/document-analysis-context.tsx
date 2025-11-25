@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from "react"
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react"
 
 interface DocumentAnalysisData {
   file: {
@@ -69,6 +69,39 @@ export function DocumentAnalysisProvider({ children }: { children: ReactNode }) 
     }
     return null
   })
+
+  // ADD: Effect to re-check sessionStorage on mount (in case data was written after initial render)
+  // This ensures data is available even if navigation happens before context state updates
+  useEffect(() => {
+    if (!documentData && typeof window !== "undefined") {
+      try {
+        const storedFile = sessionStorage.getItem("arms_uploaded_file")
+        const storedFileName = sessionStorage.getItem("arms_uploaded_file_name")
+        const storedFileType = sessionStorage.getItem("arms_uploaded_file_type")
+        const storedDataFields = sessionStorage.getItem("arms_dataFields")
+        const storedCategory = sessionStorage.getItem("arms_category")
+        const storedSubcategory = sessionStorage.getItem("arms_subcategory")
+        const storedAutoFill = sessionStorage.getItem("arms_auto_fill")
+
+        if (storedFile && storedFileName && storedFileType) {
+          setDocumentDataState({
+            file: {
+              dataUrl: storedFile,
+              name: storedFileName,
+              type: storedFileType,
+            },
+            category: storedCategory || "",
+            subCategory: storedSubcategory || "",
+            dataFields: storedDataFields ? JSON.parse(storedDataFields) : {},
+            analysis: null, // Don't restore full analysis on mount to save memory
+            autoFill: storedAutoFill === "true",
+          })
+        }
+      } catch (error) {
+        console.error("Error loading document data from sessionStorage on mount:", error)
+      }
+    }
+  }, []) // Only run once on mount
 
   const setDocumentData = useCallback((data: DocumentAnalysisData) => {
     setDocumentDataState(data)

@@ -38,7 +38,8 @@ export function FinancialForm({
   isEdit = false,
   editData = {},
   financialSupportTypeOptions: propFinancialSupportTypeOptions,
-}: FinancialFormProps) {
+  initialDocumentUrl,
+}: FinancialFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
     register,
@@ -50,8 +51,32 @@ export function FinancialForm({
   } = form
   const formData = watch()
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
-    isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined
+    initialDocumentUrl || // Use initial document URL from auto-fill first
+    (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)
   )
+
+  // Update documentUrl when initialDocumentUrl changes
+  // Always update if initialDocumentUrl is provided and different from current value
+  // This handles cases where autoFillDocumentUrl becomes available after component mount
+  // CRITICAL: Also update form field for validation
+  useEffect(() => {
+    if (initialDocumentUrl) {
+      // Always update documentUrl if it's different
+      if (documentUrl !== initialDocumentUrl) {
+        setDocumentUrl(initialDocumentUrl)
+      }
+      // CRITICAL FIX: Check form field value, not just state comparison
+      // On initial mount, documentUrl === initialDocumentUrl, so we need to check form field
+      const currentFormValue = form.getValues("supportingDocument")
+      const formValueIsEmpty = !currentFormValue || 
+                             (Array.isArray(currentFormValue) && currentFormValue.length === 0) ||
+                             (Array.isArray(currentFormValue) && !currentFormValue[0])
+      
+      if (formValueIsEmpty) {
+        setValue("supportingDocument", [initialDocumentUrl], { shouldValidate: false, shouldDirty: false })
+      }
+    }
+  }, [initialDocumentUrl, documentUrl, setValue, form])
 
   // Use props if provided, otherwise fetch from hook
   const { 
@@ -107,7 +132,7 @@ export function FinancialForm({
         <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">
           Step 1: Upload Document *</Label>
         <DocumentUpload
-          documentUrl={documentUrl}
+          documentUrl={documentUrl || initialDocumentUrl || undefined}
           category="research-contributions"
           subCategory="financial"
           onChange={(url) => {

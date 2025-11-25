@@ -159,68 +159,7 @@ export function LoginForm() {
         </Button>
       </form>
 
-      {/* Demo credentials section */}
-      <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200">
-        <div className="text-center">
-          <button
-            type="button"
-            className="text-[10px] sm:text-xs text-gray-400 hover:text-gray-600 transition-colors duration-200 focus:outline-none focus:text-gray-600"
-            onClick={() => {
-              const demoSection = document.getElementById("demo-credentials")
-              if (demoSection) {
-                demoSection.classList.toggle("hidden")
-              }
-            }}
-          >
-            Demo Credentials
-          </button>
-          <div id="demo-credentials" className="hidden mt-3 text-[10px] sm:text-xs text-gray-500 space-y-2 sm:space-y-3 bg-gray-50 p-3 sm:p-4 rounded-md">
-            <div>
-              <p className="font-medium text-gray-700 mb-1 sm:mb-2 text-xs sm:text-sm">Admin Account:</p>
-              <button
-                type="button"
-                onClick={() => fillDemoCredentials("admin")}
-                className="text-left w-full p-1.5 sm:p-2 hover:bg-gray-100 rounded text-blue-600 hover:text-blue-800 text-[10px] sm:text-xs"
-              >
-                admin@msubaroda.ac.in (Password: password)
-              </button>
-            </div>
 
-            <div>
-              <p className="font-medium text-gray-700 mb-1 sm:mb-2 text-xs sm:text-sm">Faculty Account:</p>
-              <button
-                type="button"
-                onClick={() => fillDemoCredentials("faculty")}
-                className="text-left w-full p-1.5 sm:p-2 hover:bg-gray-100 rounded text-blue-600 hover:text-blue-800 text-[10px] sm:text-xs"
-              >
-                dean-arts@msubaroda.ac.in (Password: password)
-              </button>
-            </div>
-
-            <div>
-              <p className="font-medium text-gray-700 mb-1 sm:mb-2 text-xs sm:text-sm">Department Account:</p>
-              <button
-                type="button"
-                onClick={() => fillDemoCredentials("department")}
-                className="text-left w-full p-1.5 sm:p-2 hover:bg-gray-100 rounded text-blue-600 hover:text-blue-800 text-[10px] sm:text-xs"
-              >
-                head.cs@msubaroda.ac.in (Password: password)
-              </button>
-            </div>
-
-            <div>
-              <p className="font-medium text-gray-700 mb-1 sm:mb-2 text-xs sm:text-sm">Teacher Account:</p>
-              <button
-                type="button"
-                onClick={() => fillDemoCredentials("teacher")}
-                className="text-left w-full p-1.5 sm:p-2 hover:bg-gray-100 rounded text-blue-600 hover:text-blue-800 text-[10px] sm:text-xs"
-              >
-                viral.kapadia-cse@msubaroda.ac.in (Password: password)
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

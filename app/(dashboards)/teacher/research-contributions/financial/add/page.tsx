@@ -13,7 +13,7 @@ import { FinancialForm } from "@/components/forms/FinancialFom"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useFinancialMutations } from "@/hooks/use-teacher-research-contributions-mutations"
-
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 export default function AddFinancialPage() {
   const router = useRouter()
@@ -22,12 +22,51 @@ export default function AddFinancialPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const form = useForm()
+  const { setValue, watch } = form
 
   // Dropdowns - already available from Context, no need to fetch
   const { financialSupportTypeOptions } = useDropDowns()
   
   // Use mutation for creating financial support
   const { create: createFinancial } = useFinancialMutations()
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "financial", // Explicit form type
+    dropdownOptions: {
+      type: financialSupportTypeOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.title || fields.Name_Of_Support) setValue("title", String(fields.title || fields.Name_Of_Support))
+      if (fields.type !== undefined && fields.type !== null) {
+        setValue("type", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+      }
+      if (fields.agency || fields.Supporting_Agency) setValue("supportingAgency", String(fields.agency || fields.Supporting_Agency))
+      if (fields.amount || fields.Grant_Received) setValue("amount", String(fields.amount || fields.Grant_Received))
+      if (fields.event_details || fields.Details_Of_Event) setValue("detailsOfEvent", String(fields.event_details || fields.Details_Of_Event))
+      if (fields.purpose || fields.Purpose_Of_Grant) setValue("purposeOfGrant", String(fields.purpose || fields.Purpose_Of_Grant))
+      if (fields.date) setValue("date", String(fields.date))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -214,6 +253,7 @@ export default function AddFinancialPage() {
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
             financialSupportTypeOptions={financialSupportTypeOptions}
+            initialDocumentUrl={autoFillDocumentUrl}
           />
           </CardContent>
         </Card>

@@ -210,6 +210,7 @@ export interface PatentFormProps {
   editData?: Record<string, any>
   resPubLevelOptions?: Array<{ id: number; name: string }>
   patentStatusOptions?: Array<{ id: number; name: string }>
+  initialDocumentUrl?: string
 }
 
 // ---------- Policy Form ----------
@@ -224,6 +225,7 @@ export interface PolicyFormProps {
   isEdit?: boolean
   editData?: Record<string, any>
   resPubLevelOptions?: Array<{ id: number; name: string }>
+  initialDocumentUrl?: string
 }
 
 // ---------- E-Content Form ----------
@@ -239,6 +241,7 @@ export interface EContentFormProps {
   editData?: Record<string, any>
   eContentTypeOptions?: Array<{ id: number; name: string }>
   typeEcontentValueOptions?: Array<{ id: number; name: string }>
+  initialDocumentUrl?: string
 }
 
 // ---------- Consultancy Form ----------
@@ -252,4 +255,5 @@ export interface ConsultancyFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  initialDocumentUrl?: string
 }

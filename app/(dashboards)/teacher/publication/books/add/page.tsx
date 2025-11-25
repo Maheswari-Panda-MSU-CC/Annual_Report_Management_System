@@ -15,6 +15,7 @@ import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useBookMutations } from "@/hooks/use-teacher-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 interface BookFormData {
   authors: string
@@ -78,6 +79,59 @@ export default function AddBookPage() {
   const isEdited = watch("edited")
 
   // Note: Dropdown data is already available from Context, no need to fetch
+
+  // Use auto-fill hook for document analysis data
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: "books", // Explicit form type
+    dropdownOptions: {
+      publishing_level: resPubLevelOptions,
+      book_type: bookTypeOptions,
+      author_type: journalAuthorTypeOptions,
+    },
+    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
+    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onAutoFill: (fields) => {
+      // Auto-fill form fields from document analysis
+      if (fields.authors) setValue("authors", String(fields.authors))
+      if (fields.title) setValue("title", String(fields.title))
+      if (fields.isbn) setValue("isbn", String(fields.isbn))
+      if (fields.publisher_name) setValue("publisher_name", String(fields.publisher_name))
+      if (fields.submit_date) setValue("submit_date", String(fields.submit_date))
+      if (fields.place) setValue("place", String(fields.place))
+      if (fields.paid !== undefined) setValue("paid", Boolean(fields.paid))
+      if (fields.edited !== undefined) setValue("edited", Boolean(fields.edited))
+      if (fields.chap_count !== undefined && fields.chap_count !== null) setValue("chap_count", Number(fields.chap_count))
+      if (fields.publishing_level !== undefined && fields.publishing_level !== null) setValue("publishing_level", Number(fields.publishing_level))
+      if (fields.book_type !== undefined && fields.book_type !== null) setValue("book_type", Number(fields.book_type))
+      if (fields.author_type !== undefined && fields.author_type !== null) setValue("author_type", Number(fields.author_type))
+      if (fields.cha) setValue("cha", String(fields.cha))
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        showToast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
+
+  // Update documentUrl when auto-fill data is available
+  // Always update if autoFillDocumentUrl is provided and different from current value
+  // This handles cases where autoFillDocumentUrl becomes available after component mount
+  useEffect(() => {
+    if (autoFillDocumentUrl && documentUrl !== autoFillDocumentUrl) {
+      setDocumentUrl(autoFillDocumentUrl)
+    }
+  }, [autoFillDocumentUrl, documentUrl])
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
@@ -222,7 +276,7 @@ export default function AddBookPage() {
               Step 1: Upload Supporting Document *
             </Label>
             <DocumentUpload
-              documentUrl={documentUrl}
+              documentUrl={documentUrl || autoFillDocumentUrl || undefined}
               category="books"
               subCategory="books"
               onChange={handleDocumentChange}
