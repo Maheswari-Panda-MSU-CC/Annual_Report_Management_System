@@ -70,6 +70,20 @@ export function UniversityCommitteeParticipationForm({
     }
   }, [isEdit, editData, setValue])
 
+  // Sync documentUrl with form state (for auto-fill from smart document analyzer)
+  // Only sync if the document URL exists and is not empty
+  useEffect(() => {
+    const formDocUrl = formData.supporting_doc
+    if (formDocUrl && formDocUrl.trim() !== "" && formDocUrl !== documentUrl) {
+      setDocumentUrl(formDocUrl)
+    } else if (!formDocUrl || formDocUrl.trim() === "") {
+      // Clear document URL if form state is empty
+      if (documentUrl) {
+        setDocumentUrl(undefined)
+      }
+    }
+  }, [formData.supporting_doc, documentUrl])
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Step 1: Upload */}

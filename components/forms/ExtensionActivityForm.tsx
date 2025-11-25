@@ -60,6 +60,21 @@ export function ExtensionActivityForm({
     }
   }, [isEdit, editData, setValue, clearErrors])
 
+  // Sync documentUrl with form state (for auto-fill from smart document analyzer)
+  useEffect(() => {
+    const formDocUrl = formData.Image
+    if (formDocUrl && formDocUrl !== documentUrl) {
+      setDocumentUrl(formDocUrl)
+    }
+  }, [formData.Image, documentUrl])
+
+  // Clear documentUrl when form field is empty
+  useEffect(() => {
+    if (!formData.Image && documentUrl) {
+      setDocumentUrl(undefined)
+    }
+  }, [formData.Image, documentUrl])
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Step 1: Upload */}

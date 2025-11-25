@@ -256,7 +256,7 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
     "Academic Body": "acad_body",
     "Place": "place",
     "Participated As": "participated_as",
-    "Year": "year",
+    "Year": "year_name", // Form uses "year_name" field, not "year"
   },
 
   // Committees
@@ -278,11 +278,11 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
 
   // Awards
   awards: {
-    "Name of Award / Fellowship": "title",
+    "Name of Award / Fellowship": "name",
     "Details": "details",
     "Name of Awarding Agency": "organization",
     "Adress of Awarding Agency": "address",
-    "Date of Award": "year",
+    "Date of Award": "date_of_award",
     "Level": "level",
   },
 

@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const result = await pool
       .request()
       .input('tid', sql.Int, teacherId)
-      .input('year', sql.Int, academicYear)
+      .input('year', sql.Int, null) // ✅ CHANGE TO NULL FOR NO YEAR bounded output
       .execute('sp_GetRefresherCourseDetailsByTid')
 
     const refresherDetails = result.recordset || []

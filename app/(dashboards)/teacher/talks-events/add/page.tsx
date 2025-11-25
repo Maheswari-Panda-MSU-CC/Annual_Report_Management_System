@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,8 @@ import {
   useCommitteeMutations,
   useTalksMutations,
 } from "@/hooks/use-teacher-talks-events-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 interface RefresherForm {
   name: string
@@ -87,6 +89,7 @@ export default function AddEventPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm()
+  const { watch, setValue } = form
 
   // Mutations for each section
   const refresherMutations = useRefresherMutations()
@@ -120,6 +123,363 @@ export default function AddEventPage() {
     fetchTalksProgrammeTypes,
     fetchTalksParticipantTypes
   } = useDropDowns()
+
+  // Determine form type based on active tab
+  const getFormTypeForTab = (tab: string): string => {
+    switch (tab) {
+      case "refresher":
+        return "refresher"
+      case "academic-programs":
+        return "academic-programs"
+      case "academic-bodies":
+        return "academic-bodies"
+      case "committees":
+        return "committees"
+      case "talks":
+        return "talks"
+      default:
+        return "refresher"
+    }
+  }
+
+  // Get dropdown options for current tab
+  const getDropdownOptionsForTab = (tab: string) => {
+    switch (tab) {
+      case "refresher":
+        return {
+          refresher_type: refresherTypeOptions,
+        }
+      case "academic-programs":
+        return {
+          programme: academicProgrammeOptions,
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "academic-bodies":
+        return {
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "committees":
+        return {
+          level: committeeLevelOptions,
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "talks":
+        return {
+          programme: talksProgrammeTypeOptions,
+          participated_as: talksParticipantTypeOptions,
+        }
+      default:
+        return {}
+    }
+  }
+
+  // Get document data from context for tab matching
+  const { documentData } = useDocumentAnalysis()
+
+  // Track which tab the document belongs to
+  const [documentTab, setDocumentTab] = useState<string | null>(null)
+
+  // Helper function to check if document matches current tab - STRICTLY MUTUALLY EXCLUSIVE
+  const doesDocumentMatchTab = (tab: string, category?: string, subCategory?: string): boolean => {
+    if (!category && !subCategory) return false
+    
+    const normalizedCategory = (category || "").toLowerCase().trim()
+    const normalizedSubCategory = (subCategory || "").toLowerCase().trim()
+    
+    switch (tab) {
+      case "refresher":
+        return normalizedCategory.includes("refresher") || 
+               normalizedCategory.includes("orientation") ||
+               normalizedSubCategory.includes("refresher") ||
+               normalizedSubCategory.includes("orientation")
+      case "academic-programs":
+        // STRICT: Only match exact phrases for programs, exclude ANY mention of bodies
+        return (
+          normalizedSubCategory === "contribution in organising academic programs" ||
+          normalizedSubCategory.includes("contribution in organising academic programs") ||
+          (normalizedSubCategory.includes("academic program") && 
+           !normalizedSubCategory.includes("body") &&
+           !normalizedSubCategory.includes("participation") &&
+           !normalizedSubCategory.includes("bodies"))
+        )
+      case "academic-bodies":
+        // STRICT: Only match exact phrases for bodies, exclude ANY mention of programs
+        // Handle exact match: "Participation in Academic Bodies of other Universities"
+        return (
+          normalizedSubCategory === "participation in academic bodies of other universities" ||
+          normalizedSubCategory.includes("participation in academic bodies") ||
+          (normalizedSubCategory.includes("academic body") && 
+           normalizedSubCategory.includes("participation") &&
+           !normalizedSubCategory.includes("program") &&
+           !normalizedSubCategory.includes("contribution") &&
+           !normalizedSubCategory.includes("organising")) ||
+          // Also match if it contains "academic bodies" (plural) with participation
+          (normalizedSubCategory.includes("academic bodies") &&
+           normalizedSubCategory.includes("participation") &&
+           !normalizedSubCategory.includes("program"))
+        )
+      case "committees":
+        return normalizedCategory.includes("committee") ||
+               normalizedSubCategory.includes("committee") ||
+               (normalizedCategory.includes("university") && normalizedCategory.includes("committee"))
+      case "talks":
+        return normalizedCategory.includes("talk") ||
+               normalizedSubCategory.includes("talk") ||
+               (normalizedCategory.includes("academic") && normalizedCategory.includes("talk"))
+      default:
+        return false
+    }
+  }
+
+  // Use auto-fill hook for document analysis data
+  // Determine formType from document data first, then fallback to active tab
+  const shouldProvideFormType = useMemo(() => {
+    // Only provide formType if document data exists and we can determine it
+    if (documentData?.category && documentData?.subCategory) {
+      const category = documentData.category
+      const subCategory = documentData.subCategory
+      
+      // Use doesDocumentMatchTab to determine which tab this belongs to
+      // Check in priority order (most specific first)
+      if (doesDocumentMatchTab("academic-bodies", category, subCategory)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[FormType] Detected: academic-bodies", { category, subCategory })
+        }
+        return "academic-bodies"
+      } else if (doesDocumentMatchTab("academic-programs", category, subCategory)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[FormType] Detected: academic-programs", { category, subCategory })
+        }
+        return "academic-programs"
+      } else if (doesDocumentMatchTab("refresher", category, subCategory)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[FormType] Detected: refresher", { category, subCategory })
+        }
+        return "refresher"
+      } else if (doesDocumentMatchTab("committees", category, subCategory)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[FormType] Detected: committees", { category, subCategory })
+        }
+        return "committees"
+      } else if (doesDocumentMatchTab("talks", category, subCategory)) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[FormType] Detected: talks", { category, subCategory })
+        }
+        return "talks"
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[FormType] Could not detect from document data, using active tab", {
+          category,
+          subCategory,
+          activeTab,
+          fallback: getFormTypeForTab(activeTab)
+        })
+      }
+    }
+    // If we can't determine from document data, use active tab
+    return getFormTypeForTab(activeTab)
+  }, [documentData, activeTab])
+
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+  } = useAutoFillData({
+    formType: shouldProvideFormType,
+    dropdownOptions: getDropdownOptionsForTab(activeTab),
+    onlyFillEmpty: true,
+    getFormValues: () => watch(),
+    onAutoFill: (fields) => {
+      // Only auto-fill if document matches current tab
+      if (!documentData) {
+        console.warn("[AutoFill] No document data available")
+        return
+      }
+      
+      const category = documentData.category || documentData.analysis?.classification?.category || ""
+      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
+      
+      const matchesTab = doesDocumentMatchTab(activeTab, category, subCategory)
+      
+      if (!matchesTab) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log("[AutoFill] Skipped - Document doesn't match current tab", {
+            activeTab,
+            category,
+            subCategory,
+            fieldsCount: Object.keys(fields).length,
+            fields: Object.keys(fields)
+          })
+        }
+        return
+      }
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log("[AutoFill] Filling fields for tab:", activeTab, {
+          fieldsCount: Object.keys(fields).length,
+          fields: Object.keys(fields),
+          sampleValues: Object.fromEntries(Object.entries(fields).slice(0, 3))
+        })
+      }
+      // Map fields based on active tab
+      if (activeTab === "refresher") {
+        // Note: categories-field-mapping.ts maps to "course_type", "start_date", "end_date", "organizing_university", etc.
+        // but form uses "refresher_type", "startdate", "enddate", "university", etc.
+        if (fields.name) setValue("name", String(fields.name))
+        if (fields.refresher_type || fields.course_type) setValue("refresher_type", String(fields.refresher_type || fields.course_type))
+        if (fields.startdate || fields.start_date) setValue("startdate", String(fields.startdate || fields.start_date))
+        if (fields.enddate || fields.end_date) setValue("enddate", String(fields.enddate || fields.end_date))
+        if (fields.university || fields.organizing_university) setValue("university", String(fields.university || fields.organizing_university))
+        if (fields.institute || fields.organizing_institute) setValue("institute", String(fields.institute || fields.organizing_institute))
+        if (fields.department || fields.organizing_department) setValue("department", String(fields.department || fields.organizing_department))
+        if (fields.centre) setValue("centre", String(fields.centre))
+        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
+      } else if (activeTab === "academic-programs") {
+        if (fields.name) setValue("name", String(fields.name))
+        if (fields.programme) setValue("programme", String(fields.programme))
+        if (fields.place) setValue("place", String(fields.place))
+        if (fields.date) setValue("date", String(fields.date))
+        if (fields.year || fields.year_name) setValue("year_name", String(fields.year || fields.year_name))
+        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
+        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
+      } else if (activeTab === "academic-bodies") {
+        // Hook maps: "Course Title" → "name", "Academic Body" → "acad_body", "Year" → "year_name"
+        // So we use the mapped field names directly
+        if (fields.name) setValue("name", String(fields.name))
+        if (fields.acad_body) setValue("acad_body", String(fields.acad_body))
+        if (fields.place) setValue("place", String(fields.place))
+        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
+        // year_name is already mapped and processed by hook (dropdown matching)
+        if (fields.year_name) setValue("year_name", String(fields.year_name))
+        // Also handle legacy "year" field name for backward compatibility
+        if (fields.year && !fields.year_name) {
+          setValue("year_name", String(fields.year))
+        }
+        // submit_date is a date field - try to set from year if available
+        if (fields.submit_date) {
+          setValue("submit_date", String(fields.submit_date))
+        } else if (fields.year_name) {
+          // If we have a year, try to set submit_date to first day of that year
+          const yearValue = fields.year_name
+          // Check if it's a valid year (4 digits)
+          if (typeof yearValue === 'string' && /^\d{4}$/.test(yearValue)) {
+            setValue("submit_date", `${yearValue}-01-01`)
+          }
+        }
+        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
+      } else if (activeTab === "committees") {
+        if (fields.name) setValue("name", String(fields.name))
+        if (fields.committee_name) setValue("committee_name", String(fields.committee_name))
+        if (fields.level) setValue("level", String(fields.level))
+        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
+        if (fields.submit_date || fields.year) setValue("submit_date", String(fields.submit_date || fields.year))
+        if (fields.year_name || fields.year) setValue("year_name", String(fields.year_name || fields.year))
+        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
+      } else if (activeTab === "talks") {
+        if (fields.name) setValue("name", String(fields.name))
+        if (fields.programme) setValue("programme", String(fields.programme))
+        if (fields.place) setValue("place", String(fields.place))
+        if (fields.date || fields.talk_date) setValue("date", String(fields.date || fields.talk_date))
+        if (fields.title || fields.title_of_event) setValue("title", String(fields.title || fields.title_of_event))
+        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
+        if (fields.supporting_doc) {
+          setValue("supporting_doc", String(fields.supporting_doc))
+          setValue("Image", String(fields.supporting_doc)) // Talks also uses Image field
+        }
+        if (fields.Image) {
+          setValue("supporting_doc", String(fields.Image))
+          setValue("Image", String(fields.Image))
+        }
+      }
+    },
+    clearAfterUse: false,
+  })
+
+  // Debug: Log when auto-fill data is available (development only)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && hasAutoFillData && documentData) {
+      const category = documentData.category || documentData.analysis?.classification?.category || ""
+      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
+      const matchesTab = doesDocumentMatchTab(activeTab, category, subCategory)
+      
+      console.log("[AutoFill Debug]", {
+        activeTab,
+        formType: shouldProvideFormType,
+        category,
+        subCategory,
+        matchesTab,
+        hasData: hasAutoFillData,
+        dataFieldsCount: Object.keys(autoFillDataFields || {}).length,
+        documentUrl: autoFillDocumentUrl ? "present" : "missing"
+      })
+    }
+  }, [hasAutoFillData, documentData, activeTab, shouldProvideFormType, autoFillDataFields, autoFillDocumentUrl])
+
+  // Track previous tab to detect tab changes
+  const prevActiveTabRef = useRef<string>(activeTab)
+
+  // Handle document URL from auto-fill context - STRICTLY TAB BOUNDED
+  // ALWAYS clear when switching tabs, then re-check and set only if matches
+  useEffect(() => {
+    const tabChanged = prevActiveTabRef.current !== activeTab
+    prevActiveTabRef.current = activeTab
+
+    // Step 1: ALWAYS clear document URL when switching tabs (prevents overlap)
+    if (tabChanged && documentTab) {
+      // Clear document URL from form state immediately
+      if (activeTab === "talks") {
+        setValue("supporting_doc", "")
+        setValue("Image", "")
+      } else {
+        setValue("supporting_doc", "")
+      }
+      // Clear tracker when switching away
+      setDocumentTab(null)
+    }
+    
+    // Step 2: Check if we have document data and if it matches current tab
+    if (autoFillDocumentUrl && hasAutoFillData && documentData) {
+      const category = documentData.category || documentData.analysis?.classification?.category || ""
+      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
+      
+      // Check if document matches current tab using strict matching
+      const matchesCurrentTab = doesDocumentMatchTab(activeTab, category, subCategory)
+      
+      if (matchesCurrentTab) {
+        // Only set if we don't already have it set for this tab
+        const currentDocUrl = watch("supporting_doc") || watch("Image")
+        if (!currentDocUrl || currentDocUrl !== autoFillDocumentUrl) {
+          // Set document tab tracker
+          setDocumentTab(activeTab)
+          
+          // Set document URL for matching tab
+          if (activeTab === "talks") {
+            setValue("supporting_doc", autoFillDocumentUrl)
+            setValue("Image", autoFillDocumentUrl)
+          } else {
+            setValue("supporting_doc", autoFillDocumentUrl)
+          }
+        }
+      } else {
+        // Document doesn't match current tab - ensure it's cleared
+        const currentDocUrl = watch("supporting_doc") || watch("Image")
+        if (currentDocUrl && currentDocUrl === autoFillDocumentUrl) {
+          // Clear document URL for non-matching tab
+          if (activeTab === "talks") {
+            setValue("supporting_doc", "")
+            setValue("Image", "")
+          } else {
+            setValue("supporting_doc", "")
+          }
+          setDocumentTab(null)
+        }
+      }
+    }
+  }, [activeTab, documentTab, autoFillDocumentUrl, hasAutoFillData, documentData, setValue, watch])
 
   // Handle URL tab parameter
   useEffect(() => {

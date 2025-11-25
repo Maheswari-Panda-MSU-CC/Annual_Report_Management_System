@@ -61,7 +61,23 @@ export function AcademicTalkForm({
                 setValue("Image", docUrl, { shouldValidate: false })
             }
         }
-    }, [isEdit, editData, setValue]);
+    }, [isEdit, editData, setValue])
+
+    // Sync documentUrl with form state (for auto-fill from smart document analyzer)
+    // Talks uses both supporting_doc and Image fields
+    // Only sync if the document URL exists and is not empty
+    useEffect(() => {
+        const formDocUrl = formData.supporting_doc || formData.Image
+        if (formDocUrl && formDocUrl.trim() !== "" && formDocUrl !== documentUrl) {
+            setDocumentUrl(formDocUrl)
+        } else if ((!formData.supporting_doc || formData.supporting_doc.trim() === "") && 
+                   (!formData.Image || formData.Image.trim() === "")) {
+            // Clear document URL if both form state fields are empty
+            if (documentUrl) {
+                setDocumentUrl(undefined)
+            }
+        }
+    }, [formData.supporting_doc, formData.Image, documentUrl])
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

@@ -57,6 +57,20 @@ export function RefresherOrientationForm({
     }
   }, [isEdit, editData, setValue])
 
+  // Sync documentUrl with form state (for auto-fill from smart document analyzer)
+  // Only sync if the document URL exists and is not empty
+  useEffect(() => {
+    const formDocUrl = formData.supporting_doc
+    if (formDocUrl && formDocUrl.trim() !== "" && formDocUrl !== documentUrl) {
+      setDocumentUrl(formDocUrl)
+    } else if (!formDocUrl || formDocUrl.trim() === "") {
+      // Clear document URL if form state is empty
+      if (documentUrl) {
+        setDocumentUrl(undefined)
+      }
+    }
+  }, [formData.supporting_doc, documentUrl])
+
   // Re-validate end date when start date changes
   useEffect(() => {
     if (formData.startdate && formData.enddate) {

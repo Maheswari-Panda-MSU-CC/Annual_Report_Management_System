@@ -254,6 +254,8 @@ export function useTeacherTalksEvents() {
     queryFn: () => fetchAPI(`/api/teacher/talks-events/teacher-talks?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
     staleTime: 3 * 60 * 1000,
+    refetchOnMount: true, // ✅ ADD THIS
+    refetchOnWindowFocus: false,
   })
 
   const academicContri = useQuery({
@@ -261,6 +263,8 @@ export function useTeacherTalksEvents() {
     queryFn: () => fetchAPI(`/api/teacher/talks-events/academic-contri?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
     staleTime: 3 * 60 * 1000,
+    refetchOnMount: true, // ✅ ADD THIS
+    refetchOnWindowFocus: false,
   })
 
   const academicParticipation = useQuery({
@@ -268,6 +272,8 @@ export function useTeacherTalksEvents() {
     queryFn: () => fetchAPI(`/api/teacher/talks-events/acad-bodies-parti?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
     staleTime: 3 * 60 * 1000,
+    refetchOnMount: true, // ✅ ADD THIS
+    refetchOnWindowFocus: false,
   })
 
   const committees = useQuery({
@@ -275,6 +281,8 @@ export function useTeacherTalksEvents() {
     queryFn: () => fetchAPI(`/api/teacher/talks-events/parti-university-committes?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
     staleTime: 3 * 60 * 1000,
+    refetchOnMount: true, // ✅ ADD THIS
+    refetchOnWindowFocus: false,
   })
 
   const refresher = useQuery({
@@ -282,6 +290,8 @@ export function useTeacherTalksEvents() {
     queryFn: () => fetchAPI(`/api/teacher/talks-events/refresher-details?teacherId=${teacherId}`),
     enabled: !!teacherId && teacherId > 0,
     staleTime: 3 * 60 * 1000,
+    refetchOnMount: true, // ✅ CRITICAL: Refetch when component mounts (after invalidation)
+    refetchOnWindowFocus: false,
   })
 
   return {
