@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DocumentViewer } from "@/components/document-viewer"
 import { Skeleton } from "@/components/ui/skeleton"
+import { validatePdfPageCount } from "@/lib/pdf-validation-utils"
 
 interface DocumentUploadProps {
   documentUrl?: string
@@ -23,6 +24,9 @@ interface DocumentUploadProps {
   extractedFields?: Record<string, any>
   className?: string
   hideExtractButton?: boolean // Flag to hide Extract Data Fields button
+  disabled?: boolean // NEW: Disable upload/clear during analysis
+  onClear?: () => void // NEW: Callback when document is cleared
+  onError?: (error: string) => void // NEW: Optional callback for error notifications (e.g., toast)
 }
 
 export function DocumentUpload({
@@ -39,6 +43,9 @@ export function DocumentUpload({
   extractedFields: initialExtractedFields,
   className = "",
   hideExtractButton = false, // Default to false to maintain existing behavior
+  disabled = false, // NEW: Default to false for backward compatibility
+  onClear, // NEW: Optional callback
+  onError, // NEW: Optional error callback for toast notifications
 }: DocumentUploadProps) {
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(initialDocumentUrl)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -103,17 +110,61 @@ export function DocumentUpload({
     // Check file size (1MB max)
     if (file.size > maxFileSize) {
       const maxSizeMB = (maxFileSize / 1024 / 1024).toFixed(0)
-      return `File size exceeds ${maxSizeMB}MB limit. Maximum allowed size is 1MB.`
+      return `File size exceeds ${maxSizeMB}MB limit. Maximum allowed size is ${maxSizeMB}MB.`
     }
 
-    // Validate PDF is single page (basic check - file size for 1 page PDF is typically < 1MB)
+    // Validate PDF is single page - ONLY for PDFs (NOT for images)
     if (fileExtension === "pdf") {
-      // Note: Full PDF page validation would require parsing the PDF
-      // For now, we rely on size limit (1MB) which typically indicates a single page
-      // In production, you might want to add PDF parsing to verify page count
+      try {
+        const pdfValidation = await validatePdfPageCount(file)
+        
+        // STRICT CHECK: Block upload if PDF validation failed
+        // Check if validation explicitly failed (isValid === false)
+        if (pdfValidation.isValid === false) {
+          // If there's an error message, use it; otherwise provide default
+          const errorMsg = pdfValidation.error || `PDF validation failed. Your PDF has ${pdfValidation.pageCount || 'unknown'} page(s). Please ensure your PDF contains exactly 1 page.`
+          
+          console.log("[PDF Validation] BLOCKED:", {
+            pageCount: pdfValidation.pageCount,
+            error: errorMsg,
+            isValid: pdfValidation.isValid
+          })
+          
+          // Return error to block upload
+          return errorMsg
+        }
+        
+        // Additional safety check: if pageCount is explicitly > 1, block even if isValid is true
+        // This is a defensive check in case of any edge cases
+        if (pdfValidation.pageCount !== undefined && pdfValidation.pageCount > 1) {
+          const errorMsg = `PDF must contain exactly 1 page. Your PDF has ${pdfValidation.pageCount} page(s). Please split your PDF into single-page files or use a different document.`
+          console.warn("[PDF Validation] BLOCKED - Page count check:", {
+            pageCount: pdfValidation.pageCount,
+            isValid: pdfValidation.isValid
+          })
+          return errorMsg
+        }
+        
+        // If validation passed (isValid === true), continue - allow upload
+        // This includes cases where library failed gracefully (isValid: true, pageCount: 0)
+        // In that case, backend will validate as a safety measure
+        if (pdfValidation.isValid === true) {
+          console.log("[PDF Validation] PASSED - Allowing upload", {
+            pageCount: pdfValidation.pageCount
+          })
+        }
+      } catch (error: any) {
+        // If validation throws an unexpected error, log but don't block
+        // This handles cases where PDF.js completely fails to load
+        console.warn("[PDF Validation] Library error (allowing upload - backend will validate):", error)
+        // Don't return error - allow upload to proceed
+        // The backend will validate the PDF anyway
+      }
     }
 
-    return null
+    // Images (jpg, jpeg, png) don't need PDF validation - they pass through here
+    // PDFs that passed validation also pass through here
+    return null // Success for images and validated PDFs
   }
 
   // Upload file to local temp folder
@@ -149,17 +200,37 @@ export function DocumentUpload({
 
   // Handle file upload
   const handleFileUpload = async (file: File) => {
+    // Don't upload if disabled
+    if (disabled) {
+      const errorMsg = "Document upload is disabled during analysis."
+      setError(errorMsg)
+      if (onError) {
+        onError(errorMsg)
+      }
+      return
+    }
+
+    // Clear previous errors only when starting a new upload attempt
     setError(null)
     setIsUploading(true)
     setUploadProgress(0)
 
     try {
-      // Validate file (async validation)
+      // Validate file BEFORE uploading (prevents upload if validation fails)
       const validationError = await validateFile(file)
       if (validationError) {
         setError(validationError)
         setIsUploading(false)
-        return
+        setUploadProgress(0)
+        // Don't call onFileSelect if validation fails
+        setUploadedFile(null)
+        
+        // Call onError callback if provided (for toast notifications)
+        if (onError) {
+          onError(validationError)
+        }
+        
+        return // Exit early - don't upload
       }
 
       setUploadProgress(10)
@@ -198,9 +269,16 @@ export function DocumentUpload({
         setUploadProgress(0)
       }, 500)
     } catch (err: any) {
-      setError(err.message || "Failed to upload document")
+      const errorMessage = err.message || "Failed to upload document"
+      setError(errorMessage)
       setIsUploading(false)
       setUploadProgress(0)
+      
+      // Call onError callback if provided (for toast notifications)
+      if (onError) {
+        onError(errorMessage)
+      }
+      
       // Clean up on error - delete temp file if upload failed
       try {
         await deleteTempFile()
@@ -210,14 +288,18 @@ export function DocumentUpload({
     }
   }
 
-  // Handle file drop
+  // Handle file drop (accepted files)
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
+      if (disabled) return // Don't allow file drop if disabled
+      
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0]
         setUploadedFile(file)
         
         // Call onFileSelect callback if provided (for SmartDocumentAnalyzer)
+        // Only call if validation will pass (we'll validate in handleFileUpload)
+        // But we set it here so parent can track the file selection
         if (onFileSelect) {
           onFileSelect(file)
         }
@@ -226,12 +308,51 @@ export function DocumentUpload({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onFileSelect]
+    [onFileSelect, disabled]
+  )
+
+  // Handle rejected files (e.g., file too large, wrong type)
+  const onDropRejected = useCallback(
+    (fileRejections: any[]) => {
+      if (disabled) return
+      
+      if (fileRejections.length > 0) {
+        const rejection = fileRejections[0]
+        const file = rejection.file
+        let errorMessage = "File upload failed."
+        
+        // Check rejection reasons
+        rejection.errors.forEach((error: any) => {
+          if (error.code === "file-too-large") {
+            const maxSizeMB = (maxFileSize / 1024 / 1024).toFixed(0)
+            errorMessage = `File size exceeds ${maxSizeMB}MB limit. Maximum allowed size is ${maxSizeMB}MB.`
+          } else if (error.code === "file-invalid-type") {
+            errorMessage = `Invalid file type. Only ${allowedFileTypes.map((t) => t.toUpperCase()).join(", ")} files are allowed.`
+          } else if (error.code === "too-many-files") {
+            errorMessage = "Only one file is allowed."
+          } else {
+            errorMessage = error.message || "File upload failed."
+          }
+        })
+        
+        setError(errorMessage)
+        setUploadedFile(null)
+        setIsUploading(false)
+        setUploadProgress(0)
+        
+        // Call onError callback if provided (for toast notifications)
+        if (onError) {
+          onError(errorMessage)
+        }
+      }
+    },
+    [disabled, maxFileSize, allowedFileTypes, onError]
   )
 
   // Configure dropzone - only allow jpg, png, pdf
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected, // NEW: Handle rejected files
     accept: {
       "application/pdf": [".pdf"],
       "image/jpeg": [".jpg", ".jpeg"],
@@ -239,7 +360,7 @@ export function DocumentUpload({
     },
     maxSize: maxFileSize,
     multiple: false,
-    disabled: isUploading,
+    disabled: isUploading || disabled, // Disable if uploading OR if disabled prop is true
   })
 
   // Handle Extract Data Fields
@@ -329,6 +450,8 @@ export function DocumentUpload({
 
   // Handle Update Document
   const handleUpdateDocument = () => {
+    if (disabled) return // Don't allow update if disabled
+    
     setShowUploadUI(true)
     setUploadedFile(null)
     setError(null)
@@ -336,12 +459,20 @@ export function DocumentUpload({
 
   // Handle Clear Document
   const handleClearDocument = async () => {
+    if (disabled) return // Don't allow clear if disabled
+    
     // Delete the file from local folder
     await deleteTempFile()
     setDocumentUrl(undefined)
     setShowUploadUI(true)
     setUploadedFile(null)
     setError(null)
+    
+    // Call onClear callback if provided
+    if (onClear) {
+      onClear()
+    }
+    
     if (onChange) {
       onChange("")
     }
@@ -359,7 +490,7 @@ export function DocumentUpload({
   }, [documentUrl])
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-4 ${className} ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       {/* Upload UI */}
       {showUploadUI && (
         <div className="space-y-4">
@@ -369,7 +500,7 @@ export function DocumentUpload({
               isDragActive
                 ? "border-blue-400 bg-blue-50"
                 : "border-gray-300 hover:border-gray-400"
-            } ${isUploading ? "opacity-50 cursor-not-allowed" : ""}`}
+            } ${isUploading || disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           >
             <input {...getInputProps()} />
             {isUploading ? (
@@ -408,15 +539,19 @@ export function DocumentUpload({
                   ({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)
                 </span>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setUploadedFile(null)}>
+              <Button variant="ghost" size="sm" onClick={() => {
+                setUploadedFile(null)
+                setError(null) // Clear error when removing file
+              }}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
           )}
 
+          {/* Error Alert - Always show when there's an error */}
           {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+            <Alert variant="destructive" className="mt-2">
+              <AlertDescription className="font-medium">{error}</AlertDescription>
             </Alert>
           )}
         </div>
@@ -439,7 +574,7 @@ export function DocumentUpload({
             <Button
               variant="outline"
               onClick={handleUpdateDocument}
-              disabled={isUploading}
+              disabled={isUploading || disabled}
               className="flex items-center gap-2"
             >
               <RefreshCw className="h-4 w-4" />
@@ -449,7 +584,7 @@ export function DocumentUpload({
               <Button
                 variant="outline"
                 onClick={handleExtractData}
-                disabled={isExtracting || isUploading}
+                disabled={isExtracting || isUploading || disabled}
                 className="flex items-center gap-2"
               >
                 {isExtracting ? (
@@ -463,7 +598,7 @@ export function DocumentUpload({
             <Button
               variant="ghost"
               onClick={handleClearDocument}
-              disabled={isUploading}
+              disabled={isUploading || disabled}
               className="flex items-center gap-2 text-destructive hover:text-destructive"
             >
               <X className="h-4 w-4" />
@@ -471,9 +606,10 @@ export function DocumentUpload({
             </Button>
           </div>
 
+          {/* Error Alert - Always show when there's an error */}
           {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+            <Alert variant="destructive" className="mt-2">
+              <AlertDescription className="font-medium">{error}</AlertDescription>
             </Alert>
           )}
         </div>

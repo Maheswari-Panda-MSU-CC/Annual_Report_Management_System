@@ -674,12 +674,32 @@ export function SmartDocumentAnalyzer() {
   // Handle file selection from DocumentUpload
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)
+    // Clear all analysis results when new file is selected
     setAnalysis(null)
+    setProgress(0)
+    setIsClassificationCorrect(null)
+    setSelectedCategoryKey(null)
+    setSelectedSubcategoryKey(null)
   }
 
   // Handle document URL change from DocumentUpload (after upload completes)
   const handleDocumentChange = (url: string) => {
     setLocalFileUrl(url)
+    // If document is cleared (empty string), clear all state
+    if (!url || url === "") {
+      handleClearDocument()
+    }
+  }
+
+  // Handle clear document - clears all analysis state
+  const handleClearDocument = () => {
+    setSelectedFile(null)
+    setLocalFileUrl(null)
+    setAnalysis(null)
+    setProgress(0)
+    setIsClassificationCorrect(null)
+    setSelectedCategoryKey(null)
+    setSelectedSubcategoryKey(null)
   }
 
   const handleAnalyze = async () => {
@@ -797,11 +817,36 @@ export function SmartDocumentAnalyzer() {
             documentUrl={localFileUrl || undefined}
             onFileSelect={handleFileSelect}
             onChange={handleDocumentChange}
+            onClear={handleClearDocument}
+            onError={(errorMessage) => {
+              // Show toast notification for validation errors
+              toast({
+                title: "Upload Failed",
+                description: errorMessage,
+                variant: "destructive",
+              })
+            }}
             allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
             maxFileSize={1 * 1024 * 1024}
             className="w-full"
             hideExtractButton={true}
+            disabled={isAnalyzing}
           />
+
+          {/* File Info Display */}
+          {selectedFile && !isAnalyzing && (
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">{selectedFile.name}</span>
+                  <span className="text-xs text-gray-500">
+                    ({(selectedFile.size / 1024).toFixed(2)} KB)
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <Button
             onClick={handleAnalyze}
@@ -821,14 +866,7 @@ export function SmartDocumentAnalyzer() {
             )}
           </Button>
 
-          {isAnalyzing && (
-            <div className="space-y-2">
-              <Progress value={progress} className="w-full" />
-              <p className="text-sm text-gray-600 text-center">
-                AI is analyzing your document...
-              </p>
-            </div>
-          )}
+         
         </div>
 
         {/* Analysis Results */}
