@@ -7,7 +7,9 @@
  * Handles formats like:
  * - "28th January, 2025"
  * - "January 28, 2025"
- * - "28/01/2025"
+ * - "28/01/2025" (DD/MM/YYYY)
+ * - "28-01-2025" (DD-MM-YYYY)
+ * - "28.01.2025" (DD.MM.YYYY)
  * - "2025-01-28"
  */
 export function parseDateString(dateString: string): string | null {
@@ -69,6 +71,52 @@ export function parseDateString(dateString: string): string | null {
       }
     }
     // Try MM/DD/YYYY
+    if (part2 <= 31 && part1 <= 12 && year >= 1900 && year < 2100) {
+      const parsedDate = new Date(year, part1 - 1, part2)
+      if (!isNaN(parsedDate.getTime())) {
+        return formatDate(parsedDate)
+      }
+    }
+  }
+
+  // Try DD-MM-YYYY or MM-DD-YYYY format (dash-separated)
+  const dashParts = cleaned.match(/(\d{1,2})-(\d{1,2})-(\d{4})/)
+  if (dashParts) {
+    const part1 = parseInt(dashParts[1])
+    const part2 = parseInt(dashParts[2])
+    const year = parseInt(dashParts[3])
+
+    // Try DD-MM-YYYY first (more common)
+    if (part1 <= 31 && part2 <= 12 && year >= 1900 && year < 2100) {
+      const parsedDate = new Date(year, part2 - 1, part1)
+      if (!isNaN(parsedDate.getTime())) {
+        return formatDate(parsedDate)
+      }
+    }
+    // Try MM-DD-YYYY
+    if (part2 <= 31 && part1 <= 12 && year >= 1900 && year < 2100) {
+      const parsedDate = new Date(year, part1 - 1, part2)
+      if (!isNaN(parsedDate.getTime())) {
+        return formatDate(parsedDate)
+      }
+    }
+  }
+
+  // NEW: Try DD.MM.YYYY or MM.DD.YYYY format (dot-separated)
+  const dotParts = cleaned.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/)
+  if (dotParts) {
+    const part1 = parseInt(dotParts[1])
+    const part2 = parseInt(dotParts[2])
+    const year = parseInt(dotParts[3])
+
+    // Try DD.MM.YYYY first (more common)
+    if (part1 <= 31 && part2 <= 12 && year >= 1900 && year < 2100) {
+      const parsedDate = new Date(year, part2 - 1, part1)
+      if (!isNaN(parsedDate.getTime())) {
+        return formatDate(parsedDate)
+      }
+    }
+    // Try MM.DD.YYYY
     if (part2 <= 31 && part1 <= 12 && year >= 1900 && year < 2100) {
       const parsedDate = new Date(year, part1 - 1, part2)
       if (!isNaN(parsedDate.getTime())) {

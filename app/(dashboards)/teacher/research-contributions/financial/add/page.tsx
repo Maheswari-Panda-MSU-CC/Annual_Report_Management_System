@@ -44,15 +44,84 @@ export default function AddFinancialPage() {
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
-      if (fields.title || fields.Name_Of_Support) setValue("title", String(fields.title || fields.Name_Of_Support))
-      if (fields.type !== undefined && fields.type !== null) {
-        setValue("type", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+      // Note: fields are already mapped by categories-field-mapping.ts hook
+      // Form field names: nameOfSupport, type, supportingAgency, grantReceived, detailsOfEvent, purposeOfGrant, date
+      
+      // Name of Support - form field is "nameOfSupport"
+      if (fields.nameOfSupport) {
+        setValue("nameOfSupport", String(fields.nameOfSupport))
+      } else if (fields.title) {
+        // Fallback if mapping didn't work
+        setValue("nameOfSupport", String(fields.title))
       }
-      if (fields.agency || fields.Supporting_Agency) setValue("supportingAgency", String(fields.agency || fields.Supporting_Agency))
-      if (fields.amount || fields.Grant_Received) setValue("amount", String(fields.amount || fields.Grant_Received))
-      if (fields.event_details || fields.Details_Of_Event) setValue("detailsOfEvent", String(fields.event_details || fields.Details_Of_Event))
-      if (fields.purpose || fields.Purpose_Of_Grant) setValue("purposeOfGrant", String(fields.purpose || fields.Purpose_Of_Grant))
-      if (fields.date) setValue("date", String(fields.date))
+      
+      // Type - this should already be matched to dropdown ID by the hook
+      if (fields.type !== undefined && fields.type !== null) {
+        if (typeof fields.type === 'number') {
+          setValue("type", fields.type)
+        } else {
+          // If it's a string, try to find matching option
+          const typeOption = financialSupportTypeOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.type).toLowerCase()
+          )
+          if (typeOption) {
+            setValue("type", typeOption.id)
+          } else {
+            const numValue = Number(fields.type)
+            if (!isNaN(numValue)) {
+              setValue("type", numValue)
+            }
+          }
+        }
+      }
+      
+      // Supporting Agency - form field is "supportingAgency"
+      if (fields.supportingAgency) {
+        setValue("supportingAgency", String(fields.supportingAgency))
+      } else if (fields.agency) {
+        // Fallback if mapping didn't work
+        setValue("supportingAgency", String(fields.agency))
+      }
+      
+      // Grant Received - form field is "grantReceived"
+      // Handle comma-separated numbers like "15,000"
+      if (fields.grantReceived !== undefined && fields.grantReceived !== null) {
+        const grantValue = String(fields.grantReceived).replace(/,/g, '').trim()
+        const numValue = Number(grantValue)
+        if (!isNaN(numValue)) {
+          setValue("grantReceived", numValue)
+        } else if (grantValue) {
+          setValue("grantReceived", grantValue)
+        }
+      } else if (fields.amount !== undefined && fields.amount !== null) {
+        // Fallback if mapping didn't work
+        const grantValue = String(fields.amount).replace(/,/g, '').trim()
+        const numValue = Number(grantValue)
+        if (!isNaN(numValue)) {
+          setValue("grantReceived", numValue)
+        }
+      }
+      
+      // Details of Event - form field is "detailsOfEvent"
+      if (fields.detailsOfEvent) {
+        setValue("detailsOfEvent", String(fields.detailsOfEvent))
+      } else if (fields.event_details) {
+        // Fallback if mapping didn't work
+        setValue("detailsOfEvent", String(fields.event_details))
+      }
+      
+      // Purpose of Grant - form field is "purposeOfGrant"
+      if (fields.purposeOfGrant) {
+        setValue("purposeOfGrant", String(fields.purposeOfGrant))
+      } else if (fields.purpose) {
+        // Fallback if mapping didn't work
+        setValue("purposeOfGrant", String(fields.purpose))
+      }
+      
+      // Date - form field is "date"
+      if (fields.date) {
+        setValue("date", String(fields.date))
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(

@@ -41,14 +41,78 @@ export default function AddJrfSrfPage() {
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
-      if (fields.name || fields.Name_Of_Fellow) setValue("name", String(fields.name || fields.Name_Of_Fellow))
-      if (fields.type !== undefined && fields.type !== null) {
-        setValue("type", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+      // Note: fields are already mapped by categories-field-mapping.ts hook
+      // So we use the mapped field names directly (nameOfFellow, projectTitle, monthlyStipend, etc.)
+      
+      // Name of Fellow - form field is "nameOfFellow"
+      if (fields.nameOfFellow) {
+        setValue("nameOfFellow", String(fields.nameOfFellow))
+      } else if (fields.name) {
+        // Fallback if mapping didn't work
+        setValue("nameOfFellow", String(fields.name))
       }
-      if (fields.project_title || fields.Project_Title) setValue("projectTitle", String(fields.project_title || fields.Project_Title))
-      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
-      if (fields.stipend || fields.Monthly_Stipend) setValue("monthlyStipend", String(fields.stipend || fields.Monthly_Stipend))
-      if (fields.date) setValue("date", String(fields.date))
+      
+      // Type - this should already be matched to dropdown ID by the hook
+      // But handle both number (ID) and string (name) cases
+      if (fields.type !== undefined && fields.type !== null) {
+        if (typeof fields.type === 'number') {
+          setValue("type", fields.type)
+        } else {
+          // If it's a string, try to find matching option
+          const typeOption = jrfSrfTypeOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.type).toLowerCase()
+          )
+          if (typeOption) {
+            setValue("type", typeOption.id)
+          } else {
+            // If no match found, try to convert to number (in case it's a string number)
+            const numValue = Number(fields.type)
+            if (!isNaN(numValue)) {
+              setValue("type", numValue)
+            }
+          }
+        }
+      }
+      
+      // Project Title - form field is "projectTitle"
+      if (fields.projectTitle) {
+        setValue("projectTitle", String(fields.projectTitle))
+      }
+      
+      // Duration - form field is "duration"
+      if (fields.duration !== undefined && fields.duration !== null) {
+        const durationValue = typeof fields.duration === 'number' 
+          ? fields.duration 
+          : Number(String(fields.duration).replace(/[^0-9.]/g, ''))
+        if (!isNaN(durationValue)) {
+          setValue("duration", durationValue)
+        }
+      }
+      
+      // Monthly Stipend - form field is "monthlyStipend"
+      // Handle comma-separated numbers like "15,000"
+      if (fields.monthlyStipend !== undefined && fields.monthlyStipend !== null) {
+        const stipendValue = String(fields.monthlyStipend).replace(/,/g, '').trim()
+        const numValue = Number(stipendValue)
+        if (!isNaN(numValue)) {
+          setValue("monthlyStipend", numValue)
+        } else if (stipendValue) {
+          // If it's not a valid number, set as string anyway
+          setValue("monthlyStipend", stipendValue)
+        }
+      } else if (fields.stipend !== undefined && fields.stipend !== null) {
+        // Fallback for "stipend" field name
+        const stipendValue = String(fields.stipend).replace(/,/g, '').trim()
+        const numValue = Number(stipendValue)
+        if (!isNaN(numValue)) {
+          setValue("monthlyStipend", numValue)
+        }
+      }
+      
+      // Date - form field is "date"
+      if (fields.date) {
+        setValue("date", String(fields.date))
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
@@ -248,7 +312,7 @@ export default function AddJrfSrfPage() {
             handleExtractInfo={handleExtractInfo}
             isEdit={false}
             jrfSrfTypeOptions={jrfSrfTypeOptions}
-            initialDocumentUrl={autoFillDocumentUrl}
+            initialDocumentUrl={autoFillDocumentUrl || "undefined"}
           />
           </CardContent>
         </Card>

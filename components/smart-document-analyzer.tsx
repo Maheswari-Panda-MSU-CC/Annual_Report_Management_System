@@ -128,7 +128,32 @@ export function SmartDocumentAnalyzer() {
     const normalizedCategory = normalizeString(category)
     const normalizedSubCategory = normalizeString(subCategory)
 
-    // Try to find matching category
+    // PRIORITY 1: Check if subcategory matches a standalone category first
+    // This handles cases like "Research & Consultancy" + "Research Projects"
+    // where "Research Projects" is a standalone category, not a subcategory
+    if (normalizedSubCategory) {
+      for (const cat of teacherCategories) {
+        const normalizedCatKey = normalizeString(cat.key)
+        const normalizedCatLabel = normalizeString(cat.label)
+        
+        // Check if subcategory matches a standalone category (one without subcategories)
+        if (
+          !cat.subcategories && // Only check standalone categories
+          (
+            normalizedCatKey === normalizedSubCategory ||
+            normalizedCatLabel === normalizedSubCategory ||
+            normalizedSubCategory.includes(normalizedCatKey) ||
+            normalizedCatKey.includes(normalizedSubCategory) ||
+            normalizedSubCategory.includes(normalizedCatLabel) ||
+            normalizedCatLabel.includes(normalizedSubCategory)
+          )
+        ) {
+          return { route: cat.route, label: cat.label }
+        }
+      }
+    }
+
+    // PRIORITY 2: Try to find matching category (existing logic)
     for (const cat of teacherCategories) {
       const normalizedCatKey = normalizeString(cat.key)
       const normalizedCatLabel = normalizeString(cat.label)

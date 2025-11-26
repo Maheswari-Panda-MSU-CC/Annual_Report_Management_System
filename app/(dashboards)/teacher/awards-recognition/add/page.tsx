@@ -40,17 +40,22 @@ export default function AddAwardsPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { toast } = useToast()
-  const [activeTab, setActiveTab] = useState("performance")
+  
+  // Initialize activeTab from URL parameter, default to "performance"
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get("tab")
+    return (tab && ["performance", "awards", "extension"].includes(tab)) ? tab : "performance"
+  })
+  
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
   const [extractionSuccess, setExtractionSuccess] = useState<string | null>(null)
-  const [documentTab, setDocumentTab] = useState<string | null>(null)
   const form = useForm({
     mode: "onSubmit",
     reValidateMode: "onChange",
   })
   const { watch, setValue } = form
-  const prevActiveTabRef = useRef<string>("performance")
+  const prevActiveTabRef = useRef<string>(activeTab)
 
   // Mutation hooks
   const performanceMutations = usePerformanceMutations()
@@ -61,25 +66,12 @@ export default function AddAwardsPage() {
   const isSubmitting = performanceMutations.createMutation.isPending || 
                        awardsMutations.createMutation.isPending || 
                        extensionMutations.createMutation.isPending
-  // Fetch dropdowns (handled internally by useDropDowns hook)
+  
+  // Fetch dropdowns
   const { 
     awardFellowLevelOptions,
     sponserNameOptions
   } = useDropDowns()
-
-  // Determine form type based on active tab
-  const getFormTypeForTab = (tab: string): string => {
-    switch (tab) {
-      case "performance":
-        return "performance"
-      case "awards":
-        return "awards"
-      case "extension":
-        return "extension"
-      default:
-        return "performance"
-    }
-  }
 
   // Get dropdown options for current tab
   const getDropdownOptionsForTab = (tab: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
@@ -100,266 +92,83 @@ export default function AddAwardsPage() {
     }
   }
 
-  // Helper function to check if document matches current tab - STRICTLY MUTUALLY EXCLUSIVE
-  // Must be defined before useMemo that uses it
-  const doesDocumentMatchTab = (tab: string, category?: string, subCategory?: string): boolean => {
-    if (!category && !subCategory) return false
-    
-    const normalizedCategory = (category || "").toLowerCase().trim()
-    const normalizedSubCategory = (subCategory || "").toLowerCase().trim()
-    
-    switch (tab) {
-      case "performance":
-        return (
-          normalizedCategory.includes("performance") ||
-          normalizedSubCategory.includes("performance by individual") ||
-          normalizedSubCategory.includes("performance by group") ||
-          (normalizedCategory.includes("award") && normalizedCategory.includes("performance"))
-        )
-      case "awards":
-        return (
-          normalizedSubCategory.includes("award") ||
-          normalizedSubCategory.includes("fellowship") ||
-          normalizedSubCategory.includes("recognition") ||
-          (normalizedSubCategory.includes("award") && !normalizedSubCategory.includes("performance"))
-        )
-      case "extension":
-        return (
-          normalizedCategory.includes("extension") ||
-          normalizedSubCategory.includes("extension") ||
-          (normalizedCategory.includes("activity") && !normalizedCategory.includes("performance"))
-        )
-      default:
-        return false
-    }
-  }
-
-  // Get document data from context for tab matching
+  // Get document data from context
   const { documentData } = useDocumentAnalysis()
 
-  // Determine formType from document data first, then fallback to active tab
-  const shouldProvideFormType = useMemo(() => {
-    // Only provide formType if document data exists and we can determine it
-    if (documentData?.category && documentData?.subCategory) {
-      const category = documentData.category
-      const subCategory = documentData.subCategory
-      
-      // Use doesDocumentMatchTab to determine which tab this belongs to
-      // Check in priority order (most specific first)
-      if (doesDocumentMatchTab("performance", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: performance", { category, subCategory })
-        }
-        return "performance"
-      } else if (doesDocumentMatchTab("awards", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: awards", { category, subCategory })
-        }
-        return "awards"
-      } else if (doesDocumentMatchTab("extension", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: extension", { category, subCategory })
-        }
-        return "extension"
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[FormType] Could not detect from document data, using active tab", {
-          category,
-          subCategory,
-          activeTab,
-          fallback: getFormTypeForTab(activeTab)
-        })
-      }
-    }
-    // If we can't determine from document data, use active tab
-    return getFormTypeForTab(activeTab)
-  }, [documentData, activeTab])
-
-  // Use auto-fill hook for document analysis data
+  // Use auto-fill hook - formType is same as activeTab
   const { 
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
   } = useAutoFillData({
-    formType: shouldProvideFormType,
+    formType: activeTab, // formType = activeTab (performance/awards/extension)
     dropdownOptions: getDropdownOptionsForTab(activeTab),
     onlyFillEmpty: true,
     getFormValues: () => watch(),
     onAutoFill: (fields) => {
-      console.log(autoFillDataFields)
-      // Only auto-fill if document matches current tab
-      if (!documentData) {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn("[AutoFill] No document data available")
-        }
-        return
-      }
-      
-      const category = documentData.category || documentData.analysis?.classification?.category || ""
-      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
-      
-      const matchesTab = doesDocumentMatchTab(activeTab, category, subCategory)
-      
-      if (!matchesTab) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[AutoFill] Skipped - Document doesn't match current tab", {
-            activeTab,
-            category,
-            subCategory,
-            fieldsCount: Object.keys(fields).length,
-            fields: Object.keys(fields)
-          })
-        }
-        return
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[AutoFill] Filling fields for tab:", activeTab, {
-          fieldsCount: Object.keys(fields).length,
-          fields: Object.keys(fields),
-          sampleValues: Object.fromEntries(Object.entries(fields).slice(0, 3))
-        })
-      }
-      
-      // Map fields based on active tab
+      // Fields are already mapped by categories-field-mapping in the hook
+      // Just fill based on activeTab
       if (activeTab === "performance") {
-        if (fields.name || fields.title_of_performance) setValue("name", String(fields.name || fields.title_of_performance))
+        if (fields.name) setValue("name", String(fields.name))
         if (fields.place) setValue("place", String(fields.place))
-        if (fields.date || fields.performance_date) setValue("date", String(fields.date || fields.performance_date))
-        if (fields.perf_nature || fields.nature_of_performance) setValue("perf_nature", String(fields.perf_nature || fields.nature_of_performance))
+        if (fields.date) setValue("date", String(fields.date))
+        if (fields.perf_nature) setValue("perf_nature", String(fields.perf_nature))
         if (fields.Image) setValue("Image", String(fields.Image))
       } else if (activeTab === "awards") {
-        // Awards form field mapping
         if (fields.name) setValue("name", String(fields.name))
         if (fields.details) setValue("details", String(fields.details))
         if (fields.organization) setValue("organization", String(fields.organization))
         if (fields.address) setValue("address", String(fields.address))
         if (fields.date_of_award) setValue("date_of_award", String(fields.date_of_award))
-        if (fields.level) setValue("level", String(fields.level))
+        if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
         if (fields.Image) setValue("Image", String(fields.Image))
       } else if (activeTab === "extension") {
-        // Extension form field mapping - note: mapping uses "nature" but form uses "names"
-        // and mapping uses "sponsored_by" but form uses "sponsered"
         if (fields.name_of_activity) setValue("name_of_activity", String(fields.name_of_activity))
-        if (fields.names || fields.nature) setValue("names", String(fields.names || fields.nature))
-        if (fields.level) setValue("level", String(fields.level))
-        if (fields.sponsered || fields.sponsored_by) setValue("sponsered", String(fields.sponsered || fields.sponsored_by))
+        if (fields.names) setValue("names", String(fields.names))
+        if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
+        if (fields.sponsered !== undefined && fields.sponsered !== null) setValue("sponsered", Number(fields.sponsered))
         if (fields.place) setValue("place", String(fields.place))
         if (fields.date) setValue("date", String(fields.date))
         if (fields.Image) setValue("Image", String(fields.Image))
+      }
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Auto-filled",
+          description: `Populated ${filledCount} field(s) from document analysis.`,
+        })
       }
     },
     clearAfterUse: false,
   })
 
-  // Debug: Log when auto-fill data is available (development only)
-  useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && hasAutoFillData && documentData) {
-      const category = documentData.category || documentData.analysis?.classification?.category || ""
-      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
-      const matchesTab = doesDocumentMatchTab(activeTab, category, subCategory)
-      
-      console.log("[AutoFill Debug]", {
-        activeTab,
-        formType: shouldProvideFormType,
-        category,
-        subCategory,
-        matchesTab,
-        hasData: hasAutoFillData,
-        dataFieldsCount: Object.keys(autoFillDataFields || {}).length,
-        documentUrl: autoFillDocumentUrl ? "present" : "missing"
-      })
-    }
-  }, [hasAutoFillData, documentData, activeTab, shouldProvideFormType, autoFillDataFields, autoFillDocumentUrl])
-
-  // Handle document URL from auto-fill context - TAB BOUNDED with CLEAR on mismatch
-  // Consolidated logic: Always clear when switching tabs, then set only if matches
-  useEffect(() => {
-    const previousTab = prevActiveTabRef.current
-    prevActiveTabRef.current = activeTab // Update ref for next render
-
-    // Step 1: Always clear document URL when switching tabs (to prevent overlap)
-    if (previousTab && previousTab !== activeTab) {
-      setValue("Image", "")
-      // Clear tracker when switching away
-      setDocumentTab(null)
-    }
-
-    // Step 2: Check if we have document data and if it matches current tab
-    if (autoFillDocumentUrl && hasAutoFillData && documentData) {
-      const category = documentData.category || documentData.analysis?.classification?.category || ""
-      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
-      
-      // Check if document matches current tab using strict matching
-      const matchesCurrentTab = doesDocumentMatchTab(activeTab, category, subCategory)
-      
-      if (matchesCurrentTab) {
-        // Set document tab tracker
-        setDocumentTab(activeTab)
-        
-        // Set document URL for matching tab
-        setValue("Image", autoFillDocumentUrl)
-      } else {
-        // Document doesn't match current tab - ensure it's cleared
-        if (documentTab === activeTab) {
-          setDocumentTab(null)
-        }
-        // Make sure document URL is cleared for non-matching tabs
-        const currentDocUrl = watch("Image")
-        if (currentDocUrl && currentDocUrl === autoFillDocumentUrl) {
-          setValue("Image", "")
-        }
-      }
-    }
-  }, [activeTab, documentTab, autoFillDocumentUrl, hasAutoFillData, documentData, setValue, watch])
-
-  // Handle URL tab parameter on component mount
+  // Handle URL tab parameter changes
   useEffect(() => {
     const tab = searchParams.get("tab")
-    if (tab && ["performance", "awards", "extension"].includes(tab)) {
+    if (tab && ["performance", "awards", "extension"].includes(tab) && tab !== activeTab) {
       setActiveTab(tab)
     }
-  }, [searchParams])
+  }, [searchParams, activeTab])
 
-  // Reset form when tab changes (but preserve auto-filled data if document matches)
+  // Handle document URL - set when document matches current tab
   useEffect(() => {
-    // Check if we have auto-filled data for the new tab
-    const hasAutoFillForTab = hasAutoFillData && documentData && (() => {
-      const category = documentData.category || documentData.analysis?.classification?.category || ""
-      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
-      return doesDocumentMatchTab(activeTab, category, subCategory)
-    })()
+    const previousTab = prevActiveTabRef.current
+    prevActiveTabRef.current = activeTab
 
-    // Only reset if we don't have auto-fill data for this tab
-    // This prevents clearing auto-filled data when switching to the matching tab
-    if (!hasAutoFillForTab) {
-      form.reset({
-        name: "",
-        place: "",
-        date: "",
-        perf_nature: "",
-        details: "",
-        organization: "",
-        address: "",
-        date_of_award: "",
-        level: undefined,
-        name_of_activity: "",
-        names: "",
-        sponsered: undefined,
-        Image: "",
-      })
-      setExtractionError(null)
-      setExtractionSuccess(null)
-      // Clear form errors
-      form.clearErrors()
-    } else {
-      // Just clear errors and extraction status, but keep form data
-      setExtractionError(null)
-      setExtractionSuccess(null)
-      form.clearErrors()
+    // Clear document URL when switching tabs
+    if (previousTab && previousTab !== activeTab) {
+      setValue("Image", "")
     }
-  }, [activeTab, hasAutoFillData, documentData])
+
+    // Set document URL if available and matches current tab
+    if (autoFillDocumentUrl && hasAutoFillData) {
+      setValue("Image", autoFillDocumentUrl)
+    }
+  }, [activeTab, autoFillDocumentUrl, hasAutoFillData, setValue])
 
   // Track uploaded files separately
   const [uploadedFiles, setUploadedFiles] = useState<UploadStatus>({
@@ -374,7 +183,6 @@ export default function AddAwardsPage() {
     awards: false,
     extension: false,
   })
-
 
   const handleExtractInformation = useCallback(
     async (tab: string) => {

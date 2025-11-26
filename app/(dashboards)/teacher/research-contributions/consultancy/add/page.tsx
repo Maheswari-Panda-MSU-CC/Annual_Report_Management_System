@@ -37,13 +37,62 @@ export default function AddConsultancyPage() {
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
-      if (fields.name || fields.title) setValue("title", String(fields.name || fields.title))
-      if (fields.collaborating_inst || fields.collaboratingInstitute) setValue("collaboratingInstitute", String(fields.collaborating_inst || fields.collaboratingInstitute))
-      if (fields.address) setValue("address", String(fields.address))
-      if (fields.Start_Date || fields.startDate) setValue("startDate", String(fields.Start_Date || fields.startDate))
-      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
-      if (fields.amount !== undefined && fields.amount !== null) setValue("amount", String(fields.amount))
-      if (fields.details || fields.detailsOutcome) setValue("detailsOutcome", String(fields.details || fields.detailsOutcome))
+      // Note: fields are already mapped by categories-field-mapping.ts hook
+      // Form field names: title, collaboratingInstitute, address, startDate, duration, amount, detailsOutcome
+      
+      // Title - form field is "title"
+      if (fields.title) {
+        setValue("title", String(fields.title))
+      } else if (fields.name) {
+        // Fallback if mapping didn't work (backend uses name, form uses title)
+        setValue("title", String(fields.name))
+      }
+      
+      // Collaborating Institute - form field is "collaboratingInstitute"
+      if (fields.collaboratingInstitute) {
+        setValue("collaboratingInstitute", String(fields.collaboratingInstitute))
+      } else if (fields.collaborating_inst) {
+        // Fallback if mapping didn't work
+        setValue("collaboratingInstitute", String(fields.collaborating_inst))
+      }
+      
+      // Address
+      if (fields.address) {
+        setValue("address", String(fields.address))
+      }
+      
+      // Start Date - form field is "startDate"
+      if (fields.startDate) {
+        setValue("startDate", String(fields.startDate))
+      } else if (fields.Start_Date) {
+        // Fallback if mapping didn't work
+        setValue("startDate", String(fields.Start_Date))
+      }
+      
+      // Duration
+      if (fields.duration !== undefined && fields.duration !== null) {
+        setValue("duration", Number(fields.duration))
+      }
+      
+      // Amount
+      if (fields.amount !== undefined && fields.amount !== null) {
+        // Handle comma-separated numbers
+        const amountValue = String(fields.amount).replace(/,/g, '').trim()
+        const numValue = Number(amountValue)
+        if (!isNaN(numValue)) {
+          setValue("amount", numValue)
+        } else {
+          setValue("amount", amountValue)
+        }
+      }
+      
+      // Details / Outcome - form field is "detailsOutcome"
+      if (fields.detailsOutcome) {
+        setValue("detailsOutcome", String(fields.detailsOutcome))
+      } else if (fields.details) {
+        // Fallback if mapping didn't work
+        setValue("detailsOutcome", String(fields.details))
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(

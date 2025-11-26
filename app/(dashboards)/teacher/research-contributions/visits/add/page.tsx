@@ -41,15 +41,72 @@ export default function AddVisitsPage() {
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
-      if (fields.Institute_visited || fields.instituteVisited) setValue("instituteVisited", String(fields.Institute_visited || fields.instituteVisited))
-      if (fields.duration || fields.durationOfVisit) setValue("durationOfVisit", String(fields.duration || fields.durationOfVisit))
-      if (fields.role || fields.Acad_research_Role_Id) {
-        const roleValue = fields.role || fields.Acad_research_Role_Id
-        setValue("role", typeof roleValue === 'number' ? roleValue : Number(roleValue))
+      // Note: fields are already mapped by categories-field-mapping.ts hook
+      // Form field names: instituteVisited, durationOfVisit, role, sponsoredBy, remarks, date
+      
+      // Institute Visited - form field is "instituteVisited"
+      if (fields.instituteVisited) {
+        setValue("instituteVisited", String(fields.instituteVisited))
+      } else if (fields.institute) {
+        // Fallback if mapping didn't work
+        setValue("instituteVisited", String(fields.institute))
       }
-      if (fields.Sponsored_by || fields.sponsoredBy) setValue("sponsoredBy", String(fields.Sponsored_by || fields.sponsoredBy))
-      if (fields.remarks) setValue("remarks", String(fields.remarks))
-      if (fields.date) setValue("date", String(fields.date))
+      
+      // Duration of Visit - form field is "durationOfVisit"
+      if (fields.durationOfVisit !== undefined && fields.durationOfVisit !== null) {
+        const durationValue = typeof fields.durationOfVisit === 'number' 
+          ? fields.durationOfVisit 
+          : Number(String(fields.durationOfVisit).replace(/[^0-9.]/g, ''))
+        if (!isNaN(durationValue)) {
+          setValue("durationOfVisit", durationValue)
+        }
+      } else if (fields.duration !== undefined && fields.duration !== null) {
+        // Fallback if mapping didn't work
+        const durationValue = typeof fields.duration === 'number' 
+          ? fields.duration 
+          : Number(String(fields.duration).replace(/[^0-9.]/g, ''))
+        if (!isNaN(durationValue)) {
+          setValue("durationOfVisit", durationValue)
+        }
+      }
+      
+      // Role - this should already be matched to dropdown ID by the hook
+      if (fields.role !== undefined && fields.role !== null) {
+        if (typeof fields.role === 'number') {
+          setValue("role", fields.role)
+        } else {
+          // If it's a string, try to find matching option
+          const roleOption = academicVisitRoleOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.role).toLowerCase()
+          )
+          if (roleOption) {
+            setValue("role", roleOption.id)
+          } else {
+            const numValue = Number(fields.role)
+            if (!isNaN(numValue)) {
+              setValue("role", numValue)
+            }
+          }
+        }
+      }
+      
+      // Sponsored By - form field is "sponsoredBy"
+      if (fields.sponsoredBy) {
+        setValue("sponsoredBy", String(fields.sponsoredBy))
+      } else if (fields.sponsored_by) {
+        // Fallback if mapping didn't work
+        setValue("sponsoredBy", String(fields.sponsored_by))
+      }
+      
+      // Remarks
+      if (fields.remarks) {
+        setValue("remarks", String(fields.remarks))
+      }
+      
+      // Date
+      if (fields.date) {
+        setValue("date", String(fields.date))
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(

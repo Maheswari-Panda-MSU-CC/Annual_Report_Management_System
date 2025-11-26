@@ -43,14 +43,72 @@ export default function AddPhdPage() {
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
-      if (fields.regno || fields.Reg_No) setValue("regno", String(fields.regno || fields.Reg_No))
-      if (fields.name || fields.Name_of_Student) setValue("name", String(fields.name || fields.Name_of_Student))
-      if (fields.start_date || fields.Date_of_Registration) setValue("startDate", String(fields.start_date || fields.Date_of_Registration))
-      if (fields.topic || fields.Topic) setValue("topic", String(fields.topic || fields.Topic))
-      if (fields.status !== undefined && fields.status !== null) {
-        setValue("status", typeof fields.status === 'number' ? fields.status : Number(fields.status))
+      // Note: fields are already mapped by categories-field-mapping.ts hook
+      // Form field names: regNo, nameOfStudent, dateOfRegistration, topic, status, yearOfCompletion
+      
+      // Registration Number - form field is "regNo"
+      if (fields.regNo) {
+        setValue("regNo", String(fields.regNo))
+      } else if (fields.regno) {
+        // Fallback if mapping didn't work
+        setValue("regNo", String(fields.regno))
       }
-      if (fields.completion_year || fields.Year_of_Completion) setValue("completionYear", String(fields.completion_year || fields.Year_of_Completion))
+      
+      // Name of Student - form field is "nameOfStudent"
+      if (fields.nameOfStudent) {
+        setValue("nameOfStudent", String(fields.nameOfStudent))
+      } else if (fields.name) {
+        // Fallback if mapping didn't work
+        setValue("nameOfStudent", String(fields.name))
+      }
+      
+      // Date of Registration - form field is "dateOfRegistration"
+      if (fields.dateOfRegistration) {
+        setValue("dateOfRegistration", String(fields.dateOfRegistration))
+      } else if (fields.start_date) {
+        // Fallback if mapping didn't work
+        setValue("dateOfRegistration", String(fields.start_date))
+      }
+      
+      // Topic - form field is "topic"
+      if (fields.topic) {
+        setValue("topic", String(fields.topic))
+      }
+      
+      // Status - this should already be matched to dropdown ID by the hook
+      if (fields.status !== undefined && fields.status !== null) {
+        if (typeof fields.status === 'number') {
+          setValue("status", fields.status)
+        } else {
+          // If it's a string, try to find matching option
+          const statusOption = phdGuidanceStatusOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.status).toLowerCase()
+          )
+          if (statusOption) {
+            setValue("status", statusOption.id)
+          } else {
+            // If no match found, try to convert to number
+            const numValue = Number(fields.status)
+            if (!isNaN(numValue)) {
+              setValue("status", numValue)
+            }
+          }
+        }
+      }
+      
+      // Year of Completion - form field is "yearOfCompletion"
+      if (fields.yearOfCompletion !== undefined && fields.yearOfCompletion !== null) {
+        const yearValue = String(fields.yearOfCompletion).replace(/[^0-9]/g, '')
+        if (yearValue) {
+          setValue("yearOfCompletion", Number(yearValue))
+        }
+      } else if (fields.completion_year !== undefined && fields.completion_year !== null) {
+        // Fallback if mapping didn't work
+        const yearValue = String(fields.completion_year).replace(/[^0-9]/g, '')
+        if (yearValue) {
+          setValue("yearOfCompletion", Number(yearValue))
+        }
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(

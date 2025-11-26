@@ -76,6 +76,7 @@ export default function AddResearchPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      console.log("RESEARCH PROJECTS fields", fields)
       // Auto-fill form fields from document analysis
       if (fields.title) setValue("title", String(fields.title))
       if (fields.funding_agency !== undefined && fields.funding_agency !== null) setValue("funding_agency", Number(fields.funding_agency))

@@ -30,8 +30,6 @@ export function JrfSrfForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
   handleFileSelect = () => {},
   handleExtractInfo = () => {},
   isEdit = false,

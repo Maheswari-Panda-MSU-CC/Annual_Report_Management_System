@@ -30,62 +30,20 @@ import {
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
-interface RefresherForm {
-  name: string
-  courseType: string
-  startDate: string
-  endDate: string
-  organizingUniversity: string
-  organizingInstitute: string
-  organizingDepartment: string
-  centre: string
-  supportingDocument: string
-}
-
-interface ContributionForm {
-  name: string
-  programme: string
-  place: string
-  date: string
-  year: string
-  participatedAs: string
-  supportingDocument: string
-}
-
-interface AcademicBodyForm {
-  courseTitle: string
-  academicBody: string
-  place: string
-  participatedAs: string
-  year: string
-  supportingDocument: string
-}
-
-interface CommitteeForm {
-  name: string
-  committeeName: string
-  level: string
-  participatedAs: string
-  year: string
-  supportingDocument: string
-}
-
-interface TalksForm {
-  name: string
-  programme: string
-  place: string
-  talkDate: string
-  titleOfEvent: string
-  participatedAs: string
-  supportingDocument: string
-}
 
 export default function AddEventPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const { user } = useAuth()
-  const [activeTab, setActiveTab] = useState("refresher")
+  
+  // Initialize activeTab from URL parameter, default to "refresher"
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get("tab")
+    return (tab && ["refresher", "academic-programs", "academic-bodies", "committees", "talks"].includes(tab)) 
+      ? tab 
+      : "refresher"
+  })
   const [isExtracting, setIsExtracting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm()
@@ -109,19 +67,12 @@ export default function AddEventPage() {
   // Fetch dropdowns
   const { 
     refresherTypeOptions,
-    fetchRefresherTypes,
     academicProgrammeOptions,
     participantTypeOptions,
-    fetchAcademicProgrammes,
-    fetchParticipantTypes,
     reportYearsOptions,
-    fetchReportYears,
     committeeLevelOptions,
-    fetchCommitteeLevels,
     talksProgrammeTypeOptions,
     talksParticipantTypeOptions,
-    fetchTalksProgrammeTypes,
-    fetchTalksParticipantTypes
   } = useDropDowns()
 
   // Determine form type based on active tab
@@ -143,7 +94,7 @@ export default function AddEventPage() {
   }
 
   // Get dropdown options for current tab
-  const getDropdownOptionsForTab = (tab: string) => {
+  const getDropdownOptionsForTab = (tab: string): Record<string, Array<{ id: number | string; name: string }>> => {
     switch (tab) {
       case "refresher":
         return {
@@ -234,62 +185,13 @@ export default function AddEventPage() {
     }
   }
 
-  // Use auto-fill hook for document analysis data
-  // Determine formType from document data first, then fallback to active tab
-  const shouldProvideFormType = useMemo(() => {
-    // Only provide formType if document data exists and we can determine it
-    if (documentData?.category && documentData?.subCategory) {
-      const category = documentData.category
-      const subCategory = documentData.subCategory
-      
-      // Use doesDocumentMatchTab to determine which tab this belongs to
-      // Check in priority order (most specific first)
-      if (doesDocumentMatchTab("academic-bodies", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: academic-bodies", { category, subCategory })
-        }
-        return "academic-bodies"
-      } else if (doesDocumentMatchTab("academic-programs", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: academic-programs", { category, subCategory })
-        }
-        return "academic-programs"
-      } else if (doesDocumentMatchTab("refresher", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: refresher", { category, subCategory })
-        }
-        return "refresher"
-      } else if (doesDocumentMatchTab("committees", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: committees", { category, subCategory })
-        }
-        return "committees"
-      } else if (doesDocumentMatchTab("talks", category, subCategory)) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[FormType] Detected: talks", { category, subCategory })
-        }
-        return "talks"
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[FormType] Could not detect from document data, using active tab", {
-          category,
-          subCategory,
-          activeTab,
-          fallback: getFormTypeForTab(activeTab)
-        })
-      }
-    }
-    // If we can't determine from document data, use active tab
-    return getFormTypeForTab(activeTab)
-  }, [documentData, activeTab])
-
+  // Use auto-fill hook - formType is same as activeTab (like awards-recognition)
   const { 
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
   } = useAutoFillData({
-    formType: shouldProvideFormType,
+    formType: activeTab, // formType = activeTab (refresher/academic-programs/academic-bodies/committees/talks)
     dropdownOptions: getDropdownOptionsForTab(activeTab),
     onlyFillEmpty: true,
     getFormValues: () => watch(),
@@ -327,15 +229,26 @@ export default function AddEventPage() {
       }
       // Map fields based on active tab
       if (activeTab === "refresher") {
-        // Note: categories-field-mapping.ts maps to "course_type", "start_date", "end_date", "organizing_university", etc.
-        // but form uses "refresher_type", "startdate", "enddate", "university", etc.
         if (fields.name) setValue("name", String(fields.name))
-        if (fields.refresher_type || fields.course_type) setValue("refresher_type", String(fields.refresher_type || fields.course_type))
-        if (fields.startdate || fields.start_date) setValue("startdate", String(fields.startdate || fields.start_date))
-        if (fields.enddate || fields.end_date) setValue("enddate", String(fields.enddate || fields.end_date))
-        if (fields.university || fields.organizing_university) setValue("university", String(fields.university || fields.organizing_university))
-        if (fields.institute || fields.organizing_institute) setValue("institute", String(fields.institute || fields.organizing_institute))
-        if (fields.department || fields.organizing_department) setValue("department", String(fields.department || fields.organizing_department))
+        if (fields.refresher_type || fields.course_type) {
+          setValue("refresher_type", String(fields.refresher_type || fields.course_type))
+        }
+        // Check mapped field names first (start_date, end_date), then form field names
+        if (fields.start_date || fields.startdate) {
+          setValue("startdate", String(fields.start_date || fields.startdate))
+        }
+        if (fields.end_date || fields.enddate) {
+          setValue("enddate", String(fields.end_date || fields.enddate))
+        }
+        if (fields.organizing_university || fields.university) {
+          setValue("university", String(fields.organizing_university || fields.university))
+        }
+        if (fields.organizing_institute || fields.institute) {
+          setValue("institute", String(fields.organizing_institute || fields.institute))
+        }
+        if (fields.organizing_department || fields.department) {
+          setValue("department", String(fields.organizing_department || fields.department))
+        }
         if (fields.centre) setValue("centre", String(fields.centre))
         if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
       } else if (activeTab === "academic-programs") {
@@ -408,7 +321,7 @@ export default function AddEventPage() {
       
       console.log("[AutoFill Debug]", {
         activeTab,
-        formType: shouldProvideFormType,
+        formType: activeTab,
         category,
         subCategory,
         matchesTab,
@@ -417,7 +330,7 @@ export default function AddEventPage() {
         documentUrl: autoFillDocumentUrl ? "present" : "missing"
       })
     }
-  }, [hasAutoFillData, documentData, activeTab, shouldProvideFormType, autoFillDataFields, autoFillDocumentUrl])
+  }, [hasAutoFillData, documentData, activeTab, autoFillDataFields, autoFillDocumentUrl])
 
   // Track previous tab to detect tab changes
   const prevActiveTabRef = useRef<string>(activeTab)
@@ -481,13 +394,45 @@ export default function AddEventPage() {
     }
   }, [activeTab, documentTab, autoFillDocumentUrl, hasAutoFillData, documentData, setValue, watch])
 
-  // Handle URL tab parameter
+  // Handle URL tab parameter changes
   useEffect(() => {
     const tab = searchParams.get("tab")
-    if (tab && ["refresher", "academic-programs", "academic-bodies", "committees", "talks"].includes(tab)) {
+    if (tab && ["refresher", "academic-programs", "academic-bodies", "committees", "talks"].includes(tab) && tab !== activeTab) {
       setActiveTab(tab)
     }
-  }, [searchParams])
+  }, [searchParams, activeTab])
+  
+  // Auto-switch tab based on document data if no URL tab is specified
+  const hasAutoSwitchedRef = useRef(false)
+  useEffect(() => {
+    // Only auto-switch if:
+    // 1. No URL tab parameter is set
+    // 2. Document data is available
+    // 3. We haven't already auto-switched
+    const urlTab = searchParams.get("tab")
+    if (!urlTab && documentData?.category && documentData?.subCategory && !hasAutoSwitchedRef.current) {
+      const category = documentData.category
+      const subCategory = documentData.subCategory
+      
+      // Check in priority order (most specific first)
+      if (doesDocumentMatchTab("academic-bodies", category, subCategory)) {
+        setActiveTab("academic-bodies")
+        hasAutoSwitchedRef.current = true
+      } else if (doesDocumentMatchTab("academic-programs", category, subCategory)) {
+        setActiveTab("academic-programs")
+        hasAutoSwitchedRef.current = true
+      } else if (doesDocumentMatchTab("talks", category, subCategory)) {
+        setActiveTab("talks")
+        hasAutoSwitchedRef.current = true
+      } else if (doesDocumentMatchTab("committees", category, subCategory)) {
+        setActiveTab("committees")
+        hasAutoSwitchedRef.current = true
+      } else if (doesDocumentMatchTab("refresher", category, subCategory)) {
+        setActiveTab("refresher")
+        hasAutoSwitchedRef.current = true
+      }
+    }
+  }, [documentData, searchParams])
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {

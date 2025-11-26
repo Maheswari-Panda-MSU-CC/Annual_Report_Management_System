@@ -99,7 +99,7 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
     "Publishing Place": "publishing_place",
     "Charges Paid": "charges_paid",
     "Edited": "edited",
-    "Chapter Count": "chapter_count",
+    "Chapter Count": "chap_count",
     "Publishing Level": "publishing_level",
     "Book Type": "book_type",
     "Author Type": "author_type",
@@ -122,12 +122,27 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
   // Patents
   patents: {
     "Title": "title",
+    "title": "title",  // Add alias
     "Level": "level",
+    "level": "level",  // Add alias
     "Status": "status",
+    "status": "status",  // Add alias
     "Date": "date",
-    "Transfer of Technology with Licence": "transfer_of_technology",
-    "Earning Generated (Rupees)": "earning_generated",
+    "date": "date",  // Add alias
+    "Transfer of Technology with Licence": "Tech_Licence",
+    "transfer of technology with licence": "Tech_Licence",
+    "Transfer_of_Technology_with_Licence": "Tech_Licence",
+    "transfer_of_technology": "Tech_Licence",  // Add alias
+    "Tech_Licence": "Tech_Licence",  // Direct alias
+    "Earning Generated (Rupees)": "Earnings_Generate",
+    "earning generated rupees": "Earnings_Generate",
+    "Earning_Generated_Rupees": "Earnings_Generate",
+    "earning_generated": "Earnings_Generate",  // Add alias
+    "Earnings_Generate": "Earnings_Generate",  // Direct alias
     "Patent Application/Publication/Grant No.": "PatentApplicationNo",
+    "patent application publication grant no": "PatentApplicationNo",
+    "Patent_Application_Publication_Grant_No": "PatentApplicationNo",
+    "PatentApplicationNo": "PatentApplicationNo",  // Direct alias
   },
 
   // Policy Documents
@@ -141,83 +156,211 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
   // E-Content
   econtent: {
     "Title": "title",
+    "title": "title",  // Add alias
     "Type of E-Content Platform": "type",
-    "Brief Details": "brief_details",
+    "type": "type",  // Add alias
+    "Brief Details": "briefDetails",
+    "brief details": "briefDetails",
+    "Brief_Details": "briefDetails",
+    "brief_details": "briefDetails",  // Add alias
+    "briefDetails": "briefDetails",  // Direct alias
     "Quadrant": "quadrant",
-    "Publishing Date": "Publishing_date",
-    "Publishing Authorities": "Publishing_Authorities",
+    "quadrant": "quadrant",  // Add alias
+    "Publishing Date": "publishingDate",
+    "publishing date": "publishingDate",
+    "Publishing_Date": "publishingDate",
+    "Publishing_date": "publishingDate",  // Add alias
+    "publishingDate": "publishingDate",  // Direct alias
+    "Publishing Authorities": "publishingAuthorities",
+    "publishing authorities": "publishingAuthorities",
+    "Publishing_Authorities": "publishingAuthorities",
+    "publishingAuthorities": "publishingAuthorities",  // Direct alias
     "Link": "link",
+    "link": "link",  // Add alias
     "Type of E Content": "type",
   },
 
   // Consultancy
   consultancy: {
-    "Title": "name",
-    "Collaborating Institute / Industry": "collaborating_inst",
+    "Title": "title",
+    "title": "title",  // Add alias
+    "name": "title",  // Backend uses name, form uses title
+    "Collaborating Institute / Industry": "collaboratingInstitute",
+    "collaborating institute / industry": "collaboratingInstitute",
+    "Collaborating_Institute_Industry": "collaboratingInstitute",
+    "collaborating_inst": "collaboratingInstitute",  // Backend uses collaborating_inst, form uses collaboratingInstitute
+    "collaboratingInstitute": "collaboratingInstitute",  // Direct alias
     "Address": "address",
-    "Start Date": "Start_Date",
+    "address": "address",  // Add alias
+    "Start Date": "startDate",
+    "start date": "startDate",
+    "Start_Date": "startDate",
+    "startDate": "startDate",  // Direct alias
     "Duration(in Months)": "duration",
+    "duration": "duration",  // Add alias
     "Amount(Rs.)": "amount",
-    "Details / Outcome": "details",
+    "amount": "amount",  // Add alias
+    "Details / Outcome": "detailsOutcome",
+    "details / outcome": "detailsOutcome",
+    "Details_Outcome": "detailsOutcome",
+    "details": "detailsOutcome",  // Backend uses details, form uses detailsOutcome
+    "detailsOutcome": "detailsOutcome",  // Direct alias
   },
 
   // Collaborations
   collaborations: {
     "Category": "category",
-    "Collaborating Institute": "collaborating_inst",
-    "Name of Collaborator(At other institute)": "collab_name",
-    "QS/THE World University Ranking of Institute": "qs_ranking",
+    "category": "category",  // Add alias
+    "Collaborating Institute": "collaboratingInstitute",
+    "collaborating institute": "collaboratingInstitute",
+    "Collaborating_Institute": "collaboratingInstitute",
+    "collaborating_inst": "collaboratingInstitute",  // Backend uses collaborating_inst, form uses collaboratingInstitute
+    "collaboratingInstitute": "collaboratingInstitute",  // Direct alias
+    "Name of Collaborator(At other institute)": "collabName",
+    "name of collaborator": "collabName",
+    "Name_of_Collaborator": "collabName",
+    "collab_name": "collabName",  // Backend uses collab_name, form uses collabName
+    "collabName": "collabName",  // Direct alias
+    "QS/THE World University Ranking of Institute": "collabRank",
+    "qs the world university ranking": "collabRank",
+    "QS_THE_World_University_Ranking": "collabRank",
+    "qs_ranking": "collabRank",  // Backend uses qs_ranking, form uses collabRank
+    "collabRank": "collabRank",  // Direct alias
     "Address": "address",
+    "address": "address",  // Add alias
     "Details": "details",
-    "Collaboration Outcome": "outcome",
+    "details": "details",  // Add alias
+    "Collaboration Outcome": "collabOutcome",
+    "collaboration outcome": "collabOutcome",
+    "Collaboration_Outcome": "collabOutcome",
+    "outcome": "collabOutcome",  // Backend uses outcome, form uses collabOutcome
+    "collabOutcome": "collabOutcome",  // Direct alias
     "Status": "status",
-    "Starting Date": "starting_date",
+    "status": "status",  // Add alias
+    "Starting Date": "startingDate",
+    "starting date": "startingDate",
+    "Starting_Date": "startingDate",
+    "starting_date": "startingDate",
+    "startingDate": "startingDate",  // Direct alias
     "Duration(months)": "duration",
+    "duration": "duration",  // Add alias
     "Level": "level",
-    "No. of Beneficiary": "beneficiary_count",
-    "MOU Signed?": "mou_signed",
-    "Signing Date": "signing_date",
+    "level": "level",  // Add alias
+    "No. of Beneficiary": "noOfBeneficiary",
+    "no of beneficiary": "noOfBeneficiary",
+    "No_of_Beneficiary": "noOfBeneficiary",
+    "beneficiary_count": "noOfBeneficiary",
+    "beneficiary_num": "noOfBeneficiary",
+    "noOfBeneficiary": "noOfBeneficiary",  // Direct alias
+    "MOU Signed?": "mouSigned",
+    "mou signed": "mouSigned",
+    "MOU_Signed": "mouSigned",
+    "mou_signed": "mouSigned",
+    "mouSigned": "mouSigned",  // Direct alias
+    "Signing Date": "signingDate",
+    "signing date": "signingDate",
+    "Signing_Date": "signingDate",
+    "signing_date": "signingDate",
+    "signingDate": "signingDate",  // Direct alias
   },
 
   // Visits
   visits: {
-    "Institute/Industry Visited": "institute",
-    "Duration of Visit(days)": "duration",
+    "Institute/Industry Visited": "instituteVisited",
+    "institute industry visited": "instituteVisited",
+    "Institute_Industry_Visited": "instituteVisited",
+    "institute": "instituteVisited",  // Backend uses institute, form uses instituteVisited
+    "instituteVisited": "instituteVisited",  // Direct alias
+    "Duration of Visit(days)": "durationOfVisit",
+    "duration of visit days": "durationOfVisit",
+    "Duration_of_Visit_days": "durationOfVisit",
+    "duration": "durationOfVisit",  // Backend uses duration, form uses durationOfVisit
+    "durationOfVisit": "durationOfVisit",  // Direct alias
     "Role": "role",
-    "Sponsored By": "sponsored_by",
+    "role": "role",  // Add alias
+    "Sponsored By": "sponsoredBy",
+    "sponsored by": "sponsoredBy",
+    "Sponsored_By": "sponsoredBy",
+    "sponsored_by": "sponsoredBy",  // Backend uses sponsored_by, form uses sponsoredBy
+    "sponsoredBy": "sponsoredBy",  // Direct alias
     "Remarks": "remarks",
+    "remarks": "remarks",  // Add alias
     "Date": "date",
+    "date": "date",  // Add alias
   },
 
   // Financial Support
   financial: {
-    "Name Of Support": "title",
+    "Name Of Support": "nameOfSupport",
+    "name of support": "nameOfSupport",
+    "Name_Of_Support": "nameOfSupport",
+    "title": "nameOfSupport",  // Mapping was wrong, form uses nameOfSupport
+    "nameOfSupport": "nameOfSupport",  // Direct alias
     "Type": "type",
-    "Supporting Agency": "agency",
-    "Grant Received": "amount",
-    "Details Of Event": "event_details",
-    "Purpose Of Grant": "purpose",
+    "type": "type",  // Add alias
+    "Supporting Agency": "supportingAgency",
+    "supporting agency": "supportingAgency",
+    "Supporting_Agency": "supportingAgency",
+    "agency": "supportingAgency",  // Mapping was wrong, form uses supportingAgency
+    "supportingAgency": "supportingAgency",  // Direct alias
+    "Grant Received": "grantReceived",
+    "grant received": "grantReceived",
+    "Grant_Received": "grantReceived",
+    "amount": "grantReceived",  // Mapping was wrong, form uses grantReceived
+    "grantReceived": "grantReceived",  // Direct alias
+    "Details Of Event": "detailsOfEvent",
+    "details of event": "detailsOfEvent",
+    "Details_Of_Event": "detailsOfEvent",
+    "event_details": "detailsOfEvent",
+    "detailsOfEvent": "detailsOfEvent",  // Direct alias
+    "Purpose Of Grant": "purposeOfGrant",
+    "purpose of grant": "purposeOfGrant",
+    "Purpose_Of_Grant": "purposeOfGrant",
+    "purpose": "purposeOfGrant",
+    "purposeOfGrant": "purposeOfGrant",  // Direct alias
     "Date": "date",
+    "date": "date",  // Add alias
   },
 
   // JRF/SRF
   "jrf-srf": {
-    "Name Of Fellow": "name",
+    "Name Of Fellow": "nameOfFellow",
+    "name": "nameOfFellow",
     "Type": "type",
-    "Project Title": "project_title",
+    "Project Title": "projectTitle",
+    "project_title": "projectTitle",
     "Duration [in months]": "duration",
-    "Monthly Stipend": "stipend",
+    "Monthly Stipend": "monthlyStipend",
+    "stipend": "monthlyStipend",
     "Date": "date",
   },
 
   // PhD Guidance
   phd: {
-    "Reg No": "regno",
-    "Name of Student": "name",
-    "Date of Registration": "start_date",
+    "Reg No": "regNo",
+    "reg no": "regNo",
+    "Reg_No": "regNo",
+    "regno": "regNo",  // Backend uses regno, form uses regNo
+    "regNo": "regNo",  // Direct alias
+    "Name of Student": "nameOfStudent",
+    "name of student": "nameOfStudent",
+    "Name_of_Student": "nameOfStudent",
+    "name": "nameOfStudent",  // Backend uses name, form uses nameOfStudent
+    "nameOfStudent": "nameOfStudent",  // Direct alias
+    "Date of Registration": "dateOfRegistration",
+    "date of registration": "dateOfRegistration",
+    "Date_of_Registration": "dateOfRegistration",
+    "start_date": "dateOfRegistration",  // Backend uses start_date, form uses dateOfRegistration
+    "dateOfRegistration": "dateOfRegistration",  // Direct alias
     "Topic": "topic",
+    "topic": "topic",  // Add alias
     "Status": "status",
-    "Year of Completion": "completion_year",
+    "status": "status",  // Add alias
+    "Year of Completion": "yearOfCompletion",
+    "year of completion": "yearOfCompletion",
+    "Year_of_Completion": "yearOfCompletion",
+    "completion_year": "yearOfCompletion",  // Backend uses completion_year, form uses yearOfCompletion
+    "yearOfCompletion": "yearOfCompletion",  // Direct alias
   },
 
   // Copyrights
@@ -231,13 +374,39 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
   // Refresher/Orientation
   refresher: {
     "Name": "name",
+    "name": "name",  // Add alias
     "Course Type": "course_type",
+    "course type": "course_type",
+    "Course_Type": "course_type",
+    "course_type": "course_type",  // Add alias
+    "refresher_type": "course_type",  // Form uses refresher_type, map to course_type
     "Start Date": "start_date",
+    "start date": "start_date",
+    "Start_Date": "start_date",
+    "start_date": "start_date",  // Add alias
+    "startdate": "start_date",  // Form field name alias
     "End Date": "end_date",
+    "end date": "end_date",
+    "End_Date": "end_date",
+    "end_date": "end_date",  // Add alias
+    "enddate": "end_date",  // Form field name alias
     "Orgnizing University": "organizing_university",
+    "organizing university": "organizing_university",
+    "Orgnizing_University": "organizing_university",
+    "organizing_university": "organizing_university",  // Add alias
+    "university": "organizing_university",  // Form field name alias
     "Orgnizing Institute": "organizing_institute",
+    "organizing institute": "organizing_institute",
+    "Orgnizing_Institute": "organizing_institute",
+    "organizing_institute": "organizing_institute",  // Add alias
+    "institute": "organizing_institute",  // Form field name alias
     "Orgnizing Department": "organizing_department",
+    "organizing department": "organizing_department",
+    "Orgnizing_Department": "organizing_department",
+    "organizing_department": "organizing_department",  // Add alias
+    "department": "organizing_department",  // Form field name alias
     "Centre": "centre",
+    "centre": "centre",  // Add alias
   },
 
   // Academic Programs
@@ -289,21 +458,47 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
   // Extension
   extension: {
     "Name of Activity": "name_of_activity",
-    "Nature of Activity": "nature",
+    "name of activity": "name_of_activity",
+    "Name_of_Activity": "name_of_activity",
+    "name_of_activity": "name_of_activity",  // Add alias
+    "Nature of Activity": "names",
+    "nature of activity": "names",
+    "Nature_of_Activity": "names",
+    "nature": "names",  // Add alias
+    "names": "names",  // Direct alias
     "Level": "level",
-    "Sponsered By": "sponsored_by",
+    "level": "level",  // Add alias
+    "Sponsered By": "sponsered",
+    "sponsered by": "sponsered",
+    "Sponsered_By": "sponsered",
+    "sponsored_by": "sponsered",  // Add alias
+    "sponsered": "sponsered",  // Direct alias
     "Place": "place",
+    "place": "place",  // Add alias
     "Date": "date",
+    "date": "date",  // Add alias
   },
 
   // Talks
   talks: {
     "Name": "name",
+    "name": "name",  // Add alias
     "Programme": "programme",
+    "programme": "programme",  // Add alias
     "Place": "place",
+    "place": "place",  // Add alias
     "Talk Date": "date",
+    "talk date": "date",  // Add normalized version
+    "Talk_Date": "date",  // Add underscore version
+    "date": "date",  // Add alias
     "Title of Event / Talk": "title",
+    "title of event / talk": "title",  // Add normalized version
+    "Title_of_Event_Talk": "title",  // Add underscore version
+    "title": "title",  // Add alias
     "Participated As": "participated_as",
+    "participated as": "participated_as",  // Add normalized version
+    "Participated_As": "participated_as",  // Add underscore version
+    "participated_as": "participated_as",  // Add alias
   },
 
   // Academic Recommendations - Articles
@@ -436,6 +631,7 @@ export function getMappedFieldName(
 function normalizeFieldName(name: string): string {
   return name
     .toLowerCase()
+    .replace(/_/g, " ")  // Convert underscores to spaces FIRST (like awards fix)
     .replace(/[^a-z0-9\s]/g, "")
     .replace(/\s+/g, " ")
     .trim()

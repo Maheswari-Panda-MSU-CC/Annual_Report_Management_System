@@ -52,23 +52,148 @@ export default function AddCollaborationsPage() {
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
       // Auto-fill form fields from document analysis
-      if (fields.category || fields.Category) setValue("category", String(fields.category || fields.Category))
-      if (fields.collaborating_inst || fields.Collaborating_Institute) setValue("collaboratingInstitute", String(fields.collaborating_inst || fields.Collaborating_Institute))
-      if (fields.collab_name || fields.Name_of_Collaborator) setValue("collaboratorName", String(fields.collab_name || fields.Name_of_Collaborator))
-      if (fields.qs_ranking || fields.QS_THE_World_University_Ranking) setValue("qsRanking", String(fields.qs_ranking || fields.QS_THE_World_University_Ranking))
-      if (fields.address || fields.Address) setValue("address", String(fields.address || fields.Address))
-      if (fields.details || fields.Details) setValue("details", String(fields.details || fields.Details))
-      if (fields.outcome !== undefined && fields.outcome !== null) {
-        setValue("outcome", typeof fields.outcome === 'number' ? fields.outcome : Number(fields.outcome))
+      // Note: fields are already mapped by categories-field-mapping.ts hook
+      // Form field names: category, collaboratingInstitute, collabName, collabRank, address, details, collabOutcome, status, startingDate, duration, level, noOfBeneficiary, mouSigned, signingDate
+      
+      // Category
+      if (fields.category) {
+        setValue("category", String(fields.category))
       }
+      
+      // Collaborating Institute - form field is "collaboratingInstitute"
+      if (fields.collaboratingInstitute) {
+        setValue("collaboratingInstitute", String(fields.collaboratingInstitute))
+      } else if (fields.collaborating_inst) {
+        // Fallback if mapping didn't work
+        setValue("collaboratingInstitute", String(fields.collaborating_inst))
+      }
+      
+      // Collaborator Name - form field is "collabName"
+      if (fields.collabName) {
+        setValue("collabName", String(fields.collabName))
+      } else if (fields.collab_name) {
+        // Fallback if mapping didn't work
+        setValue("collabName", String(fields.collab_name))
+      }
+      
+      // Collaborator Rank - form field is "collabRank"
+      if (fields.collabRank) {
+        setValue("collabRank", String(fields.collabRank))
+      } else if (fields.qs_ranking) {
+        // Fallback if mapping didn't work
+        setValue("collabRank", String(fields.qs_ranking))
+      }
+      
+      // Address
+      if (fields.address) {
+        setValue("address", String(fields.address))
+      }
+      
+      // Details
+      if (fields.details) {
+        setValue("details", String(fields.details))
+      }
+      
+      // Collaboration Outcome - form field is "collabOutcome"
+      if (fields.collabOutcome !== undefined && fields.collabOutcome !== null) {
+        if (typeof fields.collabOutcome === 'number') {
+          setValue("collabOutcome", fields.collabOutcome)
+        } else {
+          // If it's a string, try to find matching option
+          const outcomeOption = collaborationsOutcomeOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.collabOutcome).toLowerCase()
+          )
+          if (outcomeOption) {
+            setValue("collabOutcome", outcomeOption.id)
+          } else {
+            const numValue = Number(fields.collabOutcome)
+            if (!isNaN(numValue)) {
+              setValue("collabOutcome", numValue)
+            }
+          }
+        }
+      } else if (fields.outcome !== undefined && fields.outcome !== null) {
+        // Fallback if mapping didn't work
+        if (typeof fields.outcome === 'number') {
+          setValue("collabOutcome", fields.outcome)
+        } else {
+          const outcomeOption = collaborationsOutcomeOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.outcome).toLowerCase()
+          )
+          if (outcomeOption) {
+            setValue("collabOutcome", outcomeOption.id)
+          } else {
+            const numValue = Number(fields.outcome)
+            if (!isNaN(numValue)) {
+              setValue("collabOutcome", numValue)
+            }
+          }
+        }
+      }
+      
+      // Status
       if (fields.status !== undefined && fields.status !== null) {
         setValue("status", typeof fields.status === 'number' ? fields.status : Number(fields.status))
       }
-      if (fields.starting_date || fields.Starting_Date) setValue("startingDate", String(fields.starting_date || fields.Starting_Date))
-      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
-      if (fields.signing_date || fields.Signing_Date) setValue("signingDate", String(fields.signing_date || fields.Signing_Date))
-      if (fields.beneficiary_num !== undefined && fields.beneficiary_num !== null) setValue("noOfBeneficiary", Number(fields.beneficiary_num))
-      if (fields.MOU_signed !== undefined) setValue("mouSigned", Boolean(fields.MOU_signed))
+      
+      // Starting Date - form field is "startingDate"
+      if (fields.startingDate) {
+        setValue("startingDate", String(fields.startingDate))
+      } else if (fields.starting_date) {
+        // Fallback if mapping didn't work
+        setValue("startingDate", String(fields.starting_date))
+      }
+      
+      // Duration
+      if (fields.duration !== undefined && fields.duration !== null) {
+        setValue("duration", Number(fields.duration))
+      }
+      
+      // Level
+      if (fields.level !== undefined && fields.level !== null) {
+        if (typeof fields.level === 'number') {
+          setValue("level", fields.level)
+        } else {
+          const levelOption = collaborationsLevelOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.level).toLowerCase()
+          )
+          if (levelOption) {
+            setValue("level", levelOption.id)
+          } else {
+            const numValue = Number(fields.level)
+            if (!isNaN(numValue)) {
+              setValue("level", numValue)
+            }
+          }
+        }
+      }
+      
+      // Number of Beneficiary - form field is "noOfBeneficiary"
+      if (fields.noOfBeneficiary !== undefined && fields.noOfBeneficiary !== null) {
+        setValue("noOfBeneficiary", Number(fields.noOfBeneficiary))
+      } else if (fields.beneficiary_num !== undefined && fields.beneficiary_num !== null) {
+        // Fallback if mapping didn't work
+        setValue("noOfBeneficiary", Number(fields.beneficiary_num))
+      } else if (fields.beneficiary_count !== undefined && fields.beneficiary_count !== null) {
+        // Fallback if mapping didn't work
+        setValue("noOfBeneficiary", Number(fields.beneficiary_count))
+      }
+      
+      // MOU Signed - form field is "mouSigned"
+      if (fields.mouSigned !== undefined) {
+        setValue("mouSigned", Boolean(fields.mouSigned))
+      } else if (fields.MOU_signed !== undefined) {
+        // Fallback if mapping didn't work
+        setValue("mouSigned", Boolean(fields.MOU_signed))
+      }
+      
+      // Signing Date - form field is "signingDate"
+      if (fields.signingDate) {
+        setValue("signingDate", String(fields.signingDate))
+      } else if (fields.signing_date) {
+        // Fallback if mapping didn't work
+        setValue("signingDate", String(fields.signing_date))
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
