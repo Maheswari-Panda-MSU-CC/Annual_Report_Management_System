@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/components/ui/use-toast"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { Loader2, Brain, FileText, ArrowRight } from "lucide-react"
@@ -33,85 +32,10 @@ export function SmartDocumentAnalyzer() {
   const [localFileUrl, setLocalFileUrl] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<DocumentAnalysis | null>(null)
-  const [progress, setProgress] = useState(0)
   const { toast } = useToast()
   const router = useRouter()
   const { setDocumentData } = useDocumentAnalysis()
 
-  // Helper function to calculate field similarity between extracted fields and expected fields
-  const calculateFieldSimilarity = (
-    extractedFields: Record<string, string>,
-    expectedFields: string[]
-  ): number => {
-    if (!extractedFields || Object.keys(extractedFields).length === 0) return 0
-    if (!expectedFields || expectedFields.length === 0) return 0
-
-    const extractedKeys = Object.keys(extractedFields).map(k => k.toLowerCase().trim())
-    const expectedKeys = expectedFields.map(f => f.toLowerCase().trim())
-    
-    // Normalize field names (remove special characters, spaces, etc.)
-    const normalizeField = (field: string) => {
-      return field
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .trim()
-    }
-
-    const normalizedExtracted = extractedKeys.map(normalizeField)
-    const normalizedExpected = expectedKeys.map(normalizeField)
-
-    // Calculate matches
-    let matches = 0
-    normalizedExtracted.forEach(extracted => {
-      const match = normalizedExpected.some(expected => {
-        // Exact match
-        if (extracted === expected) return true
-        // Partial match (one contains the other)
-        if (extracted.includes(expected) || expected.includes(extracted)) return true
-        // Fuzzy match (similar strings)
-        const similarity = calculateStringSimilarity(extracted, expected)
-        return similarity > 0.7
-      })
-      if (match) matches++
-    })
-
-    return expectedKeys.length > 0 ? matches / expectedKeys.length : 0
-  }
-
-  // Helper function to calculate string similarity (Levenshtein distance based)
-  const calculateStringSimilarity = (str1: string, str2: string): number => {
-    const longer = str1.length > str2.length ? str1 : str2
-    const shorter = str1.length > str2.length ? str2 : str1
-    if (longer.length === 0) return 1.0
-    
-    const distance = levenshteinDistance(longer, shorter)
-    return (longer.length - distance) / longer.length
-  }
-
-  // Simple Levenshtein distance calculation
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix = []
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i]
-    }
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j
-    }
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1]
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1,
-            matrix[i][j - 1] + 1,
-            matrix[i - 1][j] + 1
-          )
-        }
-      }
-    }
-    return matrix[str2.length][str1.length]
-  }
 
   // Helper function to normalize strings for matching
   const normalizeString = (str: string): string => {
@@ -676,7 +600,6 @@ export function SmartDocumentAnalyzer() {
     setSelectedFile(file)
     // Clear all analysis results when new file is selected
     setAnalysis(null)
-    setProgress(0)
     setIsClassificationCorrect(null)
     setSelectedCategoryKey(null)
     setSelectedSubcategoryKey(null)
@@ -696,7 +619,6 @@ export function SmartDocumentAnalyzer() {
     setSelectedFile(null)
     setLocalFileUrl(null)
     setAnalysis(null)
-    setProgress(0)
     setIsClassificationCorrect(null)
     setSelectedCategoryKey(null)
     setSelectedSubcategoryKey(null)
@@ -705,7 +627,6 @@ export function SmartDocumentAnalyzer() {
   const handleAnalyze = async () => {
     if (!selectedFile) return
     setIsAnalyzing(true)
-    setProgress(0)
 
     try {
       const formData = new FormData()
@@ -737,7 +658,6 @@ export function SmartDocumentAnalyzer() {
       }
 
       setAnalysis(result)
-      setProgress(100)
       // Reset classification confirmation
       setIsClassificationCorrect(null)
       setSelectedCategoryKey(null)

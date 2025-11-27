@@ -29,7 +29,7 @@ export function useTeacherCVData() {
       name: [profile.data.teacherInfo.fname, profile.data.teacherInfo.mname, profile.data.teacherInfo.lname].filter(Boolean).join(" "),
       designation: profile.data.designation?.name || "",
       department: profile.data.department?.name || "",
-      institution: "Maharaja Sayajirao University of Baroda",
+      institution: "The Maharaja Sayajirao University of Baroda",
       email: profile.data.teacherInfo?.email_id || profile.data.teacherInfo?.email || "",
       phone: profile.data.teacherInfo?.phone_no?.toString() || profile.data.teacherInfo?.phone || "",
       address: profile.data.teacherInfo?.address || profile.data.teacherInfo?.Address || "",

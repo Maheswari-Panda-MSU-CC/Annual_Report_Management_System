@@ -101,10 +101,17 @@ function generateCertificateHTML(data: CertificateData): string {
       padding: 20px;
     }
     
+    .table-container {
+      width: 100%;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    
     #certificate-content table {
       table-layout: fixed !important;
       width: 100% !important;
       border-collapse: collapse;
+      margin-bottom: 16px;
     }
     
     #certificate-content table td,
@@ -113,14 +120,31 @@ function generateCertificateHTML(data: CertificateData): string {
       word-break: break-word !important;
       hyphens: auto;
       border: 1px solid #d1d5db;
-      padding: 8px 12px;
+      padding: 6px 8px;
       text-align: left;
-      font-size: 11px;
+      font-size: 10px;
+      line-height: 1.3;
+      vertical-align: top;
+      max-width: 0;
+      overflow: hidden;
     }
     
     #certificate-content table th {
       background-color: #f9fafb;
       font-weight: 600;
+      white-space: normal !important;
+      word-wrap: break-word !important;
+      text-align: center;
+      font-size: 9px;
+      padding: 8px 6px;
+    }
+    
+    #certificate-content table tbody td {
+      font-size: 9px;
+    }
+    
+    #certificate-content table tbody tr:nth-child(even) {
+      background-color: #fafafa;
     }
     
     .text-center {
@@ -221,10 +245,14 @@ function generateCertificateHTML(data: CertificateData): string {
     
     .badge {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: 600;
+      white-space: nowrap !important;
+      line-height: 1.1;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
     }
     
     .badge-default {
@@ -250,10 +278,29 @@ function generateCertificateHTML(data: CertificateData): string {
     @media print {
       body {
         padding: 0;
+        margin: 0;
       }
       
       #certificate-content {
         padding: 10mm;
+        max-width: 100%;
+      }
+      
+      #certificate-content table {
+        page-break-inside: auto;
+      }
+      
+      #certificate-content table tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      
+      #certificate-content table thead {
+        display: table-header-group;
+      }
+      
+      #certificate-content table tfoot {
+        display: table-footer-group;
       }
       
       @page {
@@ -294,33 +341,33 @@ function generateCertificateHTML(data: CertificateData): string {
       <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">
         Published Articles/Papers in Journals
       </h3>
-      <div style="width: 100%; overflow: visible;">
+      <div class="table-container">
         <table style="width: 100%; table-layout: fixed;">
           <thead>
             <tr>
-              <th style="width: 5%; white-space: nowrap;">Sr No.</th>
-              <th style="width: 12%; white-space: normal; word-wrap: break-word;">Author(s)</th>
-              <th style="width: 18%; white-space: normal; word-wrap: break-word;">Paper Title</th>
-              <th style="width: 18%; white-space: normal; word-wrap: break-word;">Journal Name & ISSN & Volume No.</th>
-              <th style="width: 8%; white-space: nowrap;">Published Year</th>
-              <th style="width: 12%; white-space: normal; word-wrap: break-word;">DOI</th>
-              <th style="width: 15%; white-space: normal; word-wrap: break-word;">Index in Scopus/UGC CARE/Clarivate</th>
-              <th style="width: 12%; white-space: normal; word-wrap: break-word;">Document Submitted?</th>
+              <th style="width: 4%;">Sr No.</th>
+              <th style="width: 11%;">Author(s)</th>
+              <th style="width: 16%;">Paper Title</th>
+              <th style="width: 16%;">Journal Name & ISSN & Volume No.</th>
+              <th style="width: 7%;">Published Year</th>
+              <th style="width: 11%;">DOI</th>
+              <th style="width: 18%;">Index in Scopus/UGC CARE/Clarivate</th>
+              <th style="width: 16%;">Document Submitted?</th>
             </tr>
           </thead>
           <tbody>
             ${selectedArticles.map((publication) => `
             <tr>
-              <td style="white-space: nowrap; width: 5%;">${publication.srNo}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 12%;">${escapeHtml(publication.authors)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 18%;">${escapeHtml(publication.paperTitle)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 18%;">${escapeHtml(publication.journalNameISSNVolume)}</td>
-              <td style="white-space: nowrap; width: 8%;">${escapeHtml(publication.publishedYear)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 12%;">
-                ${publication.doi ? `<span class="break-all">${escapeHtml(publication.doi)}</span>` : "-"}
+              <td style="text-align: center; white-space: nowrap;">${publication.srNo}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.authors)}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.paperTitle)}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.journalNameISSNVolume)}</td>
+              <td style="text-align: center; white-space: nowrap;">${escapeHtml(publication.publishedYear)}</td>
+              <td style="word-wrap: break-word; font-size: 9px;">
+                ${publication.doi ? `<span style="word-break: break-all;">${escapeHtml(publication.doi)}</span>` : "-"}
               </td>
-              <td style="white-space: normal; word-wrap: break-word; width: 15%;">${escapeHtml(publication.indexing)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 12%;">
+              <td style="word-wrap: break-word;">${escapeHtml(publication.indexing)}</td>
+              <td style="text-align: center; padding: 4px 6px;">
                 <span class="badge ${publication.documentSubmitted === "Submitted" ? "badge-default" : "badge-destructive"}">
                   ${escapeHtml(publication.documentSubmitted)}
                 </span>
@@ -339,29 +386,29 @@ function generateCertificateHTML(data: CertificateData): string {
       <h3 class="text-lg font-semibold text-gray-800 mb-3 border-b pb-2">
         Papers Presented in Conference/Symposia/Seminar
       </h3>
-      <div style="width: 100%; overflow: visible;">
+      <div class="table-container">
         <table style="width: 100%; table-layout: fixed;">
           <thead>
             <tr>
-              <th style="width: 5%; white-space: nowrap;">Sr No.</th>
-              <th style="width: 15%; white-space: normal; word-wrap: break-word;">Authors</th>
-              <th style="width: 20%; white-space: normal; word-wrap: break-word;">Paper Title</th>
-              <th style="width: 18%; white-space: normal; word-wrap: break-word;">Paper Theme</th>
-              <th style="width: 18%; white-space: normal; word-wrap: break-word;">Organising Body</th>
-              <th style="width: 12%; white-space: normal; word-wrap: break-word;">Date of Publication</th>
-              <th style="width: 12%; white-space: normal; word-wrap: break-word;">Documents Submitted?</th>
+              <th style="width: 4%;">Sr No.</th>
+              <th style="width: 14%;">Authors</th>
+              <th style="width: 18%;">Paper Title</th>
+              <th style="width: 16%;">Paper Theme</th>
+              <th style="width: 16%;">Organising Body</th>
+              <th style="width: 16%;">Date of Publication</th>
+              <th style="width: 16%;">Documents Submitted?</th>
             </tr>
           </thead>
           <tbody>
             ${selectedPapers.map((publication) => `
             <tr>
-              <td style="white-space: nowrap; width: 5%;">${publication.srNo}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 15%;">${escapeHtml(publication.authors)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 20%;">${escapeHtml(publication.paperTitle)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 18%;">${escapeHtml(publication.paperTheme)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 18%;">${escapeHtml(publication.organisingBody)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 12%;">${escapeHtml(publication.dateOfPublication)}</td>
-              <td style="white-space: normal; word-wrap: break-word; width: 12%;">
+              <td style="text-align: center; white-space: nowrap;">${publication.srNo}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.authors)}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.paperTitle)}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.paperTheme)}</td>
+              <td style="word-wrap: break-word;">${escapeHtml(publication.organisingBody)}</td>
+              <td style="text-align: center; word-wrap: break-word;">${escapeHtml(publication.dateOfPublication)}</td>
+              <td style="text-align: center; padding: 4px 6px;">
                 <span class="badge ${publication.documentsSubmitted === "Submitted" ? "badge-default" : "badge-destructive"}">
                   ${escapeHtml(publication.documentsSubmitted)}
                 </span>

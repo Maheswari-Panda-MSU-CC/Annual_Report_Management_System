@@ -1091,15 +1091,82 @@ export default function PublicationCertificate() {
             </CardHeader>
             <CardContent className="p-3 sm:p-4 md:p-8" id="certificate-content" style={{ position: "relative", margin: "0 auto", maxWidth: "210mm", width: "100%", backgroundColor: "#ffffff", overflow: "visible" }}>
               <style dangerouslySetInnerHTML={{__html: `
+                #certificate-content .table-container {
+                  width: 100%;
+                  margin-bottom: 16px;
+                  overflow-x: auto;
+                  overflow-y: visible;
+                }
+                
                 #certificate-content table {
                   table-layout: fixed !important;
                   width: 100% !important;
+                  border-collapse: collapse;
+                  margin-bottom: 16px;
                 }
+                
                 #certificate-content table td,
                 #certificate-content table th {
                   overflow-wrap: break-word !important;
                   word-break: break-word !important;
                   hyphens: auto;
+                  border: 1px solid #d1d5db;
+                  padding: 6px 8px;
+                  text-align: left;
+                  font-size: 9px;
+                  line-height: 1.3;
+                  vertical-align: top;
+                  max-width: 0;
+                  overflow: hidden;
+                }
+                
+                #certificate-content table th {
+                  background-color: #f9fafb;
+                  font-weight: 600;
+                  text-align: center;
+                  font-size: 9px;
+                  padding: 8px 6px;
+                  white-space: normal;
+                }
+                
+                #certificate-content table td {
+                  font-size: 9px;
+                }
+                
+                #certificate-content .badge {
+                  display: inline-block;
+                  padding: 2px 6px;
+                  border-radius: 4px;
+                  font-size: 8px;
+                  font-weight: 500;
+                  white-space: nowrap !important;
+                  line-height: 1.1;
+                  text-transform: uppercase;
+                  letter-spacing: 0.3px;
+                }
+                
+                @media (min-width: 640px) {
+                  #certificate-content table th,
+                  #certificate-content table td {
+                    font-size: 10px;
+                    padding: 8px 10px;
+                  }
+                  
+                  #certificate-content .badge {
+                    font-size: 9px;
+                    padding: 3px 8px;
+                  }
+                }
+                
+                @media (min-width: 768px) {
+                  #certificate-content table th,
+                  #certificate-content table td {
+                    font-size: 11px;
+                  }
+                  
+                  #certificate-content .badge {
+                    font-size: 10px;
+                  }
                 }
               `}} />
               {/* Header */}
@@ -1117,7 +1184,7 @@ export default function PublicationCertificate() {
                 </div>
 
                 <h1 className="text-base sm:text-xl md:text-2xl font-bold text-gray-800 mb-2">
-                  MAHARAJA SAIYAJIRAO UNIVERSITY OF BARODA
+                The Maharaja Sayajirao University of Baroda
                 </h1>
 
                 <h2 className="text-sm sm:text-lg md:text-xl font-semibold text-blue-600 mb-4 sm:mb-6 border-b-2 border-blue-200 pb-2">
@@ -1139,53 +1206,29 @@ export default function PublicationCertificate() {
                     <span className="hidden sm:inline">Published Articles/Papers in Journals</span>
                     <span className="sm:hidden">Published Articles</span>
                   </h3>
-                  <div style={{ width: "100%", overflow: "visible" }}>
-                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm" style={{ width: "100%", tableLayout: "fixed" }}>
+                  <div className="table-container">
+                    <table className="w-full border-collapse border border-gray-300">
                       <thead>
-                        <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "5%", whiteSpace: "nowrap" }}>
-                            Sr No.
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Author(s)
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Paper Title
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Journal Name & ISSN & Volume No.
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "8%", whiteSpace: "nowrap" }}>
-                            Published Year
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>DOI</th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "15%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Index in Scopus/UGC CARE/Clarivate
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Document Submitted?
-                          </th>
+                        <tr>
+                          <th style={{ width: "4%" }}>Sr No.</th>
+                          <th style={{ width: "11%" }}>Author(s)</th>
+                          <th style={{ width: "16%" }}>Paper Title</th>
+                          <th style={{ width: "16%" }}>Journal Name & ISSN & Volume No.</th>
+                          <th style={{ width: "7%" }}>Published Year</th>
+                          <th style={{ width: "11%" }}>DOI</th>
+                          <th style={{ width: "18%" }}>Index in Scopus/UGC CARE/Clarivate</th>
+                          <th style={{ width: "16%" }}>Document Submitted?</th>
                         </tr>
                       </thead>
                       <tbody>
                         {selectedArticles.map((publication) => (
                           <tr key={publication.id} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "nowrap", width: "5%" }}>
-                              {publication.srNo}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
-                              {publication.authors}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
-                              {publication.paperTitle}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
-                              {publication.journalNameISSNVolume}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "nowrap", width: "8%" }}>
-                              {publication.publishedYear}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
+                            <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>{publication.srNo}</td>
+                            <td>{publication.authors}</td>
+                            <td>{publication.paperTitle}</td>
+                            <td>{publication.journalNameISSNVolume}</td>
+                            <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>{publication.publishedYear}</td>
+                            <td>
                               {publication.doi ? (
                                 <span className="text-blue-600 break-all">
                                   {publication.doi}
@@ -1194,13 +1237,11 @@ export default function PublicationCertificate() {
                                 "-"
                               )}
                             </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "15%" }}>
-                              {publication.indexing}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
+                            <td>{publication.indexing}</td>
+                            <td style={{ textAlign: "center" }}>
                               <Badge
                                 variant={publication.documentSubmitted === "Submitted" ? "default" : "destructive"}
-                                className="text-xs"
+                                className="badge"
                               >
                                 {publication.documentSubmitted}
                               </Badge>
@@ -1220,58 +1261,32 @@ export default function PublicationCertificate() {
                     <span className="hidden sm:inline">Papers Presented in Conference/Symposia/Seminar</span>
                     <span className="sm:hidden">Papers Presented</span>
                   </h3>
-                  <div style={{ width: "100%", overflow: "visible" }}>
-                    <table className="w-full border-collapse border border-gray-300 text-xs sm:text-sm" style={{ width: "100%", tableLayout: "fixed" }}>
+                  <div className="table-container">
+                    <table className="w-full border-collapse border border-gray-300">
                       <thead>
-                        <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "5%", whiteSpace: "nowrap" }}>
-                            Sr No.
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "15%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Authors
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "20%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Paper Title
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Paper Theme
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "18%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Organising Body
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Date of Publication
-                          </th>
-                          <th className="border border-gray-300 px-2 sm:px-3 py-2 text-left font-semibold" style={{ width: "12%", whiteSpace: "normal", wordWrap: "break-word" }}>
-                            Documents Submitted?
-                          </th>
+                        <tr>
+                          <th style={{ width: "4%" }}>Sr No.</th>
+                          <th style={{ width: "14%" }}>Authors</th>
+                          <th style={{ width: "18%" }}>Paper Title</th>
+                          <th style={{ width: "16%" }}>Paper Theme</th>
+                          <th style={{ width: "16%" }}>Organising Body</th>
+                          <th style={{ width: "16%" }}>Date of Publication</th>
+                          <th style={{ width: "16%" }}>Documents Submitted?</th>
                         </tr>
                       </thead>
                       <tbody>
                         {selectedPapers.map((publication) => (
                           <tr key={publication.id} className="hover:bg-gray-50">
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "nowrap", width: "5%" }}>
-                              {publication.srNo}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "15%" }}>
-                              {publication.authors}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "20%" }}>
-                              {publication.paperTitle}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
-                              {publication.paperTheme}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "18%" }}>
-                              {publication.organisingBody}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
-                              {publication.dateOfPublication}
-                            </td>
-                            <td className="border border-gray-300 px-2 sm:px-3 py-2" style={{ whiteSpace: "normal", wordWrap: "break-word", width: "12%" }}>
+                            <td style={{ whiteSpace: "nowrap", textAlign: "center" }}>{publication.srNo}</td>
+                            <td>{publication.authors}</td>
+                            <td>{publication.paperTitle}</td>
+                            <td>{publication.paperTheme}</td>
+                            <td>{publication.organisingBody}</td>
+                            <td style={{ whiteSpace: "nowrap" }}>{publication.dateOfPublication}</td>
+                            <td style={{ textAlign: "center" }}>
                               <Badge
                                 variant={publication.documentsSubmitted === "Submitted" ? "default" : "destructive"}
-                                className="text-xs"
+                                className="badge"
                               >
                                 {publication.documentsSubmitted}
                               </Badge>
