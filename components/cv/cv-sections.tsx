@@ -2,6 +2,8 @@
 
 import React, { memo } from "react"
 import type { CVData } from "@/types/cv-data"
+import type { CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
+import { cvTemplateStyles } from "@/app/api/teacher/cv-generation/cv-template-styles"
 
 // Helper to format year
 const formatYear = (date: string | Date | null | undefined): string => {
@@ -18,18 +20,22 @@ interface SectionProps {
   children: React.ReactNode
   isEmpty?: boolean
   className?: string
+  template?: CVTemplate
 }
 
 /**
  * Reusable Section Component
  * Handles empty states gracefully
+ * Uses template-specific styles for consistency with PDF/Word
  */
-export const Section = memo(({ title, children, isEmpty = false, className = "" }: SectionProps) => {
+export const Section = memo(({ title, children, isEmpty = false, className = "", template = "academic" }: SectionProps) => {
   if (isEmpty) return null
+  
+  const styles = cvTemplateStyles[template].previewStyles
   
   return (
     <div className={`mb-6 ${className}`}>
-      <h2 className="text-base font-semibold mb-4 mt-8 uppercase tracking-wide border-b-2 border-gray-300 pb-2.5">
+      <h2 className={styles.sectionTitle}>
         {title}
       </h2>
       {children}
@@ -42,17 +48,19 @@ Section.displayName = "Section"
 /**
  * Education Section Component
  */
-export const EducationSection = memo(({ education }: { education: any[] }) => {
+export const EducationSection = memo(({ education, template = "academic" }: { education: any[]; template?: CVTemplate }) => {
   if (education.length === 0) return null
+  
+  const styles = cvTemplateStyles[template].previewStyles
 
   return (
-    <Section title="Education" isEmpty={education.length === 0}>
+    <Section title="Education" isEmpty={education.length === 0} template={template}>
       {education.map((edu: any, idx: number) => (
-        <div key={idx} className="mb-5 pb-4 border-b border-gray-100 last:border-b-0">
-          <p className="font-semibold text-gray-900 mb-1.5 text-base">
+        <div key={idx} className={styles.itemClass}>
+          <p className={styles.itemTitle}>
             {edu.degree_name || edu.degree_type_name || edu.degree || ""}
           </p>
-          <p className="text-sm italic text-gray-600 mb-1.5">
+          <p className={styles.itemSubtitle}>
             {edu.university_name || edu.institution || ""}
             {edu.year_of_passing
               ? `, ${formatYear(edu.year_of_passing)}`
@@ -61,13 +69,13 @@ export const EducationSection = memo(({ education }: { education: any[] }) => {
                 : ""}
           </p>
           {edu.subject && (
-            <p className="text-sm text-gray-500 leading-relaxed">Subject: {edu.subject}</p>
+            <p className={styles.itemDetails}>Subject: {edu.subject}</p>
           )}
           {edu.state && (
-            <p className="text-sm text-gray-500 leading-relaxed">State: {edu.state}</p>
+            <p className={styles.itemDetails}>State: {edu.state}</p>
           )}
           {edu.QS_Ranking && (
-            <p className="text-sm text-gray-500 leading-relaxed">QS Ranking: {edu.QS_Ranking}</p>
+            <p className={styles.itemDetails}>QS Ranking: {edu.QS_Ranking}</p>
           )}
         </div>
       ))}
@@ -80,25 +88,27 @@ EducationSection.displayName = "EducationSection"
 /**
  * Experience Section Component
  */
-export const ExperienceSection = memo(({ experience }: { experience: any[] }) => {
+export const ExperienceSection = memo(({ experience, template = "academic" }: { experience: any[]; template?: CVTemplate }) => {
   if (experience.length === 0) return null
+  
+  const styles = cvTemplateStyles[template].previewStyles
 
   return (
-    <Section title="Professional Experience" isEmpty={experience.length === 0}>
+    <Section title="Professional Experience" isEmpty={experience.length === 0} template={template}>
       {experience.map((exp: any, idx: number) => (
-        <div key={idx} className="mb-5 pb-4 border-b border-gray-100 last:border-b-0">
-          <p className="font-semibold text-gray-900 mb-1.5 text-base">
+        <div key={idx} className={styles.itemClass}>
+          <p className={styles.itemTitle}>
             {exp.desig || exp.designation || exp.position || ""}
           </p>
-          <p className="text-sm italic text-gray-600 mb-1.5">
+          <p className={styles.itemSubtitle}>
             {exp.Employeer || exp.institution || ""}
           </p>
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <p className={styles.itemDetails}>
             {formatYear(exp.Start_Date || exp.from_date)} -{" "}
             {formatYear(exp.End_Date || exp.to_date) || "Present"}
           </p>
           {exp.Nature && (
-            <p className="text-sm text-gray-500 leading-relaxed">Nature: {exp.Nature}</p>
+            <p className={styles.itemDetails}>Nature: {exp.Nature}</p>
           )}
         </div>
       ))}
@@ -111,14 +121,16 @@ ExperienceSection.displayName = "ExperienceSection"
 /**
  * Publications Section Component
  */
-export const PublicationsSection = memo(({ articles }: { articles: any[] }) => {
+export const PublicationsSection = memo(({ articles, template = "academic" }: { articles: any[]; template?: CVTemplate }) => {
   if (articles.length === 0) return null
+  
+  const styles = cvTemplateStyles[template].previewStyles
 
   return (
-    <Section title="Published Articles/Journals" isEmpty={articles.length === 0}>
+    <Section title="Published Articles/Journals" isEmpty={articles.length === 0} template={template}>
       {articles.map((pub: any, idx: number) => (
-        <div key={idx} className="mb-4 pb-3 border-b border-gray-100 last:border-b-0">
-          <p className="text-sm leading-relaxed">
+        <div key={idx} className={styles.itemClass}>
+          <p className={styles.itemDetails}>
             <span className="font-medium">{idx + 1}.</span> {pub.authors || ""}. "{pub.title || ""}".
             <em> {pub.journal_name || ""}</em>, {formatYear(pub.month_year)}.
             {pub.impact_factor ? ` IF: ${pub.impact_factor}` : ""}
@@ -135,25 +147,27 @@ PublicationsSection.displayName = "PublicationsSection"
 /**
  * Research Projects Section Component
  */
-export const ResearchSection = memo(({ research }: { research: any[] }) => {
+export const ResearchSection = memo(({ research, template = "academic" }: { research: any[]; template?: CVTemplate }) => {
   if (research.length === 0) return null
+  
+  const styles = cvTemplateStyles[template].previewStyles
 
   return (
-    <Section title="Research Projects" isEmpty={research.length === 0}>
+    <Section title="Research Projects" isEmpty={research.length === 0} template={template}>
       {research.map((proj: any, idx: number) => (
-        <div key={idx} className="mb-5 pb-4 border-b border-gray-100 last:border-b-0">
-          <p className="font-semibold text-gray-900 mb-1.5 text-base">{proj.title || ""}</p>
-          <p className="text-sm text-gray-500 leading-relaxed">
+        <div key={idx} className={styles.itemClass}>
+          <p className={styles.itemTitle}>{proj.title || ""}</p>
+          <p className={styles.itemDetails}>
             Funding Agency: {proj.funding_agency_name || proj.funding_agency || ""}
           </p>
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <p className={styles.itemDetails}>
             Amount:{" "}
             {proj.grant_sanctioned
               ? `₹${proj.grant_sanctioned.toLocaleString()}`
               : ""}{" "}
             | Duration: {proj.duration || ""} years
           </p>
-          <p className="text-sm text-gray-500 leading-relaxed">
+          <p className={styles.itemDetails}>
             Status: {proj.status_name || proj.status || ""}
           </p>
         </div>
@@ -167,19 +181,21 @@ ResearchSection.displayName = "ResearchSection"
 /**
  * Awards Section Component
  */
-export const AwardsSection = memo(({ awards }: { awards: any[] }) => {
+export const AwardsSection = memo(({ awards, template = "academic" }: { awards: any[]; template?: CVTemplate }) => {
   if (awards.length === 0) return null
+  
+  const styles = cvTemplateStyles[template].previewStyles
 
   return (
-    <Section title="Awards & Honors" isEmpty={awards.length === 0}>
+    <Section title="Awards & Honors" isEmpty={awards.length === 0} template={template}>
       {awards.map((award: any, idx: number) => (
-        <div key={idx} className="mb-5 pb-4 border-b border-gray-100 last:border-b-0">
-          <p className="font-semibold text-gray-900 mb-1.5 text-base">{award.name || ""}</p>
-          <p className="text-sm italic text-gray-600 mb-1.5">
+        <div key={idx} className={styles.itemClass}>
+          <p className={styles.itemTitle}>{award.name || ""}</p>
+          <p className={styles.itemSubtitle}>
             {award.organization || ""}, {formatYear(award.date_of_award)}
           </p>
           {award.details && (
-            <p className="text-sm text-gray-500 leading-relaxed">{award.details}</p>
+            <p className={styles.itemDetails}>{award.details}</p>
           )}
         </div>
       ))}

@@ -10,6 +10,7 @@ import {
   TableRow,
   TableCell,
   BorderStyle,
+  ShadingType,
 } from "docx"
 import { type CVTemplate } from "./cv-template-styles"
 import type { CVData } from "@/types/cv-data"
@@ -17,50 +18,52 @@ import type { CVData } from "@/types/cv-data"
 // Types are now imported from types/cv-data.ts
 
 // Template-specific styling configurations
+// Font sizes are in half-points (e.g., 45 = 22.5pt)
+// Match preview exactly: text-3xl=30px=45hp, text-lg=18px=27hp, text-base=16px=24hp, text-sm=14px=21hp
 const templateStyles = {
   academic: {
-    nameSize: 32,
-    titleSize: 20,
-    contactSize: 18,
-    sectionHeadingSize: 22,
-    bodySize: 22,
-    nameColor: "1f2937",
-    titleColor: "4b5563",
-    sectionColor: "1e3a8a",
+    nameSize: 43, // 22.5pt (30px) - matches preview text-3xl
+    titleSize: 25, // 13.5pt (18px) - matches preview text-lg
+    contactSize: 19, // 10.5pt (14px) - matches preview text-sm
+    sectionHeadingSize: 21, // 12pt (16px) - matches preview text-base
+    bodySize: 19, // 10.5pt (14px) - matches preview text-sm
+    nameColor: "1f2937", // Dark gray - excellent contrast
+    titleColor: "4b5563", // Medium gray - good hierarchy
+    sectionColor: "1e3a8a", // Blue - professional and readable (differentiates from classic)
     fontFamily: "Times New Roman",
   },
   professional: {
-    nameSize: 36,
-    titleSize: 22,
-    contactSize: 20,
-    sectionHeadingSize: 24,
-    bodySize: 22,
-    nameColor: "ffffff",
-    titleColor: "ffffff",
-    sectionColor: "1d4ed8",
+    nameSize: 43, // 22.5pt (30px) - matches preview text-3xl
+    titleSize: 25, // 13.5pt (18px) - matches preview text-lg
+    contactSize: 19, // 10.5pt (14px) - matches preview text-sm
+    sectionHeadingSize: 21, // 12pt (16px) - matches preview text-base
+    bodySize: 19,  // 10.5pt (14px) - matches preview text-sm
+    nameColor: "ffffff", // White - on dark blue background
+    titleColor: "e0e7ff", // Light blue - good contrast on dark bg
+    sectionColor: "1d4ed8", // Blue - matches theme
     fontFamily: "Calibri",
   },
   modern: {
-    nameSize: 34,
-    titleSize: 21,
-    contactSize: 19,
-    sectionHeadingSize: 23,
-    bodySize: 22,
-    nameColor: "111827",
-    titleColor: "4b5563",
-    sectionColor: "374151",
+    nameSize: 43, // 22.5pt (30px) - matches preview text-3xl
+    titleSize: 25, // 13.5pt (18px) - matches preview text-lg
+    contactSize: 19, // 10.5pt (14px) - matches preview text-sm
+    sectionHeadingSize: 21, // 12pt (16px) - matches preview text-base
+    bodySize: 19,  // 10.5pt (14px) - matches preview text-sm
+    nameColor: "111827", // Very dark gray - excellent contrast
+    titleColor: "4b5563", // Medium gray - good hierarchy
+    sectionColor: "374151", // Dark gray - modern and readable
     fontFamily: "Calibri",
   },
   classic: {
-    nameSize: 30,
-    titleSize: 19,
-    contactSize: 18,
-    sectionHeadingSize: 22,
-    bodySize: 22,
-    nameColor: "1f2937",
-    titleColor: "374151",
-    sectionColor: "374151",
-    fontFamily: "Times New Roman",
+    nameSize: 43, // 22.5pt (30px) - matches preview text-3xl
+    titleSize: 25, // 13.5pt (18px) - matches preview text-lg
+    contactSize: 19, // 10.5pt (14px) - matches preview text-sm
+    sectionHeadingSize: 21, // 12pt (16px) - matches preview text-base
+    bodySize: 19, // 10.5pt (14px) - matches preview text-sm
+    nameColor: "1f2937", // Dark gray - excellent contrast
+    titleColor: "4b5563", // Medium gray - different from academic
+    sectionColor: "4b5563", // Dark gray for classic (different from academic blue)
+    fontFamily: "Georgia", // Different font from academic (Times New Roman) to differentiate
   },
 }
 
@@ -75,6 +78,34 @@ function formatYear(date: string | Date | null | undefined): string {
 }
 
 // Create Word document section with template-specific styling
+// Helper function to create section headings with template-specific colors
+function createSectionHeading(
+  text: string,
+  template: CVTemplate,
+  styles: typeof templateStyles.academic,
+): Paragraph {
+  const sectionHeadingColor = template === "professional" 
+    ? "1e3a8a" 
+    : template === "academic"
+    ? "1e3a8a" // Blue for academic
+    : template === "classic"
+    ? "92400e" // Amber for classic
+    : "374151"
+  
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: text,
+        bold: true,
+        size: styles.sectionHeadingSize,
+        color: sectionHeadingColor,
+        font: styles.fontFamily,
+      }),
+    ],
+    spacing: { after: 300 },
+  })
+}
+
 function createWordSection(
   sectionId: string,
   data: CVData,
@@ -146,13 +177,14 @@ function createWordSection(
 
     case "education":
       if (data.education.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Education",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        const sectionHeadingColor = template === "professional" 
+          ? "1e3a8a" 
+          : template === "academic"
+          ? "1e3a8a" // Blue for academic
+          : template === "classic"
+          ? "92400e" // Amber for classic
+          : "374151"
+        sections.push(createSectionHeading("Education", template, styles))
         data.education.forEach((edu: any) => {
           sections.push(
             new Paragraph({
@@ -220,13 +252,7 @@ function createWordSection(
 
     case "experience":
       if (data.experience.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Professional Experience",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Professional Experience", template, styles))
         data.experience.forEach((exp: any) => {
           sections.push(
             new Paragraph({
@@ -291,13 +317,7 @@ function createWordSection(
 
     case "research":
       if (data.research.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Research Projects",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Research Projects", template, styles))
         data.research.forEach((proj: any) => {
           sections.push(
             new Paragraph({
@@ -342,13 +362,7 @@ function createWordSection(
 
     case "articles":
       if (data.articles.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Published Articles/Journals",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Published Articles/Journals", template, styles))
         data.articles.forEach((pub: any, index: number) => {
           const pubText = `${index + 1}. ${pub.authors || ""}. "${pub.title || ""}". ${
             pub.journal_name || ""
@@ -367,13 +381,7 @@ function createWordSection(
 
     case "postdoc":
       if (data.postdoc.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Post Doctoral Research Experience",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Post Doctoral Research Experience", template, styles))
         data.postdoc.forEach((postdoc: any) => {
           sections.push(
             new Paragraph({
@@ -420,13 +428,7 @@ function createWordSection(
 
     case "patents":
       if (data.patents.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Patents",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Patents", template, styles))
         data.patents.forEach((patent: any) => {
           sections.push(
             new Paragraph({
@@ -467,13 +469,7 @@ function createWordSection(
 
     case "econtent":
       if (data.econtent.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "E-Contents",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("E-Contents", template, styles))
         data.econtent.forEach((econtent: any) => {
           sections.push(
             new Paragraph({
@@ -518,13 +514,7 @@ function createWordSection(
 
     case "consultancy":
       if (data.consultancy.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Consultancy Undertaken",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Consultancy Undertaken", template, styles))
         data.consultancy.forEach((consult: any) => {
           sections.push(
             new Paragraph({
@@ -569,13 +559,7 @@ function createWordSection(
 
     case "collaborations":
       if (data.collaborations.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Collaborations",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Collaborations", template, styles))
         data.collaborations.forEach((collab: any) => {
           sections.push(
             new Paragraph({
@@ -620,13 +604,7 @@ function createWordSection(
 
     case "phdguidance":
       if (data.phdguidance.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Ph.D. Guidance",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Ph.D. Guidance", template, styles))
         data.phdguidance.forEach((phd: any) => {
           sections.push(
             new Paragraph({
@@ -672,13 +650,7 @@ function createWordSection(
 
     case "books":
       if (data.books.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Books Published",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Books Published", template, styles))
         data.books.forEach((book: any, index: number) => {
           const bookText = `${index + 1}. ${book.authors || ""}. "${book.title || ""}". ${
             book.publisher_name || ""
@@ -697,13 +669,7 @@ function createWordSection(
 
     case "papers":
       if (data.papers.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Papers Presented",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Papers Presented", template, styles))
         data.papers.forEach((paper: any, index: number) => {
           const paperText = `${index + 1}. ${paper.authors || ""}. "${paper.title_of_paper || ""}". ${
             paper.organising_body || ""
@@ -722,13 +688,7 @@ function createWordSection(
 
     case "talks":
       if (data.talks.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Talks",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Talks", template, styles))
         data.talks.forEach((talk: any) => {
           sections.push(
             new Paragraph({
@@ -758,13 +718,7 @@ function createWordSection(
 
     case "academic_contribution":
       if (data.academic_contribution.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Contribution in Academic Programme",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Contribution in Academic Programme", template, styles))
         data.academic_contribution.forEach((contri: any) => {
           sections.push(
             new Paragraph({
@@ -794,13 +748,7 @@ function createWordSection(
 
     case "academic_participation":
       if (data.academic_participation.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Participation in Academic Programme",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Participation in Academic Programme", template, styles))
         data.academic_participation.forEach((parti: any) => {
           sections.push(
             new Paragraph({
@@ -830,13 +778,7 @@ function createWordSection(
 
     case "committees":
       if (data.committees.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Participation in Academic Committee",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Participation in Academic Committee", template, styles))
         data.committees.forEach((committee: any) => {
           sections.push(
             new Paragraph({
@@ -866,13 +808,7 @@ function createWordSection(
 
     case "performance":
       if (data.performance.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Performance by Individual/Group",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Performance by Individual/Group", template, styles))
         data.performance.forEach((perf: any) => {
           sections.push(
             new Paragraph({
@@ -917,13 +853,7 @@ function createWordSection(
 
     case "extension":
       if (data.extension.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Extension Activities",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Extension Activities", template, styles))
         data.extension.forEach((ext: any) => {
           sections.push(
             new Paragraph({
@@ -953,13 +883,7 @@ function createWordSection(
 
     case "orientation":
       if (data.orientation.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Orientation Course",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Orientation Course", template, styles))
         data.orientation.forEach((orient: any) => {
           sections.push(
             new Paragraph({
@@ -1006,13 +930,7 @@ function createWordSection(
 
     case "awards":
       if (data.awards.length > 0) {
-        sections.push(
-          new Paragraph({
-            text: "Awards & Honors",
-            heading: HeadingLevel.HEADING_1,
-            spacing: { after: 300 },
-          }),
-        )
+        sections.push(createSectionHeading("Awards & Honors", template, styles))
         data.awards.forEach((award: any) => {
           sections.push(
             new Paragraph({
@@ -1099,8 +1017,14 @@ export async function generateWordDocument(
         new TextRun({
           text: "CONTACT",
           bold: true,
-          size: styles.sectionHeadingSize - 4,
-          color: template === "professional" ? "ffffff" : styles.sectionColor,
+          size: styles.sectionHeadingSize - 8, // 24pt -> 16pt (8 half-points)
+          color: template === "professional" 
+            ? "e0e7ff" // Light blue for professional
+            : template === "academic"
+            ? "1e3a8a" // Blue for academic
+            : template === "classic"
+            ? "92400e" // Amber/brown for classic - differentiates from academic
+            : styles.sectionColor,
         }),
       ],
       spacing: { after: 200 },
@@ -1113,8 +1037,8 @@ export async function generateWordDocument(
         children: [
           new TextRun({
             text: `Email: ${cvData.personal.email}`,
-            size: styles.bodySize - 2,
-            color: template === "professional" ? "ffffff" : "000000",
+            size: styles.bodySize, // Use standard body size (24 = 12pt)
+            color: template === "professional" ? "ffffff" : "1f2937", // White for professional, dark for others
           }),
         ],
         spacing: { after: 100 },
@@ -1128,8 +1052,8 @@ export async function generateWordDocument(
         children: [
           new TextRun({
             text: `Phone: ${cvData.personal.phone}`,
-            size: styles.bodySize - 2,
-            color: template === "professional" ? "ffffff" : "000000",
+            size: styles.bodySize,
+            color: template === "professional" ? "ffffff" : "1f2937",
           }),
         ],
         spacing: { after: 100 },
@@ -1143,8 +1067,8 @@ export async function generateWordDocument(
         children: [
           new TextRun({
             text: `Address: ${cvData.personal.address}`,
-            size: styles.bodySize - 2,
-            color: template === "professional" ? "ffffff" : "000000",
+            size: styles.bodySize,
+            color: template === "professional" ? "ffffff" : "1f2937",
           }),
         ],
         spacing: { after: 100 },
@@ -1158,8 +1082,8 @@ export async function generateWordDocument(
         children: [
           new TextRun({
             text: `ORCID: ${cvData.personal.orcid}`,
-            size: styles.bodySize - 2,
-            color: template === "professional" ? "ffffff" : "000000",
+            size: styles.bodySize,
+            color: template === "professional" ? "ffffff" : "1f2937",
           }),
         ],
         spacing: { after: 200 },
@@ -1175,8 +1099,14 @@ export async function generateWordDocument(
           new TextRun({
             text: "PERSONAL",
             bold: true,
-            size: styles.sectionHeadingSize - 4,
-            color: template === "professional" ? "ffffff" : styles.sectionColor,
+            size: styles.sectionHeadingSize - 8, // Consistent with CONTACT
+            color: template === "professional" 
+              ? "e0e7ff" // Light blue for professional
+              : template === "academic"
+              ? "1e3a8a" // Blue for academic
+              : template === "classic"
+              ? "92400e" // Amber/brown for classic - differentiates from academic
+              : styles.sectionColor,
           }),
         ],
         spacing: { before: 200, after: 200 },
@@ -1189,8 +1119,8 @@ export async function generateWordDocument(
           children: [
             new TextRun({
               text: `Date of Birth: ${cvData.personal.dateOfBirth}`,
-              size: styles.bodySize - 2,
-              color: template === "professional" ? "ffffff" : "000000",
+              size: styles.bodySize,
+              color: template === "professional" ? "ffffff" : "1f2937",
             }),
           ],
           spacing: { after: 100 },
@@ -1204,8 +1134,8 @@ export async function generateWordDocument(
           children: [
             new TextRun({
               text: `Nationality: ${cvData.personal.nationality}`,
-              size: styles.bodySize - 2,
-              color: template === "professional" ? "ffffff" : "000000",
+              size: styles.bodySize,
+              color: template === "professional" ? "ffffff" : "1f2937",
             }),
           ],
           spacing: { after: 100 },
@@ -1217,7 +1147,15 @@ export async function generateWordDocument(
   // Build right column content (Header + Sections)
   const rightColumnContent: (Paragraph | Table)[] = []
 
-  // Header
+  // Header - Add background shading for professional template
+  const headerShading = template === "professional" 
+    ? {
+        type: ShadingType.SOLID,
+        color: "1d4ed8", // Dark blue background
+        fill: "1d4ed8",
+      }
+    : undefined
+
   rightColumnContent.push(
     new Paragraph({
       children: [
@@ -1231,6 +1169,7 @@ export async function generateWordDocument(
       ],
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
+      shading: headerShading,
     }),
     new Paragraph({
       children: [
@@ -1243,6 +1182,7 @@ export async function generateWordDocument(
       ],
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
+      shading: headerShading,
     }),
     new Paragraph({
       children: [
@@ -1255,6 +1195,7 @@ export async function generateWordDocument(
       ],
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
+      shading: headerShading,
     }),
     new Paragraph({
       children: [
@@ -1267,6 +1208,7 @@ export async function generateWordDocument(
       ],
       alignment: AlignmentType.CENTER,
       spacing: { after: 400 },
+      shading: headerShading,
     })
   )
 
@@ -1288,7 +1230,13 @@ export async function generateWordDocument(
             children: leftColumnContent,
             width: { size: 33, type: WidthType.PERCENTAGE },
             shading: {
-              fill: template === "professional" ? "1d4ed8" : template === "modern" ? "eff6ff" : "f9fafb",
+              fill: template === "professional" 
+                ? "1d4ed8" 
+                : template === "modern" 
+                ? "eff6ff" 
+                : template === "academic"
+                ? "eff6ff" // Light blue for academic - differentiates from classic
+                : "fffbeb", // Warm amber for classic - differentiates from academic
             },
             margins: {
               top: 1440, // 1 inch

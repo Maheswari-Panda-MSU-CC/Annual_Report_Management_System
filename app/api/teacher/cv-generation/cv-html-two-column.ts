@@ -42,12 +42,18 @@ function generateLeftColumn(cvData: CVData, template: CVTemplate, selectedSectio
     : null
   
   // Left column background color based on template
+  // Use EXACT same colors as Word document for consistency
+  // Professional: #1d4ed8 (dark blue) - matches Word shading
+  // Academic: Light blue background (#eff6ff) with blue accents - differentiates from classic
+  // Classic: Warm amber background (#fffbeb) with amber accents - differentiates from academic
   const leftColumnBg = isProfessional 
-    ? 'background-color: #1e3a8a; color: #ffffff;' 
+    ? 'background-color: #1d4ed8; color: #ffffff;' // Match Word document exactly
     : template === 'modern'
     ? 'background: linear-gradient(to bottom, #eff6ff 0%, #ffffff 100%);'
     : template === 'academic'
-    ? 'background-color: #f9fafb;'
+    ? 'background-color: #eff6ff;' // Light blue for academic - differentiates from classic
+    : template === 'classic'
+    ? 'background-color: #fffbeb;' // Warm amber for classic - differentiates from academic
     : 'background-color: #f9fafb;'
   
   const leftColumnTextColor = isProfessional ? '#ffffff' : '#374151'
@@ -55,6 +61,10 @@ function generateLeftColumn(cvData: CVData, template: CVTemplate, selectedSectio
     ? 'border-right: 2px solid #1e40af;' 
     : template === 'modern'
     ? 'border-right: 2px solid #bfdbfe;'
+    : template === 'academic'
+    ? 'border-right: 2px solid #1e3a8a;' // Blue border for academic
+    : template === 'classic'
+    ? 'border-right: 2px solid #92400e;' // Amber border for classic
     : 'border-right: 2px solid #d1d5db;'
   
   return `
@@ -69,7 +79,7 @@ function generateLeftColumn(cvData: CVData, template: CVTemplate, selectedSectio
       
       <!-- Contact Information -->
       <div style="margin-bottom: 24px;">
-        <h2 style="font-weight: bold !important; font-size: 16px !important; margin-bottom: 16px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; color: ${isProfessional ? '#bfdbfe' : '#1f2937'} !important;">
+        <h2 style="font-weight: bold !important; font-size: 16px !important; margin-bottom: 16px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; color: ${isProfessional ? '#bfdbfe' : template === 'academic' ? '#1e3a8a' : template === 'classic' ? '#4b5563' : '#1f2937'} !important;">
           Contact
         </h2>
         <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -99,7 +109,7 @@ function generateLeftColumn(cvData: CVData, template: CVTemplate, selectedSectio
       <!-- Personal Details -->
       ${selectedSections.includes('personal') && (personal.dateOfBirth || personal.nationality) ? `
         <div>
-          <h2 style="font-weight: bold !important; font-size: 16px !important; margin-bottom: 16px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; color: ${isProfessional ? '#bfdbfe' : '#1f2937'} !important;">
+          <h2 style="font-weight: bold !important; font-size: 16px !important; margin-bottom: 16px !important; text-transform: uppercase !important; letter-spacing: 0.5px !important; color: ${isProfessional ? '#bfdbfe' : template === 'academic' ? '#1e3a8a' : template === 'classic' ? '#4b5563' : '#1f2937'} !important;">
             Personal
           </h2>
           <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -138,9 +148,9 @@ function generateRightColumn(cvData: CVData, template: CVTemplate, selectedSecti
   const styles = cvTemplateStyles[template].previewStyles
   const isProfessional = template === 'professional'
   
-  // Header styles - match preview exactly
+  // Header styles - match preview exactly with print support
   const headerBg = isProfessional 
-    ? 'background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px;'
+    ? 'background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important; background-color: #1d4ed8 !important; color: white !important; padding: 30px !important; border-radius: 8px !important; margin-bottom: 30px !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;'
     : ''
   
   const headerBorder = isProfessional 
@@ -148,20 +158,26 @@ function generateRightColumn(cvData: CVData, template: CVTemplate, selectedSecti
     : template === 'modern'
     ? 'border-bottom: 2px solid #bfdbfe; padding-bottom: 20px;'
     : template === 'academic'
-    ? 'border-bottom: 2px solid #9ca3af; padding-bottom: 20px;'
+    ? 'border-bottom: 2px solid #1e3a8a; padding-bottom: 20px;' // Blue border for academic
+    : template === 'classic'
+    ? 'border-bottom: 2px solid #92400e; padding-bottom: 20px;' // Amber border for classic
     : 'border-bottom: 1px solid #9ca3af; padding-bottom: 20px;'
   
+  // Ensure name color is visible - pure white for professional (on dark bg), dark for others
   const nameColor = isProfessional ? '#ffffff' : '#1f2937'
-  const titleColor = isProfessional ? '#bfdbfe' : '#4b5563'
-  const institutionColor = '#6b7280'
+  const titleColor = isProfessional ? '#e0e7ff' : '#4b5563' // Light blue for professional, gray for others
+  const institutionColor = isProfessional ? '#c7d2fe' : '#6b7280' // Lighter blue for professional
   
   // Section title styles - ensure colors are visible and bold
+  // Differentiate academic (blue) from classic (amber/brown)
   const sectionTitleColor = isProfessional 
     ? '#1e3a8a' 
     : template === 'modern' 
     ? '#1e40af' 
     : template === 'academic' 
-    ? '#1e3a8a' 
+    ? '#1e3a8a' // Blue for academic
+    : template === 'classic'
+    ? '#92400e' // Amber/brown for classic (differentiates from academic)
     : '#374151'
   
   const sectionTitleBorder = isProfessional 
@@ -169,14 +185,28 @@ function generateRightColumn(cvData: CVData, template: CVTemplate, selectedSecti
     : template === 'modern'
     ? 'border-bottom: 2px solid #bfdbfe !important; padding-bottom: 10px !important; border-left: none;'
     : template === 'academic'
-    ? 'border-bottom: 2px solid #1e3a8a !important; padding-bottom: 10px !important; border-left: none;'
+    ? 'border-bottom: 2px solid #1e3a8a !important; padding-bottom: 10px !important; border-left: none;' // Blue border
+    : template === 'classic'
+    ? 'border-bottom: 2px solid #92400e !important; padding-bottom: 10px !important; border-left: none; letter-spacing: 1px !important;' // Amber border with letter spacing
     : 'border-bottom: 1px solid #9ca3af !important; padding-bottom: 10px !important; border-left: none;'
   
   // Item styles - ensure good contrast and visibility
   const itemTitleColor = '#1f2937' // Dark gray for titles
-  const itemSubtitleColor = isProfessional ? '#2563eb' : template === 'modern' ? '#4b5563' : '#4b5563' // Blue for professional, gray for others
+  const itemSubtitleColor = isProfessional 
+    ? '#2563eb' 
+    : template === 'modern' 
+    ? '#4b5563' 
+    : template === 'academic'
+    ? '#1e40af' // Blue for academic
+    : template === 'classic'
+    ? '#92400e' // Amber for classic
+    : '#4b5563'
   const itemDetailsColor = '#6b7280' // Medium gray for details
-  const itemBorderColor = '#e5e7eb' // Light gray for borders
+  const itemBorderColor = template === 'academic' 
+    ? '#dbeafe' // Light blue border for academic
+    : template === 'classic'
+    ? '#fef3c7' // Light amber border for classic
+    : '#e5e7eb' // Light gray for others
   
   let sectionsHTML = ''
   
@@ -189,15 +219,15 @@ function generateRightColumn(cvData: CVData, template: CVTemplate, selectedSecti
         </h2>
         ${cvData.education.map((edu: any) => `
           <div style="margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid ${itemBorderColor};">
-            <p style="font-weight: ${template === 'modern' ? '600' : 'bold'} !important; font-size: 16px !important; margin-bottom: 6px !important; color: ${itemTitleColor} !important;">
+            <p style="font-weight: ${template === 'modern' ? '600' : 'bold'} !important; font-size: 15px !important; margin-bottom: 6px !important; color: ${itemTitleColor} !important; line-height: 1.4 !important;">
               ${escapeHtml(edu.degree_name || edu.degree_type_name || edu.degree || '')}
             </p>
-            <p style="font-size: 14px !important; font-style: italic !important; margin-bottom: 6px !important; color: ${itemSubtitleColor} !important;">
+            <p style="font-size: 13px !important; font-style: italic !important; margin-bottom: 6px !important; color: ${itemSubtitleColor} !important; line-height: 1.5 !important;">
               ${escapeHtml(edu.university_name || edu.institution || '')}${edu.year_of_passing ? `, ${formatYear(edu.year_of_passing)}` : edu.year ? `, ${escapeHtml(String(edu.year))}` : ''}
             </p>
-            ${edu.subject ? `<p style="font-size: 14px; line-height: 1.5; color: ${itemDetailsColor}; margin: 4px 0;">Subject: ${escapeHtml(edu.subject)}</p>` : ''}
-            ${edu.state ? `<p style="font-size: 14px; line-height: 1.5; color: ${itemDetailsColor}; margin: 4px 0;">State: ${escapeHtml(edu.state)}</p>` : ''}
-            ${edu.QS_Ranking ? `<p style="font-size: 14px; line-height: 1.5; color: ${itemDetailsColor}; margin: 4px 0;">QS Ranking: ${escapeHtml(edu.QS_Ranking)}</p>` : ''}
+            ${edu.subject ? `<p style="font-size: 12px; line-height: 1.5; color: ${itemDetailsColor}; margin: 4px 0;">Subject: ${escapeHtml(edu.subject)}</p>` : ''}
+            ${edu.state ? `<p style="font-size: 12px; line-height: 1.5; color: ${itemDetailsColor}; margin: 4px 0;">State: ${escapeHtml(edu.state)}</p>` : ''}
+            ${edu.QS_Ranking ? `<p style="font-size: 12px; line-height: 1.5; color: ${itemDetailsColor}; margin: 4px 0;">QS Ranking: ${escapeHtml(edu.QS_Ranking)}</p>` : ''}
           </div>
         `).join('')}
       </div>
@@ -625,17 +655,17 @@ function generateRightColumn(cvData: CVData, template: CVTemplate, selectedSecti
   return `
     <div style="width: 66.67%; flex: 1 1 66.67%; padding: 32px; min-height: 100vh; background-color: #ffffff;">
       <!-- Header -->
-      <div style="text-align: center; margin-bottom: 32px; ${headerBg} ${!isProfessional ? headerBorder : ''}">
-        <h1 style="font-size: 28px !important; font-weight: bold !important; margin-bottom: 12px !important; color: ${nameColor} !important;">
+      <div style="text-align: center; margin-bottom: 32px; ${headerBg} ${!isProfessional ? headerBorder : ''} ${isProfessional ? 'background-color: #1d4ed8 !important;' : ''}">
+        <h1 style="font-size: ${template === 'professional' ? '22px' : template === 'modern' ? '21px' : template === 'academic' ? '20px' : '19px'} !important; font-weight: bold !important; margin-bottom: 12px !important; color: ${nameColor} !important; line-height: 1.2 !important; ${isProfessional ? 'text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;' : ''}">
           ${escapeHtml(personal.name)}
         </h1>
-        <p style="font-size: 18px !important; margin-bottom: 8px !important; color: ${titleColor} !important;">
+        <p style="font-size: 15px !important; margin-bottom: 8px !important; color: ${titleColor} !important; line-height: 1.4 !important;">
           ${escapeHtml(personal.designation)}
         </p>
-        <p style="font-size: 16px !important; margin-bottom: 8px !important; color: ${titleColor} !important;">
+        <p style="font-size: 14px !important; margin-bottom: 8px !important; color: ${titleColor} !important; line-height: 1.4 !important;">
           ${escapeHtml(personal.department)}
         </p>
-        <p style="font-size: 14px !important; margin-top: 4px !important; color: ${institutionColor} !important;">
+        <p style="font-size: 13px !important; margin-top: 4px !important; color: ${institutionColor} !important; line-height: 1.4 !important;">
           ${escapeHtml(personal.institution)}
         </p>
       </div>
@@ -710,6 +740,13 @@ export function generateCVHTMLTwoColumn(
       body {
         margin: 0;
         padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       
       .section {
