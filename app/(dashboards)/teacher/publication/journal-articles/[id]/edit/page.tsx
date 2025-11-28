@@ -297,8 +297,8 @@ export default function EditJournalArticlePage() {
             </Label>
             <DocumentUpload
               documentUrl={documentUrl}
-              category="journal-articles"
-              subCategory="journals"
+              category="Books/Papers"
+              subCategory="Published Articles/Papers in Journals/Edited Volumes"
               onChange={handleDocumentChange}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}

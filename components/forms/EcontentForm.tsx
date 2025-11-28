@@ -128,8 +128,8 @@ export function EContentForm({
         <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Document *</Label>
         <DocumentUpload
           documentUrl={documentUrl || initialDocumentUrl || undefined}
-          category="research-contributions"
-          subCategory="econtent"
+          category="Research & Consultancy"
+          subCategory="E Content"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])

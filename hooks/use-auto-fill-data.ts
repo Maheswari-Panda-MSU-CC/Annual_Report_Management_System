@@ -80,7 +80,7 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
       const url = documentData.file.dataUrl
       // If it's a data URL, return null (DocumentUpload will handle it)
       if (url.startsWith("data:")) {
-        return null
+        return undefined
       }
       // If it's a local URL, return it
       if (url.startsWith("/uploaded-document/")) {
@@ -88,7 +88,7 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
       }
       return url
     }
-    return null
+    return undefined
   }, [documentData])
 
   // Process and map data fields with intelligent matching
@@ -252,6 +252,13 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
     hasAutoFilledRef.current = true
     lastDataFieldsHashRef.current = dataFieldsHash
 
+    console.log("useAutoFillData: Triggering auto-fill", {
+      formType,
+      fieldsCount: Object.keys(fieldsToFill).length,
+      fields: Object.keys(fieldsToFill),
+      dataFieldsHash: dataFieldsHash.substring(0, 50) + "...",
+    })
+
     // Call onAutoFill with only the fields that should be filled
     onAutoFill(fieldsToFill)
     
@@ -275,12 +282,17 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
     getFormValues
   ])
 
-  // Reset flag if data is cleared (allows re-filling if new document is uploaded)
+  // Reset flag if data is cleared OR if new data arrives (allows re-filling if new document is uploaded)
   useEffect(() => {
     if (!hasDocumentData && dataFieldsHash === "") {
+      // Data was cleared
       hasAutoFilledRef.current = false
       lastDataFieldsHashRef.current = ""
       lastProcessedFieldsRef.current = {}
+    } else if (hasDocumentData && dataFieldsHash !== "" && dataFieldsHash !== lastDataFieldsHashRef.current) {
+      // New data arrived (different hash) - reset flag to allow auto-fill
+      // This handles the case when DocumentUpload extracts new data after page is already mounted
+      hasAutoFilledRef.current = false
     }
   }, [hasDocumentData, dataFieldsHash])
 

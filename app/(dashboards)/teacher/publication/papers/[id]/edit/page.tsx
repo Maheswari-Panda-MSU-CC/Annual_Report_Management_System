@@ -250,8 +250,8 @@ export default function EditPaperPage() {
             </Label>
             <DocumentUpload
               documentUrl={documentUrl}
-              category="papers"
-              subCategory="papers"
+              category="Books/Papers"
+              subCategory="Papers Presented"
               onChange={handleDocumentChange}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}

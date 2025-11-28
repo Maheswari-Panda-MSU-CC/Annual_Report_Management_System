@@ -1,17 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { ArrowLeft, FileText, Users, Building, Presentation, Brain, Loader2 } from "lucide-react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ArrowLeft, FileText, Users, Building, Presentation } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { DocumentUpload } from "@/components/ui/document-upload"
 import { RefresherOrientationForm } from "@/components/forms/RefresherOrientationForm"
 import { useForm } from "react-hook-form"
 import { AcademicProgramForm } from "@/components/forms/AcademicProgramForm"
@@ -196,37 +192,7 @@ export default function AddEventPage() {
     onlyFillEmpty: true,
     getFormValues: () => watch(),
     onAutoFill: (fields) => {
-      // Only auto-fill if document matches current tab
-      if (!documentData) {
-        console.warn("[AutoFill] No document data available")
-        return
-      }
-      
-      const category = documentData.category || documentData.analysis?.classification?.category || ""
-      const subCategory = documentData.subCategory || documentData.analysis?.classification?.["sub-category"] || ""
-      
-      const matchesTab = doesDocumentMatchTab(activeTab, category, subCategory)
-      
-      if (!matchesTab) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log("[AutoFill] Skipped - Document doesn't match current tab", {
-            activeTab,
-            category,
-            subCategory,
-            fieldsCount: Object.keys(fields).length,
-            fields: Object.keys(fields)
-          })
-        }
-        return
-      }
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log("[AutoFill] Filling fields for tab:", activeTab, {
-          fieldsCount: Object.keys(fields).length,
-          fields: Object.keys(fields),
-          sampleValues: Object.fromEntries(Object.entries(fields).slice(0, 3))
-        })
-      }
+    
       // Map fields based on active tab
       if (activeTab === "refresher") {
         if (fields.name) setValue("name", String(fields.name))
@@ -440,88 +406,6 @@ export default function AddEventPage() {
     const url = new URL(window.location.href)
     url.searchParams.set("tab", value)
     window.history.pushState({}, "", url.toString())
-  }
-
-  // Form states
-  const [refresherForm, setRefresherForm] = useState({
-    name: "",
-    courseType: "",
-    startDate: "",
-    endDate: "",
-    organizingUniversity: "",
-    organizingInstitute: "",
-    organizingDepartment: "",
-    centre: "",
-    supportingDocument: "",
-  })
-
-  const [contributionForm, setContributionForm] = useState({
-    name: "",
-    programme: "",
-    place: "",
-    date: "",
-    year: "",
-    participatedAs: "",
-    supportingDocument: "",
-  })
-
-  const [academicBodyForm, setAcademicBodyForm] = useState({
-    courseTitle: "",
-    academicBody: "",
-    place: "",
-    participatedAs: "",
-    year: "",
-    supportingDocument: "",
-  })
-
-  const [committeeForm, setCommitteeForm] = useState({
-    name: "",
-    committeeName: "",
-    level: "",
-    participatedAs: "",
-    year: "",
-    supportingDocument: "",
-  })
-
-  const [talksForm, setTalksForm] = useState({
-    name: "",
-    programme: "",
-    place: "",
-    talkDate: "",
-    titleOfEvent: "",
-    participatedAs: "",
-    supportingDocument: "",
-  })
-
-  // Handle form changes
-  const handleRefresherChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setRefresherForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleContributionChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setContributionForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleAcademicBodyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setAcademicBodyForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleCommitteeChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setCommitteeForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleTalksChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setTalksForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  // File upload handlers
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFiles(files)
   }
 
   const handleExtractInfo = async () => {
@@ -831,25 +715,6 @@ export default function AddEventPage() {
       // Error toast is handled by mutation
       console.error("Error adding teacher talk:", error)
     }
-  }
-
-  const handleTalksSubmitOld = (e: React.FormEvent) => {
-    e.preventDefault()
-    console.log("Talks Data:", talksForm)
-    toast({
-      title: "Success",
-      description: "Academic/Research Talk added successfully!",
-    })
-    // Reset form
-    setTalksForm({
-      name: "",
-      programme: "",
-      place: "",
-      talkDate: "",
-      titleOfEvent: "",
-      participatedAs: "",
-      supportingDocument: "",
-    })
   }
 
   return (

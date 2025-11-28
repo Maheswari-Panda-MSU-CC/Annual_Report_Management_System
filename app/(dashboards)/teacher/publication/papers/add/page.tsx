@@ -239,8 +239,8 @@ export default function AddConferencePaperPage() {
             </Label>
             <DocumentUpload
               documentUrl={documentUrl || autoFillDocumentUrl || undefined}
-              category="papers"
-              subCategory="papers"
+              category="Books/Papers"
+              subCategory="Papers Presented"
               onChange={handleDocumentChange}
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}

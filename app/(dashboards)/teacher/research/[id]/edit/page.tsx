@@ -403,8 +403,8 @@ export default function EditResearchPage() {
             <Label className="text-lg font-semibold mb-3 block">Step 1: Supporting Document</Label>
             <DocumentUpload
               documentUrl={documentUrl || undefined}
-              category="research"
-              subCategory="research-project"
+              category="Research & Consultancy"
+              subCategory="Research Projects"
               onChange={(url) => {
                 setDocumentUrl(url)
                 setValue("Pdf", url)

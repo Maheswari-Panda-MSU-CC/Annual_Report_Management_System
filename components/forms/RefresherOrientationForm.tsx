@@ -87,8 +87,8 @@ export function RefresherOrientationForm({
         </Label>
         <DocumentUpload
           documentUrl={documentUrl}
-          category="talks-events"
-          subCategory="refresher"
+          category="Academic Programs"
+          subCategory="Refresher/Orientantion Course"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supporting_doc", url, { shouldValidate: true })

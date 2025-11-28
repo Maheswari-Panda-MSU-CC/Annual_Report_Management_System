@@ -83,8 +83,8 @@ export function AwardsFellowshipForm({
         </Label>
         <DocumentUpload
           documentUrl={documentUrl}
-          category="awards-recognition"
-          subCategory="awards"
+          category="Awards/Performance"
+          subCategory="Awards/Fellowship/Recognition"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("Image", url, { shouldValidate: true })

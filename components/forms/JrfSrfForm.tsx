@@ -131,8 +131,8 @@ export function JrfSrfForm({
         </Label>
         <DocumentUpload
           documentUrl={documentUrl || initialDocumentUrl || undefined}
-          category="research-contributions"
-          subCategory="jrf-srf"
+          category="Research & Consultancy"
+          subCategory="Details Of JRF/SRF Working With You"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])

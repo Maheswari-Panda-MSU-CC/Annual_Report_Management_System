@@ -77,8 +77,8 @@ export function PerformanceTeacherForm({
         </Label>
         <DocumentUpload
           documentUrl={documentUrl}
-          category="awards-recognition"
-          subCategory="performance"
+          category="Awards/Performance"
+          subCategory="Performance by Individual/Group"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("Image", url, { shouldValidate: true })

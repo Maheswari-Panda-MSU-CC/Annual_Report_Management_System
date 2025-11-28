@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useDropzone } from "react-dropzone"
 import { Upload, File, X, Loader2, RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DocumentViewer } from "@/components/document-viewer"
 import { Skeleton } from "@/components/ui/skeleton"
 import { validatePdfPageCount } from "@/lib/pdf-validation-utils"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 interface DocumentUploadProps {
   documentUrl?: string
@@ -26,6 +27,7 @@ interface DocumentUploadProps {
   hideExtractButton?: boolean // Flag to hide Extract Data Fields button
   disabled?: boolean // NEW: Disable upload/clear during analysis
   onClear?: () => void // NEW: Callback when document is cleared
+  onClearFields?: () => void // NEW: Callback to clear form fields when document is cleared
   onError?: (error: string) => void // NEW: Optional callback for error notifications (e.g., toast)
 }
 
@@ -45,6 +47,7 @@ export function DocumentUpload({
   hideExtractButton = false, // Default to false to maintain existing behavior
   disabled = false, // NEW: Default to false for backward compatibility
   onClear, // NEW: Optional callback
+  onClearFields, // NEW: Optional callback to clear form fields
   onError, // NEW: Optional error callback for toast notifications
 }: DocumentUploadProps) {
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(initialDocumentUrl)
@@ -56,11 +59,28 @@ export function DocumentUpload({
   const [showUploadUI, setShowUploadUI] = useState(!initialDocumentUrl)
   const [documentType, setDocumentType] = useState<string>("pdf")
   const [documentName, setDocumentName] = useState<string>("document")
+  // Store the actual File object for API calls (not just URL)
+  const fileRef = useRef<File | null>(null)
+  // Access document analysis context to store extracted data
+  const { setDocumentData, clearDocumentData } = useDocumentAnalysis()
 
   // Get file extension from filename or URL
   const getFileExtension = (filename: string): string => {
     const parts = filename.split(".")
     return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "pdf"
+  }
+
+  // Get MIME type from file extension
+  const getMimeType = (extension: string): string => {
+    const mimeTypes: Record<string, string> = {
+      pdf: "application/pdf",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }
+    return mimeTypes[extension] || "application/pdf"
   }
 
   // Handle Smart Document Analyzer redirect props
@@ -83,19 +103,6 @@ export function DocumentUpload({
       onExtract(initialExtractedFields)
     }
   }, [initialExtractedFields, onExtract])
-
-  // Get MIME type from file extension
-  const getMimeType = (extension: string): string => {
-    const mimeTypes: Record<string, string> = {
-      pdf: "application/pdf",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      doc: "application/msword",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    }
-    return mimeTypes[extension] || "application/pdf"
-  }
 
   // Validate file
   const validateFile = async (file: File): Promise<string | null> => {
@@ -256,6 +263,8 @@ export function DocumentUpload({
       setDocumentName(file.name)
       setShowUploadUI(false)
       setUploadedFile(null)
+      // Store the actual File object for API calls
+      fileRef.current = file
 
       // Call onChange callback with local URL
       // Form submission will handle S3 upload using the file in /public/uploaded-document/
@@ -296,6 +305,7 @@ export function DocumentUpload({
       if (acceptedFiles.length > 0) {
         const file = acceptedFiles[0]
         setUploadedFile(file)
+        fileRef.current = file // Store file reference immediately
         
         // Call onFileSelect callback if provided (for SmartDocumentAnalyzer)
         // Only call if validation will pass (we'll validate in handleFileUpload)
@@ -365,8 +375,47 @@ export function DocumentUpload({
 
   // Handle Extract Data Fields
   const handleExtractData = async () => {
-    if (!documentUrl && !uploadedFile) {
-      setError("Please upload a document first")
+    let fileToExtract = fileRef.current || uploadedFile
+
+    // Get the current documentUrl (use prop if internal state is empty)
+    const currentDocumentUrl = documentUrl || initialDocumentUrl
+
+    // If we don't have the file but have a documentUrl, try to fetch it
+    if (!fileToExtract && currentDocumentUrl) {
+      setIsExtracting(true)
+      setError(null)
+
+      try {
+        const response = await fetch(currentDocumentUrl)
+        if (response.ok) {
+          const blob = await response.blob()
+          const urlParts = currentDocumentUrl.split("/")
+          const fileName = urlParts[urlParts.length - 1] || documentName || "document.pdf"
+          const fileExtension = getFileExtension(fileName)
+          const mimeType = getMimeType(fileExtension)
+          // Create File object from Blob
+          // File constructor: new File(fileBits, fileName, options)
+          fileToExtract = new (window.File || File)([blob], fileName, { type: mimeType })
+          fileRef.current = fileToExtract
+        } else {
+          setError("Could not access the document file. Please re-upload the document.")
+          setIsExtracting(false)
+          return
+        }
+      } catch (fetchError) {
+        console.error("Error fetching file from URL:", fetchError)
+        setError("Could not access the document file. Please re-upload the document.")
+        setIsExtracting(false)
+        return
+      }
+    }
+
+    if (!fileToExtract) {
+      if (currentDocumentUrl) {
+        setError("Could not access the document file. Please re-upload the document.")
+      } else {
+        setError("Please upload a document first")
+      }
       return
     }
 
@@ -374,75 +423,112 @@ export function DocumentUpload({
     setError(null)
 
     try {
-      // Determine the type for extraction based on category/subcategory
-      // The API expects a 'type' field that matches the form type
-      let extractionType = category || subCategory || "publication"
+      // Use reverse mapping to get standard category and subcategory from form type
+      let standardCategory: string | null = null
+      let standardSubCategory: string | null = null
 
-      // Map common categories to API types
-      const typeMap: Record<string, string> = {
-        "research": "research_project",
-        "research-project": "research_project",
-        "publication": "publication",
-        "journal-article": "articles",
-        "journal-articles": "articles",
-        "books": "books",
-        "papers": "papers",
-        "patents": "patent",
-        "patent": "patent",
-        "awards": "awards",
-        "award": "award",
-        "talks": "talks",
-        "events": "event",
-        "refresher": "refresher",
-        "performance": "performance",
-        "extension": "extension",
-        "econtent": "econtent",
-        "policy": "policy",
-        "consultancy": "contribution",
-        "collaborations": "contribution",
-        "visits": "contribution",
-        "financial": "contribution",
-        "jrf-srf": "jrf_srf",
-        "phd": "contribution",
-        "copyrights": "contribution",
-        "academic-bodies": "academic-bodies",
-        "committees": "committee",
-        "academic-recommendations": "academic_recommendation",
+      // Fallback to provided category/subCategory if reverse mapping fails
+      if (!standardCategory) {
+        standardCategory = category || ""
+      }
+      if (!standardSubCategory) {
+        standardSubCategory = subCategory || ""
       }
 
-      // Normalize the type
-      const normalizedType = extractionType.toLowerCase().replace(/\s+/g, "-")
-      const apiType = typeMap[normalizedType] || normalizedType
+      // Create FormData with file, category, and subCategory
+      const formData = new FormData()
+      formData.append("file", fileToExtract)
+      formData.append("category", standardCategory)
+      if (standardSubCategory) {
+        formData.append("subCategory", standardSubCategory)
+      }
 
-      // Call LLM extraction API (dummy API that returns mock data)
+      // Call LLM extraction API with multipart/form-data
       const response = await fetch("/api/llm/get-formfields", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: apiType,
-          category: category,
-          subcategory: subCategory,
-        }),
+        body: formData, // Don't set Content-Type header - browser will set it with boundary
       })
 
       if (!response.ok) {
-        throw new Error("Failed to extract data fields")
+        let errorMessage = "Failed to extract data fields"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData?.error?.message || errorData?.error || errorData?.message || errorMessage
+        } catch {
+          errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success && data.data) {
-        // Call onExtract callback
-        if (onExtract) {
-          onExtract(data.data)
+      if (!result.success) {
+        const errorMessage = result?.error?.message || result?.error || result?.message || "Document field extraction failed."
+        throw new Error(errorMessage)
+      }
+
+      // The API returns dataFields directly (not nested in data)
+      const dataFields = result.dataFields || {}
+
+      if (Object.keys(dataFields).length === 0) {
+        throw new Error("No data fields extracted from document")
+      }
+
+      // Store extracted data in context (like smart-document-analyzer)
+      // This allows useAutoFillData hook to access the data automatically
+      if (fileToExtract && (documentUrl || initialDocumentUrl)) {
+        const currentDocUrl = documentUrl || initialDocumentUrl || ""
+        
+        // Transform API response to match context format (same as smart-document-analyzer)
+        const analysisData = {
+          success: result.success,
+          classification: {
+            category: result.category || standardCategory || "",
+            "sub-category": result.subCategory || standardSubCategory || "",
+            dataFields: dataFields,
+          },
+          extractedText: result.extractedText || "",
+          fileType: result.fileType || fileToExtract.type || "",
+          fileName: result.fileName || fileToExtract.name || "",
+          timestamp: result.timestamp || new Date().toISOString(),
         }
-      } else {
-        throw new Error("No data extracted")
+
+        // Store in context (same format as smart-document-analyzer)
+        const contextData = {
+          file: {
+            dataUrl: currentDocUrl,
+            name: fileToExtract.name,
+            type: fileToExtract.type,
+          },
+          category: result.category || standardCategory || category || "",
+          subCategory: result.subCategory || standardSubCategory || subCategory || "",
+          dataFields: dataFields,
+          analysis: analysisData,
+          autoFill: true,
+        }
+        
+        console.log("DocumentUpload: Storing data in context", {
+          category: contextData.category,
+          subCategory: contextData.subCategory,
+          dataFieldsCount: Object.keys(contextData.dataFields).length,
+          autoFill: contextData.autoFill,
+        })
+        
+        setDocumentData(contextData)
+      }
+
+      // Still call onExtract callback for backward compatibility
+      // Existing pages that use onExtract will continue to work
+      // Pass dataFields as the extracted data
+      if (onExtract) {
+        onExtract(dataFields)
       }
     } catch (err: any) {
-      setError(err.message || "Failed to extract data fields")
+      const errorMessage = err?.message || "Failed to extract data fields"
+      setError(errorMessage)
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setIsExtracting(false)
     }
@@ -466,7 +552,16 @@ export function DocumentUpload({
     setDocumentUrl(undefined)
     setShowUploadUI(true)
     setUploadedFile(null)
+    fileRef.current = null // Clear stored file reference
     setError(null)
+    
+    // Clear document data from context
+    clearDocumentData()
+    
+    // Call onClearFields callback to clear form fields
+    if (onClearFields) {
+      onClearFields()
+    }
     
     // Call onClear callback if provided
     if (onClear) {

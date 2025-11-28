@@ -131,8 +131,8 @@ export function PhdGuidanceForm({
         <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Document *</Label>
         <DocumentUpload
           documentUrl={documentUrl || initialDocumentUrl || undefined}
-          category="research-contributions"
-          subCategory="phd"
+          category="Research & Consultancy"
+          subCategory="PhD Guidance Details"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])

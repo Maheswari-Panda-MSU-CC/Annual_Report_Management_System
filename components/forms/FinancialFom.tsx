@@ -133,8 +133,8 @@ export function FinancialForm({
           Step 1: Upload Document *</Label>
         <DocumentUpload
           documentUrl={documentUrl || initialDocumentUrl || undefined}
-          category="research-contributions"
-          subCategory="financial"
+          category="Research & Consultancy"
+          subCategory="Financial Support/Aid Received For Academic/Research Activities"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])

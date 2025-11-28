@@ -175,8 +175,8 @@ export function CollaborationForm({
         <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Collaboration Document *</Label>
         <DocumentUpload
           documentUrl={documentUrl || initialDocumentUrl || undefined}
-          category="research-contributions"
-          subCategory="collaborations"
+          category="Research & Consultancy"
+          subCategory="Collaborations/MOUs/Linkages Signed"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])

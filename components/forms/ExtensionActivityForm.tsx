@@ -84,8 +84,8 @@ export function ExtensionActivityForm({
         </Label>
         <DocumentUpload
           documentUrl={documentUrl}
-          category="awards-recognition"
-          subCategory="extension"
+          category="Awards/Performance"
+          subCategory="Extension"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("Image", url, { shouldValidate: true })

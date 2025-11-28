@@ -286,8 +286,8 @@ export default function EditBookPage() {
             </Label>
             <DocumentUpload
               documentUrl={documentUrl}
-              category="books"
-              subCategory="books"
+              category="Books/Papers"
+              subCategory="Books/Books Chapter(s) Published"
               onChange={handleDocumentChange}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}

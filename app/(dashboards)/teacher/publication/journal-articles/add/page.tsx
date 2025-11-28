@@ -312,8 +312,8 @@ export default function AddJournalArticlePage() {
             </Label>
             <DocumentUpload
               documentUrl={documentUrl || autoFillDocumentUrl || undefined}
-              category="journal-articles"
-              subCategory="journals"
+              category="Books/Papers"
+              subCategory="Published Articles/Papers in Journals/Edited Volumes"
               onChange={handleDocumentChange}
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}

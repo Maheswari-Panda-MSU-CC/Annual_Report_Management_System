@@ -77,8 +77,8 @@ export function AcademicBodiesForm({
                 <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Supporting Document</Label>
                 <DocumentUpload
                     documentUrl={documentUrl}
-                    category="talks-events"
-                    subCategory="academic-bodies"
+                    category="Academic Programs"
+                    subCategory="Participation in Academic Bodies of other Universities"
                     onChange={(url) => {
                         setDocumentUrl(url)
                         setValue("supporting_doc", url, { shouldValidate: true })

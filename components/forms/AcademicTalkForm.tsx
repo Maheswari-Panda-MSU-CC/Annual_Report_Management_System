@@ -85,8 +85,8 @@ export function AcademicTalkForm({
                 <Label className="text-lg font-semibold mb-3 block">Step 1: Upload Supporting Document</Label>
                 <DocumentUpload
                     documentUrl={documentUrl}
-                    category="talks-events"
-                    subCategory="talks"
+                    category="Talks"
+                    subCategory="Talks of Academic/Research Nature"
                     onChange={(url) => {
                         setDocumentUrl(url)
                         setValue("supporting_doc", url, { shouldValidate: true })

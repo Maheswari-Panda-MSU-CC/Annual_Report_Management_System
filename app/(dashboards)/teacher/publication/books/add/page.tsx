@@ -277,8 +277,8 @@ export default function AddBookPage() {
             </Label>
             <DocumentUpload
               documentUrl={documentUrl || autoFillDocumentUrl || undefined}
-              category="books"
-              subCategory="books"
+              category="Books/Papers"
+              subCategory="Books/Books Chapter(s) Published"
               onChange={handleDocumentChange}
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}

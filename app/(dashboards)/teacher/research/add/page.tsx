@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback, useEffect } from "react"
+import { useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -388,8 +388,8 @@ export default function AddResearchPage() {
                 <div>
                   <DocumentUpload
                     documentUrl={field.value || autoFillDocumentUrl || undefined}
-                    category="research"
-                    subCategory="research-project"
+                    category="Research & Consultancy"
+                    subCategory="Research Projects"
                     onChange={(url) => {
                       field.onChange(url)
                     }}

@@ -9,9 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { SearchableSelect } from "@/components/ui/searchable-select"
-import { Loader2, Save } from "lucide-react"
+import { Save } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 
 interface AcademicVisitFormProps {
@@ -125,8 +124,8 @@ export function AcademicVisitForm({
         <Label className="text-base sm:text-lg font-semibold mb-2 sm:mb-3 block">Step 1: Upload Document *</Label>
         <DocumentUpload
           documentUrl={documentUrl || initialDocumentUrl || undefined}
-          category="research-contributions"
-          subCategory="visits"
+          category="Research & Consultancy"
+          subCategory="Academic/Research Visit"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])

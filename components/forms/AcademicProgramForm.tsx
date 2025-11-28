@@ -86,8 +86,8 @@ export function AcademicProgramForm({
         </Label>
         <DocumentUpload
           documentUrl={documentUrl}
-          category="talks-events"
-          subCategory="academic-programs"
+          category="Academic Programs"
+          subCategory="Contribution in Organising Academic Programs"
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supporting_doc", url, { shouldValidate: true })
