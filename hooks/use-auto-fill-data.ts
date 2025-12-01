@@ -150,14 +150,30 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
           processedValue = parsedDate
         }
       }
-      // Handle numeric fields
+      // Handle numeric fields (including grant amounts with commas)
       else if (mappedKey.includes("num") || 
                mappedKey.includes("count") ||
                mappedKey.includes("index") ||
-               mappedKey.includes("factor")) {
-        const numValue = parseFloat(extractedValue)
+               mappedKey.includes("factor") ||
+               mappedKey === "grant_sanctioned" ||
+               mappedKey === "grant_received") {
+        // Remove commas and spaces, then parse
+        const cleanedValue = String(extractedValue).replace(/[,\s]/g, '')
+        const numValue = parseFloat(cleanedValue)
         if (!isNaN(numValue)) {
           processedValue = numValue
+        }
+      }
+      // Handle duration field - extract number from "9 months" format
+      else if (mappedKey === "duration") {
+        // Extract number from string like "9 months" or "9"
+        const durationStr = String(extractedValue)
+        const match = durationStr.match(/(\d+)/)
+        if (match) {
+          const numValue = parseInt(match[1])
+          if (!isNaN(numValue) && numValue > 0) {
+            processedValue = numValue
+          }
         }
       }
 

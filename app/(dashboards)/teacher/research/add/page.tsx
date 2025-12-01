@@ -80,10 +80,40 @@ export default function AddResearchPage() {
       // Auto-fill form fields from document analysis
       if (fields.title) setValue("title", String(fields.title))
       if (fields.funding_agency !== undefined && fields.funding_agency !== null) setValue("funding_agency", Number(fields.funding_agency))
-      if (fields.grant_sanctioned) setValue("grant_sanctioned", String(fields.grant_sanctioned))
-      if (fields.grant_received) setValue("grant_received", String(fields.grant_received))
+      
+      // Handle grant_sanctioned - remove commas if present
+      if (fields.grant_sanctioned) {
+        const grantValue = String(fields.grant_sanctioned).replace(/[,\s]/g, '')
+        setValue("grant_sanctioned", grantValue)
+      }
+      
+      // Handle grant_received - remove commas if present
+      if (fields.grant_received) {
+        const grantValue = String(fields.grant_received).replace(/[,\s]/g, '')
+        setValue("grant_received", grantValue)
+      }
+      
       if (fields.proj_nature !== undefined && fields.proj_nature !== null) setValue("proj_nature", Number(fields.proj_nature))
-      if (fields.duration !== undefined && fields.duration !== null) setValue("duration", Number(fields.duration))
+      
+      // Handle duration - extract number from "9 months" format
+      if (fields.duration !== undefined && fields.duration !== null) {
+        let durationValue = 0
+        if (typeof fields.duration === 'number') {
+          durationValue = fields.duration
+        } else {
+          const durationStr = String(fields.duration)
+          const match = durationStr.match(/(\d+)/)
+          if (match) {
+            durationValue = parseInt(match[1]) || 0
+          } else {
+            durationValue = parseInt(durationStr) || 0
+          }
+        }
+        if (durationValue > 0) {
+          setValue("duration", durationValue)
+        }
+      }
+      
       if (fields.status !== undefined && fields.status !== null) setValue("status", Number(fields.status))
       if (fields.start_date) setValue("start_date", String(fields.start_date))
       if (fields.proj_level !== undefined && fields.proj_level !== null) setValue("proj_level", Number(fields.proj_level))
@@ -134,24 +164,44 @@ export default function AddResearchPage() {
     }
     if (fields.totalGrantSanctioned || fields.grant_sanctioned) {
       const value = fields.totalGrantSanctioned || fields.grant_sanctioned
-      setValue("grant_sanctioned", value.toString())
+      // Remove commas and convert to string for the form field
+      const cleanedValue = String(value).replace(/[,\s]/g, '')
+      setValue("grant_sanctioned", cleanedValue)
       fieldsPopulated++
     }
     if (fields.totalGrantReceived || fields.grant_received) {
       const value = fields.totalGrantReceived || fields.grant_received
-      setValue("grant_received", value.toString())
+      // Remove commas and convert to string for the form field
+      const cleanedValue = String(value).replace(/[,\s]/g, '')
+      setValue("grant_received", cleanedValue)
       fieldsPopulated++
     }
-    if (fields.projectNature || fields.proj_nature) {
-      const value = fields.projectNature || fields.proj_nature
-      setValue("proj_nature", typeof value === 'number' ? value : null)
-      fieldsPopulated++
+    if (fields.projectNature || fields.proj_nature || fields["Project Nature"]) {
+      const value = fields.projectNature || fields.proj_nature || fields["Project Nature"]
+      // Try dropdown matching first
+      if (typeof value === 'string') {
+        const matchingNature = projectNatureOptions.find(
+          (n) => n.name.toLowerCase().includes(value.toLowerCase()) ||
+                 value.toLowerCase().includes(n.name.toLowerCase())
+        )
+        if (matchingNature) {
+          setValue("proj_nature", matchingNature.id)
+          fieldsPopulated++
+        } else if (typeof value === 'number') {
+          setValue("proj_nature", value)
+          fieldsPopulated++
+        }
+      } else if (typeof value === 'number') {
+        setValue("proj_nature", value)
+        fieldsPopulated++
+      }
     }
-    if (fields.level || fields.proj_level) {
-      const levelName = fields.level || fields.proj_level
+    if (fields.level || fields.proj_level || fields.projectNatureLevel || fields["Project Nature Level"]) {
+      const levelName = fields.level || fields.proj_level || fields.projectNatureLevel || fields["Project Nature Level"]
+      const levelNameStr = String(levelName)
       const matchingLevel = projectLevelOptions.find(
-        (l) => l.name.toLowerCase().includes(levelName.toLowerCase()) ||
-               levelName.toLowerCase().includes(l.name.toLowerCase())
+        (l) => l.name.toLowerCase().includes(levelNameStr.toLowerCase()) ||
+               levelNameStr.toLowerCase().includes(l.name.toLowerCase())
       )
       if (matchingLevel) {
         setValue("proj_level", matchingLevel.id)
@@ -159,16 +209,30 @@ export default function AddResearchPage() {
       }
     }
     if (fields.duration) {
-      const durationValue = typeof fields.duration === 'number' 
-        ? fields.duration 
-        : parseInt(fields.duration.toString()) || 0
-      setValue("duration", durationValue)
-      fieldsPopulated++
+      let durationValue = 0
+      if (typeof fields.duration === 'number') {
+        durationValue = fields.duration
+      } else {
+        // Extract number from string like "9 months" or "9"
+        const durationStr = String(fields.duration)
+        const match = durationStr.match(/(\d+)/)
+        if (match) {
+          durationValue = parseInt(match[1]) || 0
+        } else {
+          durationValue = parseInt(durationStr) || 0
+        }
+      }
+      if (durationValue > 0) {
+        setValue("duration", durationValue)
+        fieldsPopulated++
+      }
     }
-    if (fields.status) {
+    if (fields.status || fields["Status"]) {
+      const statusValue = fields.status || fields["Status"]
+      const statusStr = String(statusValue)
       const matchingStatus = projectStatusOptions.find(
-        (s) => s.name.toLowerCase().includes(fields.status.toLowerCase()) ||
-               fields.status.toLowerCase().includes(s.name.toLowerCase())
+        (s) => s.name.toLowerCase().includes(statusStr.toLowerCase()) ||
+               statusStr.toLowerCase().includes(s.name.toLowerCase())
       )
       if (matchingStatus) {
         setValue("status", matchingStatus.id)

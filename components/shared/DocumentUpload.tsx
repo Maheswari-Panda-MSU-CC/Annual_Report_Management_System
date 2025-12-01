@@ -442,9 +442,10 @@ export function DocumentUpload({
       if (standardSubCategory) {
         formData.append("subCategory", standardSubCategory)
       }
+      formData.append("isTargeted", "true")
 
       // Call LLM extraction API with multipart/form-data
-      const response = await fetch("/api/llm/get-formfields", {
+      const response = await fetch("/api/llm/categorize-document", {
         method: "POST",
         body: formData, // Don't set Content-Type header - browser will set it with boundary
       })
@@ -468,7 +469,7 @@ export function DocumentUpload({
       }
 
       // The API returns dataFields directly (not nested in data)
-      const dataFields = result.dataFields || {}
+      const dataFields = result.classification.dataFields || {}
 
       if (Object.keys(dataFields).length === 0) {
         throw new Error("No data fields extracted from document")

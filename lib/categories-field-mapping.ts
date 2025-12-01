@@ -111,7 +111,8 @@ export const FIELD_NAME_MAPPINGS: Record<string, Record<string, string>> = {
     "Funding Agency": "funding_agency",
     "Total Grant Sanctioned": "grant_sanctioned",
     "Total Grant Received": "grant_received",
-    "Project Nature Level": "project_nature_level",
+    "Project Nature Level": "proj_level", // Maps to project level dropdown
+    "Project Nature": "proj_nature", // Maps to project nature dropdown
     "Duration": "duration",
     "Status": "status",
     "Start Date": "start_date",
