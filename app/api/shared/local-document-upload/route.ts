@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { writeFile, unlink, readdir } from "fs/promises"
+import { writeFile, unlink, readdir, readFile } from "fs/promises"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 
@@ -8,6 +8,18 @@ const UPLOAD_DIR = join(process.cwd(), "public", "uploaded-document")
 // Ensure upload directory exists
 if (!existsSync(UPLOAD_DIR)) {
   mkdirSync(UPLOAD_DIR, { recursive: true })
+}
+
+// Helper to get MIME type from file extension
+function getMimeType(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase()
+  const mimeTypes: Record<string, string> = {
+    pdf: "application/pdf",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+  }
+  return mimeTypes[ext || ""] || "application/octet-stream"
 }
 
 export async function POST(request: NextRequest) {
@@ -81,6 +93,59 @@ export async function POST(request: NextRequest) {
     console.error("Error uploading file:", error)
     return NextResponse.json(
       { success: false, error: error.message || "Failed to upload file" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const fileName = searchParams.get("fileName")
+
+    if (!fileName) {
+      return NextResponse.json(
+        { success: false, error: "File name is required" },
+        { status: 400 }
+      )
+    }
+
+    // Security: Prevent directory traversal attacks
+    if (fileName.includes("..") || fileName.includes("/") || fileName.includes("\\")) {
+      return NextResponse.json(
+        { success: false, error: "Invalid file name" },
+        { status: 400 }
+      )
+    }
+
+    const filePath = join(UPLOAD_DIR, fileName)
+
+    // Check if file exists
+    if (!existsSync(filePath)) {
+      return NextResponse.json(
+        { success: false, error: "File not found" },
+        { status: 404 }
+      )
+    }
+
+    // Read file
+    const fileBuffer = await readFile(filePath)
+    const mimeType = getMimeType(fileName)
+
+    // Return file with appropriate headers
+    // Convert Buffer to Uint8Array for NextResponse compatibility
+    return new NextResponse(new Uint8Array(fileBuffer), {
+      status: 200,
+      headers: {
+        "Content-Type": mimeType,
+        "Content-Disposition": `inline; filename="${fileName}"`,
+        "Cache-Control": "public, max-age=3600",
+      },
+    })
+  } catch (error: any) {
+    console.error("Error serving file:", error)
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to serve file" },
       { status: 500 }
     )
   }

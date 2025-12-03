@@ -128,48 +128,6 @@ export default function AddJrfSrfPage() {
     clearAfterUse: false, // Keep data for manual editing
   })
 
-  const handleExtractInfo = async () => {
-    setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "jrf_srf" }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: "jrf_srf" }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          form.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-          duration: 3000,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }
-
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
       toast({
@@ -309,10 +267,9 @@ export default function AddJrfSrfPage() {
             isExtracting={isExtracting}
             selectedFiles={null}
             handleFileSelect={() => {}}
-            handleExtractInfo={handleExtractInfo}
             isEdit={false}
             jrfSrfTypeOptions={jrfSrfTypeOptions}
-            initialDocumentUrl={autoFillDocumentUrl || "undefined"}
+            initialDocumentUrl={autoFillDocumentUrl || undefined}
           />
           </CardContent>
         </Card>

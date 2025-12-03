@@ -10,6 +10,8 @@ import { DocumentViewer } from "@/components/document-viewer"
 import { Skeleton } from "@/components/ui/skeleton"
 import { validatePdfPageCount } from "@/lib/pdf-validation-utils"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { getDocumentDisplayUrl } from "@/lib/document-url-utils"
+import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
 
 interface DocumentUploadProps {
   documentUrl?: string
@@ -29,6 +31,7 @@ interface DocumentUploadProps {
   onClear?: () => void // NEW: Callback when document is cleared
   onClearFields?: () => void // NEW: Callback to clear form fields when document is cleared
   onError?: (error: string) => void // NEW: Optional callback for error notifications (e.g., toast)
+  isEditMode?: boolean // NEW: Flag to indicate if component is used in edit page/modal
 }
 
 export function DocumentUpload({
@@ -49,6 +52,7 @@ export function DocumentUpload({
   onClear, // NEW: Optional callback
   onClearFields, // NEW: Optional callback to clear form fields
   onError, // NEW: Optional error callback for toast notifications
+  isEditMode = false, // NEW: Default to false (add mode)
 }: DocumentUploadProps) {
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(initialDocumentUrl)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
@@ -63,6 +67,7 @@ export function DocumentUpload({
   const fileRef = useRef<File | null>(null)
   // Access document analysis context to store extracted data
   const { setDocumentData, clearDocumentData } = useDocumentAnalysis()
+  const { confirm, DialogComponent: ClearDocumentDialog } = useConfirmationDialog()
 
   // Get file extension from filename or URL
   const getFileExtension = (filename: string): string => {
@@ -481,6 +486,7 @@ export function DocumentUpload({
         const currentDocUrl = documentUrl || initialDocumentUrl || ""
         
         // Transform API response to match context format (same as smart-document-analyzer)
+        // Always use a new timestamp to ensure hash changes for each extraction
         const analysisData = {
           success: result.success,
           classification: {
@@ -491,7 +497,7 @@ export function DocumentUpload({
           extractedText: result.extractedText || "",
           fileType: result.fileType || fileToExtract.type || "",
           fileName: result.fileName || fileToExtract.name || "",
-          timestamp: result.timestamp || new Date().toISOString(),
+          timestamp: new Date().toISOString(), // Always use current timestamp to ensure unique hash
         }
 
         // Store in context (same format as smart-document-analyzer)
@@ -536,41 +542,113 @@ export function DocumentUpload({
   }
 
   // Handle Update Document
-  const handleUpdateDocument = () => {
+  const handleUpdateDocument = async () => {
     if (disabled) return // Don't allow update if disabled
+    
+    // In edit mode, don't show dialog and don't clear form fields - just allow re-upload
+    if (isEditMode) {
+      // Just reset the upload UI without clearing form fields
+      clearDocumentData() // Clear document data from context
+      setShowUploadUI(true)
+      setUploadedFile(null)
+      setError(null)
+      setDocumentUrl(undefined)
+      if (onChange) {
+        onChange("")
+      }
+      return
+    }
+    
+    // In add mode, automatically clear form fields
+    if (onClearFields) {
+      onClearFields()
+    }
+    
+    // Clear document data from context
+    clearDocumentData()
     
     setShowUploadUI(true)
     setUploadedFile(null)
     setError(null)
+    
+    // Clear document URL
+    setDocumentUrl(undefined)
+    if (onChange) {
+      onChange("")
+    }
   }
 
   // Handle Clear Document
   const handleClearDocument = async () => {
     if (disabled) return // Don't allow clear if disabled
     
-    // Delete the file from local folder
-    await deleteTempFile()
-    setDocumentUrl(undefined)
-    setShowUploadUI(true)
-    setUploadedFile(null)
-    fileRef.current = null // Clear stored file reference
-    setError(null)
-    
-    // Clear document data from context
-    clearDocumentData()
-    
-    // Call onClearFields callback to clear form fields
-    if (onClearFields) {
-      onClearFields()
-    }
-    
-    // Call onClear callback if provided
-    if (onClear) {
-      onClear()
-    }
-    
-    if (onChange) {
-      onChange("")
+    // Check if there's auto-filled data or document
+    const hasAutoFilledData = documentUrl || initialExtractedFields
+    const hasFormData = onClearFields !== undefined
+
+    if (hasAutoFilledData || hasFormData) {
+      // Build description message
+      let description = "Are you sure you want to clear the document?"
+      if (hasAutoFilledData) {
+        description += " This will also clear all auto-filled data fields."
+      }
+      if (hasFormData) {
+        description += " All form fields will be cleared as well."
+      }
+
+      // Show single confirmation dialog
+      const shouldClear = await confirm({
+        title: "Clear Document?",
+        description: description,
+        confirmText: "Clear All",
+        cancelText: "Cancel",
+      })
+
+      if (!shouldClear) {
+        return // User cancelled
+      }
+
+      // Delete the file from local folder
+      await deleteTempFile()
+      setDocumentUrl(undefined)
+      setShowUploadUI(true)
+      setUploadedFile(null)
+      fileRef.current = null // Clear stored file reference
+      setError(null)
+      
+      // Clear document data from context
+      clearDocumentData()
+      
+      // Clear form fields if available
+      if (hasFormData && onClearFields) {
+        onClearFields()
+      }
+      
+      // Call onClear callback if provided
+      if (onClear) {
+        onClear()
+      }
+      
+      if (onChange) {
+        onChange("")
+      }
+    } else {
+      // No data to clear, just clear document
+      await deleteTempFile()
+      setDocumentUrl(undefined)
+      setShowUploadUI(true)
+      setUploadedFile(null)
+      fileRef.current = null
+      setError(null)
+      clearDocumentData()
+
+      if (onClear) {
+        onClear()
+      }
+      
+      if (onChange) {
+        onChange("")
+      }
     }
   }
 
@@ -586,7 +664,9 @@ export function DocumentUpload({
   }, [documentUrl])
 
   return (
-    <div className={`space-y-4 ${className} ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+    <>
+      <ClearDocumentDialog />
+      <div className={`space-y-4 ${className} ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       {/* Upload UI */}
       {showUploadUI && (
         <div className="space-y-4">
@@ -658,7 +738,7 @@ export function DocumentUpload({
         <div className="space-y-4">
           <div className="min-h-[200px]">
             <DocumentViewer
-              documentUrl={documentUrl}
+              documentUrl={getDocumentDisplayUrl(documentUrl) || documentUrl}
               documentName={documentName}
               documentType={documentType}
               className="w-full"
@@ -670,7 +750,7 @@ export function DocumentUpload({
             <Button
               variant="outline"
               onClick={handleUpdateDocument}
-              disabled={isUploading || disabled}
+              disabled={isExtracting || isUploading || disabled}
               className="flex items-center gap-2"
             >
               <RefreshCw className="h-4 w-4" />
@@ -691,15 +771,18 @@ export function DocumentUpload({
                 Extract Data Fields
               </Button>
             )}
-            <Button
-              variant="ghost"
-              onClick={handleClearDocument}
-              disabled={isUploading || disabled}
-              className="flex items-center gap-2 text-destructive hover:text-destructive"
-            >
-              <X className="h-4 w-4" />
-              Clear Document
-            </Button>
+            {/* Hide Clear Document button in edit mode */}
+            {!isEditMode && (
+              <Button
+                variant="ghost"
+                onClick={handleClearDocument}
+                disabled={isExtracting || isUploading || disabled}
+                className="flex items-center gap-2 text-destructive hover:text-destructive"
+              >
+                <X className="h-4 w-4" />
+                Clear Document
+              </Button>
+            )}
           </div>
 
           {/* Error Alert - Always show when there's an error */}
@@ -722,6 +805,7 @@ export function DocumentUpload({
         </div>
       )}
     </div>
+    </>
   )
 }
 

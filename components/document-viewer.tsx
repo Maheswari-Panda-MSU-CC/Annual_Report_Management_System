@@ -393,6 +393,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Download, ExternalLink, FileText, ImageIcon, File } from "lucide-react"
+import { getDocumentDisplayUrl } from "@/lib/document-url-utils"
 
 interface DocumentViewerProps {
   documentUrl: string
@@ -407,6 +408,8 @@ export function DocumentViewer({
   documentType = "pdf",
   className = "",
 }: DocumentViewerProps) {
+  // Convert local document URLs to API routes for production compatibility
+  const displayUrl = getDocumentDisplayUrl(documentUrl) || documentUrl
 
   const getFileIcon = () => {
     switch (documentType.toLowerCase()) {
@@ -424,7 +427,7 @@ export function DocumentViewer({
 
   const handleDownload = () => {
     const link = document.createElement("a")
-    link.href = documentUrl
+    link.href = displayUrl
     link.download = documentName
     link.target = "_blank"
     link.rel = "noopener noreferrer"
@@ -434,7 +437,7 @@ export function DocumentViewer({
   }
 
   const handleViewInNewTab = () => {
-    window.open(documentUrl, "_blank", "noopener,noreferrer")
+    window.open(displayUrl, "_blank", "noopener,noreferrer")
   }
 
   return (
@@ -472,13 +475,13 @@ export function DocumentViewer({
     <div className="w-full min-h-[250px] h-[500px] max-h-[800px] bg-white rounded-lg border-2 border-blue-500 overflow-hidden flex items-center justify-center">
       {["jpg", "jpeg", "png", "gif"].includes(documentType.toLowerCase()) ? (
         <img
-          src={documentUrl}
+          src={displayUrl}
           alt={documentName}
           className="max-h-full max-w-full object-contain"
         />
       ) : (
         <iframe
-          src={documentUrl}
+          src={displayUrl}
           title={documentName}
           className="w-full h-full"
           style={{ border: "none", backgroundColor: "white" }}

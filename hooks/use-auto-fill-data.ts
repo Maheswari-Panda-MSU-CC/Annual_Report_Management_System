@@ -184,10 +184,17 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
   }, [documentData?.dataFields, customFieldMapping, formType, dropdownOptions])
 
   // Create a stable hash of the data fields to detect when data actually changes
+  // Include timestamp and file name to ensure hash changes even if data is similar
   const dataFieldsHash = useMemo(() => {
     if (!documentData?.dataFields) return ""
-    return JSON.stringify(documentData.dataFields)
-  }, [documentData?.dataFields])
+    // Include timestamp and file name to ensure unique hash for each extraction
+    const timestamp = documentData?.analysis?.timestamp || documentData?.file?.name || ""
+    return JSON.stringify({
+      dataFields: documentData.dataFields,
+      timestamp: timestamp,
+      fileName: documentData?.file?.name || "",
+    })
+  }, [documentData?.dataFields, documentData?.analysis?.timestamp, documentData?.file?.name])
 
   // Store processed fields in ref to avoid dependency issues
   useEffect(() => {
@@ -210,23 +217,35 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
     return false
   }
 
-  // Auto-apply data fields ONLY ONCE when component first mounts with data
-  // This ensures it only runs when first navigating to the page, not on subsequent updates
+  // Auto-apply data fields when new data arrives (including re-extractions)
+  // This ensures it runs on initial mount AND when new data is extracted
   useEffect(() => {
     // Only proceed if:
     // 1. Component has mounted
     // 2. We have document data
-    // 3. We haven't already auto-filled
+    // 3. We haven't already auto-filled THIS specific hash (or hash changed)
     // 4. We have processed fields
-    // 5. This is the first time we're seeing this data (hash is new or empty)
+    // 5. This is new data (hash is different from last processed hash)
+    const isNewData = lastDataFieldsHashRef.current === "" || dataFieldsHash !== lastDataFieldsHashRef.current
     const shouldAutoFill = hasMountedRef.current &&
                           hasDocumentData &&
                           !hasAutoFilledRef.current &&
                           dataFieldsHash !== "" &&
                           Object.keys(processedDataFields).length > 0 &&
-                          (lastDataFieldsHashRef.current === "" || dataFieldsHash !== lastDataFieldsHashRef.current)
+                          isNewData
 
-    if (!shouldAutoFill || !onAutoFill) return
+    if (!shouldAutoFill || !onAutoFill) {
+      console.log("useAutoFillData: Skipping auto-fill", {
+        hasMounted: hasMountedRef.current,
+        hasDocumentData,
+        hasAutoFilled: hasAutoFilledRef.current,
+        dataFieldsHash: dataFieldsHash ? dataFieldsHash.substring(0, 30) + "..." : "",
+        processedFieldsCount: Object.keys(processedDataFields).length,
+        isNewData,
+        lastHash: lastDataFieldsHashRef.current ? lastDataFieldsHashRef.current.substring(0, 30) + "..." : "empty",
+      })
+      return
+    }
 
     // Get current form values if we should only fill empty fields
     // If onlyFillEmpty is true but getFormValues is not provided, default to filling all fields (backward compatibility)
@@ -273,6 +292,8 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
       fieldsCount: Object.keys(fieldsToFill).length,
       fields: Object.keys(fieldsToFill),
       dataFieldsHash: dataFieldsHash.substring(0, 50) + "...",
+      onlyFillEmpty,
+      shouldCheckEmpty,
     })
 
     // Call onAutoFill with only the fields that should be filled
@@ -308,7 +329,15 @@ export function useAutoFillData(options: AutoFillOptions = {}) {
     } else if (hasDocumentData && dataFieldsHash !== "" && dataFieldsHash !== lastDataFieldsHashRef.current) {
       // New data arrived (different hash) - reset flag to allow auto-fill
       // This handles the case when DocumentUpload extracts new data after page is already mounted
+      console.log("useAutoFillData: New data detected, resetting auto-fill flag", {
+        oldHash: lastDataFieldsHashRef.current ? lastDataFieldsHashRef.current.substring(0, 50) : "empty",
+        newHash: dataFieldsHash.substring(0, 50),
+        hasAutoFilled: hasAutoFilledRef.current,
+      })
+      // CRITICAL: Reset the flag to allow auto-fill to trigger again
       hasAutoFilledRef.current = false
+      // Don't update lastDataFieldsHashRef here - let the auto-fill effect update it after filling
+      // This ensures the auto-fill effect will see the hash change and trigger
     }
   }, [hasDocumentData, dataFieldsHash])
 

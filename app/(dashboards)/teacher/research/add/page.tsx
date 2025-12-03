@@ -18,12 +18,16 @@ import { ResearchProjectFormData } from "@/types/interfaces"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { useResearchMutations } from "@/hooks/use-teacher-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 
 export default function AddResearchPage() {
   const router = useRouter()
   const { toast } = useToast()
   const { user } = useAuth()
   const { createResearch } = useResearchMutations()
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const {
     projectStatusOptions,
@@ -32,13 +36,7 @@ export default function AddResearchPage() {
     projectNatureOptions,
   } = useDropDowns()
 
-  const {
-    control,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<ResearchProjectFormData>({
+  const form = useForm<ResearchProjectFormData>({
     defaultValues: {
       title: "",
       funding_agency: null,
@@ -55,6 +53,15 @@ export default function AddResearchPage() {
     },
   })
 
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors },
+  } = form
+
   // Watch grant_sealed to enable/disable grant_year
   const grantSealed = watch("grant_sealed")
 
@@ -65,6 +72,7 @@ export default function AddResearchPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "research", // Explicit form type
     dropdownOptions: {
@@ -73,52 +81,92 @@ export default function AddResearchPage() {
       proj_level: projectLevelOptions,
       status: projectStatusOptions,
     },
-    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
-    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
       console.log("RESEARCH PROJECTS fields", fields)
-      // Auto-fill form fields from document analysis
-      if (fields.title) setValue("title", String(fields.title))
-      if (fields.funding_agency !== undefined && fields.funding_agency !== null) setValue("funding_agency", Number(fields.funding_agency))
+      // REPLACE all form fields with extracted data (even if they already have values)
+      // This ensures new extraction replaces existing data
       
-      // Handle grant_sanctioned - remove commas if present
-      if (fields.grant_sanctioned) {
-        const grantValue = String(fields.grant_sanctioned).replace(/[,\s]/g, '')
-        setValue("grant_sanctioned", grantValue)
+      // Title - replace if exists in extraction
+      if (fields.title !== undefined) {
+        setValue("title", fields.title ? String(fields.title) : "")
       }
       
-      // Handle grant_received - remove commas if present
-      if (fields.grant_received) {
-        const grantValue = String(fields.grant_received).replace(/[,\s]/g, '')
-        setValue("grant_received", grantValue)
+      // Funding Agency - replace if exists in extraction
+      if (fields.funding_agency !== undefined) {
+        setValue("funding_agency", fields.funding_agency !== null && fields.funding_agency !== undefined ? Number(fields.funding_agency) : null)
       }
       
-      if (fields.proj_nature !== undefined && fields.proj_nature !== null) setValue("proj_nature", Number(fields.proj_nature))
-      
-      // Handle duration - extract number from "9 months" format
-      if (fields.duration !== undefined && fields.duration !== null) {
-        let durationValue = 0
-        if (typeof fields.duration === 'number') {
-          durationValue = fields.duration
+      // Handle grant_sanctioned - remove commas if present, replace if exists
+      if (fields.grant_sanctioned !== undefined) {
+        if (fields.grant_sanctioned) {
+          const grantValue = String(fields.grant_sanctioned).replace(/[,\s]/g, '')
+          setValue("grant_sanctioned", grantValue)
         } else {
-          const durationStr = String(fields.duration)
-          const match = durationStr.match(/(\d+)/)
-          if (match) {
-            durationValue = parseInt(match[1]) || 0
-          } else {
-            durationValue = parseInt(durationStr) || 0
-          }
-        }
-        if (durationValue > 0) {
-          setValue("duration", durationValue)
+          setValue("grant_sanctioned", "")
         }
       }
       
-      if (fields.status !== undefined && fields.status !== null) setValue("status", Number(fields.status))
-      if (fields.start_date) setValue("start_date", String(fields.start_date))
-      if (fields.proj_level !== undefined && fields.proj_level !== null) setValue("proj_level", Number(fields.proj_level))
-      if (fields.grant_year) setValue("grant_year", String(fields.grant_year))
-      if (fields.grant_sealed !== undefined) setValue("grant_sealed", Boolean(fields.grant_sealed))
+      // Handle grant_received - remove commas if present, replace if exists
+      if (fields.grant_received !== undefined) {
+        if (fields.grant_received) {
+          const grantValue = String(fields.grant_received).replace(/[,\s]/g, '')
+          setValue("grant_received", grantValue)
+        } else {
+          setValue("grant_received", "")
+        }
+      }
+      
+      // Project Nature - replace if exists in extraction
+      if (fields.proj_nature !== undefined) {
+        setValue("proj_nature", fields.proj_nature !== null && fields.proj_nature !== undefined ? Number(fields.proj_nature) : null)
+      }
+      
+      // Handle duration - extract number from "9 months" format, replace if exists
+      if (fields.duration !== undefined) {
+        if (fields.duration !== null) {
+          let durationValue = 0
+          if (typeof fields.duration === 'number') {
+            durationValue = fields.duration
+          } else {
+            const durationStr = String(fields.duration)
+            const match = durationStr.match(/(\d+)/)
+            if (match) {
+              durationValue = parseInt(match[1]) || 0
+            } else {
+              durationValue = parseInt(durationStr) || 0
+            }
+          }
+          setValue("duration", durationValue)
+        } else {
+          setValue("duration", 0)
+        }
+      }
+      
+      // Status - replace if exists in extraction
+      if (fields.status !== undefined) {
+        setValue("status", fields.status !== null && fields.status !== undefined ? Number(fields.status) : null)
+      }
+      
+      // Start Date - replace if exists in extraction
+      if (fields.start_date !== undefined) {
+        setValue("start_date", fields.start_date ? String(fields.start_date) : "")
+      }
+      
+      // Project Level - replace if exists in extraction
+      if (fields.proj_level !== undefined) {
+        setValue("proj_level", fields.proj_level !== null && fields.proj_level !== undefined ? Number(fields.proj_level) : null)
+      }
+      
+      // Grant Year - replace if exists in extraction
+      if (fields.grant_year !== undefined) {
+        setValue("grant_year", fields.grant_year ? String(fields.grant_year) : "")
+      }
+      
+      // Grant Sealed - replace if exists in extraction
+      if (fields.grant_sealed !== undefined) {
+        setValue("grant_sealed", Boolean(fields.grant_sealed))
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
@@ -127,12 +175,52 @@ export default function AddResearchPage() {
       if (filledCount > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `${filledCount} field(s) replaced with new extracted data`,
+        })
+      } else {
+        toast({
+          title: "Extraction Complete",
+          description: "Data fields have been updated (some fields may be empty)",
         })
       }
     },
     clearAfterUse: false, // Keep data for manual editing
   })
+
+  // Unsaved changes guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/research",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear document data when leaving the page
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
 
   // Update Pdf field when auto-fill document URL is available
   useEffect(() => {
@@ -142,122 +230,180 @@ export default function AddResearchPage() {
   }, [autoFillDocumentUrl, setValue])
 
   // Handle extracted fields from DocumentUpload component
+  // Handle extracted fields - REPLACE existing data with new extracted data
   const handleExtractFields = useCallback((fields: Record<string, any>) => {
     let fieldsPopulated = 0
 
-    // Map extracted fields to form fields
-    if (fields.title) {
-      setValue("title", fields.title)
-      fieldsPopulated++
+    // REPLACE all fields - set values even if they're empty/null in extracted data
+    // This ensures existing data is replaced with new extracted data on each extraction
+    
+    // Title - replace if exists in extraction
+    if (fields.title !== undefined) {
+      setValue("title", fields.title || "")
+      if (fields.title) fieldsPopulated++
     }
-    if (fields.fundingAgency || fields.funding_agency) {
+    
+    // Funding Agency - replace if exists in extraction
+    if (fields.fundingAgency !== undefined || fields.funding_agency !== undefined) {
       const agencyName = fields.fundingAgency || fields.funding_agency
-      // Try to find matching funding agency
-      const matchingAgency = fundingAgencyOptions.find(
-        (a) => a.name.toLowerCase().includes(agencyName.toLowerCase()) || 
-               agencyName.toLowerCase().includes(a.name.toLowerCase())
-      )
-      if (matchingAgency) {
-        setValue("funding_agency", matchingAgency.id)
-        fieldsPopulated++
+      if (agencyName) {
+        // Try to find matching funding agency
+        const matchingAgency = fundingAgencyOptions.find(
+          (a) => a.name.toLowerCase().includes(agencyName.toLowerCase()) || 
+                 agencyName.toLowerCase().includes(a.name.toLowerCase())
+        )
+        if (matchingAgency) {
+          setValue("funding_agency", matchingAgency.id)
+          fieldsPopulated++
+        } else {
+          setValue("funding_agency", null)
+        }
+      } else {
+        setValue("funding_agency", null)
       }
     }
-    if (fields.totalGrantSanctioned || fields.grant_sanctioned) {
-      const value = fields.totalGrantSanctioned || fields.grant_sanctioned
-      // Remove commas and convert to string for the form field
-      const cleanedValue = String(value).replace(/[,\s]/g, '')
-      setValue("grant_sanctioned", cleanedValue)
-      fieldsPopulated++
+    
+    // Grant Sanctioned - replace if exists in extraction
+    if (fields.totalGrantSanctioned !== undefined || fields.grant_sanctioned !== undefined || fields.seedGrant !== undefined) {
+      const grantValue = fields.totalGrantSanctioned || fields.grant_sanctioned || fields.seedGrant
+      if (grantValue) {
+        // Remove commas and convert to string for the form field
+        const cleanedValue = String(grantValue).replace(/[,\s]/g, '')
+        setValue("grant_sanctioned", cleanedValue)
+        fieldsPopulated++
+      } else {
+        setValue("grant_sanctioned", "")
+      }
     }
-    if (fields.totalGrantReceived || fields.grant_received) {
-      const value = fields.totalGrantReceived || fields.grant_received
-      // Remove commas and convert to string for the form field
-      const cleanedValue = String(value).replace(/[,\s]/g, '')
-      setValue("grant_received", cleanedValue)
-      fieldsPopulated++
+    
+    // Grant Received - replace if exists in extraction
+    if (fields.totalGrantReceived !== undefined || fields.grant_received !== undefined) {
+      const grantValue = fields.totalGrantReceived || fields.grant_received
+      if (grantValue) {
+        // Remove commas and convert to string for the form field
+        const cleanedValue = String(grantValue).replace(/[,\s]/g, '')
+        setValue("grant_received", cleanedValue)
+        fieldsPopulated++
+      } else {
+        setValue("grant_received", "")
+      }
     }
-    if (fields.projectNature || fields.proj_nature || fields["Project Nature"]) {
+    
+    // Project Nature - replace if exists in extraction
+    if (fields.projectNature !== undefined || fields.proj_nature !== undefined || fields["Project Nature"] !== undefined) {
       const value = fields.projectNature || fields.proj_nature || fields["Project Nature"]
-      // Try dropdown matching first
-      if (typeof value === 'string') {
-        const matchingNature = projectNatureOptions.find(
-          (n) => n.name.toLowerCase().includes(value.toLowerCase()) ||
-                 value.toLowerCase().includes(n.name.toLowerCase())
-        )
-        if (matchingNature) {
-          setValue("proj_nature", matchingNature.id)
-          fieldsPopulated++
+      if (value !== undefined && value !== null) {
+        // Try dropdown matching first
+        if (typeof value === 'string') {
+          const matchingNature = projectNatureOptions.find(
+            (n) => n.name.toLowerCase().includes(value.toLowerCase()) ||
+                   value.toLowerCase().includes(n.name.toLowerCase())
+          )
+          if (matchingNature) {
+            setValue("proj_nature", matchingNature.id)
+            fieldsPopulated++
+          } else {
+            setValue("proj_nature", null)
+          }
         } else if (typeof value === 'number') {
           setValue("proj_nature", value)
           fieldsPopulated++
-        }
-      } else if (typeof value === 'number') {
-        setValue("proj_nature", value)
-        fieldsPopulated++
-      }
-    }
-    if (fields.level || fields.proj_level || fields.projectNatureLevel || fields["Project Nature Level"]) {
-      const levelName = fields.level || fields.proj_level || fields.projectNatureLevel || fields["Project Nature Level"]
-      const levelNameStr = String(levelName)
-      const matchingLevel = projectLevelOptions.find(
-        (l) => l.name.toLowerCase().includes(levelNameStr.toLowerCase()) ||
-               levelNameStr.toLowerCase().includes(l.name.toLowerCase())
-      )
-      if (matchingLevel) {
-        setValue("proj_level", matchingLevel.id)
-        fieldsPopulated++
-      }
-    }
-    if (fields.duration) {
-      let durationValue = 0
-      if (typeof fields.duration === 'number') {
-        durationValue = fields.duration
-      } else {
-        // Extract number from string like "9 months" or "9"
-        const durationStr = String(fields.duration)
-        const match = durationStr.match(/(\d+)/)
-        if (match) {
-          durationValue = parseInt(match[1]) || 0
         } else {
-          durationValue = parseInt(durationStr) || 0
+          setValue("proj_nature", null)
         }
+      } else {
+        setValue("proj_nature", null)
       }
-      if (durationValue > 0) {
+    }
+    
+    // Project Level - replace if exists in extraction
+    if (fields.level !== undefined || fields.proj_level !== undefined || fields.projectNatureLevel !== undefined || fields["Project Nature Level"] !== undefined) {
+      const levelName = fields.level || fields.proj_level || fields.projectNatureLevel || fields["Project Nature Level"]
+      if (levelName) {
+        const levelNameStr = String(levelName)
+        const matchingLevel = projectLevelOptions.find(
+          (l) => l.name.toLowerCase().includes(levelNameStr.toLowerCase()) ||
+                 levelNameStr.toLowerCase().includes(l.name.toLowerCase())
+        )
+        if (matchingLevel) {
+          setValue("proj_level", matchingLevel.id)
+          fieldsPopulated++
+        } else {
+          setValue("proj_level", null)
+        }
+      } else {
+        setValue("proj_level", null)
+      }
+    }
+    
+    // Duration - replace if exists in extraction
+    if (fields.duration !== undefined) {
+      if (fields.duration !== null && fields.duration !== "") {
+        let durationValue = 0
+        if (typeof fields.duration === 'number') {
+          durationValue = fields.duration
+        } else {
+          // Extract number from string like "9 months" or "9"
+          const durationStr = String(fields.duration)
+          const match = durationStr.match(/(\d+)/)
+          if (match) {
+            durationValue = parseInt(match[1]) || 0
+          } else {
+            durationValue = parseInt(durationStr) || 0
+          }
+        }
         setValue("duration", durationValue)
-        fieldsPopulated++
+        if (durationValue > 0) fieldsPopulated++
+      } else {
+        setValue("duration", 0)
       }
     }
-    if (fields.status || fields["Status"]) {
+    
+    // Status - replace if exists in extraction
+    if (fields.status !== undefined || fields["Status"] !== undefined) {
       const statusValue = fields.status || fields["Status"]
-      const statusStr = String(statusValue)
-      const matchingStatus = projectStatusOptions.find(
-        (s) => s.name.toLowerCase().includes(statusStr.toLowerCase()) ||
-               statusStr.toLowerCase().includes(s.name.toLowerCase())
-      )
-      if (matchingStatus) {
-        setValue("status", matchingStatus.id)
-        fieldsPopulated++
+      if (statusValue) {
+        const statusStr = String(statusValue)
+        const matchingStatus = projectStatusOptions.find(
+          (s) => s.name.toLowerCase().includes(statusStr.toLowerCase()) ||
+                 statusStr.toLowerCase().includes(s.name.toLowerCase())
+        )
+        if (matchingStatus) {
+          setValue("status", matchingStatus.id)
+          fieldsPopulated++
+        } else {
+          setValue("status", null)
+        }
+      } else {
+        setValue("status", null)
       }
     }
-    if (fields.startDate || fields.start_date) {
+    
+    // Start Date - replace if exists in extraction
+    if (fields.startDate !== undefined || fields.start_date !== undefined) {
       const dateValue = fields.startDate || fields.start_date
-      setValue("start_date", dateValue)
-      fieldsPopulated++
+      setValue("start_date", dateValue || "")
+      if (dateValue) fieldsPopulated++
     }
-    if (fields.seedGrant) {
-      setValue("grant_sanctioned", fields.seedGrant.toString())
-      fieldsPopulated++
-    }
-    if (fields.seedGrantYear || fields.grant_year) {
+    
+    // Grant Year - replace if exists in extraction
+    if (fields.seedGrantYear !== undefined || fields.grant_year !== undefined) {
       const yearValue = fields.seedGrantYear || fields.grant_year
-      setValue("grant_year", yearValue.toString())
-      fieldsPopulated++
+      setValue("grant_year", yearValue ? String(yearValue) : "")
+      if (yearValue) fieldsPopulated++
     }
 
-    toast({
-      title: "Information Extracted Successfully",
-      description: `${fieldsPopulated} fields populated from document analysis`,
-    })
+    if (fieldsPopulated > 0) {
+      toast({
+        title: "Information Extracted Successfully",
+        description: `${fieldsPopulated} fields replaced with new extracted data`,
+      })
+    } else {
+      toast({
+        title: "Extraction Complete",
+        description: "Data fields have been updated (some fields may be empty)",
+      })
+    }
   }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
@@ -410,15 +556,21 @@ export default function AddResearchPage() {
     // Use mutation instead of direct fetch
     createResearch.mutate(projectData, {
       onSuccess: () => {
+        // Clear document data on successful submission
+        clearDocumentData()
+        clearAutoFillData()
         router.push("/teacher/research")
       },
     })
   }
 
   return (
+    <>
+      {NavigationDialog && <NavigationDialog />}
+      {CancelDialog && <CancelDialog />}
     <div className="w-full max-w-full overflow-x-hidden px-3 sm:px-4 md:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full">
-        <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2 w-full sm:w-auto">
+        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2 w-full sm:w-auto">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
           <span className="sm:hidden">Back</span>
@@ -461,6 +613,10 @@ export default function AddResearchPage() {
                     allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
                     maxFileSize={1 * 1024 * 1024}
                     className="w-full"
+                    onClearFields={() => {
+                      // Clear all form fields when document is cleared
+                      reset()
+                    }}
                   />
                   {errors.Pdf && <p className="text-xs sm:text-sm text-red-500 mt-2">{errors.Pdf.message}</p>}
                 </div>
@@ -778,7 +934,7 @@ export default function AddResearchPage() {
 
               {/* Submit Button */}
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-2 sm:pt-4">
-                <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto" size="sm">
+                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto" size="sm">
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createResearch.isPending} className="w-full sm:w-auto" size="sm">
@@ -801,5 +957,6 @@ export default function AddResearchPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }
