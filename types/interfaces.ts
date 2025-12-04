@@ -211,6 +211,8 @@ export interface PatentFormProps {
   resPubLevelOptions?: Array<{ id: number; name: string }>
   patentStatusOptions?: Array<{ id: number; name: string }>
   initialDocumentUrl?: string
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 // ---------- Policy Form ----------
@@ -226,6 +228,8 @@ export interface PolicyFormProps {
   editData?: Record<string, any>
   resPubLevelOptions?: Array<{ id: number; name: string }>
   initialDocumentUrl?: string
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 // ---------- E-Content Form ----------

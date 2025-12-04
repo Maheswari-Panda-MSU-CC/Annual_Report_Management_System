@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { PatentForm } from "@/components/forms/PatentForm"
 import { toast } from "@/components/ui/use-toast"
@@ -11,14 +11,20 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { usePatentMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 export default function AddPatentsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const form = useForm()
-  const { setValue, watch } = form
+  const { setValue, watch, reset } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+  
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
   
   // Dropdowns - already available from Context, no need to fetch
   const { resPubLevelOptions, patentStatusOptions } = useDropDowns()
@@ -31,6 +37,7 @@ export default function AddPatentsPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "patents", // Explicit form type
     dropdownOptions: {
@@ -64,6 +71,45 @@ export default function AddPatentsPage() {
     },
     clearAfterUse: false, // Keep data for manual editing
   })
+
+  // Navigation guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/research-contributions?tab=patents",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
+
+  // Clear fields handler
+  const handleClearFields = () => {
+    reset()
+  }
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -180,11 +226,14 @@ export default function AddPatentsPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
+    <>
+      <NavigationDialog />
+      <CancelDialog />
+      <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
-            onClick={() => router.push("/teacher/research-contributions?tab=patents")}
+            onClick={handleCancel}
             className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
           >
             <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -199,19 +248,22 @@ export default function AddPatentsPage() {
           </p>
         </div>
 
-    <PatentForm
-      form={form}
-      onSubmit={handleSubmit}
-      isSubmitting={isSubmitting || createPatent.isPending}
-      isExtracting={isExtracting}
-      selectedFiles={null}
-      handleFileSelect={() => {}}
-      handleExtractInfo={handleExtractInfo}
-      isEdit={false}
-      resPubLevelOptions={resPubLevelOptions}
-      patentStatusOptions={patentStatusOptions}
-      initialDocumentUrl={autoFillDocumentUrl}
-    />
-    </div>
+        <PatentForm
+          form={form}
+          onSubmit={handleSubmit}
+          isSubmitting={isSubmitting || createPatent.isPending}
+          isExtracting={isExtracting}
+          selectedFiles={null}
+          handleFileSelect={() => {}}
+          handleExtractInfo={handleExtractInfo}
+          isEdit={false}
+          resPubLevelOptions={resPubLevelOptions}
+          patentStatusOptions={patentStatusOptions}
+          initialDocumentUrl={autoFillDocumentUrl}
+          onClearFields={handleClearFields}
+          onCancel={handleCancel}
+        />
+      </div>
+    </>
   );
 }

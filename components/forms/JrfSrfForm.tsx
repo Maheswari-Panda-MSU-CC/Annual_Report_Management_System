@@ -24,6 +24,8 @@ interface JrfSrfFormProps {
   isEdit?: boolean
   editData?: Record<string, any>
   jrfSrfTypeOptions?: Array<{ id: number; name: string }>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function JrfSrfForm({
@@ -36,6 +38,8 @@ export function JrfSrfForm({
   editData = {},
   jrfSrfTypeOptions: propJrfSrfTypeOptions,
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: JrfSrfFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -112,9 +116,6 @@ export function JrfSrfForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.nameOfFellow) setValue("nameOfFellow", fields.nameOfFellow)
     if (fields.type) setValue("type", fields.type)
     if (fields.projectTitle) setValue("projectTitle", fields.projectTitle)
@@ -138,6 +139,8 @@ export function JrfSrfForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -283,9 +286,7 @@ export function JrfSrfForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                router.push("/teacher/research-contributions?tab=jrfSrf")
-              }
+              onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=jrfSrf"))}
               className="w-full sm:w-auto text-xs sm:text-sm"
             >
               Cancel

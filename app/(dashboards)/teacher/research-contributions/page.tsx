@@ -70,6 +70,9 @@ import {
   usePhdMutations, 
   useCopyrightMutations 
 } from "@/hooks/use-teacher-research-contributions-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
 
 // Initial data structure
 const initialData = {
@@ -284,9 +287,13 @@ export default function ResearchContributionsPage() {
   const { navigate, isPending: isNavigating } = useNavigationWithLoading()
   
   const form=useForm();
+  const { setValue, watch, reset } = form
   const [isExtracting,setIsExtracting]=useState(false);
   
   const [isSubmitting,setIsSubmitting]=useState(false);
+  
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
   
   // Dropdowns - already available from Context, no need to fetch
   const { 
@@ -302,6 +309,177 @@ export default function ResearchContributionsPage() {
     jrfSrfTypeOptions,
     phdGuidanceStatusOptions,
   } = useDropDowns()
+  
+  // Auto-fill hook for edit modal - dynamically set form type based on editing item
+  const getFormTypeFromSectionId = (sectionId: string): string => {
+    const formTypeMap: Record<string, string> = {
+      patents: "patents",
+      policy: "policy",
+      econtent: "econtent",
+      consultancy: "consultancy",
+      collaborations: "collaborations",
+      visits: "visits",
+      financial: "financial",
+      jrfSrf: "jrf-srf", // Note: sectionId is "jrfSrf" but formType is "jrf-srf"
+      phd: "phd",
+      copyrights: "copyrights",
+    }
+    return formTypeMap[sectionId] || ""
+  }
+  
+  // Get dropdown options based on section
+  const getDropdownOptions = (sectionId: string) => {
+    switch (sectionId) {
+      case "patents":
+        return { level: resPubLevelOptions, status: patentStatusOptions }
+      case "policy":
+        return { level: resPubLevelOptions }
+      case "econtent":
+        return { type: eContentTypeOptions, typeEcontentValue: typeEcontentValueOptions }
+      case "collaborations":
+        return { level: collaborationsLevelOptions, outcome: collaborationsOutcomeOptions, type: collaborationsTypeOptions }
+      case "visits":
+        return { role: academicVisitRoleOptions }
+      case "financial":
+        return { type: financialSupportTypeOptions }
+      case "jrfSrf":
+        return { type: jrfSrfTypeOptions }
+      case "phd":
+        return { status: phdGuidanceStatusOptions }
+      default:
+        return {}
+    }
+  }
+  
+  // Auto-fill hook for edit modal - only active when editing
+  const formType = editingItem ? getFormTypeFromSectionId(editingItem.sectionId) : ""
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType,
+    dropdownOptions: editingItem ? getDropdownOptions(editingItem.sectionId) : {},
+    onlyFillEmpty: false, // REPLACE existing data in edit mode
+    getFormValues: () => watch(),
+    onAutoFill: (fields) => {
+      // Auto-fill form fields - replace existing data
+      Object.entries(fields).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          setValue(key, value)
+        }
+      })
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Updated",
+          description: `${filledCount} field(s) replaced with new extracted data`,
+        })
+      }
+    },
+    clearAfterUse: false,
+    // Only enable when editing
+    enabled: !!editingItem,
+  })
+  
+  // Cancel handler for edit modal - custom implementation for modal
+  const { confirm, DialogComponent: CancelDialog } = useConfirmationDialog()
+  const cancelHandlerRef = useRef(false) // Track if cancel is being processed
+  
+  const handleModalCancel = async (event?: React.MouseEvent) => {
+    // Prevent trigger from toast dismissals or other non-button interactions
+    if (event) {
+      const target = event.target as HTMLElement
+      // Check if click is from toast or its children
+      if (target.closest('[data-sonner-toast]') || target.closest('[role="status"]') || target.closest('.toast')) {
+        return false
+      }
+    }
+    
+    // Prevent multiple simultaneous calls
+    if (cancelHandlerRef.current) {
+      return false
+    }
+    
+    cancelHandlerRef.current = true
+    
+    try {
+      const isDirty = form.formState.isDirty
+      const formValues = form.getValues()
+      // Check for document in Pdf field, supportingDocument field, or Image field
+      const hasDocument = formValues.Pdf || formValues.supportingDocument?.[0] || formValues.Image || false
+      const hasUnsavedChanges = isDirty || hasDocument || hasDocumentData
+      
+      // Show dialog if there are unsaved changes
+      if (hasUnsavedChanges) {
+        const shouldLeave = await confirm({
+          title: "Discard Changes?",
+          description: "Are you sure to discard the unsaved changes?",
+          confirmText: "Discard",
+          cancelText: "Cancel",
+        })
+        if (!shouldLeave) {
+          return false  // User cancelled - don't close modal
+        }
+      }
+      
+      // Cleanup and close modal
+      form.reset()
+      clearDocumentData()
+      clearAutoFillData()
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      setFormData({})
+      setSelectedFiles(null)
+      return true
+    } finally {
+      // Reset the ref after a short delay to allow for async operations
+      setTimeout(() => {
+        cancelHandlerRef.current = false
+      }, 100)
+    }
+  }
+  
+  // Handle dialog close attempt - prevent close if user cancels confirmation
+  const handleDialogClose = (open: boolean) => {
+    if (!open && isEditDialogOpen) {
+      // Check if the active element is a toast or toast-related element
+      // This prevents toast dismissals from triggering dialog close
+      const activeElement = document.activeElement
+      const isToastElement = activeElement?.closest('[data-sonner-toast]') || 
+                            activeElement?.closest('[role="status"]') ||
+                            activeElement?.closest('.toast') ||
+                            activeElement?.closest('[data-radix-toast-viewport]')
+      
+      if (isToastElement) {
+        // Don't close dialog if click is on toast
+        return
+      }
+      
+      // Dialog is trying to close - check for unsaved changes
+      handleModalCancel().then((shouldClose) => {
+        // If user confirmed or no unsaved changes, dialog will be closed by handleModalCancel
+        // If user cancelled, we need to keep dialog open (state won't change)
+        if (!shouldClose) {
+          // Force dialog to stay open by setting state back to true
+          // This is a workaround since Dialog's onOpenChange doesn't support preventing close
+          setTimeout(() => {
+            setIsEditDialogOpen(true)
+          }, 0)
+        }
+      })
+      return // Don't update state here - let handleModalCancel handle it
+    }
+    setIsEditDialogOpen(open)
+  }
+  
+  // Clear fields handler
+  const handleClearFields = () => {
+    reset()
+  }
   
   // React Query hooks for data fetching - LAZY LOADING: Only fetch active tab and previously fetched tabs
   const patentsQuery = useTeacherPatents(resPubLevelOptions, { 
@@ -464,6 +642,9 @@ export default function ResearchContributionsPage() {
 
 
   const handleEdit = (sectionId: string, item: any) => {
+    // Clear any previous document data before opening edit modal
+    clearDocumentData()
+    clearAutoFillData()
     setEditingItem({ ...item, sectionId })
     setFormData({ ...item })
     setIsEditDialogOpen(true)
@@ -596,6 +777,9 @@ export default function ResearchContributionsPage() {
       setFormData({})
       setSelectedFiles(null)
       form.reset()
+      // Clear document data after successful save
+      clearDocumentData()
+      clearAutoFillData()
     } catch (error: any) {
       toast({
         title: "Error",
@@ -871,7 +1055,22 @@ export default function ResearchContributionsPage() {
   }
 
   const handleExtractInfo = async () => {
-          if (!selectedFiles || selectedFiles.length === 0) {
+          // Check for document in multiple places:
+          // 1. selectedFiles (new upload)
+          // 2. form's supportingDocument field (existing document in edit mode)
+          // 3. autoFillDocumentUrl (from document analysis context)
+          // 4. editingItem's supportingDocument (existing document)
+          const formValues = form.getValues()
+          const hasSelectedFiles = selectedFiles && selectedFiles.length > 0
+          const hasFormDocument = formValues?.supportingDocument && 
+                                 (Array.isArray(formValues.supportingDocument) ? formValues.supportingDocument[0] : formValues.supportingDocument)
+          const hasAutoFillDocument = !!autoFillDocumentUrl
+          const hasEditItemDocument = editingItem?.supportingDocument && 
+                                     (Array.isArray(editingItem.supportingDocument) ? editingItem.supportingDocument[0] : editingItem.supportingDocument)
+          
+          const hasDocument = hasSelectedFiles || hasFormDocument || hasAutoFillDocument || hasEditItemDocument
+          
+          if (!hasDocument) {
             toast({
               title: "Error",
               description: "Please upload a document first.",
@@ -1011,6 +1210,9 @@ export default function ResearchContributionsPage() {
             editData={currentData}
             resPubLevelOptions={resPubLevelOptions}
             patentStatusOptions={patentStatusOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "policy":
@@ -1026,6 +1228,9 @@ export default function ResearchContributionsPage() {
             isEdit={isEdit}
             editData={currentData}
             resPubLevelOptions={resPubLevelOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "econtent":
@@ -1042,6 +1247,9 @@ export default function ResearchContributionsPage() {
             editData={currentData}
             eContentTypeOptions={eContentTypeOptions}
             typeEcontentValueOptions={typeEcontentValueOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "consultancy":
@@ -1056,6 +1264,9 @@ export default function ResearchContributionsPage() {
             handleExtractInfo={handleExtractInfo}
             isEdit={isEdit}
             editData={currentData}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "collaborations":
@@ -1073,6 +1284,9 @@ export default function ResearchContributionsPage() {
             collaborationsLevelOptions={collaborationsLevelOptions}
             collaborationsOutcomeOptions={collaborationsOutcomeOptions}
             collaborationsTypeOptions={collaborationsTypeOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "visits":
@@ -1088,6 +1302,9 @@ export default function ResearchContributionsPage() {
             isEdit={true}
             editData={currentData}
             academicVisitRoleOptions={academicVisitRoleOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "financial":
@@ -1103,6 +1320,9 @@ export default function ResearchContributionsPage() {
             isEdit={true}
             editData={currentData}
             financialSupportTypeOptions={financialSupportTypeOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "jrfSrf":
@@ -1118,6 +1338,9 @@ export default function ResearchContributionsPage() {
             isEdit={true}
             editData={currentData}
             jrfSrfTypeOptions={jrfSrfTypeOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "phd":
@@ -1133,6 +1356,9 @@ export default function ResearchContributionsPage() {
             isEdit={true}
             editData={currentData}
             phdGuidanceStatusOptions={phdGuidanceStatusOptions}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       case "copyrights":
@@ -1147,6 +1373,9 @@ export default function ResearchContributionsPage() {
             handleExtractInfo={handleExtractInfo}
             isEdit={true}
             editData={currentData}
+            initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
+            onClearFields={handleClearFields}
+            onCancel={isEdit ? handleModalCancel : undefined}
           />
         )
       default:
@@ -1333,7 +1562,8 @@ export default function ResearchContributionsPage() {
       </Tabs>
 
       {/* Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <CancelDialog />
+      <Dialog open={isEditDialogOpen} onOpenChange={handleDialogClose}>
         <DialogContent className="w-[95vw] sm:w-[90vw] max-w-4xl max-h-[95vh] sm:max-h-[90vh] p-2 sm:p-4 md:p-6 overflow-hidden flex flex-col">
           <DialogHeader className="pb-2 sm:pb-3 md:pb-4 flex-shrink-0">
             <DialogTitle className="text-sm sm:text-base md:text-lg">
@@ -1344,7 +1574,14 @@ export default function ResearchContributionsPage() {
             {editingItem && renderForm(editingItem.sectionId, true)}
           </div>
           <div className="flex flex-col sm:flex-row justify-end gap-2 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t flex-shrink-0">
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-10">
+            <Button 
+              variant="outline" 
+              onClick={(e) => {
+                e.stopPropagation()
+                handleModalCancel(e)
+              }} 
+              className="w-full sm:w-auto text-xs sm:text-sm h-8 sm:h-10"
+            >
               Cancel
             </Button>
             <Button 

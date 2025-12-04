@@ -20,6 +20,8 @@ interface CopyrightFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function CopyrightForm({
@@ -33,6 +35,8 @@ export function CopyrightForm({
   isEdit = false,
   editData = {},
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: CopyrightFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -92,9 +96,6 @@ export function CopyrightForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.title) setValue("title", fields.title)
     if (fields.referenceNo) setValue("referenceNo", fields.referenceNo)
     if (fields.publicationDate) setValue("publicationDate", fields.publicationDate)
@@ -114,6 +115,8 @@ export function CopyrightForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -214,7 +217,7 @@ export function CopyrightForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push("/teacher/research-contributions?tab=copyrights")}
+              onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=copyrights"))}
             >
               Cancel
             </Button>

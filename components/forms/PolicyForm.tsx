@@ -25,6 +25,8 @@ export default function PolicyForm({
   editData = {},
   resPubLevelOptions: propResPubLevelOptions,
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: PolicyFormProps) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -103,9 +105,6 @@ export default function PolicyForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.title) setValue("title", fields.title)
     if (fields.level) setValue("level", fields.level)
     if (fields.organisation) setValue("organisation", fields.organisation)
@@ -126,6 +125,8 @@ export default function PolicyForm({
                   setValue("supportingDocument", url ? [url] : [])
                 }}
                 onExtract={handleExtractedFields}
+                onClearFields={onClearFields}
+                isEditMode={isEdit}
                 className="w-full"
               />
             </div>
@@ -181,7 +182,7 @@ export default function PolicyForm({
         <Button
           type="button"
           variant="outline"
-          onClick={() => router.push("/teacher/research-contributions?tab=policy")}
+          onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=policy"))}
           disabled={isSubmitting || isExtracting}
           className="w-full sm:w-auto text-xs sm:text-sm"
         >

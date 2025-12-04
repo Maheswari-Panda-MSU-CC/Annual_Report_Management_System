@@ -26,6 +26,8 @@ export function PatentForm({
     resPubLevelOptions: propResPubLevelOptions,
     patentStatusOptions: propPatentStatusOptions,
     initialDocumentUrl,
+    onClearFields,
+    onCancel,
 }: PatentFormProps) {
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -107,9 +109,6 @@ export function PatentForm({
 
     // Handle extracted fields from DocumentUpload
     const handleExtractedFields = (fields: Record<string, any>) => {
-        if (handleExtractInfo) {
-            handleExtractInfo()
-        }
         // Map extracted fields to form fields
         if (fields.title) setValue("title", fields.title)
         if (fields.level) setValue("level", fields.level)
@@ -137,6 +136,8 @@ export function PatentForm({
                         setValue("supportingDocument", url ? [url] : [])
                     }}
                     onExtract={handleExtractedFields}
+                    onClearFields={onClearFields}
+                    isEditMode={isEdit}
                     className="w-full"
                 />
             </div>
@@ -254,7 +255,7 @@ export function PatentForm({
 
                 {!isEdit && (
                     <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-                        <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=patents")} className="w-full sm:w-auto text-xs sm:text-sm">
+                        <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=patents"))} className="w-full sm:w-auto text-xs sm:text-sm">
                             Cancel
                         </Button>
                         <Button 

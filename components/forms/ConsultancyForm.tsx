@@ -22,7 +22,9 @@ export function ConsultancyForm({
   isEdit = false,
   editData = {},
   initialDocumentUrl,
-}: ConsultancyFormProps & { initialDocumentUrl?: string }) {
+  onClearFields,
+  onCancel,
+}: ConsultancyFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void }) {
   const router = useRouter()
   const {
     register,
@@ -91,9 +93,6 @@ export function ConsultancyForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.title) setValue("title", fields.title)
     if (fields.collaboratingInstitute) setValue("collaboratingInstitute", fields.collaboratingInstitute)
     if (fields.address) setValue("address", fields.address)
@@ -115,6 +114,8 @@ export function ConsultancyForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -211,7 +212,7 @@ export function ConsultancyForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push("/teacher/research-contributions?tab=consultancy")}
+              onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=consultancy"))}
               className="w-full sm:w-auto text-xs sm:text-sm"
             >
               Cancel

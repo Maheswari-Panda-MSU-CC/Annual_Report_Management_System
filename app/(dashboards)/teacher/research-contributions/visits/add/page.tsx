@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,9 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useVisitMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 export default function AddVisitsPage() {
   const router = useRouter()
@@ -22,7 +25,10 @@ export default function AddVisitsPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const form = useForm()
-  const { setValue, watch } = form
+  const { setValue, watch, reset } = form
+
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   // Dropdowns - already available from Context, no need to fetch
   const { academicVisitRoleOptions } = useDropDowns()
@@ -35,6 +41,7 @@ export default function AddVisitsPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "visits", // Explicit form type
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
@@ -121,6 +128,45 @@ export default function AddVisitsPage() {
     },
     clearAfterUse: false, // Keep data for manual editing
   })
+
+  // Navigation guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/research-contributions?tab=visits",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
+
+  // Clear fields handler
+  const handleClearFields = () => {
+    reset()
+  }
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -271,11 +317,14 @@ export default function AddVisitsPage() {
   }
 
   return (
+    <>
+      <NavigationDialog />
+      <CancelDialog />
       <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
-            onClick={() => router.push("/teacher/research-contributions?tab=visits")}
+            onClick={handleCancel}
             className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
           >
             <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -306,9 +355,12 @@ export default function AddVisitsPage() {
             isEdit={false}
             academicVisitRoleOptions={academicVisitRoleOptions}
             initialDocumentUrl={autoFillDocumentUrl}
+            onClearFields={handleClearFields}
+            onCancel={handleCancel}
           />
           </CardContent>
         </Card>
       </div>
+    </>
   )
 }

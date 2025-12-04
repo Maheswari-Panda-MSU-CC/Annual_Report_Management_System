@@ -36,8 +36,11 @@ export function useFormCancelHandler({
     if (skipWarning) {
       form.reset()
       clearDocumentData()
-      if (onCancel) onCancel()
-      router.push(redirectPath)
+      if (onCancel) {
+        onCancel()
+      } else if (redirectPath) {
+        router.push(redirectPath)
+      }
       return
     }
     
@@ -54,11 +57,16 @@ export function useFormCancelHandler({
       }
     }
     
-    // Cleanup and navigate
+    // Cleanup
     form.reset()
     clearDocumentData()
-    if (onCancel) onCancel()
-    router.push(redirectPath)
+    
+    // Handle navigation or custom cancel handler
+    if (onCancel) {
+      onCancel()
+    } else if (redirectPath) {
+      router.push(redirectPath)
+    }
   }, [form, clearDocumentData, redirectPath, skipWarning, onCancel, router, message, confirm])
   
   return { handleCancel, DialogComponent }

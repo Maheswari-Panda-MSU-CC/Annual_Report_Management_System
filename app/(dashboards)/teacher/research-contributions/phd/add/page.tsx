@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,9 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { usePhdMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 export default function AddPhdPage() {
   const router = useRouter()
@@ -21,7 +24,10 @@ export default function AddPhdPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
-  const { setValue, watch } = form
+  const { setValue, watch, reset } = form
+
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   // Dropdowns - already available from Context, no need to fetch
   const { phdGuidanceStatusOptions } = useDropDowns()
@@ -34,6 +40,7 @@ export default function AddPhdPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "phd", // Explicit form type
     dropdownOptions: {
@@ -123,6 +130,45 @@ export default function AddPhdPage() {
     },
     clearAfterUse: false, // Keep data for manual editing
   })
+
+  // Navigation guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/research-contributions?tab=phd",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
+
+  // Clear fields handler
+  const handleClearFields = () => {
+    reset()
+  }
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -273,11 +319,14 @@ export default function AddPhdPage() {
   }
 
   return (
+    <>
+      <NavigationDialog />
+      <CancelDialog />
       <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
-            onClick={() => router.push("/teacher/research-contributions?tab=phd")}
+            onClick={handleCancel}
             className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
           >
             <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -290,27 +339,28 @@ export default function AddPhdPage() {
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">Add details about PhD students you are guiding or have guided</p>
         </div>
 
-
         <Card>
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-base sm:text-lg">PhD Student Information</CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-              
             <PhdGuidanceForm
               form={form}
               onSubmit={handleSubmit}
-            isSubmitting={isSubmitting || createPhd.isPending}
-            isExtracting={isExtracting}
-            selectedFiles={null}
-            handleFileSelect={() => {}}
+              isSubmitting={isSubmitting || createPhd.isPending}
+              isExtracting={isExtracting}
+              selectedFiles={null}
+              handleFileSelect={() => {}}
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
               phdGuidanceStatusOptions={phdGuidanceStatusOptions}
               initialDocumentUrl={autoFillDocumentUrl}
+              onClearFields={handleClearFields}
+              onCancel={handleCancel}
             />
           </CardContent>
         </Card>
       </div>
+    </>
   )
 }

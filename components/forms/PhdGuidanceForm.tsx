@@ -25,6 +25,8 @@ interface PhdGuidanceFormProps {
   isEdit?: boolean
   editData?: Record<string, any>
   phdGuidanceStatusOptions?: Array<{ id: number; name: string }>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function PhdGuidanceForm({
@@ -39,6 +41,8 @@ export function PhdGuidanceForm({
   editData = {},
   phdGuidanceStatusOptions: propPhdGuidanceStatusOptions,
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: PhdGuidanceFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -115,9 +119,6 @@ export function PhdGuidanceForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.regNo) setValue("regNo", fields.regNo)
     if (fields.nameOfStudent) setValue("nameOfStudent", fields.nameOfStudent)
     if (fields.dateOfRegistration) setValue("dateOfRegistration", fields.dateOfRegistration)
@@ -138,6 +139,8 @@ export function PhdGuidanceForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -249,7 +252,7 @@ export function PhdGuidanceForm({
 
         {!isEdit && (
           <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=phd")} className="w-full sm:w-auto text-xs sm:text-sm">
+            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=phd"))} className="w-full sm:w-auto text-xs sm:text-sm">
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">

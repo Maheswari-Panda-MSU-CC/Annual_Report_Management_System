@@ -25,6 +25,8 @@ interface FinancialFormProps {
   isEdit?: boolean
   editData?: Record<string, any>
   financialSupportTypeOptions?: Array<{ id: number; name: string }>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function FinancialForm({
@@ -39,6 +41,8 @@ export function FinancialForm({
   editData = {},
   financialSupportTypeOptions: propFinancialSupportTypeOptions,
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: FinancialFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -116,9 +120,6 @@ export function FinancialForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.nameOfSupport) setValue("nameOfSupport", fields.nameOfSupport)
     if (fields.type) setValue("type", fields.type)
     if (fields.supportingAgency) setValue("supportingAgency", fields.supportingAgency)
@@ -140,6 +141,8 @@ export function FinancialForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -287,9 +290,7 @@ export function FinancialForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                router.push("/teacher/research-contributions?tab=financial")
-              }
+              onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=financial"))}
               className="w-full sm:w-auto text-xs sm:text-sm"
             >
               Cancel

@@ -24,6 +24,8 @@ interface AcademicVisitFormProps {
   isEdit?: boolean
   editData?: Record<string, any>
   academicVisitRoleOptions?: Array<{ id: number; name: string }>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function AcademicVisitForm({
@@ -38,6 +40,8 @@ export function AcademicVisitForm({
   editData = {},
   academicVisitRoleOptions: propAcademicVisitRoleOptions,
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: AcademicVisitFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -107,9 +111,6 @@ export function AcademicVisitForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.instituteVisited) setValue("instituteVisited", fields.instituteVisited)
     if (fields.durationOfVisit) setValue("durationOfVisit", fields.durationOfVisit)
     if (fields.role) setValue("role", fields.role)
@@ -131,6 +132,8 @@ export function AcademicVisitForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -237,7 +240,7 @@ export function AcademicVisitForm({
         {
           !isEdit && (
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=visits")} className="w-full sm:w-auto text-xs sm:text-sm">Cancel</Button>
+              <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=visits"))} className="w-full sm:w-auto text-xs sm:text-sm">Cancel</Button>
               <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
                 {isSubmitting ? "Submitting..." : (
                   <>

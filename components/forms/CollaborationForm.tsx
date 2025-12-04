@@ -29,6 +29,8 @@ interface CollaborationFormProps {
   collaborationsLevelOptions?: Array<{ id: number; name: string }>
   collaborationsOutcomeOptions?: Array<{ id: number; name: string }>
   collaborationsTypeOptions?: Array<{ id: number; name: string }>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function CollaborationForm({
@@ -45,6 +47,8 @@ export function CollaborationForm({
   collaborationsOutcomeOptions: propCollaborationsOutcomeOptions,
   collaborationsTypeOptions: propCollaborationsTypeOptions,
   initialDocumentUrl,
+  onClearFields,
+  onCancel,
 }: CollaborationFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -159,9 +163,6 @@ export function CollaborationForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.category) setValue("category", fields.category)
     if (fields.collaboratingInstitute) setValue("collaboratingInstitute", fields.collaboratingInstitute)
     if (fields.collabName) setValue("collabName", fields.collabName)
@@ -182,6 +183,8 @@ export function CollaborationForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -361,7 +364,7 @@ export function CollaborationForm({
 
         {!isEdit && (
           <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=collaborations")} className="w-full sm:w-auto text-xs sm:text-sm">
+            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=collaborations"))} className="w-full sm:w-auto text-xs sm:text-sm">
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">

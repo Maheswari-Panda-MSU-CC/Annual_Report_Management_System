@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,16 +11,22 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { useConsultancyMutations } from "@/hooks/use-teacher-research-contributions-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useToast } from "@/components/ui/use-toast"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 
 export default function AddConsultancyPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
   const form = useForm()
-  const { setValue, watch } = form
+  const { setValue, watch, reset } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   // Use mutation for creating consultancy
   const { create: createConsultancy } = useConsultancyMutations()
@@ -30,6 +36,7 @@ export default function AddConsultancyPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "consultancy", // Explicit form type
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
@@ -106,6 +113,45 @@ export default function AddConsultancyPage() {
     },
     clearAfterUse: false, // Keep data for manual editing
   })
+
+  // Navigation guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/research-contributions?tab=consultancy",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
+
+  // Clear fields handler
+  const handleClearFields = () => {
+    reset()
+  }
 
   const handleExtractInfo = async () => {
     setIsExtracting(true)
@@ -256,17 +302,15 @@ export default function AddConsultancyPage() {
     }
   }
 
-  const handleBack = () => {
-    setIsLoading(true)
-            router.push("/teacher/research-contributions?tab=consultancy")
-  }
-
   return (
+    <>
+      <NavigationDialog />
+      <CancelDialog />
       <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         <div className="flex items-center gap-2 sm:gap-4">
           <Button
             variant="outline"
-            onClick={handleBack}
+            onClick={handleCancel}
             className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
             disabled={isLoading || isSubmitting}
           >
@@ -282,13 +326,12 @@ export default function AddConsultancyPage() {
           </p>
         </div>
 
-       
         <Card>
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-base sm:text-lg">Consultancy Information</CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6">
-          <ConsultancyForm
+            <ConsultancyForm
               form={form}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting || createConsultancy.isPending}
@@ -298,9 +341,12 @@ export default function AddConsultancyPage() {
               handleExtractInfo={handleExtractInfo}
               isEdit={false}
               initialDocumentUrl={autoFillDocumentUrl}
-           />
+              onClearFields={handleClearFields}
+              onCancel={handleCancel}
+            />
           </CardContent>
         </Card>
       </div>
+    </>
   )
 }

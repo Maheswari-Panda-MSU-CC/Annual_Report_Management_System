@@ -27,7 +27,9 @@ export function EContentForm({
   eContentTypeOptions: propEContentTypeOptions,
   typeEcontentValueOptions: propTypeEcontentValueOptions,
   initialDocumentUrl,
-}: EContentFormProps & { initialDocumentUrl?: string }) {
+  onClearFields,
+  onCancel,
+}: EContentFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void }) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
@@ -111,9 +113,6 @@ export function EContentForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (handleExtractInfo) {
-      handleExtractInfo()
-    }
     if (fields.title) setValue("title", fields.title)
     if (fields.briefDetails) setValue("briefDetails", fields.briefDetails)
     if (fields.quadrant) setValue("quadrant", fields.quadrant)
@@ -135,6 +134,8 @@ export function EContentForm({
             setValue("supportingDocument", url ? [url] : [])
           }}
           onExtract={handleExtractedFields}
+          onClearFields={onClearFields}
+          isEditMode={isEdit}
           className="w-full"
         />
       </div>
@@ -274,7 +275,7 @@ export function EContentForm({
 
        {!isEdit &&
          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-         <Button type="button" variant="outline" onClick={() => router.push("/teacher/research-contributions?tab=econtent")} className="w-full sm:w-auto text-xs sm:text-sm">
+         <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=econtent"))} className="w-full sm:w-auto text-xs sm:text-sm">
            Cancel
          </Button>
          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
