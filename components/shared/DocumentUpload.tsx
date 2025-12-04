@@ -391,7 +391,19 @@ export function DocumentUpload({
       setError(null)
 
       try {
-        const response = await fetch(currentDocumentUrl)
+        // Use API route for local documents to ensure proper access
+        // This fixes the issue when navigating from dashboard where documentUrl
+        // is a local path like /uploaded-document/file.pdf
+        const fetchUrl = getDocumentDisplayUrl(currentDocumentUrl) || currentDocumentUrl
+        
+        console.log("[DocumentUpload] Fetching file for extraction:", {
+          originalUrl: currentDocumentUrl,
+          fetchUrl: fetchUrl,
+          hasFileRef: !!fileRef.current,
+          hasUploadedFile: !!uploadedFile,
+        })
+        
+        const response = await fetch(fetchUrl)
         if (response.ok) {
           const blob = await response.blob()
           const urlParts = currentDocumentUrl.split("/")
@@ -402,13 +414,28 @@ export function DocumentUpload({
           // File constructor: new File(fileBits, fileName, options)
           fileToExtract = new (window.File || File)([blob], fileName, { type: mimeType })
           fileRef.current = fileToExtract
+          
+          console.log("[DocumentUpload] Successfully loaded file for extraction:", {
+            fileName,
+            fileSize: blob.size,
+            mimeType,
+          })
         } else {
+          console.error("[DocumentUpload] Failed to fetch file:", {
+            status: response.status,
+            statusText: response.statusText,
+            url: fetchUrl,
+          })
           setError("Could not access the document file. Please re-upload the document.")
           setIsExtracting(false)
           return
         }
       } catch (fetchError) {
-        console.error("Error fetching file from URL:", fetchError)
+        console.error("[DocumentUpload] Error fetching file from URL:", {
+          error: fetchError,
+          url: currentDocumentUrl,
+          fetchUrl: getDocumentDisplayUrl(currentDocumentUrl) || currentDocumentUrl,
+        })
         setError("Could not access the document file. Please re-upload the document.")
         setIsExtracting(false)
         return

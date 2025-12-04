@@ -11,6 +11,7 @@ import { Loader2, Brain, FileText, ArrowRight } from "lucide-react"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useRouter } from "next/navigation"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { CATEGORY_FORM_TYPE_MAP } from "@/lib/categories-field-mapping"
 
 interface ClassificationData {
   category: string
@@ -594,6 +595,7 @@ export function SmartDocumentAnalyzer() {
   const [selectedCategoryKey, setSelectedCategoryKey] = useState<string | null>(null)
   const [selectedSubcategoryKey, setSelectedSubcategoryKey] = useState<string | null>(null)
   const [isClassificationCorrect, setIsClassificationCorrect] = useState<boolean | null>(null)
+  const [isReAnalyzing, setIsReAnalyzing] = useState(false)
 
   // Handle file selection from DocumentUpload
   const handleFileSelect = (file: File) => {
@@ -683,9 +685,141 @@ export function SmartDocumentAnalyzer() {
     }
   }
 
+  // Helper function to map teacherCategories keys to exact category/subcategory names in categories-field-mapping.ts
+  const mapToExactCategoryNames = (categoryKey: string, subcategoryKey: string | null): { category: string; subCategory: string } => {
+    // Special case: Research Projects is a standalone category (not under Research Contributions)
+    if (categoryKey === "Research Projects") {
+      return {
+        category: "Research & Consultancy",
+        subCategory: "Research Projects",
+      }
+    }
+
+    // Special case: "talks" subcategory under "Talks Events" maps to "Talks" category
+    if (categoryKey === "Talks Events" && subcategoryKey === "talks") {
+      return {
+        category: "Talks",
+        subCategory: "Talks of Academic/Research Nature",
+      }
+    }
+
+    // Mapping from teacherCategories keys to CATEGORY_FORM_TYPE_MAP keys
+    const categoryMapping: Record<string, string> = {
+      "Publications": "Books/Papers",
+      "Research Contributions": "Research & Consultancy",
+      "Awards Recognition": "Awards/Performance",
+      "Talks Events": "Academic Programs", // Most Talks Events subcategories map to Academic Programs category
+      "Academic Recommendations": "Academic Recommendation",
+    }
+
+    // Get the mapped category name
+    const mappedCategory = categoryMapping[categoryKey] || categoryKey
+
+    // Map subcategory keys to exact subcategory names in CATEGORY_FORM_TYPE_MAP
+    const subcategoryMapping: Record<string, Record<string, string>> = {
+      "Books/Papers": {
+        "journals": "Published Articles/Papers in Journals/Edited Volumes",
+        "books": "Books/Books Chapter(s) Published",
+        "papers": "Papers Presented",
+      },
+      "Research & Consultancy": {
+        "patents": "Patents",
+        "policy": "Policy Document Developed",
+        "econtent": "E Content",
+        "consultancy": "Details of Consultancy Undertaken",
+        "collaborations": "Collaborations/MOUs/Linkages Signed",
+        "visits": "Academic/Research Visit",
+        "financial": "Financial Support/Aid Received For Academic/Research Activities",
+        "jrf-srf": "Details Of JRF/SRF Working With You",
+        "phd": "PhD Guidance Details",
+        "copyrights": "Copyrights",
+      },
+      "Academic Programs": {
+        "refresher": "Refresher/Orientantion Course",
+        "academic-programs": "Contribution in Organising Academic Programs",
+        "academic-bodies": "Participation in Academic Bodies of other Universities",
+        "committees": "Participation in Committees of University",
+      },
+      "Awards/Performance": {
+        "performance": "Performance by Individual/Group",
+        "awards": "Awards/Fellowship/Recognition",
+        "extension": "Extension",
+      },
+      "Talks": {
+        "talks": "Talks of Academic/Research Nature",
+      },
+      "Academic Recommendation": {
+        "articles": "Articles/Journals/Edited Volumes",
+        "books": "Books",
+        "magazines": "Magazines",
+        "technical": "Technical Report and Other(s)",
+      },
+    }
+
+    // Get the mapped subcategory name
+    let mappedSubCategory = ""
+    if (subcategoryKey && subcategoryMapping[mappedCategory]) {
+      mappedSubCategory = subcategoryMapping[mappedCategory][subcategoryKey] || subcategoryKey
+    }
+
+    return {
+      category: mappedCategory,
+      subCategory: mappedSubCategory,
+    }
+  }
+
+  // Helper function to re-analyze document with selected category/subcategory
+  const reAnalyzeWithCategory = async (category: string, subCategory: string): Promise<DocumentAnalysis | null> => {
+    if (!selectedFile) return null
+
+    setIsReAnalyzing(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", selectedFile)
+      formData.append("category", category)
+      if (subCategory) {
+        formData.append("subCategory", subCategory)
+      }
+      formData.append("isTargeted", "true")
+
+      const response = await fetch("/api/llm/categorize-document", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        let errorMessage = "Document re-analysis failed."
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData?.error?.message || errorData?.message || errorData?.error || errorMessage
+        } catch {
+          errorMessage = response.statusText || errorMessage
+        }
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        const errorMessage = result?.error?.message || result?.error || result?.message || "Document re-analysis failed."
+        throw new Error(errorMessage)
+      }
+
+      return result
+    } catch (error: any) {
+      console.error("Re-analysis error:", error)
+      throw error
+    } finally {
+      setIsReAnalyzing(false)
+    }
+  }
+
   // Helper to store data in context and navigate
-  const storeAndNavigate = async (route: string, category: string, subCategory: string, dataFields: Record<string, string>) => {
+  const storeAndNavigate = async (route: string, category: string, subCategory: string, dataFields: Record<string, string>, analysisData?: DocumentAnalysis | null) => {
     if (!selectedFile || !localFileUrl) return
+
+    // Use provided analysis data or existing analysis
+    const finalAnalysis = analysisData || analysis
 
     // Store in context with local file URL (for DocumentUpload component)
     // The localFileUrl is already uploaded to /uploaded-document/ folder
@@ -698,7 +832,7 @@ export function SmartDocumentAnalyzer() {
       category,
       subCategory,
       dataFields,
-      analysis,
+      analysis: finalAnalysis,
       autoFill: true,
     })
 
@@ -946,6 +1080,7 @@ export function SmartDocumentAnalyzer() {
                           <Button
                             disabled={
                               !selectedCategoryKey ||
+                              isReAnalyzing ||
                               (!!teacherCategories.find((c) => c.key === selectedCategoryKey)?.subcategories &&
                                 (teacherCategories.find((c) => c.key === selectedCategoryKey)?.subcategories?.length ?? 0) > 0 &&
                                 !selectedSubcategoryKey)
@@ -971,30 +1106,66 @@ export function SmartDocumentAnalyzer() {
                                   }
                                 }
 
-                                // Store data in context and navigate
+                                // Map to exact category/subcategory names for API
+                                const { category: exactCategory, subCategory: exactSubCategory } = mapToExactCategoryNames(
+                                  selectedCategoryKey,
+                                  selectedSubcategoryKey
+                                )
+
+                                // Show loading toast
+                                toast({
+                                  title: "Re-analyzing Document...",
+                                  description: `Analyzing with selected category: ${exactCategory}${exactSubCategory ? ` / ${exactSubCategory}` : ""}`,
+                                })
+
+                                // Re-analyze document with selected category/subcategory
+                                const newAnalysis = await reAnalyzeWithCategory(exactCategory, exactSubCategory)
+
+                                if (!newAnalysis) {
+                                  throw new Error("Failed to re-analyze document")
+                                }
+
+                                // Update analysis state with new results
+                                setAnalysis(newAnalysis)
+
+                                // Extract data fields from new analysis
+                                const newDataFields = newAnalysis.classification?.dataFields || {}
+
+                                // Store data in context and navigate with new analysis
                                 await storeAndNavigate(
                                   targetRoute,
-                                  selectedCategoryKey,
-                                  selectedSubcategoryKey || "",
-                                  analysis.classification.dataFields || {}
+                                  exactCategory.toLowerCase(),
+                                  exactSubCategory.toLowerCase(),
+                                  newDataFields,
+                                  newAnalysis
                                 )
+
                                 toast({
                                   title: "Redirecting...",
                                   description: `Taking you to ${selectedSubcategoryKey ? chosenCategory.subcategories?.find(s => s.key === selectedSubcategoryKey)?.label : chosenCategory.label} page with auto-filled data`,
                                 })
-                              } catch (e) {
+                              } catch (e: any) {
                                 console.error("Navigation error:", e)
                                 toast({
-                                  title: "Navigation Failed",
-                                  description: "Please try again.",
+                                  title: "Analysis Failed",
+                                  description: e?.message || "Please try again.",
                                   variant: "destructive",
                                 })
                               }
                             }}
                             className="w-full"
                           >
-                            Continue to Add Page
-                            <ArrowRight className="ml-2 h-4 w-4" />
+                            {isReAnalyzing ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Re-analyzing Document...
+                              </>
+                            ) : (
+                              <>
+                                Continue to Add Page
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                              </>
+                            )}
                           </Button>
                         </CardContent>
                       </Card>
