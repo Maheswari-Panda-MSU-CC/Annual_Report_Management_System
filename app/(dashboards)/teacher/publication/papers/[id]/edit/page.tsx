@@ -17,6 +17,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { usePaperMutations } from "@/hooks/use-teacher-mutations"
 import { useQuery } from "@tanstack/react-query"
 import { teacherQueryKeys } from "@/hooks/use-teacher-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 interface PaperFormData {
   authors: string
@@ -27,6 +31,7 @@ interface PaperFormData {
   title_of_paper: string
   level: number | null
   mode: string
+  Image?: string
 }
 
 export default function EditPaperPage() {
@@ -38,8 +43,23 @@ export default function EditPaperPage() {
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+
+  const form = useForm<PaperFormData>({
+    defaultValues: {
+      authors: "",
+      theme: "",
+      organising_body: "",
+      place: "",
+      date: "",
+      title_of_paper: "",
+      level: null,
+      mode: "",
+      Image: "",
+    },
+  })
 
   const {
     register,
@@ -48,7 +68,113 @@ export default function EditPaperPage() {
     control,
     reset,
     formState: { errors },
-  } = useForm<PaperFormData>()
+  } = form
+
+  // Use auto-fill hook for document analysis data - watches context changes
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType: "papers", // Explicit form type
+    dropdownOptions: {
+      level: resPubLevelOptions,
+    },
+    onlyFillEmpty: false, // REPLACE existing data with new extracted data
+    onAutoFill: (fields) => {
+      console.log("EDIT PAGE: Auto-fill triggered with fields", fields)
+      // REPLACE all form fields with extracted data (even if they already have values)
+      // This ensures new extraction replaces existing data
+      
+      // Authors - replace if exists in extraction
+      if (fields.authors !== undefined) {
+        setValue("authors", fields.authors ? String(fields.authors) : "")
+      }
+      
+      // Theme - replace if exists in extraction
+      if (fields.theme !== undefined) {
+        setValue("theme", fields.theme ? String(fields.theme) : "")
+      }
+      
+      // Organising Body - replace if exists in extraction
+      if (fields.organising_body !== undefined) {
+        setValue("organising_body", fields.organising_body ? String(fields.organising_body) : "")
+      }
+      
+      // Place - replace if exists in extraction
+      if (fields.place !== undefined) {
+        setValue("place", fields.place ? String(fields.place) : "")
+      }
+      
+      // Date - replace if exists in extraction
+      if (fields.date !== undefined) {
+        setValue("date", fields.date ? String(fields.date) : "")
+      }
+      
+      // Title of Paper - replace if exists in extraction
+      if (fields.title_of_paper !== undefined) {
+        setValue("title_of_paper", fields.title_of_paper ? String(fields.title_of_paper) : "")
+      }
+      
+      // Mode - replace if exists in extraction
+      if (fields.mode !== undefined) {
+        setValue("mode", fields.mode ? String(fields.mode) : "")
+      }
+      
+      // Level - replace if exists in extraction
+      if (fields.level !== undefined) {
+        if (fields.level !== null && fields.level !== undefined) {
+          const matchingLevel = resPubLevelOptions.find(
+            (l) => l.id === Number(fields.level)
+          )
+          if (matchingLevel) {
+            setValue("level", matchingLevel.id)
+          } else {
+            setValue("level", null)
+          }
+        } else {
+          setValue("level", null)
+        }
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
+
+  // Unsaved changes guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/publication",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear document data when leaving the page
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
 
   // Note: Dropdown data is already available from Context, no need to fetch
 
@@ -99,6 +225,7 @@ export default function EditPaperPage() {
     if (paper.Image) {
       setExistingDocumentUrl(paper.Image)
       setDocumentUrl(paper.Image)
+      setValue("Image", paper.Image) // Update form field so cancel handler can detect document
     }
 
     // Populate form with fetched data
@@ -111,6 +238,7 @@ export default function EditPaperPage() {
       title_of_paper: paper.title_of_paper || "",
       level: paper.level || null,
       mode: paper.mode || "",
+      Image: paper.Image || "",
     })
   }, [papersData, id, reset, router, toast])
 
@@ -118,6 +246,7 @@ export default function EditPaperPage() {
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
+    setValue("Image", url) // Update form field so cancel handler can detect document
   }
 
   const onSubmit = async (data: PaperFormData) => {
@@ -205,6 +334,8 @@ export default function EditPaperPage() {
       { paperId: parseInt(id as string), paperData },
       {
         onSuccess: () => {
+          clearDocumentData()
+          clearAutoFillData()
           router.push("/teacher/publication")
         },
       }
@@ -223,9 +354,12 @@ export default function EditPaperPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+    <>
+      {NavigationDialog && <NavigationDialog />}
+      {CancelDialog && <CancelDialog />}
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={() => router.push("/teacher/publication")} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -255,6 +389,10 @@ export default function EditPaperPage() {
               onChange={handleDocumentChange}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}
+              isEditMode={true}
+              onClearFields={() => {
+                reset()
+              }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
           </div>
@@ -410,7 +548,7 @@ export default function EditPaperPage() {
                   "Update Paper Presentation"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>
@@ -418,5 +556,6 @@ export default function EditPaperPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }

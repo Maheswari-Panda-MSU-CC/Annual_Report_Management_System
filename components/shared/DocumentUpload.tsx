@@ -588,12 +588,12 @@ export function DocumentUpload({
 
     if (hasAutoFilledData || hasFormData) {
       // Build description message
-      let description = "Are you sure you want to clear the document?"
+      let description = "Are you sure you want to remove the document?"
       if (hasAutoFilledData) {
-        description += " This will also clear all auto-filled data fields."
+        description += " This will also clear all auto-filled data fields if extrcated earlier."
       }
       if (hasFormData) {
-        description += " All form fields will be cleared as well."
+        description += "all form fields will be cleared if autofilled."
       }
 
       // Show single confirmation dialog

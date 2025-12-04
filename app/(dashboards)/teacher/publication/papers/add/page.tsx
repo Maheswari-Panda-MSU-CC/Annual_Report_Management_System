@@ -16,6 +16,9 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
 import { usePaperMutations } from "@/hooks/use-teacher-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 
 interface PaperFormData {
   authors: string
@@ -26,6 +29,7 @@ interface PaperFormData {
   title_of_paper: string
   level: number | null
   mode: string
+  Image?: string
 }
 
 export default function AddConferencePaperPage() {
@@ -35,17 +39,11 @@ export default function AddConferencePaperPage() {
   const { createPaper } = usePaperMutations()
   const [isExtracting, setIsExtracting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    control,
-    watch,
-    formState: { errors },
-  } = useForm<PaperFormData>({
+  const form = useForm<PaperFormData>({
     defaultValues: {
       authors: "",
       theme: "",
@@ -55,6 +53,7 @@ export default function AddConferencePaperPage() {
       title_of_paper: "",
       level: null,
       mode: "",
+      Image: "",
     },
   })
 
@@ -63,44 +62,109 @@ export default function AddConferencePaperPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
-    formType
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "papers", // Explicit form type
     dropdownOptions: {
       level: resPubLevelOptions,
     },
-    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
-    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
-      // Auto-fill form fields from document analysis
-      if (fields.authors) setValue("authors", String(fields.authors))
-      if (fields.theme) setValue("theme", String(fields.theme))
-      if (fields.organising_body) setValue("organising_body", String(fields.organising_body))
-      if (fields.place) setValue("place", String(fields.place))
-      if (fields.date) setValue("date", String(fields.date))
-      if (fields.title_of_paper) setValue("title_of_paper", String(fields.title_of_paper))
-      if (fields.mode) setValue("mode", String(fields.mode))
-      if (fields.level !== undefined && fields.level !== null) {
-        setValue("level", Number(fields.level))
+      console.log("PAPERS fields", fields)
+      // REPLACE all form fields with extracted data (even if they already have values)
+      // This ensures new extraction replaces existing data
+      
+      // Authors - replace if exists in extraction
+      if (fields.authors !== undefined) {
+        setValue("authors", fields.authors ? String(fields.authors) : "")
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
-        toast({
-          title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
-        })
+      // Theme - replace if exists in extraction
+      if (fields.theme !== undefined) {
+        setValue("theme", fields.theme ? String(fields.theme) : "")
+      }
+      
+      // Organising Body - replace if exists in extraction
+      if (fields.organising_body !== undefined) {
+        setValue("organising_body", fields.organising_body ? String(fields.organising_body) : "")
+      }
+      
+      // Place - replace if exists in extraction
+      if (fields.place !== undefined) {
+        setValue("place", fields.place ? String(fields.place) : "")
+      }
+      
+      // Date - replace if exists in extraction
+      if (fields.date !== undefined) {
+        setValue("date", fields.date ? String(fields.date) : "")
+      }
+      
+      // Title of Paper - replace if exists in extraction
+      if (fields.title_of_paper !== undefined) {
+        setValue("title_of_paper", fields.title_of_paper ? String(fields.title_of_paper) : "")
+      }
+      
+      // Mode - replace if exists in extraction
+      if (fields.mode !== undefined) {
+        setValue("mode", fields.mode ? String(fields.mode) : "")
+      }
+      
+      // Level - replace if exists in extraction
+      if (fields.level !== undefined) {
+        setValue("level", fields.level !== null && fields.level !== undefined ? Number(fields.level) : null)
       }
     },
     clearAfterUse: false, // Keep data for manual editing
   })
 
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    control,
+    watch,
+    reset,
+    formState: { errors },
+  } = form
+
   useEffect(() => {
     fetchResPubLevels()
   }, [])
+
+  // Unsaved changes guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/publication",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear document data when leaving the page
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
 
   // Update documentUrl when auto-fill data is available
   // Always update if autoFillDocumentUrl is provided and different from current value
@@ -108,23 +172,81 @@ export default function AddConferencePaperPage() {
   useEffect(() => {
     if (autoFillDocumentUrl && documentUrl !== autoFillDocumentUrl) {
       setDocumentUrl(autoFillDocumentUrl)
+      setValue("Image", autoFillDocumentUrl) // Update form field so cancel handler can detect document
     }
-  }, [autoFillDocumentUrl, documentUrl])
+  }, [autoFillDocumentUrl, documentUrl, setValue])
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
+    setValue("Image", url) // Update form field so cancel handler can detect document
   }
 
+  // Handle extracted fields from DocumentUpload - REPLACE existing data with new extracted data
   const handleExtractFields = useCallback((extractedData: Record<string, any>) => {
-    // Map extracted data to form fields
-    if (extractedData.authors) setValue("authors", extractedData.authors)
-    if (extractedData.theme || extractedData.themeOfConference) setValue("theme", extractedData.theme || extractedData.themeOfConference)
-    if (extractedData.organising_body || extractedData.organizingBody) setValue("organising_body", extractedData.organising_body || extractedData.organizingBody)
-    if (extractedData.place) setValue("place", extractedData.place)
-    if (extractedData.date || extractedData.dateOfPresentation) setValue("date", extractedData.date || extractedData.dateOfPresentation)
-    if (extractedData.title_of_paper || extractedData.titleOfPaper) setValue("title_of_paper", extractedData.title_of_paper || extractedData.titleOfPaper)
-    if (extractedData.mode || extractedData.modeOfParticipation) setValue("mode", extractedData.mode || extractedData.modeOfParticipation)
-  }, [setValue])
+    let fieldsPopulated = 0
+
+    // REPLACE all fields - set values even if they're empty/null in extracted data
+    // This ensures existing data is replaced with new extracted data
+    
+    // Authors - replace if exists in extraction
+    if (extractedData.authors !== undefined) {
+      setValue("authors", extractedData.authors || "")
+      if (extractedData.authors) fieldsPopulated++
+    }
+    
+    // Theme - replace if exists in extraction
+    if (extractedData.theme !== undefined || extractedData.themeOfConference !== undefined) {
+      const themeValue = extractedData.theme || extractedData.themeOfConference || ""
+      setValue("theme", themeValue)
+      if (themeValue) fieldsPopulated++
+    }
+    
+    // Organising Body - replace if exists in extraction
+    if (extractedData.organising_body !== undefined || extractedData.organizingBody !== undefined) {
+      const orgBodyValue = extractedData.organising_body || extractedData.organizingBody || ""
+      setValue("organising_body", orgBodyValue)
+      if (orgBodyValue) fieldsPopulated++
+    }
+    
+    // Place - replace if exists in extraction
+    if (extractedData.place !== undefined) {
+      setValue("place", extractedData.place || "")
+      if (extractedData.place) fieldsPopulated++
+    }
+    
+    // Date - replace if exists in extraction
+    if (extractedData.date !== undefined || extractedData.dateOfPresentation !== undefined) {
+      const dateValue = extractedData.date || extractedData.dateOfPresentation || ""
+      setValue("date", dateValue)
+      if (dateValue) fieldsPopulated++
+    }
+    
+    // Title of Paper - replace if exists in extraction
+    if (extractedData.title_of_paper !== undefined || extractedData.titleOfPaper !== undefined) {
+      const titleValue = extractedData.title_of_paper || extractedData.titleOfPaper || ""
+      setValue("title_of_paper", titleValue)
+      if (titleValue) fieldsPopulated++
+    }
+    
+    // Mode - replace if exists in extraction
+    if (extractedData.mode !== undefined || extractedData.modeOfParticipation !== undefined) {
+      const modeValue = extractedData.mode || extractedData.modeOfParticipation || ""
+      setValue("mode", modeValue)
+      if (modeValue) fieldsPopulated++
+    }
+
+    if (fieldsPopulated > 0) {
+      toast({
+        title: "Information Extracted Successfully",
+        description: `${fieldsPopulated} fields replaced with new extracted data`,
+      })
+    } else {
+      toast({
+        title: "Extraction Complete",
+        description: "Data fields have been updated (some fields may be empty)",
+      })
+    }
+  }, [setValue, toast])
 
   const onSubmit = async (data: PaperFormData) => {
     if (!user?.role_id) {
@@ -205,15 +327,20 @@ export default function AddConferencePaperPage() {
     // Use mutation instead of direct fetch
     createPaper.mutate(paperData, {
       onSuccess: () => {
+        clearDocumentData()
+        clearAutoFillData()
         router.push("/teacher/publication")
       },
     })
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+    <>
+      {NavigationDialog && <NavigationDialog />}
+      {CancelDialog && <CancelDialog />}
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -245,6 +372,9 @@ export default function AddConferencePaperPage() {
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}
+              onClearFields={() => {
+                reset()
+              }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload invitation letter/email/certificate (PDF, JPG, PNG - max 1MB)</p>
           </div>
@@ -403,7 +533,7 @@ export default function AddConferencePaperPage() {
                     "Save Paper Presentation"
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
                   Cancel
                 </Button>
               </div>
@@ -412,5 +542,6 @@ export default function AddConferencePaperPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }

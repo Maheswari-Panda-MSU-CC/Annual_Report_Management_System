@@ -147,7 +147,7 @@ export default function PaperDetailPage() {
     : null
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-full bg-gray-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 lg:m-2">
         <Header onMobileMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
@@ -162,7 +162,7 @@ export default function PaperDetailPage() {
                 </Button>
                 <div>
                   <h1 className="text-2xl font-bold">Paper Presentation Details</h1>
-                  <p className="text-gray-600">Publication ID: {paper.papid}</p>
+                  {/* <p className="text-gray-600">Publication ID: {paper.papid}</p> */}
                 </div>
               </div>
               <div className="flex space-x-2 flex-wrap">
@@ -172,12 +172,7 @@ export default function PaperDetailPage() {
                     Edit
                   </Button>
                 </Link>
-                {documentUrl && (
-                  <Button variant="outline" onClick={handleDownloadDocument}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Document
-                  </Button>
-                )}
+               
               </div>
             </div>
 
@@ -311,26 +306,7 @@ export default function PaperDetailPage() {
                   </CardContent>
                 </Card>
 
-                {documentUrl && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Supporting Documents</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <p className="text-sm font-medium">Certificate/Invitation</p>
-                            <p className="text-xs text-gray-500">PDF Document</p>
-                          </div>
-                          <Button size="sm" variant="outline" onClick={handleDownloadDocument}>
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+               
               </div>
             </div>
 

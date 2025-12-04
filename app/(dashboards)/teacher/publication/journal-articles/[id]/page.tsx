@@ -152,7 +152,7 @@ export default function JournalArticleDetailPage() {
     : null
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-full bg-gray-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 lg:m-0">
         <Header onMobileMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
@@ -166,8 +166,8 @@ export default function JournalArticleDetailPage() {
                   Back
                 </Button>
                 <div>
-                  <h1 className="text-2xl font-bold">Journal Article Details</h1>
-                  <p className="text-gray-600">Publication ID: {article.id}</p>
+                  <h1 className="text-2xl font-bold">Published Article/Journal/Edited Volume Details</h1>
+                  {/* <p className="text-gray-600">Publication ID: {article.id}</p> */}
                 </div>
               </div>
               <div className="flex space-x-2 flex-wrap">
@@ -177,12 +177,7 @@ export default function JournalArticleDetailPage() {
                     Edit
                   </Button>
                 </Link>
-                {documentUrl && (
-                  <Button variant="outline" onClick={handleDownloadDocument}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Document
-                  </Button>
-                )}
+               
               </div>
             </div>
 
@@ -194,7 +189,7 @@ export default function JournalArticleDetailPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center">
                       <FileText className="w-5 h-5 mr-2" />
-                      Article Information
+                      Published Article/Journal/Edited Volume Information
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -350,26 +345,7 @@ export default function JournalArticleDetailPage() {
                   </CardContent>
                 </Card>
 
-                {documentUrl && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Supporting Documents</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <p className="text-sm font-medium">Article PDF</p>
-                            <p className="text-xs text-gray-500">PDF Document</p>
-                          </div>
-                          <Button size="sm" variant="outline" onClick={handleDownloadDocument}>
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                
               </div>
             </div>
 

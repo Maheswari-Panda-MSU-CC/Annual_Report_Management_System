@@ -28,8 +28,8 @@ export function useFormCancelHandler({
   const handleCancel = useCallback(async () => {
     const isDirty = form.formState.isDirty
     const formValues = form.getValues()
-    // Check for document in Pdf field or supportingDocument field
-    const hasDocument = formValues.Pdf || formValues.supportingDocument?.[0] || false
+    // Check for document in Pdf field, supportingDocument field, or Image field (for publication forms)
+    const hasDocument = formValues.Pdf || formValues.supportingDocument?.[0] || formValues.Image || false
     const hasUnsavedChanges = isDirty || hasDocument
     
     // Skip warning for Smart Document Analyzer navigation

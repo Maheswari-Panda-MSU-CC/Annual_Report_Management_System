@@ -448,9 +448,7 @@ export function DocumentViewer({
         {getFileIcon()} Document Preview
       </CardTitle>
       <div className="flex items-center gap-2">
-        <Badge variant="outline" className="text-xs">
-          {documentType.toUpperCase()}
-        </Badge>
+       
         <Button
           variant="outline"
           size="sm"

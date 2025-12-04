@@ -17,6 +17,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { useJournalMutations } from "@/hooks/use-teacher-mutations"
 import { useQuery } from "@tanstack/react-query"
 import { teacherQueryKeys } from "@/hooks/use-teacher-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 interface JournalFormData {
   authors: string
@@ -40,6 +44,7 @@ interface JournalFormData {
   issn: string
   type: number | null
   DOI: string
+  Image?: string
 }
 
 export default function EditJournalArticlePage() {
@@ -51,6 +56,7 @@ export default function EditJournalArticlePage() {
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const {
     journalAuthorTypeOptions,
@@ -61,6 +67,33 @@ export default function EditJournalArticlePage() {
     fetchResPubLevels,
   } = useDropDowns()
 
+  const form = useForm<JournalFormData>({
+    defaultValues: {
+      authors: "",
+      author_num: null,
+      title: "",
+      isbn: "",
+      journal_name: "",
+      volume_num: null,
+      page_num: "",
+      month_year: "",
+      author_type: null,
+      level: null,
+      peer_reviewed: false,
+      h_index: null,
+      impact_factor: null,
+      in_scopus: false,
+      in_ugc: false,
+      in_clarivate: false,
+      in_oldUGCList: false,
+      paid: false,
+      issn: "",
+      type: null,
+      DOI: "",
+      Image: "",
+    },
+  })
+
   const {
     register,
     handleSubmit,
@@ -68,7 +101,202 @@ export default function EditJournalArticlePage() {
     control,
     reset,
     formState: { errors },
-  } = useForm<JournalFormData>()
+  } = form
+
+  // Use auto-fill hook for document analysis data - watches context changes
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType: "journal-articles", // Explicit form type
+    dropdownOptions: {
+      level: resPubLevelOptions,
+      author_type: journalAuthorTypeOptions,
+      type: journalEditedTypeOptions,
+    },
+    onlyFillEmpty: false, // REPLACE existing data with new extracted data
+    onAutoFill: (fields) => {
+      console.log("EDIT PAGE: Auto-fill triggered with fields", fields)
+      // REPLACE all form fields with extracted data (even if they already have values)
+      // This ensures new extraction replaces existing data
+      
+      // Authors - replace if exists in extraction
+      if (fields.authors !== undefined) {
+        setValue("authors", fields.authors ? String(fields.authors) : "")
+      }
+      
+      // Author Num - replace if exists in extraction
+      if (fields.author_num !== undefined) {
+        setValue("author_num", fields.author_num !== null && fields.author_num !== undefined ? Number(fields.author_num) : null)
+      }
+      
+      // Title - replace if exists in extraction
+      if (fields.title !== undefined) {
+        setValue("title", fields.title ? String(fields.title) : "")
+      }
+      
+      // ISBN - replace if exists in extraction
+      if (fields.isbn !== undefined) {
+        setValue("isbn", fields.isbn ? String(fields.isbn) : "")
+      }
+      
+      // Journal Name - replace if exists in extraction
+      if (fields.journal_name !== undefined) {
+        setValue("journal_name", fields.journal_name ? String(fields.journal_name) : "")
+      }
+      
+      // Volume Num - replace if exists in extraction
+      if (fields.volume_num !== undefined) {
+        setValue("volume_num", fields.volume_num !== null && fields.volume_num !== undefined ? Number(fields.volume_num) : null)
+      }
+      
+      // Page Num - replace if exists in extraction
+      if (fields.page_num !== undefined) {
+        setValue("page_num", fields.page_num ? String(fields.page_num) : "")
+      }
+      
+      // Month Year - replace if exists in extraction
+      if (fields.month_year !== undefined) {
+        setValue("month_year", fields.month_year ? String(fields.month_year) : "")
+      }
+      
+      // Author Type - replace if exists in extraction
+      if (fields.author_type !== undefined) {
+        if (fields.author_type !== null && fields.author_type !== undefined) {
+          const matchingAuthorType = journalAuthorTypeOptions.find(
+            (a) => a.id === Number(fields.author_type)
+          )
+          if (matchingAuthorType) {
+            setValue("author_type", matchingAuthorType.id)
+          } else {
+            setValue("author_type", null)
+          }
+        } else {
+          setValue("author_type", null)
+        }
+      }
+      
+      // Level - replace if exists in extraction
+      if (fields.level !== undefined) {
+        if (fields.level !== null && fields.level !== undefined) {
+          const matchingLevel = resPubLevelOptions.find(
+            (l) => l.id === Number(fields.level)
+          )
+          if (matchingLevel) {
+            setValue("level", matchingLevel.id)
+          } else {
+            setValue("level", null)
+          }
+        } else {
+          setValue("level", null)
+        }
+      }
+      
+      // Peer Reviewed - replace if exists in extraction
+      if (fields.peer_reviewed !== undefined) {
+        setValue("peer_reviewed", Boolean(fields.peer_reviewed))
+      }
+      
+      // H Index - replace if exists in extraction
+      if (fields.h_index !== undefined) {
+        setValue("h_index", fields.h_index !== null && fields.h_index !== undefined ? Number(fields.h_index) : null)
+      }
+      
+      // Impact Factor - replace if exists in extraction
+      if (fields.impact_factor !== undefined) {
+        setValue("impact_factor", fields.impact_factor !== null && fields.impact_factor !== undefined ? Number(fields.impact_factor) : null)
+      }
+      
+      // In Scopus - replace if exists in extraction
+      if (fields.in_scopus !== undefined) {
+        setValue("in_scopus", Boolean(fields.in_scopus))
+      }
+      
+      // In UGC - replace if exists in extraction
+      if (fields.in_ugc !== undefined) {
+        setValue("in_ugc", Boolean(fields.in_ugc))
+      }
+      
+      // In Clarivate - replace if exists in extraction
+      if (fields.in_clarivate !== undefined) {
+        setValue("in_clarivate", Boolean(fields.in_clarivate))
+      }
+      
+      // In Old UGC List - replace if exists in extraction
+      if (fields.in_oldUGCList !== undefined) {
+        setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
+      }
+      
+      // Paid - replace if exists in extraction
+      if (fields.paid !== undefined) {
+        setValue("paid", Boolean(fields.paid))
+      }
+      
+      // ISSN - replace if exists in extraction
+      if (fields.issn !== undefined) {
+        setValue("issn", fields.issn ? String(fields.issn) : "")
+      }
+      
+      // Type - replace if exists in extraction
+      if (fields.type !== undefined) {
+        if (fields.type !== null && fields.type !== undefined) {
+          const matchingType = journalEditedTypeOptions.find(
+            (t) => t.id === Number(fields.type)
+          )
+          if (matchingType) {
+            setValue("type", matchingType.id)
+          } else {
+            setValue("type", null)
+          }
+        } else {
+          setValue("type", null)
+        }
+      }
+      
+      // DOI - replace if exists in extraction
+      if (fields.DOI !== undefined) {
+        setValue("DOI", fields.DOI ? String(fields.DOI) : "")
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
+
+  // Unsaved changes guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/publication",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear document data when leaving the page
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
 
   // Note: Dropdown data is already available from Context, no need to fetch
 
@@ -119,6 +347,7 @@ export default function EditJournalArticlePage() {
     if (journal.Image) {
       setExistingDocumentUrl(journal.Image)
       setDocumentUrl(journal.Image)
+      setValue("Image", journal.Image) // Update form field so cancel handler can detect document
     }
 
     // Populate form with fetched data
@@ -144,6 +373,7 @@ export default function EditJournalArticlePage() {
       issn: journal.issn || "",
       type: journal.type || null,
       DOI: journal.DOI || "",
+      Image: journal.Image || "",
     })
   }, [journalsData, id, reset, router, toast])
 
@@ -151,6 +381,7 @@ export default function EditJournalArticlePage() {
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
+    setValue("Image", url) // Update form field so cancel handler can detect document
   }
 
   const onSubmit = async (data: JournalFormData) => {
@@ -252,6 +483,8 @@ export default function EditJournalArticlePage() {
       { journalId: parseInt(id as string), journalData },
       {
         onSuccess: () => {
+          clearDocumentData()
+          clearAutoFillData()
           router.push("/teacher/publication")
         },
       }
@@ -270,31 +503,26 @@ export default function EditJournalArticlePage() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+    <>
+      {NavigationDialog && <NavigationDialog />}
+      {CancelDialog && <CancelDialog />}
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={() => router.push("/teacher/publication")} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
         <div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Edit Published Article/Paper</h1>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">Edit Published Article/Journal/Edited Volume</h1>
           <p className="text-sm sm:text-base text-muted-foreground">Edit your published article or paper in journal/edited volume</p>
         </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Edit Article/Paper Details
-          </CardTitle>
-        </CardHeader>
         <CardContent>
           {/* Document Upload Section */}
-          <div className="mb-6">
-            <Label className="text-base sm:text-lg font-semibold mb-3 block">
-              Supporting Document (Optional - upload new to replace existing)
-            </Label>
+          <div className="mb-6 my-4">
+           
             <DocumentUpload
               documentUrl={documentUrl}
               category="Books/Papers"
@@ -302,6 +530,10 @@ export default function EditJournalArticlePage() {
               onChange={handleDocumentChange}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}
+              isEditMode={true}
+              onClearFields={() => {
+                reset()
+              }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
           </div>
@@ -701,7 +933,7 @@ export default function EditJournalArticlePage() {
                   "Update Article/Paper"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>
@@ -709,5 +941,6 @@ export default function EditJournalArticlePage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }

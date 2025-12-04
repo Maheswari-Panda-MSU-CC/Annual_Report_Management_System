@@ -17,6 +17,10 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useBookMutations } from "@/hooks/use-teacher-mutations"
 import { useQuery } from "@tanstack/react-query"
 import { teacherQueryKeys } from "@/hooks/use-teacher-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 
 interface BookFormData {
   authors: string
@@ -32,6 +36,7 @@ interface BookFormData {
   publishing_level: number | null
   book_type: number | null
   author_type: number | null
+  Image?: string
 }
 
 export default function EditBookPage() {
@@ -43,6 +48,7 @@ export default function EditBookPage() {
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const {
     journalAuthorTypeOptions,
@@ -53,6 +59,25 @@ export default function EditBookPage() {
     fetchBookTypes,
   } = useDropDowns()
 
+  const form = useForm<BookFormData>({
+    defaultValues: {
+      authors: "",
+      title: "",
+      isbn: "",
+      cha: "",
+      publisher_name: "",
+      submit_date: "",
+      place: "",
+      paid: false,
+      edited: false,
+      chap_count: null,
+      publishing_level: null,
+      book_type: null,
+      author_type: null,
+      Image: "",
+    },
+  })
+
   const {
     register,
     handleSubmit,
@@ -61,10 +86,165 @@ export default function EditBookPage() {
     reset,
     watch,
     formState: { errors },
-  } = useForm<BookFormData>()
+  } = form
 
   // Watch edited field for conditional validation
   const isEdited = watch("edited")
+
+  // Use auto-fill hook for document analysis data - watches context changes
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    dataFields: autoFillDataFields,
+    hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType: "books", // Explicit form type
+    dropdownOptions: {
+      publishing_level: resPubLevelOptions,
+      book_type: bookTypeOptions,
+      author_type: journalAuthorTypeOptions,
+    },
+    onlyFillEmpty: false, // REPLACE existing data with new extracted data
+    onAutoFill: (fields) => {
+      console.log("EDIT PAGE: Auto-fill triggered with fields", fields)
+      // REPLACE all form fields with extracted data (even if they already have values)
+      // This ensures new extraction replaces existing data
+      
+      // Authors - replace if exists in extraction
+      if (fields.authors !== undefined) {
+        setValue("authors", fields.authors ? String(fields.authors) : "")
+      }
+      
+      // Title - replace if exists in extraction
+      if (fields.title !== undefined) {
+        setValue("title", fields.title ? String(fields.title) : "")
+      }
+      
+      // ISBN - replace if exists in extraction
+      if (fields.isbn !== undefined) {
+        setValue("isbn", fields.isbn ? String(fields.isbn) : "")
+      }
+      
+      // Publisher Name - replace if exists in extraction
+      if (fields.publisher_name !== undefined) {
+        setValue("publisher_name", fields.publisher_name ? String(fields.publisher_name) : "")
+      }
+      
+      // Submit Date - replace if exists in extraction
+      if (fields.submit_date !== undefined) {
+        setValue("submit_date", fields.submit_date ? String(fields.submit_date) : "")
+      }
+      
+      // Place - replace if exists in extraction
+      if (fields.place !== undefined) {
+        setValue("place", fields.place ? String(fields.place) : "")
+      }
+      
+      // Paid - replace if exists in extraction
+      if (fields.paid !== undefined) {
+        setValue("paid", Boolean(fields.paid))
+      }
+      
+      // Edited - replace if exists in extraction
+      if (fields.edited !== undefined) {
+        setValue("edited", Boolean(fields.edited))
+      }
+      
+      // Chapter Count - replace if exists in extraction
+      if (fields.chap_count !== undefined) {
+        setValue("chap_count", fields.chap_count !== null && fields.chap_count !== undefined ? Number(fields.chap_count) : null)
+      }
+      
+      // Publishing Level - replace if exists in extraction
+      if (fields.publishing_level !== undefined) {
+        if (fields.publishing_level !== null && fields.publishing_level !== undefined) {
+          const matchingLevel = resPubLevelOptions.find(
+            (l) => l.id === Number(fields.publishing_level)
+          )
+          if (matchingLevel) {
+            setValue("publishing_level", matchingLevel.id)
+          } else {
+            setValue("publishing_level", null)
+          }
+        } else {
+          setValue("publishing_level", null)
+        }
+      }
+      
+      // Book Type - replace if exists in extraction
+      if (fields.book_type !== undefined) {
+        if (fields.book_type !== null && fields.book_type !== undefined) {
+          const matchingBookType = bookTypeOptions.find(
+            (b) => b.id === Number(fields.book_type)
+          )
+          if (matchingBookType) {
+            setValue("book_type", matchingBookType.id)
+          } else {
+            setValue("book_type", null)
+          }
+        } else {
+          setValue("book_type", null)
+        }
+      }
+      
+      // Author Type - replace if exists in extraction
+      if (fields.author_type !== undefined) {
+        if (fields.author_type !== null && fields.author_type !== undefined) {
+          const matchingAuthorType = journalAuthorTypeOptions.find(
+            (a) => a.id === Number(fields.author_type)
+          )
+          if (matchingAuthorType) {
+            setValue("author_type", matchingAuthorType.id)
+          } else {
+            setValue("author_type", null)
+          }
+        } else {
+          setValue("author_type", null)
+        }
+      }
+      
+      // Chapter/Article Title - replace if exists in extraction
+      if (fields.cha !== undefined) {
+        setValue("cha", fields.cha ? String(fields.cha) : "")
+      }
+    },
+    clearAfterUse: false, // Keep data for manual editing
+  })
+
+  // Unsaved changes guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/publication",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear document data when leaving the page
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
 
   // Note: Dropdown data is already available from Context, no need to fetch
 
@@ -115,6 +295,7 @@ export default function EditBookPage() {
     if (book.Image) {
       setExistingDocumentUrl(book.Image)
       setDocumentUrl(book.Image)
+      setValue("Image", book.Image) // Update form field so cancel handler can detect document
     }
 
     // Populate form with fetched data
@@ -132,6 +313,7 @@ export default function EditBookPage() {
       publishing_level: book.publishing_level || null,
       book_type: book.book_type || null,
       author_type: book.author_type || null,
+      Image: book.Image || "",
     })
   }, [booksData, id, reset, router, showToast])
 
@@ -139,6 +321,7 @@ export default function EditBookPage() {
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
+    setValue("Image", url) // Update form field so cancel handler can detect document
   }
 
   const onSubmit = async (data: BookFormData) => {
@@ -241,6 +424,8 @@ export default function EditBookPage() {
       { bookId: parseInt(id as string), bookData },
       {
         onSuccess: () => {
+          clearDocumentData()
+          clearAutoFillData()
           router.push("/teacher/publication")
         },
       }
@@ -259,9 +444,12 @@ export default function EditBookPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+    <>
+      {NavigationDialog && <NavigationDialog />}
+      {CancelDialog && <CancelDialog />}
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={() => router.push("/teacher/publication")} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -291,6 +479,10 @@ export default function EditBookPage() {
               onChange={handleDocumentChange}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}
+              isEditMode={true}
+              onClearFields={() => {
+                reset()
+              }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
           </div>
@@ -570,7 +762,7 @@ export default function EditBookPage() {
                   "Update Book/Book Chapter"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={() => router.push("/teacher/publication")} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>
@@ -578,5 +770,6 @@ export default function EditBookPage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }

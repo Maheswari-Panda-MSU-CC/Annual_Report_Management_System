@@ -16,6 +16,9 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useToast } from "@/components/ui/use-toast"
 import { useJournalMutations } from "@/hooks/use-teacher-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 
 interface JournalFormData {
   authors: string
@@ -39,6 +42,7 @@ interface JournalFormData {
   issn: string
   type: number | null
   DOI: string
+  Image?: string
 }
 
 export default function AddJournalArticlePage() {
@@ -48,25 +52,15 @@ export default function AddJournalArticlePage() {
   const { createJournal } = useJournalMutations()
   const [isExtracting, setIsExtracting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const {
     journalAuthorTypeOptions,
     journalEditedTypeOptions,
     resPubLevelOptions,
-    fetchJournalAuthorTypes,
-    fetchJournalEditedTypes,
-    fetchResPubLevels,
   } = useDropDowns()
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    control,
-    reset,
-    watch,
-    formState: { errors },
-  } = useForm<JournalFormData>({
+  const form = useForm<JournalFormData>({
     defaultValues: {
       authors: "",
       author_num: null,
@@ -89,16 +83,26 @@ export default function AddJournalArticlePage() {
       issn: "",
       type: null,
       DOI: "",
+      Image: "",
     },
   })
 
-  // Note: Dropdown data is already available from Context, no need to fetch
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    control,
+    reset,
+    watch,
+    formState: { errors },
+  } = form
 
   // Use auto-fill hook for document analysis data
   const { 
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: "journal-articles", // Explicit form type
     dropdownOptions: {
@@ -106,45 +110,154 @@ export default function AddJournalArticlePage() {
       author_type: journalAuthorTypeOptions,
       type: journalEditedTypeOptions,
     },
-    onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
-    getFormValues: () => watch(), // Pass current form values to check if fields are empty
+    onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
-      // Auto-fill form fields from document analysis
-      if (fields.authors) setValue("authors", String(fields.authors))
-      if (fields.author_num !== undefined && fields.author_num !== null) setValue("author_num", Number(fields.author_num))
-      if (fields.title) setValue("title", String(fields.title))
-      if (fields.isbn) setValue("isbn", String(fields.isbn))
-      if (fields.journal_name) setValue("journal_name", String(fields.journal_name))
-      if (fields.volume_num !== undefined && fields.volume_num !== null) setValue("volume_num", Number(fields.volume_num))
-      if (fields.page_num) setValue("page_num", String(fields.page_num))
-      if (fields.month_year) setValue("month_year", String(fields.month_year))
-      if (fields.author_type !== undefined && fields.author_type !== null) setValue("author_type", Number(fields.author_type))
-      if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
-      if (fields.peer_reviewed !== undefined) setValue("peer_reviewed", Boolean(fields.peer_reviewed))
-      if (fields.h_index !== undefined && fields.h_index !== null) setValue("h_index", Number(fields.h_index))
-      if (fields.impact_factor !== undefined && fields.impact_factor !== null) setValue("impact_factor", Number(fields.impact_factor))
-      if (fields.in_scopus !== undefined) setValue("in_scopus", Boolean(fields.in_scopus))
-      if (fields.in_ugc !== undefined) setValue("in_ugc", Boolean(fields.in_ugc))
-      if (fields.in_clarivate !== undefined) setValue("in_clarivate", Boolean(fields.in_clarivate))
-      if (fields.in_oldUGCList !== undefined) setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
-      if (fields.paid !== undefined) setValue("paid", Boolean(fields.paid))
-      if (fields.issn) setValue("issn", String(fields.issn))
-      if (fields.type !== undefined && fields.type !== null) setValue("type", Number(fields.type))
-      if (fields.DOI) setValue("DOI", String(fields.DOI))
+      console.log("JOURNAL ARTICLES fields", fields)
+      // REPLACE all form fields with extracted data (even if they already have values)
+      // This ensures new extraction replaces existing data
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
-        toast({
-          title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
-        })
+      // Authors - replace if exists in extraction
+      if (fields.authors !== undefined) {
+        setValue("authors", fields.authors ? String(fields.authors) : "")
+      }
+      
+      // Author Num - replace if exists in extraction
+      if (fields.author_num !== undefined) {
+        setValue("author_num", fields.author_num !== null && fields.author_num !== undefined ? Number(fields.author_num) : null)
+      }
+      
+      // Title - replace if exists in extraction
+      if (fields.title !== undefined) {
+        setValue("title", fields.title ? String(fields.title) : "")
+      }
+      
+      // ISBN - replace if exists in extraction
+      if (fields.isbn !== undefined) {
+        setValue("isbn", fields.isbn ? String(fields.isbn) : "")
+      }
+      
+      // Journal Name - replace if exists in extraction
+      if (fields.journal_name !== undefined) {
+        setValue("journal_name", fields.journal_name ? String(fields.journal_name) : "")
+      }
+      
+      // Volume Num - replace if exists in extraction
+      if (fields.volume_num !== undefined) {
+        setValue("volume_num", fields.volume_num !== null && fields.volume_num !== undefined ? Number(fields.volume_num) : null)
+      }
+      
+      // Page Num - replace if exists in extraction
+      if (fields.page_num !== undefined) {
+        setValue("page_num", fields.page_num ? String(fields.page_num) : "")
+      }
+      
+      // Month Year - replace if exists in extraction
+      if (fields.month_year !== undefined) {
+        setValue("month_year", fields.month_year ? String(fields.month_year) : "")
+      }
+      
+      // Author Type - replace if exists in extraction
+      if (fields.author_type !== undefined) {
+        setValue("author_type", fields.author_type !== null && fields.author_type !== undefined ? Number(fields.author_type) : null)
+      }
+      
+      // Level - replace if exists in extraction
+      if (fields.level !== undefined) {
+        setValue("level", fields.level !== null && fields.level !== undefined ? Number(fields.level) : null)
+      }
+      
+      // Peer Reviewed - replace if exists in extraction
+      if (fields.peer_reviewed !== undefined) {
+        setValue("peer_reviewed", Boolean(fields.peer_reviewed))
+      }
+      
+      // H Index - replace if exists in extraction
+      if (fields.h_index !== undefined) {
+        setValue("h_index", fields.h_index !== null && fields.h_index !== undefined ? Number(fields.h_index) : null)
+      }
+      
+      // Impact Factor - replace if exists in extraction
+      if (fields.impact_factor !== undefined) {
+        setValue("impact_factor", fields.impact_factor !== null && fields.impact_factor !== undefined ? Number(fields.impact_factor) : null)
+      }
+      
+      // In Scopus - replace if exists in extraction
+      if (fields.in_scopus !== undefined) {
+        setValue("in_scopus", Boolean(fields.in_scopus))
+      }
+      
+      // In UGC - replace if exists in extraction
+      if (fields.in_ugc !== undefined) {
+        setValue("in_ugc", Boolean(fields.in_ugc))
+      }
+      
+      // In Clarivate - replace if exists in extraction
+      if (fields.in_clarivate !== undefined) {
+        setValue("in_clarivate", Boolean(fields.in_clarivate))
+      }
+      
+      // In Old UGC List - replace if exists in extraction
+      if (fields.in_oldUGCList !== undefined) {
+        setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
+      }
+      
+      // Paid - replace if exists in extraction
+      if (fields.paid !== undefined) {
+        setValue("paid", Boolean(fields.paid))
+      }
+      
+      // ISSN - replace if exists in extraction
+      if (fields.issn !== undefined) {
+        setValue("issn", fields.issn ? String(fields.issn) : "")
+      }
+      
+      // Type - replace if exists in extraction
+      if (fields.type !== undefined) {
+        setValue("type", fields.type !== null && fields.type !== undefined ? Number(fields.type) : null)
+      }
+      
+      // DOI - replace if exists in extraction
+      if (fields.DOI !== undefined) {
+        setValue("DOI", fields.DOI ? String(fields.DOI) : "")
       }
     },
     clearAfterUse: false, // Keep data for manual editing
   })
+
+  // Unsaved changes guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/publication",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear document data when leaving the page
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
 
   // Update documentUrl when auto-fill data is available
   // Always update if autoFillDocumentUrl is provided and different from current value
@@ -152,28 +265,113 @@ export default function AddJournalArticlePage() {
   useEffect(() => {
     if (autoFillDocumentUrl && documentUrl !== autoFillDocumentUrl) {
       setDocumentUrl(autoFillDocumentUrl)
+      setValue("Image", autoFillDocumentUrl) // Update form field so cancel handler can detect document
     }
-  }, [autoFillDocumentUrl, documentUrl])
+  }, [autoFillDocumentUrl, documentUrl, setValue])
 
   const handleDocumentChange = (url: string) => {
     setDocumentUrl(url)
+    setValue("Image", url) // Update form field so cancel handler can detect document
   }
 
+  // Handle extracted fields from DocumentUpload - REPLACE existing data with new extracted data
   const handleExtractFields = useCallback((extractedData: Record<string, any>) => {
-    // Map extracted data to form fields
-    if (extractedData.authors) setValue("authors", extractedData.authors)
-    if (extractedData.author_num) setValue("author_num", parseInt(extractedData.author_num) || null)
-    if (extractedData.title) setValue("title", extractedData.title)
-    if (extractedData.isbn) setValue("isbn", extractedData.isbn)
-    if (extractedData.journal_name || extractedData.journalBookName) setValue("journal_name", extractedData.journal_name || extractedData.journalBookName)
-    if (extractedData.volume_num || extractedData.volumeNo) setValue("volume_num", parseInt(extractedData.volume_num || extractedData.volumeNo) || null)
-    if (extractedData.page_num || extractedData.pageNo) setValue("page_num", extractedData.page_num || extractedData.pageNo)
-    if (extractedData.month_year || extractedData.date) setValue("month_year", extractedData.month_year || extractedData.date)
-    if (extractedData.h_index || extractedData.hIndex) setValue("h_index", parseFloat(extractedData.h_index || extractedData.hIndex) || null)
-    if (extractedData.impact_factor || extractedData.impactFactor) setValue("impact_factor", parseFloat(extractedData.impact_factor || extractedData.impactFactor) || null)
-    if (extractedData.DOI || extractedData.doi) setValue("DOI", extractedData.DOI || extractedData.doi)
-    if (extractedData.issn) setValue("issn", extractedData.issn)
-  }, [setValue])
+    let fieldsPopulated = 0
+
+    // REPLACE all fields - set values even if they're empty/null in extracted data
+    // This ensures existing data is replaced with new extracted data
+    
+    // Authors - replace if exists in extraction
+    if (extractedData.authors !== undefined) {
+      setValue("authors", extractedData.authors || "")
+      if (extractedData.authors) fieldsPopulated++
+    }
+    
+    // Author Num - replace if exists in extraction
+    if (extractedData.author_num !== undefined) {
+      setValue("author_num", extractedData.author_num ? parseInt(extractedData.author_num) || null : null)
+      if (extractedData.author_num) fieldsPopulated++
+    }
+    
+    // Title - replace if exists in extraction
+    if (extractedData.title !== undefined) {
+      setValue("title", extractedData.title || "")
+      if (extractedData.title) fieldsPopulated++
+    }
+    
+    // ISBN - replace if exists in extraction
+    if (extractedData.isbn !== undefined) {
+      setValue("isbn", extractedData.isbn || "")
+      if (extractedData.isbn) fieldsPopulated++
+    }
+    
+    // Journal Name - replace if exists in extraction
+    if (extractedData.journal_name !== undefined || extractedData.journalBookName !== undefined) {
+      const journalName = extractedData.journal_name || extractedData.journalBookName || ""
+      setValue("journal_name", journalName)
+      if (journalName) fieldsPopulated++
+    }
+    
+    // Volume Num - replace if exists in extraction
+    if (extractedData.volume_num !== undefined || extractedData.volumeNo !== undefined) {
+      const volumeNum = extractedData.volume_num || extractedData.volumeNo
+      setValue("volume_num", volumeNum ? parseInt(volumeNum) || null : null)
+      if (volumeNum) fieldsPopulated++
+    }
+    
+    // Page Num - replace if exists in extraction
+    if (extractedData.page_num !== undefined || extractedData.pageNo !== undefined) {
+      const pageNum = extractedData.page_num || extractedData.pageNo || ""
+      setValue("page_num", pageNum)
+      if (pageNum) fieldsPopulated++
+    }
+    
+    // Month Year - replace if exists in extraction
+    if (extractedData.month_year !== undefined || extractedData.date !== undefined) {
+      const monthYear = extractedData.month_year || extractedData.date || ""
+      setValue("month_year", monthYear)
+      if (monthYear) fieldsPopulated++
+    }
+    
+    // H Index - replace if exists in extraction
+    if (extractedData.h_index !== undefined || extractedData.hIndex !== undefined) {
+      const hIndex = extractedData.h_index || extractedData.hIndex
+      setValue("h_index", hIndex ? parseFloat(hIndex) || null : null)
+      if (hIndex) fieldsPopulated++
+    }
+    
+    // Impact Factor - replace if exists in extraction
+    if (extractedData.impact_factor !== undefined || extractedData.impactFactor !== undefined) {
+      const impactFactor = extractedData.impact_factor || extractedData.impactFactor
+      setValue("impact_factor", impactFactor ? parseFloat(impactFactor) || null : null)
+      if (impactFactor) fieldsPopulated++
+    }
+    
+    // DOI - replace if exists in extraction
+    if (extractedData.DOI !== undefined || extractedData.doi !== undefined) {
+      const doi = extractedData.DOI || extractedData.doi || ""
+      setValue("DOI", doi)
+      if (doi) fieldsPopulated++
+    }
+    
+    // ISSN - replace if exists in extraction
+    if (extractedData.issn !== undefined) {
+      setValue("issn", extractedData.issn || "")
+      if (extractedData.issn) fieldsPopulated++
+    }
+
+    if (fieldsPopulated > 0) {
+      toast({
+        title: "Information Extracted Successfully",
+        description: `${fieldsPopulated} fields replaced with new extracted data`,
+      })
+    } else {
+      toast({
+        title: "Extraction Complete",
+        description: "Data fields have been updated (some fields may be empty)",
+      })
+    }
+  }, [setValue, toast])
 
   const onSubmit = async (data: JournalFormData) => {
     if (!user?.role_id) {
@@ -278,15 +476,20 @@ export default function AddJournalArticlePage() {
     // Use mutation instead of direct fetch
     createJournal.mutate(journalData, {
       onSuccess: () => {
+        clearDocumentData()
+        clearAutoFillData()
         router.push("/teacher/publication")
       },
     })
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-4xl">
+    <>
+      {NavigationDialog && <NavigationDialog />}
+      {CancelDialog && <CancelDialog />}
+      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={() => router.back()} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -318,6 +521,9 @@ export default function AddJournalArticlePage() {
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
               maxFileSize={1 * 1024 * 1024}
+              onClearFields={() => {
+                reset()
+              }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload article/journal/volume document (PDF, JPG, PNG - max 1MB)</p>
           </div>
@@ -721,7 +927,7 @@ export default function AddJournalArticlePage() {
                     "Save"
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={() => router.back()} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
                   Cancel
                 </Button>
               </div>
@@ -730,5 +936,6 @@ export default function AddJournalArticlePage() {
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }

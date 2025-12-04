@@ -237,10 +237,6 @@ export default function PublicationsPage() {
     journalEditedTypeOptions,
     resPubLevelOptions,
     bookTypeOptions,
-    fetchJournalAuthorTypes,
-    fetchJournalEditedTypes,
-    fetchResPubLevels,
-    fetchBookTypes,
   } = useDropDowns()
 
   // Note: Dropdown data is already available from Context, no need to fetch
@@ -648,7 +644,7 @@ export default function PublicationsPage() {
                                     </Dialog>
 
                                     <Badge variant="outline" className="text-xs hidden sm:inline-flex">
-                                      {item.supportingDocument.length} file(s)
+                                      uploded file
                                     </Badge>
                                   </>
                                 ) : (
