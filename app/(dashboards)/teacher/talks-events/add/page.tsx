@@ -25,6 +25,8 @@ import {
 } from "@/hooks/use-teacher-talks-events-mutations"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 
 
 export default function AddEventPage() {
@@ -124,7 +126,7 @@ export default function AddEventPage() {
   }
 
   // Get document data from context for tab matching
-  const { documentData } = useDocumentAnalysis()
+  const { documentData, clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   // Track which tab the document belongs to
   const [documentTab, setDocumentTab] = useState<string | null>(null)
@@ -186,6 +188,7 @@ export default function AddEventPage() {
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: activeTab, // formType = activeTab (refresher/academic-programs/academic-bodies/committees/talks)
     dropdownOptions: getDropdownOptionsForTab(activeTab),
@@ -277,6 +280,50 @@ export default function AddEventPage() {
     },
     clearAfterUse: false,
   })
+
+  // Navigation guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/talks-events",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
+
+  // Clear fields handler
+  const handleClearFields = () => {
+    form.reset()
+    // Also clear document URL from form state
+    setValue("supporting_doc", "")
+    if (activeTab === "talks") {
+      setValue("Image", "")
+    }
+  }
 
   // Debug: Log when auto-fill data is available (development only)
   useEffect(() => {
@@ -409,15 +456,11 @@ export default function AddEventPage() {
   }
 
   const handleExtractInfo = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please upload a document first.",
-        variant: "destructive",
-      })
-      return
-    }
-
+    // Note: This function is for legacy manual extraction
+    // DocumentUpload component handles extraction internally via "Extract Data Fields" button
+    // So we don't need to check selectedFiles here - DocumentUpload manages its own file state
+    // This function is kept for backward compatibility but may not be used
+    
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -718,12 +761,15 @@ export default function AddEventPage() {
   }
 
   return (
-      <div className="container mx-auto py-6 space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={() => router.back()}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Events & Activities
-          </Button>
+      <>
+        {NavigationDialog && <NavigationDialog />}
+        {CancelDialog && <CancelDialog />}
+        <div className="container mx-auto py-6 space-y-6">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" onClick={handleCancel}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Events & Activities
+            </Button>
           <h1 className="text-3xl font-bold tracking-tight">Add Event & Activities</h1>
         </div>
 
@@ -776,6 +822,8 @@ export default function AddEventPage() {
                 handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 refresherTypeOptions={refresherTypeOptions}
+                onClearFields={handleClearFields}
+                onCancel={handleCancel}
               />
               </CardContent>
             </Card>
@@ -806,6 +854,8 @@ export default function AddEventPage() {
                 academicProgrammeOptions={academicProgrammeOptions}
                 participantTypeOptions={participantTypeOptions}
                 reportYearsOptions={reportYearsOptions}
+                onClearFields={handleClearFields}
+                onCancel={handleCancel}
               />
               </CardContent>
             </Card>
@@ -834,6 +884,8 @@ export default function AddEventPage() {
                 handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 reportYearsOptions={reportYearsOptions}
+                onClearFields={handleClearFields}
+                onCancel={handleCancel}
               />
               </CardContent>
             </Card>
@@ -863,6 +915,8 @@ export default function AddEventPage() {
                 isEdit={false}
                 committeeLevelOptions={committeeLevelOptions}
                 reportYearsOptions={reportYearsOptions}
+                onClearFields={handleClearFields}
+                onCancel={handleCancel}
               />
               </CardContent>
             </Card>
@@ -892,11 +946,14 @@ export default function AddEventPage() {
                 isEdit={false}
                 talksProgrammeTypeOptions={talksProgrammeTypeOptions}
                 talksParticipantTypeOptions={talksParticipantTypeOptions}
+                onClearFields={handleClearFields}
+                onCancel={handleCancel}
               />
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+        </div>
+      </>
   )
 }

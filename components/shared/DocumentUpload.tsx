@@ -379,7 +379,13 @@ export function DocumentUpload({
   })
 
   // Handle Extract Data Fields
-  const handleExtractData = async () => {
+  const handleExtractData = async (e?: React.MouseEvent) => {
+    // Prevent form submission if button is inside a form
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
     let fileToExtract = fileRef.current || uploadedFile
 
     // Get the current documentUrl (use prop if internal state is empty)
@@ -569,7 +575,13 @@ export function DocumentUpload({
   }
 
   // Handle Update Document
-  const handleUpdateDocument = async () => {
+  const handleUpdateDocument = async (e?: React.MouseEvent) => {
+    // Prevent form submission if button is inside a form
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
     if (disabled) return // Don't allow update if disabled
     
     // In edit mode, don't show dialog and don't clear form fields - just allow re-upload
@@ -606,7 +618,13 @@ export function DocumentUpload({
   }
 
   // Handle Clear Document
-  const handleClearDocument = async () => {
+  const handleClearDocument = async (e?: React.MouseEvent) => {
+    // Prevent form submission if button is inside a form
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
     if (disabled) return // Don't allow clear if disabled
     
     // Check if there's auto-filled data or document
@@ -646,8 +664,8 @@ export function DocumentUpload({
       // Clear document data from context
       clearDocumentData()
       
-      // Clear form fields if available
-      if (hasFormData && onClearFields) {
+      // Clear form fields if available - ALWAYS call if provided
+      if (onClearFields) {
         onClearFields()
       }
       
@@ -668,6 +686,11 @@ export function DocumentUpload({
       fileRef.current = null
       setError(null)
       clearDocumentData()
+
+      // Clear form fields if available - ALWAYS call if provided
+      if (onClearFields) {
+        onClearFields()
+      }
 
       if (onClear) {
         onClear()
@@ -775,6 +798,7 @@ export function DocumentUpload({
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
             <Button
+              type="button"
               variant="outline"
               onClick={handleUpdateDocument}
               disabled={isExtracting || isUploading || disabled}
@@ -785,6 +809,7 @@ export function DocumentUpload({
             </Button>
             {!hideExtractButton && (
               <Button
+                type="button"
                 variant="outline"
                 onClick={handleExtractData}
                 disabled={isExtracting || isUploading || disabled}
@@ -801,6 +826,7 @@ export function DocumentUpload({
             {/* Hide Clear Document button in edit mode */}
             {!isEditMode && (
               <Button
+                type="button"
                 variant="ghost"
                 onClick={handleClearDocument}
                 disabled={isExtracting || isUploading || disabled}

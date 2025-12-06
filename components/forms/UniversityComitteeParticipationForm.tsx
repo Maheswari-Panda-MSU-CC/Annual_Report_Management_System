@@ -27,6 +27,8 @@ interface CommitteeFormProps {
   editData?: Record<string, any>
   committeeLevelOptions?: DropdownOption[]
   reportYearsOptions?: DropdownOption[]
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function UniversityCommitteeParticipationForm({
@@ -41,6 +43,8 @@ export function UniversityCommitteeParticipationForm({
   editData = {},
   committeeLevelOptions = [],
   reportYearsOptions = [],
+  onClearFields,
+  onCancel,
 }: CommitteeFormProps) {
   const router = useRouter()
   const {
@@ -98,16 +102,19 @@ export function UniversityCommitteeParticipationForm({
             setValue("supporting_doc", url, { shouldValidate: true })
           }}
           onExtract={(fields) => {
+            // DocumentUpload already handles extraction and stores data in context
+            // useAutoFillData hook will automatically fill the form
+            // We just need to set the extracted values directly here
             Object.entries(fields).forEach(([key, value]) => {
               setValue(key, value)
             })
-            if (handleExtractInfo) {
-              handleExtractInfo()
-            }
+            // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
           allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
           maxFileSize={5 * 1024 * 1024} // 5MB
           className="w-full"
+          isEditMode={isEdit}
+          onClearFields={onClearFields}
         />
         {/* Hidden input for form validation */}
         <input
@@ -346,7 +353,7 @@ export function UniversityCommitteeParticipationForm({
 
         {!isEdit && (
           <div className="flex justify-end gap-4 mt-6">
-            <Button type="button" variant="outline" onClick={() => router.push("/teacher/academic-contributions?tab=committees")}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/academic-contributions?tab=committees"))}>Cancel</Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Submitting..." : (
                 <>

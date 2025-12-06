@@ -23,6 +23,8 @@ interface AcademicBodiesFormProps {
     isEdit?: boolean
     editData?: Record<string, any>
     reportYearsOptions?: DropdownOption[]
+    onClearFields?: () => void
+    onCancel?: () => void
 }
 
 export function AcademicBodiesForm({
@@ -36,6 +38,8 @@ export function AcademicBodiesForm({
     isEdit = false,
     editData = {},
     reportYearsOptions = [],
+    onClearFields,
+    onCancel,
 }: AcademicBodiesFormProps) {
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -84,16 +88,19 @@ export function AcademicBodiesForm({
                         setValue("supporting_doc", url, { shouldValidate: true })
                     }}
                     onExtract={(fields) => {
+                        // DocumentUpload already handles extraction and stores data in context
+                        // useAutoFillData hook will automatically fill the form
+                        // We just need to set the extracted values directly here
                         Object.entries(fields).forEach(([key, value]) => {
                             setValue(key, value)
                         })
-                        if (handleExtractInfo) {
-                            handleExtractInfo()
-                        }
+                        // Don't call handleExtractInfo - it uses old API and causes false errors
                     }}
                     allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
                     maxFileSize={5 * 1024 * 1024} // 5MB
                     className="w-full"
+                    isEditMode={isEdit}
+                    onClearFields={onClearFields}
                 />
                 {/* Hidden input for form validation */}
                 <input
@@ -274,7 +281,7 @@ export function AcademicBodiesForm({
                         <Button
                             type="button"
                             variant="outline"
-                            onClick={() => router.push("/teacher/research-contributions?tab=academic-bodies")}
+                            onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=academic-bodies"))}
                         >
                             Cancel
                         </Button>

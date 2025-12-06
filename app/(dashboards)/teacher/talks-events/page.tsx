@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -53,6 +53,9 @@ import {
   useCommitteeMutations,
   useTalksMutations,
 } from "@/hooks/use-teacher-talks-events-mutations"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
 
 // Data is now fetched using React Query hooks (useTeacherTalksEvents)
 
@@ -157,6 +160,11 @@ export default function TalksEventsPage() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
+  
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
+  const { confirm, DialogComponent: ConfirmDialog } = useConfirmationDialog()
+  const cancelHandlerRef = useRef(false) // Track if cancel is being processed
   
   // Use React Query hook for data fetching
   const {
@@ -468,6 +476,143 @@ export default function TalksEventsPage() {
     setIsEditDialogOpen(true)
   }
 
+  // Get form type from section ID for auto-fill
+  const getFormTypeFromSectionId = (sectionId: string): string => {
+    return sectionId // formType is same as sectionId
+  }
+
+  // Get dropdown options based on section
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+    switch (sectionId) {
+      case "refresher":
+        return { refresher_type: refresherTypeOptions }
+      case "academic-programs":
+        return {
+          programme: academicProgrammeOptions,
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "academic-bodies":
+        return {
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "committees":
+        return {
+          level: committeeLevelOptions,
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "talks":
+        return {
+          programme: talksProgrammeTypeOptions,
+          participated_as: talksParticipantTypeOptions,
+        }
+      default:
+        return {}
+    }
+  }
+
+  // Auto-fill hook for edit modal - only active when editing
+  const formType = editingItem ? getFormTypeFromSectionId(editingItem.sectionId) : ""
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType,
+    dropdownOptions: editingItem ? getDropdownOptions(editingItem.sectionId) : {},
+    onlyFillEmpty: false, // REPLACE existing data in edit mode
+    getFormValues: () => form.watch(),
+    onAutoFill: (fields) => {
+      // Auto-fill form fields - replace existing data
+      Object.entries(fields).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          form.setValue(key, value)
+        }
+      })
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Updated",
+          description: `${filledCount} field(s) replaced with new extracted data`,
+        })
+      }
+    },
+    clearAfterUse: false,
+  })
+
+  // Cancel handler for edit modal
+  const handleModalCancel = async (event?: React.MouseEvent) => {
+    // Prevent trigger from toast dismissals or other non-button interactions
+    if (event) {
+      const target = event.target as HTMLElement
+      // Check if click is from toast or its children
+      if (target.closest('[data-sonner-toast]') || target.closest('[role="status"]') || target.closest('.toast')) {
+        return false
+      }
+    }
+    
+    // Prevent multiple simultaneous calls
+    if (cancelHandlerRef.current) {
+      return false
+    }
+    
+    cancelHandlerRef.current = true
+    
+    try {
+      const isDirty = form.formState.isDirty
+      const formValues = form.getValues()
+      // Check for document in supportingDocument field or Image field
+      const hasDocument = formValues.supporting_doc || formValues.Image || false
+      const hasUnsavedChanges = isDirty || hasDocument || hasDocumentData
+      
+      // Show dialog if there are unsaved changes
+      if (hasUnsavedChanges) {
+        const shouldLeave = await confirm({
+          title: "Discard Changes?",
+          description: "Are you sure to discard the unsaved changes?",
+          confirmText: "Discard",
+          cancelText: "Cancel",
+        })
+        if (!shouldLeave) {
+          return false  // User cancelled - don't close modal
+        }
+      }
+      
+      // Cleanup and close modal
+      form.reset()
+      clearDocumentData()
+      clearAutoFillData()
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      setFormData({})
+      setSelectedFiles(null)
+      return true
+    } finally {
+      // Reset the ref after a short delay to allow for async operations
+      setTimeout(() => {
+        cancelHandlerRef.current = false
+      }, 100)
+    }
+  }
+
+  // Handle dialog close attempt - prevent close if user cancels confirmation
+  const handleDialogOpenChange = async (open: boolean) => {
+    if (!open && isEditDialogOpen) {
+      // User is trying to close the dialog
+      const shouldClose = await handleModalCancel()
+      if (!shouldClose) {
+        // Prevent closing by not updating state
+        return
+      }
+    }
+    setIsEditDialogOpen(open)
+  }
+
   // Helper function to upload document to S3
   const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
     if (!documentUrl) {
@@ -602,11 +747,13 @@ export default function TalksEventsPage() {
       // Execute update mutation (toast and UI update handled by mutation)
       await updateMutation.mutateAsync({ id: editingItem.id, data: updateData })
 
-      // Close dialog and reset form
+      // Close dialog - DO NOT clear form in edit mode (data fields remain)
+      // Only clear document context data
+      clearDocumentData()
+      clearAutoFillData()
       setIsEditDialogOpen(false)
       setEditingItem(null)
-      setFormData({})
-      form.reset()
+      // Note: form data is preserved in edit mode - user can continue editing if needed
     } catch (error: any) {
       // Error toast is handled by mutation, but we can add additional handling if needed
       console.error("Error updating:", error)
@@ -790,15 +937,11 @@ export default function TalksEventsPage() {
   }
 
   const handleExtractInfo = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please upload a document first.",
-        variant: "destructive",
-      })
-      return
-    }
-
+    // Note: This function is for legacy manual extraction
+    // DocumentUpload component handles extraction internally via "Extract Data Fields" button
+    // So we don't need to check selectedFiles here - DocumentUpload manages its own file state
+    // This function is kept for backward compatibility but may not be used
+    
     setIsExtracting(true)
     try {
       const res = await fetch("/api/llm/get-category", {
@@ -992,6 +1135,19 @@ export default function TalksEventsPage() {
     }
   }
 
+  // Clear fields handler for DocumentUpload
+  const handleClearFields = () => {
+    form.reset()
+    // Also clear document URL from form state
+    const formValues = form.getValues()
+    if (formValues.supporting_doc) {
+      form.setValue("supporting_doc", "")
+    }
+    if (formValues.Image) {
+      form.setValue("Image", "")
+    }
+  }
+
   const renderForm = (sectionId: string, isEdit = false) => {
     const currentData = isEdit ? formData : {}
 
@@ -1009,6 +1165,7 @@ export default function TalksEventsPage() {
             isEdit={isEdit}
             editData={currentData}
             refresherTypeOptions={refresherTypeOptions}
+            onClearFields={handleClearFields}
           />
         )
       case "academic-programs":
@@ -1026,6 +1183,7 @@ export default function TalksEventsPage() {
             academicProgrammeOptions={academicProgrammeOptions}
             participantTypeOptions={participantTypeOptions}
             reportYearsOptions={reportYearsOptions}
+            onClearFields={handleClearFields}
           />
         )
       case "academic-bodies":
@@ -1041,6 +1199,7 @@ export default function TalksEventsPage() {
             isEdit={isEdit}
             editData={currentData}
             reportYearsOptions={reportYearsOptions}
+            onClearFields={handleClearFields}
           />
         )
       case "committees":
@@ -1057,6 +1216,7 @@ export default function TalksEventsPage() {
             editData={currentData}
             committeeLevelOptions={committeeLevelOptions}
             reportYearsOptions={reportYearsOptions}
+            onClearFields={handleClearFields}
           />
         )
       case "talks":
@@ -1073,6 +1233,7 @@ export default function TalksEventsPage() {
             editData={currentData}
             talksProgrammeTypeOptions={talksProgrammeTypeOptions}
             talksParticipantTypeOptions={talksParticipantTypeOptions}
+            onClearFields={handleClearFields}
             />
           )
       default:
@@ -1097,7 +1258,9 @@ export default function TalksEventsPage() {
   }
 
   return (
-      <div className="space-y-6">
+      <>
+        {ConfirmDialog && <ConfirmDialog />}
+        <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Academic Talks & Events</h1>
           <p className="text-muted-foreground">
@@ -1205,7 +1368,7 @@ export default function TalksEventsPage() {
                                         <div className="flex-1 overflow-y-auto p-4">
                                           <div className="w-full h-full">
                                             <DocumentViewer
-                                              documentUrl={item.supportingDocument}
+                                              documentUrl={Array.isArray(item.supportingDocument) ? item.supportingDocument[0] : item.supportingDocument}
                                               documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
                                             />
                                           </div>
@@ -1214,7 +1377,7 @@ export default function TalksEventsPage() {
                                     </Dialog>
 
                                     <Badge variant="outline" className="text-xs">
-                                      {item.supportingDocument.length} file(s)
+                                      file
                                     </Badge>
                                   </>
                                 ) : (
@@ -1267,7 +1430,7 @@ export default function TalksEventsPage() {
         </Tabs>
 
         {/* Edit Dialog */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <Dialog open={isEditDialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle className="text-lg sm:text-xl">
@@ -1278,7 +1441,7 @@ export default function TalksEventsPage() {
               {editingItem && renderForm(editingItem.sectionId, true)}
             </div>
             <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
+              <Button variant="outline" onClick={handleModalCancel} className="w-full sm:w-auto">
                 Cancel
               </Button>
               <Button onClick={handleSaveEdit} disabled={isSubmitting} className="w-full sm:w-auto">
@@ -1329,6 +1492,7 @@ export default function TalksEventsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
+        </div>
+      </>
   )
 }

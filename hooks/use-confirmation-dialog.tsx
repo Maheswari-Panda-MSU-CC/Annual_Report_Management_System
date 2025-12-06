@@ -71,10 +71,10 @@ export function useConfirmationDialog() {
             <DialogDescription>{config.description || "Are you sure you want to proceed?"}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={handleCancel}>
+            <Button type="button" variant="outline" onClick={handleCancel}>
               {config.cancelText || "Cancel"}
             </Button>
-            <Button variant="destructive" onClick={handleConfirm}>
+            <Button type="button" variant="destructive" onClick={handleConfirm}>
               {config.confirmText || "Confirm"}
             </Button>
           </DialogFooter>
