@@ -328,7 +328,7 @@ export default function ResearchContributionsPage() {
   }
   
   // Get dropdown options based on section
-  const getDropdownOptions = (sectionId: string) => {
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
     switch (sectionId) {
       case "patents":
         return { level: resPubLevelOptions, status: patentStatusOptions }
@@ -381,8 +381,6 @@ export default function ResearchContributionsPage() {
       }
     },
     clearAfterUse: false,
-    // Only enable when editing
-    enabled: !!editingItem,
   })
   
   // Cancel handler for edit modal - custom implementation for modal
@@ -1510,7 +1508,7 @@ export default function ResearchContributionsPage() {
                                     </Dialog>
 
                                     <Badge variant="outline" className="text-[10px] sm:text-xs">
-                                      {item.supportingDocument.length} file(s)
+                                      file
                                     </Badge>
                                   </>
                                 ) : (
