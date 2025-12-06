@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -33,6 +33,9 @@ import { usePerformanceMutations, useAwardsMutations, useExtensionMutations } fr
 import { PerformanceTeacherForm } from "@/components/forms/PerformanceTeacherForm"
 import { AwardsFellowshipForm } from "@/components/forms/AwardsFellowshipForm"
 import { ExtensionActivityForm } from "@/components/forms/ExtensionActivityForm"
+import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
 
 // Helper hook to invalidate section queries
 function useInvalidateSection() {
@@ -65,6 +68,7 @@ const sections = [
       "Title of Performance",
       "Place",
       "Performance Date",
+      "Nature of Performance",
       "Document",
       "Actions",
     ],
@@ -175,6 +179,11 @@ export default function AwardsRecognitionPage() {
     sponserNameOptions
   } = useDropDowns()
 
+  // Document analysis context
+  const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
+  const { confirm, DialogComponent: ConfirmDialog } = useConfirmationDialog()
+  const cancelHandlerRef = useRef(false) // Track if cancel is being processed
+
   // Map API data to UI format
   const data = useMemo(() => {
     const performanceData = (queryData?.performanceTeacher || []).map((item: any, index: number) => ({
@@ -282,6 +291,149 @@ export default function AwardsRecognitionPage() {
     } catch (error) {
       // Error handling is done in the mutation hook
     }
+  }
+
+  // Get form type from section ID
+  const getFormTypeFromSectionId = (sectionId: string): string => {
+    switch (sectionId) {
+      case "performance":
+        return "performance"
+      case "awards":
+        return "awards"
+      case "extension":
+        return "extension"
+      default:
+        return "performance"
+    }
+  }
+
+  // Get dropdown options for section
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+    switch (sectionId) {
+      case "performance":
+        return {}
+      case "awards":
+        return {
+          level: awardFellowLevelOptions,
+        }
+      case "extension":
+        return {
+          level: awardFellowLevelOptions,
+          sponsered: sponserNameOptions,
+        }
+      default:
+        return {}
+    }
+  }
+
+  // Auto-fill hook for edit modal - only active when editing
+  const formType = editingItem ? getFormTypeFromSectionId(editingItem.sectionId) : ""
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType,
+    dropdownOptions: editingItem ? getDropdownOptions(editingItem.sectionId) : {},
+    onlyFillEmpty: false, // REPLACE existing data in edit mode
+    getFormValues: () => form.watch(),
+    onAutoFill: (fields) => {
+      // Auto-fill form fields - replace existing data
+      Object.entries(fields).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          form.setValue(key, value)
+        }
+      })
+      
+      // Show toast notification
+      const filledCount = Object.keys(fields).filter(
+        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
+      ).length
+      if (filledCount > 0) {
+        toast({
+          title: "Form Updated",
+          description: `${filledCount} field(s) replaced with new extracted data`,
+        })
+      }
+    },
+    clearAfterUse: false,
+  })
+
+  // Clear fields handler for DocumentUpload
+  const handleClearFields = () => {
+    form.reset()
+    // Also clear document URL from form state
+    const formValues = form.getValues()
+    if (formValues.Image) {
+      form.setValue("Image", "")
+    }
+  }
+
+  // Cancel handler for edit modal
+  const handleModalCancel = async (event?: React.MouseEvent) => {
+    // Prevent trigger from toast dismissals or other non-button interactions
+    if (event) {
+      const target = event.target as HTMLElement
+      // Check if click is from toast or its children
+      if (target.closest('[data-sonner-toast]') || target.closest('[role="status"]') || target.closest('.toast')) {
+        return false
+      }
+    }
+    
+    // Prevent multiple simultaneous calls
+    if (cancelHandlerRef.current) {
+      return false
+    }
+    
+    cancelHandlerRef.current = true
+    
+    try {
+      const isDirty = form.formState.isDirty
+      const formValues = form.getValues()
+      // Check for document in Image field
+      const hasDocument = formValues.Image || false
+      const hasUnsavedChanges = isDirty || hasDocument || hasDocumentData
+      
+      // Show dialog if there are unsaved changes
+      if (hasUnsavedChanges) {
+        const shouldLeave = await confirm({
+          title: "Discard Changes?",
+          description: "Are you sure to discard the unsaved changes?",
+          confirmText: "Discard",
+          cancelText: "Cancel",
+        })
+        if (!shouldLeave) {
+          return false  // User cancelled - don't close modal
+        }
+      }
+      
+      // Cleanup and close modal
+      form.reset()
+      clearDocumentData()
+      clearAutoFillData()
+      setIsEditDialogOpen(false)
+      setEditingItem(null)
+      setFormData({})
+      setSelectedFiles(null)
+      return true
+    } finally {
+      // Reset the ref after a short delay to allow for async operations
+      setTimeout(() => {
+        cancelHandlerRef.current = false
+      }, 100)
+    }
+  }
+
+  // Handle dialog close attempt - prevent close if user cancels confirmation
+  const handleDialogOpenChange = async (open: boolean) => {
+    if (!open && isEditDialogOpen) {
+      // User is trying to close the dialog
+      const shouldClose = await handleModalCancel()
+      if (!shouldClose) {
+        // Prevent closing by not updating state
+        return
+      }
+    }
+    setIsEditDialogOpen(open)
   }
 
   const handleEdit = (sectionId: string, item: any) => {
@@ -473,7 +625,8 @@ export default function AwardsRecognitionPage() {
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
-      form.reset()
+      // Don't reset form in edit mode - preserve form state
+      // form.reset() // Removed - keep form state after successful update
     } catch (error: any) {
       console.error("Error updating record:", error)
       // Toast handled by mutation hook
@@ -667,6 +820,7 @@ export default function AwardsRecognitionPage() {
             handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
+            onClearFields={handleClearFields}
           />
         )
       case "awards":
@@ -680,6 +834,7 @@ export default function AwardsRecognitionPage() {
             isEdit={isEdit}
             editData={currentData}
             awardFellowLevelOptions={awardFellowLevelOptions}
+            onClearFields={handleClearFields}
           />
         )
       case "extension":
@@ -694,6 +849,7 @@ export default function AwardsRecognitionPage() {
             editData={currentData}
             awardFellowLevelOptions={awardFellowLevelOptions}
             sponserNameOptions={sponserNameOptions}
+            onClearFields={handleClearFields}
           />
         )
       default:
@@ -716,7 +872,9 @@ export default function AwardsRecognitionPage() {
   }
 
   return (
-      <div className="space-y-6">
+      <>
+        {ConfirmDialog && <ConfirmDialog />}
+        <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Awards & Recognition</h1>
           <p className="text-muted-foreground">Manage your awards, recognitions, and extension activities</p>
@@ -828,7 +986,7 @@ export default function AwardsRecognitionPage() {
                                     </Dialog>
 
                                     <Badge variant="outline" className="text-xs">
-                                      {item.supportingDocument.length} file(s)
+                                       file
                                     </Badge>
                                   </>
                                 ) : (
@@ -883,16 +1041,7 @@ export default function AwardsRecognitionPage() {
         </Tabs>
 
         {/* Edit Dialog - Fully Responsive */}
-        <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-          if (!open) {
-            setIsEditDialogOpen(false)
-            setEditingItem(null)
-            setFormData({})
-            form.reset()
-          } else {
-            setIsEditDialogOpen(true)
-          }
-        }}>
+        <Dialog open={isEditDialogOpen} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] sm:max-h-[90vh] p-3 sm:p-4 md:p-6 flex flex-col gap-3 sm:gap-4">
             <DialogHeader className="pb-0 sm:pb-2 shrink-0">
               <DialogTitle className="text-base sm:text-lg md:text-xl">
@@ -904,13 +1053,9 @@ export default function AwardsRecognitionPage() {
             </div>
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2 sm:pt-3 border-t shrink-0">
               <Button 
+                type="button"
                 variant="outline" 
-                onClick={() => {
-                  setIsEditDialogOpen(false)
-                  setEditingItem(null)
-                  setFormData({})
-                  form.reset()
-                }} 
+                onClick={handleModalCancel} 
                 className="w-full sm:w-auto order-2 sm:order-1 text-sm sm:text-base"
               >
                 Cancel
@@ -970,7 +1115,8 @@ export default function AwardsRecognitionPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
+        </div>
+      </>
   )
 }
 

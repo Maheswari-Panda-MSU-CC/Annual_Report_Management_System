@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, FileText, Award, Users, Brain, Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -22,6 +23,8 @@ import { AwardsFellowshipForm } from "@/components/forms/AwardsFellowshipForm"
 import { ExtensionActivityForm } from "@/components/forms/ExtensionActivityForm"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
+import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 
 interface UploadStatus {
   performance: File | null
@@ -93,13 +96,14 @@ export default function AddAwardsPage() {
   }
 
   // Get document data from context
-  const { documentData } = useDocumentAnalysis()
+  const { documentData, clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   // Use auto-fill hook - formType is same as activeTab
   const { 
     documentUrl: autoFillDocumentUrl, 
     dataFields: autoFillDataFields,
     hasData: hasAutoFillData,
+    clearData: clearAutoFillData,
   } = useAutoFillData({
     formType: activeTab, // formType = activeTab (performance/awards/extension)
     dropdownOptions: getDropdownOptionsForTab(activeTab),
@@ -146,6 +150,75 @@ export default function AddAwardsPage() {
     clearAfterUse: false,
   })
 
+  // Navigation guard
+  const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    clearAutoFillData: clearAutoFillData,
+    enabled: true,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cancel handler
+  const { handleCancel, DialogComponent: CancelDialog } = useFormCancelHandler({
+    form,
+    clearDocumentData: () => {
+      clearDocumentData()
+      clearAutoFillData()
+    },
+    redirectPath: "/teacher/awards-recognition",
+    skipWarning: false,
+    message: "Are you sure to discard the unsaved changes?",
+  })
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (hasDocumentData) {
+        clearDocumentData()
+        clearAutoFillData()
+      }
+    }
+  }, [hasDocumentData, clearDocumentData, clearAutoFillData])
+
+  // Clear fields handler
+  const handleClearFields = () => {
+    form.reset()
+    // Also clear document URL from form state
+    setValue("Image", "")
+  }
+
+  // Get section title for current tab
+  const getSectionTitle = (tab: string): string => {
+    switch (tab) {
+      case "performance":
+        return "Performance by Individual/Group"
+      case "awards":
+        return "Awards/Fellowship/Recognition"
+      case "extension":
+        return "Extension"
+      default:
+        return "Awards & Recognition"
+    }
+  }
+
+  // Get section icon for current tab
+  const getSectionIcon = (tab: string) => {
+    switch (tab) {
+      case "performance":
+        return <FileText className="h-5 w-5" />
+      case "awards":
+        return <Award className="h-5 w-5" />
+      case "extension":
+        return <Users className="h-5 w-5" />
+      default:
+        return <Award className="h-5 w-5" />
+    }
+  }
+
   // Handle URL tab parameter changes
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -186,21 +259,8 @@ export default function AddAwardsPage() {
 
   const handleExtractInformation = useCallback(
     async (tab: string) => {
-      // Check if document is uploaded for the current tab
-      let hasDocument = false
-      if (tab === "performance" && uploadedFiles.performance) hasDocument = true
-      if (tab === "awards" && uploadedFiles.awards) hasDocument = true
-      if (tab === "extension" && uploadedFiles.extension) hasDocument = true
-
-      if (!hasDocument) {
-        setExtractionError("Please upload a document first before extracting information.")
-        toast({
-          title: "No Document",
-          description: "Please upload a document first before extracting information.",
-          variant: "destructive",
-        })
-        return
-      }
+      // DocumentUpload component handles file presence check internally
+      // No need to check here - it will show error if no file
 
       setIsExtracting(true)
       setExtractionError(null)
@@ -568,38 +628,22 @@ export default function AddAwardsPage() {
   }
 
   return (
-      <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
-          <Button variant="outline" onClick={() => router.back()} className="text-xs sm:text-sm w-full sm:w-auto">
-            <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-            <span className="hidden sm:inline">Back to Awards & Recognition</span>
-            <span className="sm:hidden">Back</span>
-          </Button>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Add Awards & Recognition</h1>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
-          <div className="border-b mb-4">
-            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 pb-2">
-              <TabsList className="flex flex-wrap min-w-max w-full sm:w-auto">
-                <TabsTrigger value="performance" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
-                  <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden sm:inline">Performance</span>
-                  <span className="sm:hidden">Performance</span>
-                </TabsTrigger>
-                <TabsTrigger value="awards" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
-                  <Award className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="hidden lg:inline">Awards/Fellowship/Recognition</span>
-                  <span className="hidden sm:inline lg:hidden">Awards/Fellowship/Recognition</span>
-                  <span className="sm:hidden">Awards/Fellowship/Recognition</span>
-                </TabsTrigger>
-                <TabsTrigger value="extension" className="flex items-center gap-1 sm:gap-2 whitespace-nowrap px-2 sm:px-3 py-2 text-xs sm:text-sm">
-                  <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                  <span className="text-xs sm:text-sm">Extension</span>
-                </TabsTrigger>
-              </TabsList>
+      <>
+        {NavigationDialog && <NavigationDialog />}
+        {CancelDialog && <CancelDialog />}
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+            <Button variant="outline" onClick={handleCancel} className="text-xs sm:text-sm w-full sm:w-auto">
+              <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Back to Awards & Recognition</span>
+              <span className="sm:hidden">Back</span>
+            </Button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Add Awards & Recognition</h1>
             </div>
           </div>
+
+        <Tabs value={activeTab} className="space-y-4 sm:space-y-6">
 
           {/* Performance Tab */}
           <TabsContent value="performance" className="space-y-4">
@@ -628,6 +672,8 @@ export default function AddAwardsPage() {
                   }}
                   handleExtractInfo={() => handleExtractInformation("performance")}
                   isEdit={false}
+                  onClearFields={handleClearFields}
+                  onCancel={handleCancel}
                 />
               </CardContent>
             </Card>
@@ -661,6 +707,8 @@ export default function AddAwardsPage() {
                   handleExtractInfo={() => handleExtractInformation("awards")}
                   isEdit={false}
                   awardFellowLevelOptions={awardFellowLevelOptions}
+                  onClearFields={handleClearFields}
+                  onCancel={handleCancel}
                 />
               </CardContent>
             </Card>
@@ -695,11 +743,14 @@ export default function AddAwardsPage() {
                   isEdit={false}
                   awardFellowLevelOptions={awardFellowLevelOptions}
                   sponserNameOptions={sponserNameOptions}
+                  onClearFields={handleClearFields}
+                  onCancel={handleCancel}
                 />
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
-      </div>
+        </div>
+      </>
   )
 }

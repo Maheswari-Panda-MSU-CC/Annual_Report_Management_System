@@ -24,6 +24,7 @@ interface RefresherOrientationFormProps {
   editData?: Record<string, any>
   refresherTypeOptions?: DropdownOption[]
   onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function RefresherOrientationForm({

@@ -18,6 +18,8 @@ interface PerformanceTeacherFormProps {
   handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
+  onClearFields?: () => void
+  onCancel?: () => void
 }
 
 export function PerformanceTeacherForm({
@@ -30,6 +32,8 @@ export function PerformanceTeacherForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
+  onClearFields,
+  onCancel,
 }: PerformanceTeacherFormProps) {
   const { register, handleSubmit, setValue, watch, clearErrors, formState: { errors } } = form
   const formData = watch()
@@ -84,16 +88,19 @@ export function PerformanceTeacherForm({
             setValue("Image", url, { shouldValidate: true })
           }}
           onExtract={(fields) => {
+            // DocumentUpload already handles extraction and stores data in context
+            // useAutoFillData hook will automatically fill the form
+            // We just need to set the extracted values directly here
             Object.entries(fields).forEach(([key, value]) => {
               setValue(key, value)
             })
-            if (handleExtractInfo) {
-              handleExtractInfo()
-            }
+            // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
           allowedFileTypes={["pdf", "jpg", "jpeg", "png", "bmp"]}
           maxFileSize={10 * 1024 * 1024} // 10MB
           className="w-full"
+          isEditMode={isEdit}
+          onClearFields={onClearFields}
         />
         {/* Hidden input for form validation */}
         <input

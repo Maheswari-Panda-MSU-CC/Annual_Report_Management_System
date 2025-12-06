@@ -5,7 +5,8 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, FileText, Users, Building, Presentation } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { RefresherOrientationForm } from "@/components/forms/RefresherOrientationForm"
@@ -447,12 +448,40 @@ export default function AddEventPage() {
     }
   }, [documentData, searchParams])
 
-  // Update URL when tab changes
-  const handleTabChange = (value: string) => {
-    setActiveTab(value)
-    const url = new URL(window.location.href)
-    url.searchParams.set("tab", value)
-    window.history.pushState({}, "", url.toString())
+  // Get section title for current tab
+  const getSectionTitle = (tab: string): string => {
+    switch (tab) {
+      case "refresher":
+        return "Refresher/Orientation"
+      case "academic-programs":
+        return "Academic Programs"
+      case "academic-bodies":
+        return "Academic Bodies"
+      case "committees":
+        return "University Committees"
+      case "talks":
+        return "Academic Talks"
+      default:
+        return "Event & Activity"
+    }
+  }
+
+  // Get section icon for current tab
+  const getSectionIcon = (tab: string) => {
+    switch (tab) {
+      case "refresher":
+        return <FileText className="h-5 w-5" />
+      case "academic-programs":
+        return <Users className="h-5 w-5" />
+      case "academic-bodies":
+        return <Building className="h-5 w-5" />
+      case "committees":
+        return <Users className="h-5 w-5" />
+      case "talks":
+        return <Presentation className="h-5 w-5" />
+      default:
+        return <FileText className="h-5 w-5" />
+    }
   }
 
   const handleExtractInfo = async () => {
@@ -770,34 +799,13 @@ export default function AddEventPage() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Events & Activities
             </Button>
-          <h1 className="text-3xl font-bold tracking-tight">Add Event & Activities</h1>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <div className="overflow-x-auto">
-            <TabsList className="grid w-full min-w-[800px] grid-cols-5 h-auto p-1">
-              <TabsTrigger value="refresher" className="text-xs px-2 py-2">
-                <FileText className="mr-1 h-3 w-3" />
-                Refresher/Orientation
-              </TabsTrigger>
-              <TabsTrigger value="academic-programs" className="text-xs px-2 py-2">
-                <Users className="mr-1 h-3 w-3" />
-                Academic Programs
-              </TabsTrigger>
-              <TabsTrigger value="academic-bodies" className="text-xs px-2 py-2">
-                <Building className="mr-1 h-3 w-3" />
-                Academic Bodies
-              </TabsTrigger>
-              <TabsTrigger value="committees" className="text-xs px-2 py-2">
-                <Users className="mr-1 h-3 w-3" />
-                University Committees
-              </TabsTrigger>
-              <TabsTrigger value="talks" className="text-xs px-2 py-2">
-                <Presentation className="mr-1 h-3 w-3" />
-                Academic Talks
-              </TabsTrigger>
-            </TabsList>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">Add Event & Activities</h1>
+             
+            </div>
           </div>
+
+        <Tabs value={activeTab} className="w-full">
 
           {/* Refresher/Orientation Course Tab */}
           <TabsContent value="refresher" className="space-y-4">
