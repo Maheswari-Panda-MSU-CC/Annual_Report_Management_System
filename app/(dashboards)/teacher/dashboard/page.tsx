@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Award, TrendingUp, BookOpen, Hash, User, ExternalLink, Upload, Brain, GraduationCap } from "lucide-react"
+import { FileText, Award, TrendingUp, BookOpen, Hash, ExternalLink, Upload, Brain, GraduationCap } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { SmartDocumentAnalyzer } from "@/components/smart-document-analyzer"
@@ -15,12 +15,6 @@ interface ResearchMetrics {
     citations: number
     documents: number
     coAuthors: number
-  }
-  googleScholar: {
-    hIndex: number
-    i10Index: number
-    citations: number
-    citationsLast5Years: number
   }
 }
 
@@ -66,9 +60,8 @@ export default function DashboardPage() {
   const handleStatClick = (href: string) => router.push(href);
   const handleQuickActionClick = (action: any) => action.href ? router.push(action.href) : action.action?.();
   const handleActivityClick = (href: string) => router.push(href);
-  const handleExternalLinkClick = (type: "scopus" | "scholar") => {
-    const url = type === "scopus" ? "https://www.scopus.com" : "https://scholar.google.com";
-    window.open(url, "_blank");
+  const handleExternalLinkClick = () => {
+    window.open("https://www.scopus.com", "_blank");
   };
 
   if (loading) {
@@ -177,7 +170,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Research Index Metrics */}
+        {/* Research Index Metrics and Research Overview */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Scopus Research Index */}
           <Card>
@@ -191,7 +184,7 @@ export default function DashboardPage() {
               </div>
               <ExternalLink
                 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-orange-600 transition-colors"
-                onClick={() => handleExternalLinkClick("scopus")}
+                onClick={handleExternalLinkClick}
               />
             </CardHeader>
             <CardContent>
@@ -206,122 +199,71 @@ export default function DashboardPage() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">H-Index</span>
-                    <span className="text-lg font-bold text-orange-600">{researchIndexes.H_INDEX}</span>
+                    <span className="text-lg font-bold text-orange-600">{researchIndexes.H_INDEX || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">i10_INDEX</span>
-                    <span className="text-lg font-bold text-green-600">{researchIndexes.i10_INDEX}</span>
+                    <span className="text-lg font-bold text-green-600">{researchIndexes.i10_INDEX || 0}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Citations</span>
                     <span className="text-lg font-bold text-blue-600">
-                      {researchIndexes.CITIATIONS}
+                      {researchIndexes.CITIATIONS || 0}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">Researcher Id</span>
-                    <span className="text-lg font-bold text-purple-600">{researchIndexes.RESEARCHER_ID}</span>
+                    <span className="text-lg font-bold text-purple-600">{researchIndexes.RESEARCHER_ID || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">ORCHID ID</span>
-                    <span className="text-lg font-bold text-green-600">{researchIndexes.ORCHID_ID}</span>
+                    <span className="text-lg font-bold text-green-600">{researchIndexes.ORCHID_ID || 'N/A'}</span>
                   </div>
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Google Scholar Research Index */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-blue-600" />
-                  Research Index (Google Scholar)
-                </CardTitle>
-                <CardDescription>Metrics from Google Scholar</CardDescription>
-              </div>
-              <ExternalLink
-                className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-blue-600 transition-colors"
-                onClick={() => handleExternalLinkClick("scholar")}
-              />
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-3">
-                  <div className="animate-pulse">
-                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">H-Index</span>
-                    <span className="text-lg font-bold text-blue-600">{researchIndexes.H_INDEX}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">i10-Index</span>
-                    <span className="text-lg font-bold text-green-600">{researchIndexes.i10_INDEX}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Citations</span>
-                    <span className="text-lg font-bold text-orange-600">
-                      {researchIndexes.CITIATIONS}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Researcher Id</span>
-                    <span className="text-lg font-bold text-purple-600">
-                      {researchIndexes.RESEARCHER_ID}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">ORCHID ID</span>
-                    <span className="text-lg font-bold text-green-600">{researchIndexes.ORCHID_ID}</span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* General Research Metrics */}
-        <div className="grid grid-cols-1 gap-6">
+          {/* Research Overview */}
           <Card>
             <CardHeader>
-              <CardTitle>Research Overview</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
+                Research Overview
+              </CardTitle>
               <CardDescription>General research statistics</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div
-                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-gray-100"
                   onClick={() => handleStatClick("/teacher/research")}
                 >
-                  <div className="text-2xl font-bold text-green-600">{researchSummary.CompletedProjects}</div>
-                  <div className="text-sm text-muted-foreground">Completed Projects</div>
+                  <div className="text-2xl font-bold text-green-600">{researchSummary.CompletedProjects || 0}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground mt-1">Completed Projects</div>
                 </div>
                 <div
-                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-gray-100"
                   onClick={() => handleStatClick("/teacher/research")}
                 >
-                  <div className="text-2xl font-bold text-blue-600">{researchSummary.OngoingProjects}</div>
-                  <div className="text-sm text-muted-foreground">Ongoing Projects</div>
+                  <div className="text-2xl font-bold text-blue-600">{researchSummary.OngoingProjects || 0}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground mt-1">Ongoing Projects</div>
                 </div>
                 <div
-                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-gray-100"
                   onClick={() => handleStatClick("/teacher/publication")}
                 >
-                  <div className="text-2xl font-bold text-orange-600">{researchSummary.TotalProjects}</div>
-                  <div className="text-sm text-muted-foreground">Total Projects</div>
+                  <div className="text-2xl font-bold text-orange-600">{researchSummary.TotalProjects || 0}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground mt-1">Total Projects</div>
                 </div>
                 <div
-                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="text-center p-4 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors border border-gray-100"
                   onClick={() => handleStatClick("/teacher/research-contributions")}
                 >
-                  <div className="text-2xl font-bold text-purple-600">Rs. {researchSummary.TotalFunding}</div>
-                  <div className="text-sm text-muted-foreground">Total Funding</div>
+                  <div className="text-lg sm:text-2xl font-bold text-purple-600 break-words">
+                    Rs. {researchSummary.TotalFunding || 0}
+                  </div>
+                  <div className="text-xs sm:text-sm text-muted-foreground mt-1">Total Funding</div>
                 </div>
               </div>
             </CardContent>
