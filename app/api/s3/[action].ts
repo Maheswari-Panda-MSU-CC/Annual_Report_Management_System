@@ -18,18 +18,6 @@ const s3Client = new S3Client({
   },
 });
 
-// MSSQL Config
-const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_NAME,
-  options: {
-    encrypt: true,
-    trustServerCertificate: true,
-  },
-};
-
 interface FileDetails {
   bucketName: string;
   subDirectoryInBucket?: string;
@@ -39,18 +27,18 @@ interface FileDetails {
 }
 
 // Helper to log info
-async function logInfo(userId: number, details: string, procedureName: string, type: string) {
-  const pool = await connectToDatabase();
-  await pool.request()
-    .input('UserId', sql.Int, userId)
-    .input('Details', sql.NVarChar, details)
-    .input('ProcedureName', sql.NVarChar, procedureName)
-    .input('Type', sql.NVarChar, type)
-    .input('TableName', sql.NVarChar, 'S3')
-    .input('RecordId', sql.Int, userId)
-    .execute('spLogInfo');
-  pool.close();
-}
+// async function logInfo(userId: number, details: string, procedureName: string, type: string) {
+//   const pool = await connectToDatabase();
+//   await pool.request()
+//     .input('UserId', sql.Int, userId)
+//     .input('Details', sql.NVarChar, details)
+//     .input('ProcedureName', sql.NVarChar, procedureName)
+//     .input('Type', sql.NVarChar, type)
+//     .input('TableName', sql.NVarChar, 'S3')
+//     .input('RecordId', sql.Int, userId)
+//     .execute('spLogInfo');
+//   pool.close();
+// }
 
 // GET file from S3
 async function getFile(fileDetails: FileDetails) {
@@ -76,7 +64,7 @@ async function getFile(fileDetails: FileDetails) {
       }));
     }
 
-    await logInfo(fileDetails.userId, 'File Downloaded Successfully', fileDetails.methodName, 'File Download');
+    // await logInfo(fileDetails.userId, 'File Downloaded Successfully', fileDetails.methodName, 'File Download');
 
     return {
       bytes: Buffer.concat(chunks),
@@ -104,7 +92,7 @@ async function uploadFile(file: any, fileDetails: FileDetails) {
     });
 
     await upload.done();
-    await logInfo(fileDetails.userId, 'File Uploaded Successfully', fileDetails.methodName, 'File Upload');
+    // await logInfo(fileDetails.userId, 'File Uploaded Successfully', fileDetails.methodName, 'File Upload');
 
     return { fileUploadStatus: true, message: 'File Uploaded Successfully' };
   } catch (err: any) {
@@ -125,7 +113,7 @@ async function deleteFile(filePath: string, fileDetails: FileDetails) {
     });
 
     await s3Client.send(command);
-    await logInfo(fileDetails.userId, 'File Deleted Successfully', fileDetails.methodName, 'File Deleted');
+    // await logInfo(fileDetails.userId, 'File Deleted Successfully', fileDetails.methodName, 'File Deleted');
 
     return { fileUploadStatus: true, message: 'File Deleted Successfully' };
   } catch (err: any) {

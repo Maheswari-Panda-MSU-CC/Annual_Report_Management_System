@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { writeFile, unlink, readdir, readFile } from "fs/promises"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
+import { cookies } from "next/headers"
 
 const UPLOAD_DIR = join(process.cwd(), "public", "uploaded-document")
 
@@ -68,10 +69,18 @@ export async function POST(request: NextRequest) {
       // Directory might be empty, ignore error
     }
 
-    // Generate unique filename
+    // Get roleId from cookies (set during login) or from FormData as fallback
+    const cookieStore = await cookies()
+    const roleIdFromCookie = cookieStore.get("role_id")?.value
+    const roleIdFromFormData = formData.get("roleId") as string | null
+    const roleId = roleIdFromCookie || roleIdFromFormData || null
+
+    // Generate unique filename with roleId if available, otherwise use default format
     const timestamp = Date.now()
     const fileExtension = file.name.split(".").pop()
-    const fileName = `document_${timestamp}.${fileExtension}`
+    const fileName = roleId 
+      ? `${roleId}_${timestamp}.${fileExtension}`
+      : `document_${timestamp}.${fileExtension}`
     const filePath = join(UPLOAD_DIR, fileName)
 
     // Convert file to buffer and save

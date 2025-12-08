@@ -627,9 +627,12 @@ export function DocumentUpload({
     
     if (disabled) return // Don't allow clear if disabled
     
+    // Store callback reference to avoid type narrowing issues
+    const clearFieldsCallback = onClearFields
+    
     // Check if there's auto-filled data or document
     const hasAutoFilledData = documentUrl || initialExtractedFields
-    const hasFormData = onClearFields !== undefined
+    const hasFormData = clearFieldsCallback !== undefined
 
     if (hasAutoFilledData || hasFormData) {
       // Build description message
@@ -688,8 +691,9 @@ export function DocumentUpload({
       clearDocumentData()
 
       // Clear form fields if available - ALWAYS call if provided
+      // Use optional chaining to avoid TypeScript narrowing issues
       if (onClearFields) {
-        onClearFields()
+        (onClearFields as () => void)()
       }
 
       if (onClear) {

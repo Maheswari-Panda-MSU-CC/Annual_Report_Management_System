@@ -74,23 +74,6 @@ export default function AddEventPage() {
     talksParticipantTypeOptions,
   } = useDropDowns()
 
-  // Determine form type based on active tab
-  const getFormTypeForTab = (tab: string): string => {
-    switch (tab) {
-      case "refresher":
-        return "refresher"
-      case "academic-programs":
-        return "academic-programs"
-      case "academic-bodies":
-        return "academic-bodies"
-      case "committees":
-        return "committees"
-      case "talks":
-        return "talks"
-      default:
-        return "refresher"
-    }
-  }
 
   // Get dropdown options for current tab
   const getDropdownOptionsForTab = (tab: string): Record<string, Array<{ id: number | string; name: string }>> => {
@@ -448,86 +431,6 @@ export default function AddEventPage() {
     }
   }, [documentData, searchParams])
 
-  // Get section title for current tab
-  const getSectionTitle = (tab: string): string => {
-    switch (tab) {
-      case "refresher":
-        return "Refresher/Orientation"
-      case "academic-programs":
-        return "Academic Programs"
-      case "academic-bodies":
-        return "Academic Bodies"
-      case "committees":
-        return "University Committees"
-      case "talks":
-        return "Academic Talks"
-      default:
-        return "Event & Activity"
-    }
-  }
-
-  // Get section icon for current tab
-  const getSectionIcon = (tab: string) => {
-    switch (tab) {
-      case "refresher":
-        return <FileText className="h-5 w-5" />
-      case "academic-programs":
-        return <Users className="h-5 w-5" />
-      case "academic-bodies":
-        return <Building className="h-5 w-5" />
-      case "committees":
-        return <Users className="h-5 w-5" />
-      case "talks":
-        return <Presentation className="h-5 w-5" />
-      default:
-        return <FileText className="h-5 w-5" />
-    }
-  }
-
-  const handleExtractInfo = async () => {
-    // Note: This function is for legacy manual extraction
-    // DocumentUpload component handles extraction internally via "Extract Data Fields" button
-    // So we don't need to check selectedFiles here - DocumentUpload manages its own file state
-    // This function is kept for backward compatibility but may not be used
-    
-    setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: activeTab }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: activeTab }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          form.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }
 
   // Helper function to upload document to S3
   const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
@@ -827,7 +730,6 @@ export default function AddEventPage() {
                 isExtracting={isExtracting}
                 selectedFiles={selectedFiles}
                 handleFileSelect={setSelectedFiles}
-                handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 refresherTypeOptions={refresherTypeOptions}
                 onClearFields={handleClearFields}
@@ -857,7 +759,6 @@ export default function AddEventPage() {
                 isExtracting={isExtracting}
                 selectedFiles={selectedFiles}
                 handleFileSelect={setSelectedFiles}
-                handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 academicProgrammeOptions={academicProgrammeOptions}
                 participantTypeOptions={participantTypeOptions}
@@ -889,7 +790,6 @@ export default function AddEventPage() {
                 isExtracting={isExtracting}
                 selectedFiles={selectedFiles}
                 handleFileSelect={setSelectedFiles}
-                handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 reportYearsOptions={reportYearsOptions}
                 onClearFields={handleClearFields}
@@ -919,7 +819,6 @@ export default function AddEventPage() {
                 isExtracting={isExtracting}
                 selectedFiles={selectedFiles}
                 handleFileSelect={setSelectedFiles}
-                handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 committeeLevelOptions={committeeLevelOptions}
                 reportYearsOptions={reportYearsOptions}
@@ -950,7 +849,6 @@ export default function AddEventPage() {
                 isExtracting={isExtracting}
                 selectedFiles={selectedFiles}
                 handleFileSelect={setSelectedFiles}
-                handleExtractInfo={handleExtractInfo}
                 isEdit={false}
                 talksProgrammeTypeOptions={talksProgrammeTypeOptions}
                 talksParticipantTypeOptions={talksParticipantTypeOptions}
