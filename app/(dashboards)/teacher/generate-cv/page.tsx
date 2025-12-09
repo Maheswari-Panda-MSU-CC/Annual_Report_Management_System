@@ -11,11 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileText, Download, ArrowLeft, CheckSquare, Square, Eye, Settings, AlertCircle, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useTeacherCVData } from "@/hooks/use-teacher-cv-data"
-import { CVPreviewTwoColumn } from "@/components/cv/cv-preview-two-column"
-// OLD CLIENT-SIDE PDF GENERATION - COMMENTED OUT (Now using server-side Puppeteer)
-// import { generatePDFFromElement } from "@/app/api/teacher/cv-generation/cv-pdf-generator"
+import { useAuth } from "@/app/api/auth/auth-provider"
+import { CVPreviewSingleColumn } from "@/components/cv/cv-preview-single-column"
 import type { CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
+import type { CVData } from "@/types/cv-data"
 import { saveAs } from "file-saver"
 
 interface CVSection {
@@ -79,12 +78,38 @@ export default function GenerateCVPage() {
   const [showPreview, setShowPreview] = useState(false)
   const [generationError, setGenerationError] = useState<string | null>(null)
 
-  // Use centralized CV data hook
-  const { cvData, isLoading: isLoadingData, isError } = useTeacherCVData()
+  // Get teacher ID from auth
+  const { user } = useAuth()
+  const teacherId = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
 
-  // Handle errors
-  if (isError && !generationError) {
-    setGenerationError("Failed to load CV data. Please try again.")
+  // CV data state - only fetched when needed
+  const [cvData, setCvData] = useState<CVData | null>(null)
+  const [isLoadingData, setIsLoadingData] = useState(false)
+
+  // Fetch CV data manually when needed
+  const fetchCVData = async () => {
+    if (!teacherId || teacherId === 0) {
+      throw new Error('Teacher ID is required')
+    }
+
+    if (cvData) {
+      // Data already loaded, no need to fetch again
+      return cvData
+    }
+
+    setIsLoadingData(true)
+    try {
+      const response = await fetch(`/api/teacher/cv-generation?teacherId=${teacherId}`)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to fetch CV data')
+      }
+      const data = await response.json()
+      setCvData(data)
+      return data
+    } finally {
+      setIsLoadingData(false)
+    }
   }
 
   const handleSectionToggle = (sectionId: string) => {
@@ -102,8 +127,8 @@ export default function GenerateCVPage() {
   }
 
   const handleGenerateWord = async () => {
-    if (!cvData.personal) {
-      throw new Error("Personal information not available. Please wait for data to load.")
+    if (!teacherId || teacherId === 0) {
+      throw new Error("Teacher ID is required. Please ensure you are logged in.")
     }
 
     try {
@@ -116,7 +141,7 @@ export default function GenerateCVPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          cvData,
+          teacherId,
           template: cvTemplate,
           format: "word",
           selectedSections,
@@ -130,7 +155,8 @@ export default function GenerateCVPage() {
 
       // Get the blob from response
       const blob = await response.blob()
-      const fileName = `CV_${cvData.personal.name.replace(/\s+/g, "_")}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.docx`
+      const teacherName = "Teacher" // File name will be set by server
+      const fileName = `CV_${teacherName}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.docx`
       
       // Save the file
       saveAs(blob, fileName)
@@ -144,8 +170,8 @@ export default function GenerateCVPage() {
   }
 
   const handleGeneratePDF = async () => {
-    if (!cvData.personal) {
-      throw new Error("Personal information not available. Please wait for data to load.")
+    if (!teacherId || teacherId === 0) {
+      throw new Error("Teacher ID is required. Please ensure you are logged in.")
     }
 
     try {
@@ -158,7 +184,7 @@ export default function GenerateCVPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          cvData,
+          teacherId,
           template: cvTemplate,
           format: "pdf",
           selectedSections,
@@ -172,7 +198,8 @@ export default function GenerateCVPage() {
 
       // Get PDF blob from response
       const blob = await response.blob()
-      const fileName = `CV_${cvData.personal.name.replace(/\s+/g, "_")}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.pdf`
+      const teacherName = "Teacher" // File name will be set by server
+      const fileName = `CV_${teacherName}_${cvTemplate}_${new Date().toISOString().split("T")[0]}.pdf`
 
       // Create download link
       const url = window.URL.createObjectURL(blob)
@@ -283,23 +310,16 @@ export default function GenerateCVPage() {
       return
     }
 
-    if (!cvData.personal) {
+    if (!teacherId || teacherId === 0) {
       toast({
-        title: "Data not loaded",
-        description: "Please wait for your data to load before generating the CV.",
+        title: "Authentication required",
+        description: "Please ensure you are logged in to generate your CV.",
         variant: "destructive",
       })
       return
     }
 
-    if (isLoadingData) {
-      toast({
-        title: "Loading data",
-        description: "Please wait for data to finish loading.",
-        variant: "destructive",
-      })
-      return
-    }
+    // No need to check isLoadingData - generation happens server-side
 
     setIsGenerating(true)
     setGenerationError(null)
@@ -341,7 +361,30 @@ export default function GenerateCVPage() {
     }
   }
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
+    if (!teacherId || teacherId === 0) {
+      toast({
+        title: "Authentication required",
+        description: "Please ensure you are logged in to preview your CV.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Fetch CV data if not already loaded
+    if (!cvData) {
+      try {
+        await fetchCVData()
+      } catch (error) {
+        toast({
+          title: "Failed to load CV data",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     setShowPreview(true)
     toast({
       title: "Preview Generated",
@@ -561,18 +604,13 @@ export default function GenerateCVPage() {
                   </Button>
                   <Button
                     onClick={handleGenerateCV}
-                    disabled={isGenerating || selectedSections.length === 0 || isLoadingData || !cvData.personal}
+                    disabled={isGenerating || selectedSections.length === 0 || !teacherId || teacherId === 0}
                     className="w-full flex items-center gap-2"
                   >
                     {isGenerating ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Generating CV...
-                      </>
-                    ) : isLoadingData ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading Data...
                       </>
                     ) : (
                       <>
@@ -581,14 +619,9 @@ export default function GenerateCVPage() {
                       </>
                     )}
                   </Button>
-                  {isLoadingData && (
-                    <p className="text-xs text-muted-foreground text-center mt-2">
-                      Please wait while we load your CV data...
-                    </p>
-                  )}
-                  {!isLoadingData && !cvData.personal && (
+                  {!cvData && (
                     <p className="text-xs text-muted-foreground text-center mt-2 text-amber-600">
-                      No profile data available. Please complete your profile first.
+                      Click "Preview CV" to load your data first.
                     </p>
                   )}
                 </div>
@@ -652,14 +685,14 @@ export default function GenerateCVPage() {
                   <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                   <span className="ml-3 text-gray-600">Loading CV data...</span>
                 </div>
-              ) : !cvData.personal ? (
+              ) : !cvData || !cvData.personal ? (
                 <div className="text-center py-12 text-gray-500">
                   <p>No data available. Please ensure your profile is complete.</p>
                 </div>
               ) : (
                 <div className="max-h-[800px] overflow-y-auto overflow-x-hidden bg-white smooth-scroll">
                   <div className="p-4" id="cv-preview-content">
-                    <CVPreviewTwoColumn
+                    <CVPreviewSingleColumn
                       cvData={cvData}
                       selectedSections={selectedSections}
                       template={cvTemplate}

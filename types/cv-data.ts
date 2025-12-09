@@ -7,13 +7,12 @@ export interface PersonalInfo {
   institution: string
   email: string
   phone: string
-  address: string
   dateOfBirth: string
-  nationality: string
   orcid: string
   profileImage?: string | null
   googleScholar?: string
-  researchGate?: string
+  researchGate?: string,
+  faculty:string
 }
 
 export interface CVData {

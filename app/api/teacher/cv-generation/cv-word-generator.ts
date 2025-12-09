@@ -67,14 +67,35 @@ const templateStyles = {
   },
 }
 
-// Helper to format year
+// Format full date (DD/MM/YYYY)
+function formatDate(date: string | Date | null | undefined): string {
+  if (!date) return "N/A"
+  try {
+    const d = new Date(date)
+    if (isNaN(d.getTime())) return "N/A"
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
+  } catch {
+    return "N/A"
+  }
+}
+
+// Helper to format year (for year-only fields)
 function formatYear(date: string | Date | null | undefined): string {
-  if (!date) return ""
+  if (!date) return "N/A"
   try {
     return new Date(date).getFullYear().toString()
   } catch {
-    return String(date)
+    return "N/A"
   }
+}
+
+// Helper to show value or N/A
+function showValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === '') return "N/A"
+  return String(value)
 }
 
 // Create Word document section with template-specific styling
@@ -97,13 +118,195 @@ function createSectionHeading(
       new TextRun({
         text: text,
         bold: true,
-        size: styles.sectionHeadingSize,
+        size: 18, // 9pt - smaller professional font
         color: sectionHeadingColor,
         font: styles.fontFamily,
       }),
     ],
-    spacing: { after: 300 },
+    spacing: { after: 200, before: 400 },
+    pageBreakBefore: false,
   })
+}
+
+// Helper to create table cell with borders
+function createTableCell(text: string, styles: typeof templateStyles.academic, borderColor: string): TableCell {
+  return new TableCell({
+    children: [
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: text,
+            size: 18, // 9pt
+            font: styles.fontFamily,
+          }),
+        ],
+      }),
+    ],
+    margins: {
+      top: 120, // 6pt padding (120 twips = 6pt)
+      bottom: 120,
+      left: 120,
+      right: 120,
+    },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+      left: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+      right: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+    },
+  })
+}
+
+// Helper to create table section
+function createTableSection(
+  title: string,
+  headers: string[],
+  rows: any[],
+  renderRow: (row: any, idx: number, styles: typeof templateStyles.academic, borderColor: string) => TableCell[],
+  template: CVTemplate,
+  styles: typeof templateStyles.academic,
+): (Paragraph | Table)[] {
+  if (rows.length === 0) {
+    const sectionHeadingColor = template === "professional" 
+      ? "1e3a8a" 
+      : template === "academic"
+      ? "1e3a8a"
+      : template === "classic"
+      ? "92400e"
+      : "374151"
+    
+    const borderColor = template === "professional" 
+      ? "bfdbfe"
+      : template === "academic"
+      ? "bfdbfe"
+      : template === "classic"
+      ? "fde68a"
+      : "d1d5db"
+    
+    return [
+      createSectionHeading(title, template, styles),
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: "No data available for this section.",
+            size: 18,
+            color: "374151",
+            font: styles.fontFamily,
+          }),
+        ],
+        spacing: { after: 100 },
+      }),
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `Expected columns: ${headers.join(", ")}`,
+            size: 16,
+            color: "6b7280",
+            font: styles.fontFamily,
+            italics: true,
+      }),
+    ],
+    spacing: { after: 300 },
+      }),
+    ]
+  }
+  
+  const sectionHeadingColor = template === "professional" 
+    ? "1e3a8a" 
+    : template === "academic"
+    ? "1e3a8a"
+    : template === "classic"
+    ? "92400e"
+    : "374151"
+  
+  const thBgColor = template === "professional" 
+    ? "eff6ff"
+    : template === "academic"
+    ? "eff6ff"
+    : template === "classic"
+    ? "fef3c7"
+    : "f3f4f6"
+  
+  const borderColor = template === "professional" 
+    ? "bfdbfe"
+    : template === "academic"
+    ? "bfdbfe"
+    : template === "classic"
+    ? "fde68a"
+    : "d1d5db"
+  
+  const sections: (Paragraph | Table)[] = []
+  
+  // Section heading
+  sections.push(createSectionHeading(title, template, styles))
+  
+  // Create table
+  const tableRows = [
+    // Header row
+    new TableRow({
+      children: headers.map(header => 
+        new TableCell({
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: header,
+                  bold: true,
+                  size: 18, // 9pt
+                  color: sectionHeadingColor,
+                  font: styles.fontFamily,
+                }),
+              ],
+            }),
+          ],
+          margins: {
+            top: 120, // 6pt padding (120 twips = 6pt)
+            bottom: 120,
+            left: 120,
+            right: 120,
+          },
+          shading: {
+            type: ShadingType.SOLID,
+            color: thBgColor,
+            fill: thBgColor,
+          },
+          borders: {
+            top: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+            bottom: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+            left: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+            right: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+          },
+        })
+      ),
+    }),
+    // Data rows
+    ...rows.map((row, idx) => 
+      new TableRow({
+        children: renderRow(row, idx, styles, borderColor),
+        cantSplit: true, // Prevent row from splitting across pages
+      })
+    ),
+  ]
+  
+  sections.push(
+    new Table({
+      rows: tableRows,
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: {
+        top: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+        bottom: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+        left: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+        right: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+        insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+        insideVertical: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+      },
+    })
+  )
+  
+  // Add spacing after table
+  sections.push(new Paragraph({ text: "", spacing: { after: 300 } }))
+  
+  return sections
 }
 
 function createWordSection(
@@ -130,12 +333,11 @@ function createWordSection(
         ["Name", data.personal.name || ""],
         ["Designation", data.personal.designation || ""],
         ["Department", data.personal.department || ""],
+        ["Faculty", data.personal.faculty || ""],
         ["Institution", data.personal.institution || ""],
         ["Email", data.personal.email || ""],
         ["Phone", data.personal.phone || ""],
-        ["Address", data.personal.address || ""],
         ["Date of Birth", data.personal.dateOfBirth || ""],
-        ["Nationality", data.personal.nationality || ""],
         ["ORCID", data.personal.orcid || ""],
       ]
         .filter(([_, value]) => value)
@@ -190,7 +392,7 @@ function createWordSection(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: edu.degree_name || edu.degree_type_name || edu.degree || "",
+                  text: edu.degree_type || "",
                   bold: true,
                   size: styles.bodySize + 2,
                 }),
@@ -200,12 +402,10 @@ function createWordSection(
             new Paragraph({
               children: [
                 new TextRun({
-                  text: `${edu.university_name || edu.institution || ""}${
+                  text: `${edu.university_name || ""}${
                     edu.year_of_passing
                       ? `, ${formatYear(edu.year_of_passing)}`
-                      : edu.year
-                        ? `, ${edu.year}`
-                        : ""
+                      : ""
                   }`,
                   italics: true,
                   size: styles.bodySize,
@@ -979,7 +1179,7 @@ function createWordSection(
   return sections
 }
 
-// Generate complete Word document
+// Generate complete Word document - Single Column Layout
 export async function generateWordDocument(
   cvData: CVData,
   template: CVTemplate,
@@ -990,284 +1190,584 @@ export async function generateWordDocument(
   }
 
   const styles = templateStyles[template]
+  const content: (Paragraph | Table)[] = []
   
-  // Build left column content (Personal info, Contact)
-  const leftColumnContent: (Paragraph | Table)[] = []
+  const borderColor = template === "professional" 
+    ? "bfdbfe"
+    : template === "academic"
+    ? "bfdbfe"
+    : template === "classic"
+    ? "fde68a"
+    : "d1d5db"
   
-  // Profile image placeholder
-  leftColumnContent.push(
+  // Personal Details Section with Profile Image
+  if (selectedSections.includes("personal")) {
+    // Create a table for personal details with image on right
+    const personalTableRows = [
+      new TableRow({
+        children: [
+          // Left cell - Personal Information
+          new TableCell({
+            children: [
+              // Name
     new Paragraph({
       children: [
         new TextRun({
-          text: "[Profile Image]",
-          italics: true,
-          size: styles.bodySize - 4,
-          color: "888888",
+                    text: cvData.personal.name,
+                    bold: true,
+                    size: 32, // 16pt
+                    color: "1f2937",
+                    font: styles.fontFamily,
         }),
       ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-    })
-  )
-
-  // Contact Information
-  leftColumnContent.push(
+                spacing: { after: 150 },
+              }),
+              // Designation, Department, Institution
+              ...(cvData.personal.designation ? [
     new Paragraph({
       children: [
         new TextRun({
-          text: "CONTACT",
-          bold: true,
-          size: styles.sectionHeadingSize - 8, // 24pt -> 16pt (8 half-points)
-          color: template === "professional" 
-            ? "e0e7ff" // Light blue for professional
-            : template === "academic"
-            ? "1e3a8a" // Blue for academic
-            : template === "classic"
-            ? "92400e" // Amber/brown for classic - differentiates from academic
-            : styles.sectionColor,
+                      text: `Designation: ${cvData.personal.designation}`,
+                      size: 20, // 10pt
+                      color: "4b5563",
+                      font: styles.fontFamily,
         }),
       ],
-      spacing: { after: 200 },
-    })
-  )
-
-  if (cvData.personal.email) {
-    leftColumnContent.push(
+                  spacing: { after: 80 },
+                }),
+              ] : []),
+              ...(cvData.personal.department ? [
       new Paragraph({
         children: [
           new TextRun({
-            text: `Email: ${cvData.personal.email}`,
-            size: styles.bodySize, // Use standard body size (24 = 12pt)
-            color: template === "professional" ? "ffffff" : "1f2937", // White for professional, dark for others
+                      text: `Department: ${cvData.personal.department}`,
+                      size: 20,
+                      color: "4b5563",
+                      font: styles.fontFamily,
+          }),
+        ],
+                  spacing: { after: 80 },
+                }),
+              ] : []),
+              ...(cvData.personal.faculty ? [
+      new Paragraph({
+        children: [
+          new TextRun({
+                      text: `Faculty: ${cvData.personal.faculty}`,
+                      size: 20,
+                      color: "4b5563",
+                      font: styles.fontFamily,
+          }),
+        ],
+                  spacing: { after: 80 },
+                }),
+              ] : []),
+              ...(cvData.personal.institution ? [
+      new Paragraph({
+        children: [
+          new TextRun({
+                      text: `Institution: ${cvData.personal.institution}`,
+                      size: 20,
+                      color: "4b5563",
+                      font: styles.fontFamily,
           }),
         ],
         spacing: { after: 100 },
-      })
-    )
-  }
-
-  if (cvData.personal.phone) {
-    leftColumnContent.push(
+                }),
+              ] : []),
+              // Contact details
+              ...(cvData.personal.email ? [
       new Paragraph({
         children: [
           new TextRun({
-            text: `Phone: ${cvData.personal.phone}`,
-            size: styles.bodySize,
-            color: template === "professional" ? "ffffff" : "1f2937",
+                      text: `Email: ${cvData.personal.email}`,
+                      size: 18, // 9pt
+                      color: "6b7280",
+                      font: styles.fontFamily,
           }),
         ],
-        spacing: { after: 100 },
-      })
-    )
-  }
-
-  if (cvData.personal.address) {
-    leftColumnContent.push(
+                  spacing: { after: 60 },
+                }),
+              ] : []),
+              ...(cvData.personal.phone ? [
       new Paragraph({
         children: [
           new TextRun({
-            text: `Address: ${cvData.personal.address}`,
-            size: styles.bodySize,
-            color: template === "professional" ? "ffffff" : "1f2937",
+                      text: `Phone: ${cvData.personal.phone}`,
+                      size: 18,
+                      color: "6b7280",
+                      font: styles.fontFamily,
           }),
         ],
-        spacing: { after: 100 },
-      })
-    )
-  }
-
-  if (cvData.personal.orcid) {
-    leftColumnContent.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: `ORCID: ${cvData.personal.orcid}`,
-            size: styles.bodySize,
-            color: template === "professional" ? "ffffff" : "1f2937",
-          }),
-        ],
-        spacing: { after: 200 },
-      })
-    )
-  }
-
-  // Personal Details (if selected)
-  if (selectedSections.includes("personal") && (cvData.personal.dateOfBirth || cvData.personal.nationality)) {
-    leftColumnContent.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: "PERSONAL",
-            bold: true,
-            size: styles.sectionHeadingSize - 8, // Consistent with CONTACT
-            color: template === "professional" 
-              ? "e0e7ff" // Light blue for professional
-              : template === "academic"
-              ? "1e3a8a" // Blue for academic
-              : template === "classic"
-              ? "92400e" // Amber/brown for classic - differentiates from academic
-              : styles.sectionColor,
-          }),
-        ],
-        spacing: { before: 200, after: 200 },
-      })
-    )
-
-    if (cvData.personal.dateOfBirth) {
-      leftColumnContent.push(
+                  spacing: { after: 60 },
+                }),
+              ] : []),
+             
+              ...(cvData.personal.dateOfBirth ? [
         new Paragraph({
           children: [
             new TextRun({
               text: `Date of Birth: ${cvData.personal.dateOfBirth}`,
-              size: styles.bodySize,
-              color: template === "professional" ? "ffffff" : "1f2937",
+                      size: 18,
+                      color: "6b7280",
+                      font: styles.fontFamily,
             }),
           ],
-          spacing: { after: 100 },
-        })
-      )
-    }
-
-    if (cvData.personal.nationality) {
-      leftColumnContent.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: `Nationality: ${cvData.personal.nationality}`,
-              size: styles.bodySize,
-              color: template === "professional" ? "ffffff" : "1f2937",
-            }),
-          ],
-          spacing: { after: 100 },
-        })
-      )
-    }
-  }
-
-  // Build right column content (Header + Sections)
-  const rightColumnContent: (Paragraph | Table)[] = []
-
-  // Header - Add background shading for professional template
-  const headerShading = template === "professional" 
-    ? {
-        type: ShadingType.SOLID,
-        color: "1d4ed8", // Dark blue background
-        fill: "1d4ed8",
-      }
-    : undefined
-
-  rightColumnContent.push(
+                  spacing: { after: 60 },
+                }),
+              ] : []),
+       
+              ...(cvData.personal.orcid ? [
     new Paragraph({
       children: [
         new TextRun({
-          text: cvData.personal.name,
-          bold: true,
-          size: styles.nameSize,
-          color: styles.nameColor,
+                      text: `ORCID: ${cvData.personal.orcid}`,
+                      size: 18,
+                      color: "6b7280",
           font: styles.fontFamily,
         }),
       ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-      shading: headerShading,
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: cvData.personal.designation,
-          size: styles.titleSize,
-          color: styles.titleColor,
-          font: styles.fontFamily,
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
-      shading: headerShading,
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: cvData.personal.department,
-          size: styles.titleSize,
-          color: styles.titleColor,
-          font: styles.fontFamily,
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 100 },
-      shading: headerShading,
-    }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: cvData.personal.institution,
-          size: styles.titleSize,
-          color: styles.titleColor,
-          font: styles.fontFamily,
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-      shading: headerShading,
-    })
-  )
-
-  // Add selected sections in order
-  selectedSections.forEach((sectionId) => {
-    if (sectionId !== "personal") {
-      const sectionContent = createWordSection(sectionId, cvData, template)
-      rightColumnContent.push(...sectionContent)
-    }
-  })
-
-  // Create two-column table
-  const mainTable = new Table({
-    rows: [
-      new TableRow({
-        children: [
-          // Left column (33% width)
+                  spacing: { after: 0 },
+                }),
+              ] : []),
+            ],
+            width: { size: 70, type: WidthType.PERCENTAGE },
+            verticalAlign: "top",
+          }),
+          // Right cell - Profile Image
           new TableCell({
-            children: leftColumnContent,
-            width: { size: 33, type: WidthType.PERCENTAGE },
+            children: [
+    new Paragraph({
+      children: [
+        new TextRun({
+                    text: "[Profile Image]",
+                    italics: true,
+                    size: 16,
+                    color: "888888",
+        }),
+      ],
+      alignment: AlignmentType.CENTER,
+                spacing: { after: 0 },
+              }),
+            ],
+            width: { size: 30, type: WidthType.PERCENTAGE },
+            verticalAlign: "top",
             shading: {
-              fill: template === "professional" 
-                ? "1d4ed8" 
-                : template === "modern" 
-                ? "eff6ff" 
-                : template === "academic"
-                ? "eff6ff" // Light blue for academic - differentiates from classic
-                : "fffbeb", // Warm amber for classic - differentiates from academic
+              type: ShadingType.SOLID,
+              color: "f9fafb",
+              fill: "f9fafb",
             },
-            margins: {
-              top: 1440, // 1 inch
-              right: 360, // 0.25 inch
-              bottom: 1440,
-              left: 360,
-            },
-          }),
-          // Right column (67% width)
-          new TableCell({
-            children: rightColumnContent,
-            width: { size: 67, type: WidthType.PERCENTAGE },
-            margins: {
-              top: 1440,
-              right: 360,
-              bottom: 1440,
-              left: 360,
-            },
-          }),
-        ],
+        }),
+      ],
       }),
-    ],
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: {
-      top: { style: BorderStyle.NONE },
-      bottom: { style: BorderStyle.NONE },
-      left: { style: BorderStyle.NONE },
-      right: { style: BorderStyle.NONE },
-      insideHorizontal: { style: BorderStyle.NONE },
-      insideVertical: { style: BorderStyle.NONE },
+    ]
+    
+    content.push(
+      new Table({
+        rows: personalTableRows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+          bottom: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+          left: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+          right: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+          insideHorizontal: { style: BorderStyle.NONE },
+          insideVertical: { style: BorderStyle.SINGLE, size: 1, color: borderColor },
+        },
+      })
+    )
+    
+    // Horizontal line separator
+    content.push(
+    new Paragraph({
+      children: [
+        new TextRun({
+            text: "─".repeat(50),
+            size: 18,
+            color: template === "professional" ? "1e3a8a" : template === "academic" ? "1e3a8a" : template === "classic" ? "92400e" : "374151",
+        }),
+      ],
+        spacing: { after: 300 },
+      })
+    )
+  }
+  
+  // Generate table sections for all other sections
+  const sectionHandlers: Record<string, (data: CVData, template: CVTemplate, styles: typeof templateStyles.academic) => (Paragraph | Table)[]> = {
+    education: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Education Detail",
+        ["Degree Level", "Institution/University", "Year", "Subject", "State", "QS Ranking"],
+        data.education,
+        (edu: any) => [
+          createTableCell(showValue(edu.degree_type), styles, borderColor),
+          createTableCell(showValue(edu.university_name), styles, borderColor),
+          createTableCell(edu.year_of_passing ? formatYear(edu.year_of_passing) : "N/A", styles, borderColor),
+          createTableCell(showValue(edu.subject), styles, borderColor),
+          createTableCell(showValue(edu.state), styles, borderColor),
+          createTableCell(showValue(edu.QS_Ranking), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
     },
+    postdoc: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Post Doctoral Research Experience",
+        ["Institute", "Start Date", "End Date", "Sponsored By"],
+        data.postdoc,
+        (postdoc: any) => [
+          createTableCell(showValue(postdoc.Institute), styles, borderColor),
+          createTableCell(postdoc.Start_Date ? formatDate(postdoc.Start_Date) : "N/A", styles, borderColor),
+          createTableCell(postdoc.End_Date ? formatDate(postdoc.End_Date) : "Present", styles, borderColor),
+          createTableCell(showValue(postdoc.SponsoredBy), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    experience: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Experience Detail",
+        ["Designation", "Employer/Institution", "Start Date", "End Date", "Nature", "Is Currently Working"],
+        data.experience,
+        (exp: any) => [
+          createTableCell(showValue(exp.desig), styles, borderColor),
+          createTableCell(showValue(exp.Employeer), styles, borderColor),
+          createTableCell(exp.Start_Date ? formatDate(exp.Start_Date) : "N/A", styles, borderColor),
+          createTableCell(exp.End_Date ? formatDate(exp.End_Date) : exp.currente ? "Present" : "N/A", styles, borderColor),
+          createTableCell(showValue(exp.Nature), styles, borderColor),
+          createTableCell(exp.currente ? "Yes" : "No", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    research: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Research Projects Detail",
+        ["Title", "Funding Agency", "Project Nature", "Duration (Months)", "Status", "Date"],
+        data.research,
+        (proj: any) => [
+          createTableCell(showValue(proj.title), styles, borderColor),
+          createTableCell(showValue(proj.Funding_Agency_Name), styles, borderColor),
+          createTableCell(showValue(proj.Proj_Nature_Name), styles, borderColor),
+          createTableCell(showValue(proj.duration), styles, borderColor),
+          createTableCell(showValue(proj.Proj_Status_Name), styles, borderColor),
+          createTableCell(proj.start_date ? formatDate(proj.start_date) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    patents: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Patents Detail",
+        ["Title", "Level", "Status", "Tech License", "Date"],
+        data.patents,
+        (patent: any) => [
+          createTableCell(showValue(patent.title), styles, borderColor),
+          createTableCell(showValue(patent.Res_Pub_Level_Name), styles, borderColor),
+          createTableCell(showValue(patent.Patent_Level_Name), styles, borderColor),
+          createTableCell(showValue(patent.Tech_Licence), styles, borderColor),
+          createTableCell(patent.date ? formatDate(patent.date) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    econtent: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "E-Contents Detail",
+        ["Title", "Brief Details", "Link", "Content Type", "Platform"],
+        data.econtent,
+        (econtent: any) => [
+          createTableCell(showValue(econtent.title), styles, borderColor),
+          createTableCell(showValue(econtent.Brief_Details), styles, borderColor),
+          createTableCell(showValue(econtent.link), styles, borderColor),
+          createTableCell(showValue(econtent.EcontentTypeName), styles, borderColor),
+          createTableCell(showValue(econtent.Econtent_PlatformName), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    consultancy: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Consultancy Undertaken Detail",
+        ["Name", "Collaborating Institution", "Address", "Duration", "Amount", "Start Date", "Outcome"],
+        data.consultancy,
+        (consult: any) => [
+          createTableCell(showValue(consult.name), styles, borderColor),
+          createTableCell(showValue(consult.collaborating_inst), styles, borderColor),
+          createTableCell(showValue(consult.address), styles, borderColor),
+          createTableCell(showValue(consult.duration), styles, borderColor),
+          createTableCell(showValue(consult.amount), styles, borderColor),
+          createTableCell(consult.Start_Date ? formatDate(consult.Start_Date) : "N/A", styles, borderColor),
+          createTableCell(showValue(consult.outcome), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    collaborations: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Collaborations Detail",
+        ["Collaboration Name", "Collaborating Institution", "Category", "Level", "Outcome", "Starting Date", "Duration", "Status"],
+        data.collaborations,
+        (collab: any) => [
+          createTableCell(showValue(collab.collab_name), styles, borderColor),
+          createTableCell(showValue(collab.collaborating_inst), styles, borderColor),
+          createTableCell(showValue(collab.category), styles, borderColor),
+          createTableCell(showValue(collab.Collaborations_Level_Name), styles, borderColor),
+          createTableCell(showValue(collab.Collaborations_Outcome_Name), styles, borderColor),
+          createTableCell(collab.starting_date ? formatDate(collab.starting_date) : "N/A", styles, borderColor),
+          createTableCell(showValue(collab.duration), styles, borderColor),
+          createTableCell(showValue(collab.collab_status), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    phdguidance: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Ph.D. Guidance Detail",
+        ["Student Name", "Registration No", "Topic", "Status", "Date Registered", "Year of Completion"],
+        data.phdguidance,
+        (phd: any) => [
+          createTableCell(showValue(phd.name), styles, borderColor),
+          createTableCell(showValue(phd.regno), styles, borderColor),
+          createTableCell(showValue(phd.topic), styles, borderColor),
+          createTableCell(showValue(phd.Res_Proj_Other_Details_Status_Name), styles, borderColor),
+          createTableCell(phd.start_date ? formatDate(phd.start_date) : "N/A", styles, borderColor),
+          createTableCell(showValue(phd.year_of_completion), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    books: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Book Published Detail",
+        ["S.No", "Authors", "Title", "Publisher", "Place", "Book Type", "Author Type", "Level", "Year", "ISBN"],
+        data.books,
+        (book: any, idx: number) => [
+          createTableCell(String(idx + 1), styles, borderColor),
+          createTableCell(showValue(book.authors), styles, borderColor),
+          createTableCell(showValue(book.title), styles, borderColor),
+          createTableCell(showValue(book.publisher_name), styles, borderColor),
+          createTableCell(showValue(book.place), styles, borderColor),
+          createTableCell(showValue(book.Book_Type_Name), styles, borderColor),
+          createTableCell(showValue(book.Author_Type_Name), styles, borderColor),
+          createTableCell(showValue(book.Res_Pub_Level_Name), styles, borderColor),
+          createTableCell(book.submit_date ? formatYear(book.submit_date) : "N/A", styles, borderColor),
+          createTableCell(showValue(book.isbn), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    papers: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Paper Presented Detail",
+        ["S.No", "Authors", "Title of Paper", "Theme", "Level", "Organising Body", "Place", "Published Year"],
+        data.papers,
+        (paper: any, idx: number) => [
+          createTableCell(String(idx + 1), styles, borderColor),
+          createTableCell(showValue(paper.authors), styles, borderColor),
+          createTableCell(showValue(paper.title_of_paper), styles, borderColor),
+          createTableCell(showValue(paper.theme), styles, borderColor),
+          createTableCell(showValue(paper.Res_Pub_Level_Name), styles, borderColor),
+          createTableCell(showValue(paper.organising_body), styles, borderColor),
+          createTableCell(showValue(paper.place), styles, borderColor),
+          createTableCell(paper.date ? formatYear(paper.date) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    articles: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Published Articles/Papers in Journals/Edited Volumes",
+        ["S.No", "Authors", "Title", "Journal Name", "Volume No", "Page No", "ISSN", "Level", "Published Year"],
+        data.articles,
+        (pub: any, idx: number) => [
+          createTableCell(String(idx + 1), styles, borderColor),
+          createTableCell(showValue(pub.authors), styles, borderColor),
+          createTableCell(showValue(pub.title), styles, borderColor),
+          createTableCell(showValue(pub.journal_name), styles, borderColor),
+          createTableCell(showValue(pub.volume_num), styles, borderColor),
+          createTableCell(showValue(pub.page_num), styles, borderColor),
+          createTableCell(showValue(pub.issn), styles, borderColor),
+          createTableCell(showValue(pub.Res_Pub_Level_Name), styles, borderColor),
+          createTableCell(pub.month_year ? formatYear(pub.month_year) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    awards: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Awards/Fellowship Detail",
+        ["Name", "Organization", "Level", "Date of Award", "Details", "Address"],
+        data.awards,
+        (award: any) => [
+          createTableCell(showValue(award.name), styles, borderColor),
+          createTableCell(showValue(award.organization), styles, borderColor),
+          createTableCell(showValue(award.Expr1), styles, borderColor),
+          createTableCell(award.date_of_award ? formatDate(award.date_of_award) : "N/A", styles, borderColor),
+          createTableCell(showValue(award.details), styles, borderColor),
+          createTableCell(showValue(award.address), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    talks: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Talk Detail",
+        ["Title/Name", "Programme", "Place", "Participated As", "Date"],
+        data.talks,
+        (talk: any) => [
+          createTableCell(showValue(talk.title || talk.name), styles, borderColor),
+          createTableCell(showValue(talk.teacher_talks_prog_name), styles, borderColor),
+          createTableCell(showValue(talk.place), styles, borderColor),
+          createTableCell(showValue(talk.teacher_talks_parti_name), styles, borderColor),
+          createTableCell(talk.date ? formatDate(talk.date) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    academic_contribution: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Contribution in Academic Programme Detail",
+        ["Name", "Programme", "Participated As", "Place", "Date", "Year"],
+        data.academic_contribution,
+        (contri: any) => [
+          createTableCell(showValue(contri.name), styles, borderColor),
+          createTableCell(showValue(contri.Expr2), styles, borderColor),
+          createTableCell(showValue(contri.Expr1), styles, borderColor),
+          createTableCell(showValue(contri.place), styles, borderColor),
+          createTableCell(contri.date ? formatDate(contri.date) : "N/A", styles, borderColor),
+          createTableCell(showValue(contri.Expr22), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    academic_participation: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Participation in Academic Programme Detail",
+        ["Name", "Academic Body", "Participated As", "Place", "Submit Date", "Year"],
+        data.academic_participation,
+        (parti: any) => [
+          createTableCell(showValue(parti.name), styles, borderColor),
+          createTableCell(showValue(parti.acad_body), styles, borderColor),
+          createTableCell(showValue(parti.participated_as), styles, borderColor),
+          createTableCell(showValue(parti.place), styles, borderColor),
+          createTableCell(parti.submit_date ? formatDate(parti.submit_date) : "N/A", styles, borderColor),
+          createTableCell(showValue(parti.Report_Yr), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    committees: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Participation in Academic Committee",
+        ["Name", "Committee Name", "Level", "Participated As", "Submit Date", "Year"],
+        data.committees,
+        (committee: any) => [
+          createTableCell(showValue(committee.name), styles, borderColor),
+          createTableCell(showValue(committee.committee_name), styles, borderColor),
+          createTableCell(showValue(committee.Parti_Commi_Level_Name), styles, borderColor),
+          createTableCell(showValue(committee.participated_as), styles, borderColor),
+          createTableCell(committee.submit_date ? formatDate(committee.submit_date) : "N/A", styles, borderColor),
+          createTableCell(showValue(committee.Expr28), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    performance: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Performance by Individual/Group Detail",
+        ["Name", "Place", "Date", "Nature"],
+        data.performance,
+        (perf: any) => [
+          createTableCell(showValue(perf.name), styles, borderColor),
+          createTableCell(showValue(perf.place), styles, borderColor),
+          createTableCell(perf.date ? formatDate(perf.date) : "N/A", styles, borderColor),
+          createTableCell(showValue(perf.perf_nature), styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    extension: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Extension Detail",
+        ["Name of Activity", "Place", "Level", "Sponsored By", "Date"],
+        data.extension,
+        (ext: any) => [
+          createTableCell(showValue(ext.name_of_activity || ext.names), styles, borderColor),
+          createTableCell(showValue(ext.place), styles, borderColor),
+          createTableCell(showValue(ext.Awards_Fellows_Level_name), styles, borderColor),
+          createTableCell(showValue(ext.sponsered_name), styles, borderColor),
+          createTableCell(ext.date ? formatDate(ext.date) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+    orientation: (data, template, styles) => {
+      const borderColor = template === "professional" ? "bfdbfe" : template === "academic" ? "bfdbfe" : template === "classic" ? "fde68a" : "d1d5db"
+      return createTableSection(
+        "Orientation Course Detail",
+        ["Name", "Course Type", "Institute", "University", "Department", "Centre", "Start Date", "End Date"],
+        data.orientation,
+        (orient: any) => [
+          createTableCell(showValue(orient.name), styles, borderColor),
+          createTableCell(showValue(orient.Refresher_Course_Type_Name), styles, borderColor),
+          createTableCell(showValue(orient.institute), styles, borderColor),
+          createTableCell(showValue(orient.university), styles, borderColor),
+          createTableCell(showValue(orient.department), styles, borderColor),
+          createTableCell(showValue(orient.centre), styles, borderColor),
+          createTableCell(orient.startdate ? formatDate(orient.startdate) : "N/A", styles, borderColor),
+          createTableCell(orient.enddate ? formatDate(orient.enddate) : "N/A", styles, borderColor),
+        ],
+        template,
+        styles,
+      )
+    },
+  }
+  
+  // Add selected sections (except personal which is already added)
+  selectedSections.forEach((sectionId) => {
+    if (sectionId !== "personal" && sectionHandlers[sectionId]) {
+      const sectionContent = sectionHandlers[sectionId](cvData, template, styles)
+      content.push(...sectionContent)
+    }
   })
 
   // Create the document
@@ -1282,14 +1782,14 @@ export async function generateWordDocument(
               height: 15840, // 11 inches in twips
             },
             margin: {
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
+              top: 1440, // 1 inch
+              right: 1440,
+              bottom: 1440,
+              left: 1440,
             },
           },
         },
-        children: [mainTable],
+        children: content,
       },
     ],
   })

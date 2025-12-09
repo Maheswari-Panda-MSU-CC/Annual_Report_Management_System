@@ -1,47 +1,62 @@
 import { NextResponse } from "next/server"
-import { generateCVHTML } from "@/app/api/teacher/cv-generation/cv-html-generator"
 import { generateWordDocument } from "@/app/api/teacher/cv-generation/cv-word-generator"
 import { generateCVPDF } from "@/app/api/teacher/cv-generation/cv-pdf-puppeteer"
 import { type CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
+import { fetchCVDataFromDB } from "@/app/api/teacher/cv-generation/fetch-cv-data"
+import { cachedJsonResponse } from '@/lib/api-cache'
 
 interface CVGenerationRequest {
-  cvData: {
-    personal: {
-      name: string
-      designation: string
-      department: string
-      institution: string
-      email: string
-      phone: string
-      address: string
-      dateOfBirth: string
-      nationality: string
-      orcid: string
-    } | null
-    education: any[]
-    postdoc: any[]
-    experience: any[]
-    research: any[]
-    patents: any[]
-    econtent: any[]
-    consultancy: any[]
-    collaborations: any[]
-    phdguidance: any[]
-    books: any[]
-    papers: any[]
-    articles: any[]
-    awards: any[]
-    talks: any[]
-    academic_contribution: any[]
-    academic_participation: any[]
-    committees: any[]
-    performance: any[]
-    extension: any[]
-    orientation: any[]
-  }
+  teacherId: number
   template: CVTemplate
   format: "pdf" | "word"
   selectedSections: string[]
+}
+
+/**
+ * GET /api/teacher/cv-generation
+ * Fetches all CV data for a teacher using sp_GetTeacherCVData stored procedure
+ * Used for preview on the CV generation page
+ * 
+ * Query Parameters:
+ * - teacherId: Teacher ID (required)
+ * - sections: Comma-separated list of section IDs to include (optional, defaults to all)
+ */
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const teacherId = parseInt(searchParams.get('teacherId') || '', 10)
+    const sectionsParam = searchParams.get('sections') || ''
+
+    if (isNaN(teacherId) || teacherId === 0) {
+      return NextResponse.json(
+        { error: 'Invalid or missing teacherId' },
+        { status: 400 }
+      )
+    }
+
+    // Parse sections if provided, otherwise include all sections
+    const requestedSections = sectionsParam 
+      ? sectionsParam.split(',').map(s => s.trim())
+      : [
+          'education', 'postdoc', 'experience', 'research', 'patents', 'econtent',
+          'consultancy', 'collaborations', 'phdguidance', 'books', 'papers',
+          'reviews','monographs',
+          'articles', 'orientation', 'academic_contribution', 'academic_participation',
+          'committees', 'performance', 'awards', 'extension', 'talks'
+        ]
+
+    // Fetch CV data using shared function
+    const cvData = await fetchCVDataFromDB(teacherId, requestedSections)
+
+    // Cache for 5 minutes (300 seconds) - CV data doesn't change frequently
+    return cachedJsonResponse(cvData, 300)
+  } catch (err: any) {
+    console.error('Error fetching CV data:', err)
+    return NextResponse.json(
+      { error: 'Failed to fetch CV data', message: err.message },
+      { status: 500 }
+    )
+  }
 }
 
 
@@ -49,12 +64,12 @@ export async function POST(request: Request) {
   try {
     const body: CVGenerationRequest = await request.json()
 
-    const { cvData, template, format, selectedSections } = body
+    const { teacherId, template, format, selectedSections } = body
 
     // Validate input
-    if (!cvData || !cvData.personal) {
+    if (!teacherId || teacherId === 0) {
       return NextResponse.json(
-        { error: "Personal information is required" },
+        { error: "Teacher ID is required" },
         { status: 400 },
       )
     }
@@ -80,11 +95,21 @@ export async function POST(request: Request) {
       )
     }
 
+    // Fetch CV data directly from database using stored procedure
+    const cvData = await fetchCVDataFromDB(teacherId, selectedSections)
+
+    // Validate that personal data exists
+    if (!cvData || !cvData.personal) {
+      return NextResponse.json(
+        { error: "Personal information is required. Please ensure the teacher profile is complete." },
+        { status: 400 },
+      )
+    }
+
+    // Generate document
     if (format === "word") {
-      // Generate Word document using the generator with current data and template
       const buffer = await generateWordDocument(cvData, template, selectedSections)
 
-      // Return the buffer as response
       return new NextResponse(buffer as any, {
         headers: {
           "Content-Type":
@@ -93,10 +118,8 @@ export async function POST(request: Request) {
         },
       })
     } else {
-      // Generate PDF using server-side Puppeteer (replaces old client-side generation)
       const pdfBuffer = await generateCVPDF(cvData, template, selectedSections)
 
-      // Return PDF as response
       return new NextResponse(pdfBuffer as unknown as BodyInit, {
         headers: {
           'Content-Type': 'application/pdf',

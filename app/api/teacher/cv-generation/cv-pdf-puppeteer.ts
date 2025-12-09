@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer'
-import { generateCVHTMLTwoColumn } from './cv-html-two-column'
+import { generateCVHTMLSingleColumn } from './cv-html-single-column'
 import type { CVTemplate } from './cv-template-styles'
 import type { CVData } from '@/types/cv-data'
 
@@ -16,8 +16,8 @@ export async function generateCVPDF(
     throw new Error('Personal information is required')
   }
 
-  // Generate two-column HTML matching the preview exactly
-  const html = generateCVHTMLTwoColumn(cvData, template, selectedSections)
+  // Generate single-column HTML matching the preview exactly
+  const html = generateCVHTMLSingleColumn(cvData, template, selectedSections)
 
   // Launch Puppeteer
   const browser = await puppeteer.launch({
