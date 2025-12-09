@@ -338,7 +338,7 @@ function createWordSection(
         ["Email", data.personal.email || ""],
         ["Phone", data.personal.phone || ""],
         ["Date of Birth", data.personal.dateOfBirth || ""],
-        ["ORCID", data.personal.orcid || ""],
+        ["ORCHID", data.personal.orcid || ""],
       ]
         .filter(([_, value]) => value)
         .map(
@@ -1321,7 +1321,7 @@ export async function generateWordDocument(
     new Paragraph({
       children: [
         new TextRun({
-                      text: `ORCID: ${cvData.personal.orcid}`,
+                      text: `ORCHID: ${cvData.personal.orcid}`,
                       size: 18,
                       color: "6b7280",
           font: styles.fontFamily,

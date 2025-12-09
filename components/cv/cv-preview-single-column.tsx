@@ -241,7 +241,7 @@ export const CVPreviewSingleColumn = memo(({
                   )}
                   {personal.orcid && (
                     <>
-                      <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>ORCID:</span>
+                      <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>ORCHID:</span>
                       <span style={{ fontSize: "12px", color: "#1f2937" }}>{personal.orcid}</span>
                     </>
                   )}

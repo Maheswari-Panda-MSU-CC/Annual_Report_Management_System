@@ -111,7 +111,7 @@ function generatePersonalSection(cvData: CVData, template: CVTemplate): string {
               ` : ''}
             
               ${personal.orcid ? `
-                <span style="font-size: 12px; color: #6b7280; font-weight: 500;">ORCID:</span>
+                <span style="font-size: 12px; color: #6b7280; font-weight: 500;">ORCHID:</span>
                 <span style="font-size: 12px; color: #1f2937;">${escapeHtml(personal.orcid)}</span>
               ` : ''}
             </div>
