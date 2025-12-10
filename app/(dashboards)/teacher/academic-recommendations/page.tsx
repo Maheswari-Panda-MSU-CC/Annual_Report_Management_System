@@ -513,6 +513,39 @@ export default function AcademicRecommendationsPage() {
     return String(value)
   }
 
+  // Helper function to format date to dd/mm/yyyy
+  const formatDate = (dateValue: any): string => {
+    if (!dateValue) return "N/A"
+    
+    try {
+      const date = new Date(dateValue)
+      if (isNaN(date.getTime())) return "N/A"
+      
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      
+      return `${day}/${month}/${year}`
+    } catch {
+      // If it's already a formatted string, try to parse it
+      if (typeof dateValue === 'string') {
+        // Try to parse common date formats
+        const parsed = new Date(dateValue)
+        if (!isNaN(parsed.getTime())) {
+          const day = String(parsed.getDate()).padStart(2, '0')
+          const month = String(parsed.getMonth() + 1).padStart(2, '0')
+          const year = parsed.getFullYear()
+          return `${day}/${month}/${year}`
+        }
+        // If it's already in dd/mm/yyyy format, return as is
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+          return dateValue
+        }
+      }
+      return String(dateValue)
+    }
+  }
+
   // Create column definitions for each section
   const createColumnsForSection = useCallback((section: any): ColumnDef<any>[] => {
     const columns: ColumnDef<any>[] = []
@@ -666,12 +699,15 @@ export default function AcademicRecommendationsPage() {
           accessorKey: "publication_date", 
           header: "Publication Date", 
           enableSorting: true, 
-          cell: ({ row }) => (
-            <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
-              <Calendar className="h-3 w-3 text-gray-400" />
-              <span>{displayValue(row.original.publication_date)}</span>
-            </div>
-          ),
+          cell: ({ row }) => {
+            const date = formatDate(row.original.publication_date)
+            return (
+              <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
+                <Calendar className="h-3 w-3 text-gray-400" />
+                <span>{date}</span>
+              </div>
+            )
+          },
           meta: { className: "text-xs sm:text-sm px-2 sm:px-4" }
         },
         { accessorKey: "ebook", header: "EBook", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.ebook, "N/A")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
@@ -712,12 +748,15 @@ export default function AcademicRecommendationsPage() {
           accessorKey: "publication_date", 
           header: "Publication Date", 
           enableSorting: true, 
-          cell: ({ row }) => (
-            <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
-              <Calendar className="h-3 w-3 text-gray-400" />
-              <span>{displayValue(row.original.publication_date)}</span>
-            </div>
-          ),
+          cell: ({ row }) => {
+            const date = formatDate(row.original.publication_date)
+            return (
+              <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
+                <Calendar className="h-3 w-3 text-gray-400" />
+                <span>{date}</span>
+              </div>
+            )
+          },
           meta: { className: "text-xs sm:text-sm px-2 sm:px-4" }
         },
         { 
@@ -767,12 +806,15 @@ export default function AcademicRecommendationsPage() {
           accessorKey: "publication_date", 
           header: "Publication Date", 
           enableSorting: true, 
-          cell: ({ row }) => (
-            <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
-              <Calendar className="h-3 w-3 text-gray-400" />
-              <span>{displayValue(row.original.publication_date)}</span>
-            </div>
-          ),
+          cell: ({ row }) => {
+            const date = formatDate(row.original.publication_date)
+            return (
+              <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
+                <Calendar className="h-3 w-3 text-gray-400" />
+                <span>{date}</span>
+              </div>
+            )
+          },
           meta: { className: "text-xs sm:text-sm px-2 sm:px-4" }
         },
         { accessorKey: "no_of_issue_per_year", header: "No. of Issues per Year", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.no_of_issue_per_year)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },

@@ -12,6 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useRouter } from "next/navigation"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { CATEGORY_FORM_TYPE_MAP } from "@/lib/categories-field-mapping"
+import { getCategoryDisplayName, getSubCategoryDisplayName } from "@/lib/category-display-mapping"
 
 interface ClassificationData {
   category: string
@@ -522,7 +523,7 @@ export function SmartDocumentAnalyzer() {
     },
     {
       key: "Talks Events",
-      label: "Talks & Events",
+      label: "Events & Activities",
       route: "/teacher/talks-events/add",
       fields: ["Event Name", "Role", "Date", "Venue"],
       subcategories: [
@@ -940,13 +941,15 @@ export function SmartDocumentAnalyzer() {
               <CardContent className="space-y-4">
                 <div className="flex justify-between">
                   <span className="font-medium">Category:</span>
-                  <Badge variant="outline">{analysis.classification.category}</Badge>
+                  <Badge variant="outline">
+                    {getCategoryDisplayName(analysis.classification.category)}
+                  </Badge>
                 </div>
                 {analysis.classification["sub-category"] && (
                   <div className="flex justify-between">
                     <span className="font-medium">Sub-Category:</span>
                     <Badge variant="secondary">
-                      {analysis.classification["sub-category"]}
+                      {getSubCategoryDisplayName(analysis.classification["sub-category"])}
                     </Badge>
                   </div>
                 )}
@@ -1011,7 +1014,7 @@ export function SmartDocumentAnalyzer() {
                         className="w-full"
                         variant="default"
                       >
-                        Go to {analysis.classification["sub-category"] || analysis.classification.category} Add Page
+                        Go to {getSubCategoryDisplayName(analysis.classification["sub-category"] || "") || getCategoryDisplayName(analysis.classification.category)} Add Page
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
