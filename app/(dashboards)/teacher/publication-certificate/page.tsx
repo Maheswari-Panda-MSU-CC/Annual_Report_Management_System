@@ -47,6 +47,7 @@ interface PaperPresented {
 }
 
 interface TeacherInfo {
+  abbri:string
   fname: string
   mname: string
   lname: string
@@ -109,6 +110,7 @@ export default function PublicationCertificate() {
   const teacherInfo = useMemo<TeacherInfo | null>(() => {
     if (!profileData?.teacherInfo) return null
     return {
+      abbri:profileData.teacherInfo.Abbri || "",
       fname: profileData.teacherInfo.fname || "",
       mname: profileData.teacherInfo.mname || "",
       lname: profileData.teacherInfo.lname || "",
@@ -213,20 +215,14 @@ export default function PublicationCertificate() {
   }, [allPublications, searchTerm, levelFilter])
 
   // Determine salutation based on teacher name
-  const getSalutation = () => {
+  const getNameWithSalutation = () => {
     if (teacherInfo) {
-      const parts = [teacherInfo.fname, teacherInfo.mname, teacherInfo.lname].filter(Boolean)
-      if (parts.length > 0) {
-        return `Dr. ${parts.join(" ")}`
-      }
+      return `${teacherInfo.abbri} ${teacherInfo.fname} ${teacherInfo.mname} ${teacherInfo.lname}`
     }
     if (user?.name) {
-      if (user.name.toLowerCase().includes("dr.") || user.name.toLowerCase().includes("prof.")) {
-        return user.name
-      }
-      return `Dr. ${user.name}`
+      return user.name
     }
-    return "Dr. FirstName MiddleName LastName"
+    return "FirstName MiddleName LastName"
   }
 
   const handlePreviewCertificate = () => {
@@ -325,306 +321,6 @@ export default function PublicationCertificate() {
       setIsGeneratingPDF(false)
     }
   }
-
-  /* ============================================
-   * OLD CLIENT-SIDE PDF GENERATION CODE (COMMENTED OUT)
-   * This code used jsPDF and html2canvas for client-side PDF generation.
-   * It has been replaced with server-side Puppeteer generation for better
-   * formatting, multi-page handling, and consistency with preview.
-   * ============================================
-   * 
-  const handleDownloadPDF_OLD = async () => {
-    if (selectedPublications.length === 0) {
-      toast({
-        title: "No Selection",
-        description: "Please select at least one publication to generate the certificate.",
-        variant: "destructive",
-        duration: 3000,
-      })
-      return
-    }
-
-    try {
-      setIsGeneratingPDF(true)
-
-      // Get the certificate content element
-      const certificateElement = document.getElementById("certificate-content")
-      if (!certificateElement) {
-        throw new Error("Certificate content not found")
-      }
-
-      // Store original styles to restore later
-      const originalOverflow = certificateElement.style.overflow
-      const originalOverflowX = certificateElement.style.overflowX
-      const originalOverflowY = certificateElement.style.overflowY
-      const originalMaxWidth = certificateElement.style.maxWidth
-      const originalWidth = certificateElement.style.width
-
-      // Temporarily modify styles for PDF generation
-      certificateElement.style.overflow = 'visible'
-      certificateElement.style.overflowX = 'visible'
-      certificateElement.style.overflowY = 'visible'
-      certificateElement.style.maxWidth = '210mm'
-      certificateElement.style.width = '100%'
-
-      // Remove overflow from all table containers and ensure proper layout
-      const tableContainers = certificateElement.querySelectorAll('div[style*="overflow"]')
-      const originalTableContainerStyles: Array<{ element: HTMLElement; overflow: string; overflowX: string; overflowY: string }> = []
-      tableContainers.forEach((container) => {
-        const el = container as HTMLElement
-        const computedStyle = window.getComputedStyle(el)
-        if (computedStyle.overflow !== 'visible' || computedStyle.overflowX !== 'visible') {
-          originalTableContainerStyles.push({
-            element: el,
-            overflow: el.style.overflow || '',
-            overflowX: el.style.overflowX || '',
-            overflowY: el.style.overflowY || '',
-          })
-          el.style.overflow = 'visible'
-          el.style.overflowX = 'visible'
-          el.style.overflowY = 'visible'
-        }
-      })
-
-      // Ensure tables have proper width and layout
-      const tables = certificateElement.querySelectorAll('table')
-      tables.forEach((table) => {
-        const tableEl = table as HTMLElement
-        tableEl.style.width = '100%'
-        tableEl.style.tableLayout = 'fixed'
-        tableEl.style.minWidth = '100%'
-        tableEl.style.maxWidth = '100%'
-      })
-
-      // Wait for images to load
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Ensure images are loaded
-      const images = certificateElement.getElementsByTagName("img")
-      const imagePromises = Array.from(images).map((img: HTMLImageElement) => {
-        if (img.complete) {
-          return Promise.resolve()
-        }
-        return new Promise((resolve) => {
-          img.onload = resolve
-          img.onerror = resolve
-          setTimeout(resolve, 2000)
-        })
-      })
-      await Promise.all(imagePromises)
-
-      // Get actual content dimensions
-      const contentWidth = Math.max(
-        certificateElement.scrollWidth,
-        certificateElement.offsetWidth,
-        certificateElement.clientWidth
-      )
-      const contentHeight = Math.max(
-        certificateElement.scrollHeight,
-        certificateElement.offsetHeight,
-        certificateElement.clientHeight
-      )
-
-      // Create canvas from certificate content with proper dimensions
-      const canvas = await html2canvas(certificateElement, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#ffffff",
-        width: contentWidth,
-        height: contentHeight,
-        x: 0,
-        y: 0,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: contentWidth,
-        windowHeight: contentHeight,
-        logging: false,
-        removeContainer: false,
-        ignoreElements: (element) => {
-          // Ignore buttons and other non-content elements
-          return element.classList.contains('no-print') || 
-                 element.tagName === 'BUTTON' ||
-                 (element as HTMLElement).style.display === 'none'
-        },
-        onclone: (clonedDoc) => {
-          // Ensure cloned document also has proper styles
-          const clonedElement = clonedDoc.getElementById("certificate-content")
-          if (clonedElement) {
-            const clonedEl = clonedElement as HTMLElement
-            clonedEl.style.overflow = 'visible'
-            clonedEl.style.overflowX = 'visible'
-            clonedEl.style.overflowY = 'visible'
-            clonedEl.style.maxWidth = '210mm'
-            clonedEl.style.width = '100%'
-
-            // Fix table containers in cloned document
-            const clonedTableContainers = clonedElement.querySelectorAll('div[style*="overflow"]')
-            clonedTableContainers.forEach((container) => {
-              const el = container as HTMLElement
-              el.style.overflow = 'visible'
-              el.style.overflowX = 'visible'
-              el.style.overflowY = 'visible'
-            })
-
-            // Fix tables in cloned document
-            const clonedTables = clonedElement.querySelectorAll('table')
-            clonedTables.forEach((table) => {
-              const tableEl = table as HTMLElement
-              tableEl.style.width = '100%'
-              tableEl.style.tableLayout = 'fixed'
-              tableEl.style.minWidth = '100%'
-              tableEl.style.maxWidth = '100%'
-            })
-          }
-        },
-      })
-
-      // Create PDF
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-        compress: true,
-      })
-
-      // Restore original styles
-      certificateElement.style.overflow = originalOverflow
-      certificateElement.style.overflowX = originalOverflowX
-      certificateElement.style.overflowY = originalOverflowY
-      certificateElement.style.maxWidth = originalMaxWidth
-      certificateElement.style.width = originalWidth
-
-      // Restore table container styles
-      originalTableContainerStyles.forEach(({ element, overflow, overflowX, overflowY }) => {
-        element.style.overflow = overflow
-        element.style.overflowX = overflowX
-        element.style.overflowY = overflowY
-      })
-
-      // A4 dimensions in mm
-      const pageWidth = 210
-      const pageHeight = 297
-      const margin = 10 // Standard margin
-
-      // Calculate dimensions to fit A4 with margins
-      const availableWidth = pageWidth - 2 * margin
-      const availableHeight = pageHeight - 2 * margin
-      
-      // Convert canvas dimensions to mm
-      // html2canvas uses device pixel ratio, so we need to account for scale
-      // At scale 2, canvas is 2x the element size
-      // Assuming 96 DPI: 1px = 0.264583mm (25.4mm / 96px)
-      const pxToMm = 25.4 / 96
-      const canvasWidthMm = (canvas.width / 2) * pxToMm
-      const canvasHeightMm = (canvas.height / 2) * pxToMm
-      
-      // Calculate scale to fit width (maintain aspect ratio)
-      // We want the content to fit within available width
-      const scaleX = availableWidth / canvasWidthMm
-      const scaleY = availableHeight / canvasHeightMm
-      const scale = Math.min(scaleX, scaleY) // Use smaller scale to fit both dimensions
-      
-      // Final image dimensions in mm
-      const imgWidth = canvasWidthMm * scale
-      const imgHeight = canvasHeightMm * scale
-
-      // Calculate pages needed
-      const pagesNeeded = Math.ceil(imgHeight / availableHeight)
-
-      let sourceY = 0
-
-      // Add pages
-      for (let i = 0; i < pagesNeeded; i++) {
-        if (i > 0) {
-          pdf.addPage()
-        }
-
-        // Calculate content height for this page (in mm)
-        const remainingHeight = imgHeight - sourceY
-        const pageContentHeight = Math.min(availableHeight, remainingHeight)
-
-        // Convert mm back to canvas pixels for cropping
-        // sourceY is in mm (scaled), we need to find the pixel position in original canvas
-        // imgHeight is scaled canvas height in mm, canvas.height is in pixels at scale 2
-        const sourceYRatio = sourceY / imgHeight // Ratio of where we are in the scaled image
-        const pageContentHeightRatio = pageContentHeight / imgHeight // Ratio of page height
-        
-        const sourceYInCanvasPx = canvas.height * sourceYRatio
-        const pageContentHeightInCanvasPx = canvas.height * pageContentHeightRatio
-
-        // Create temporary canvas for this page
-        const pageCanvas = document.createElement("canvas")
-        pageCanvas.width = canvas.width
-        pageCanvas.height = Math.ceil(pageContentHeightInCanvasPx)
-        const pageCtx = pageCanvas.getContext("2d")
-
-        if (pageCtx) {
-          // Draw portion of original canvas
-          pageCtx.drawImage(
-            canvas,
-            0,
-            sourceYInCanvasPx,
-            canvas.width,
-            pageContentHeightInCanvasPx,
-            0,
-            0,
-            canvas.width,
-            pageContentHeightInCanvasPx
-          )
-
-          const pageImgData = pageCanvas.toDataURL("image/png", 1.0)
-          
-          // Calculate dimensions for PDF (in mm)
-          // The page image should be scaled the same as the full image
-          const pageImgWidthMM = imgWidth
-          const pageImgHeightMM = pageContentHeight
-
-          // Center horizontally if content is narrower than page
-          const xPosition = margin + (availableWidth - pageImgWidthMM) / 2
-          const yPosition = margin
-
-          pdf.addImage(
-            pageImgData,
-            "PNG",
-            xPosition,
-            yPosition,
-            pageImgWidthMM,
-            Math.min(pageImgHeightMM, availableHeight)
-          )
-        }
-
-        sourceY += pageContentHeight
-      }
-
-      // Generate filename
-      const currentDate = new Date().toISOString().split("T")[0]
-      const teacherName = teacherInfo
-        ? `${teacherInfo.fname}_${teacherInfo.lname}`.replace(/\s+/g, "_")
-        : user?.name?.replace(/\s+/g, "_") || "Faculty"
-      const filename = `Publication_Certificate_${teacherName}_${currentDate}.pdf`
-
-      // Save PDF
-      pdf.save(filename)
-
-      toast({
-        title: "Success",
-        description: "PDF certificate downloaded successfully!",
-        duration: 3000,
-      })
-    } catch (error: any) {
-      console.error("Error generating PDF:", error)
-      toast({
-        title: "Error",
-        description: error.message || "Failed to generate PDF. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsGeneratingPDF(false)
-    }
-  }
-  * ============================================ */
 
   const handleSelectPublication = (publicationId: string, checked: boolean) => {
     if (checked) {
@@ -1194,8 +890,11 @@ export default function PublicationCertificate() {
 
               {/* Supervisor Information */}
               <div className="mb-4 sm:mb-6">
-                <p className="text-sm sm:text-base md:text-lg font-medium text-gray-700">
-                  <span className="font-semibold">Name of Ph.D. Supervisor:</span> {getSalutation()}
+                <p className="text-sm sm:text-base md:text-lg text-gray-700">
+                  <span className="font-bold text-gray-900">Name of Ph.D. Supervisor:</span>{" "}
+                  <span className="font-bold text-md sm:text-xl md:text-md text-blue-700 ml-2">
+                    {getNameWithSalutation()}
+                  </span>
                 </p>
               </div>
 
@@ -1210,11 +909,11 @@ export default function PublicationCertificate() {
                     <table className="w-full border-collapse border border-gray-300">
                       <thead>
                         <tr>
-                          <th style={{ width: "4%" }}>Sr No.</th>
+                          <th style={{ width: "6%" }}>Sr No.</th>
                           <th style={{ width: "11%" }}>Author(s)</th>
                           <th style={{ width: "16%" }}>Paper Title</th>
                           <th style={{ width: "16%" }}>Journal Name & ISSN & Volume No.</th>
-                          <th style={{ width: "7%" }}>Published Year</th>
+                          <th style={{ width: "12%" }}>Published Year</th>
                           <th style={{ width: "11%" }}>DOI</th>
                           <th style={{ width: "18%" }}>Index in Scopus/UGC CARE/Clarivate</th>
                           <th style={{ width: "16%" }}>Document Submitted?</th>
@@ -1265,7 +964,7 @@ export default function PublicationCertificate() {
                     <table className="w-full border-collapse border border-gray-300">
                       <thead>
                         <tr>
-                          <th style={{ width: "4%" }}>Sr No.</th>
+                          <th style={{ width: "6%" }}>Sr No.</th>
                           <th style={{ width: "14%" }}>Authors</th>
                           <th style={{ width: "18%" }}>Paper Title</th>
                           <th style={{ width: "16%" }}>Paper Theme</th>
@@ -1308,9 +1007,9 @@ export default function PublicationCertificate() {
               </div>
 
               {/* Signature */}
-              <div className="flex justify-end">
+              <div className="flex justify-end mt-8 sm:mt-12">
                 <div className="text-right">
-                  <p className="text-xs sm:text-sm font-medium text-gray-700 mb-6 sm:mb-8">{getSalutation()}</p>
+                  <p className="text-xs sm:text-sm font-medium text-gray-700 mb-12 sm:mb-16">{getNameWithSalutation()}</p>
                   <div className="border-b border-gray-400 w-32 sm:w-48 mb-2"></div>
                   <p className="text-xs text-gray-500">Signature</p>
                 </div>

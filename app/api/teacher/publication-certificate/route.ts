@@ -31,6 +31,7 @@ interface PaperPresented {
 }
 
 interface TeacherInfo {
+  abbri:string
   fname: string
   mname: string
   lname: string
@@ -45,18 +46,9 @@ interface CertificateData {
 
 function getSalutation(teacherInfo: TeacherInfo | null, userName?: string): string {
   if (teacherInfo) {
-    const parts = [teacherInfo.fname, teacherInfo.mname, teacherInfo.lname].filter(Boolean)
-    if (parts.length > 0) {
-      return `Dr. ${parts.join(" ")}`
-    }
+    return `${teacherInfo.abbri} ${teacherInfo.fname} ${teacherInfo.mname} ${teacherInfo.lname}`
   }
-  if (userName) {
-    if (userName.toLowerCase().includes("dr.") || userName.toLowerCase().includes("prof.")) {
-      return userName
-    }
-    return `Dr. ${userName}`
-  }
-  return "Dr. FirstName MiddleName LastName"
+  return "Abbreviation FirstName MiddleName LastName"
 }
 
 function generateCertificateHTML(data: CertificateData): string {
@@ -64,9 +56,7 @@ function generateCertificateHTML(data: CertificateData): string {
   const currentDate = new Date().toLocaleDateString("en-GB")
 
   // Get base URL for images - use absolute URL for Puppeteer
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
-                  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
-                  'http://localhost:3000'
+  const baseUrl = 'http://localhost:3000'
   const logoUrl = `${baseUrl}/images/msu-logo.png`
 
   return `
@@ -320,7 +310,7 @@ function generateCertificateHTML(data: CertificateData): string {
       </div>
 
       <h1 class="text-2xl font-bold text-gray-800 mb-2">
-        MAHARAJA SAIYAJIRAO UNIVERSITY OF BARODA
+        The Maharaja Sayajirao University of Baroda
       </h1>
 
       <h2 class="text-xl font-semibold text-blue-600 mb-4 border-b-2 pb-2">
@@ -330,8 +320,9 @@ function generateCertificateHTML(data: CertificateData): string {
 
     <!-- Supervisor Information -->
     <div class="mb-4">
-      <p class="text-base font-medium text-gray-700">
-        <span class="font-semibold">Name of Ph.D. Supervisor:</span> ${salutation}
+      <p class="text-base text-gray-700">
+        <span class="font-bold text-gray-900">Name of Ph.D. Supervisor:</span> 
+        <span class="font-bold text-xl text-blue-700" style="margin-left: 8px;">${salutation}</span>
       </p>
     </div>
 
@@ -429,9 +420,9 @@ function generateCertificateHTML(data: CertificateData): string {
     </div>
 
     <!-- Signature -->
-    <div class="flex justify-end">
+    <div class="flex justify-end" style="margin-top: 48px;">
       <div class="text-right">
-        <p class="text-sm font-medium text-gray-700 mb-6">${salutation}</p>
+        <p class="text-sm font-medium text-gray-700" style="margin-bottom: 64px;">${salutation}</p>
         <div style="border-bottom: 1px solid #9ca3af; width: 192px; margin-bottom: 8px;"></div>
         <p class="text-xs text-gray-500">Signature</p>
       </div>
