@@ -360,12 +360,6 @@ export default function PublicationsPage() {
     }
   }, [searchParams])
 
-  // Show loading skeleton during initial data fetch
-  // ✅ All hooks must be called before any conditional returns (Rules of Hooks)
-  if (isInitialLoading) {
-    return <TableLoadingSkeleton />
-  }
-
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
     setActiveTab(value)
@@ -373,7 +367,6 @@ export default function PublicationsPage() {
     url.searchParams.set("tab", value)
     window.history.pushState({}, "", url.toString())
   }
-
 
   const handleDelete = (sectionId: string, itemId: number, itemName: string) => {
     setDeleteConfirm({ sectionId, itemId, itemName })
@@ -673,7 +666,7 @@ export default function PublicationsPage() {
       return columns
     }
 
-  // Memoize columns for all sections at once (outside of map to follow Rules of Hooks)
+  // Memoize columns for all sections at once (BEFORE conditional return to follow Rules of Hooks)
   const columnsBySection = useMemo(() => {
     const columnsMap: Record<string, ColumnDef<any>[]> = {}
     sections.forEach((section) => {
@@ -689,6 +682,12 @@ export default function PublicationsPage() {
     })
     return columnsMap
   }, [sections, resPubLevelOptions, bookTypeOptions, journalAuthorTypeOptions, handleView, handleEdit, handleDelete])
+
+  // Show loading skeleton during initial data fetch
+  // ✅ All hooks must be called before any conditional returns (Rules of Hooks)
+  if (isInitialLoading) {
+    return <TableLoadingSkeleton />
+  }
 
   // Keep renderTableData for backward compatibility (not used in new table but kept for reference)
   const renderTableData = (section: any, item: any) => {

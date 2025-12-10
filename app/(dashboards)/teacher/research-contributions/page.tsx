@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
+import type { ColumnDef } from "@tanstack/react-table"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import {
   Plus,
@@ -616,37 +618,50 @@ export default function ResearchContributionsPage() {
     setSelectedFiles(files)
   }
 
-  // Delete handlers using mutations
-  const deleteHandlers: Record<SectionId, (id: number) => void> = {
-    patents: (id) => deletePatent.mutate(id),
-    policy: (id) => deletePolicy.mutate(id),
-    econtent: (id) => deleteEContent.mutate(id),
-    consultancy: (id) => deleteConsultancy.mutate(id),
-    collaborations: (id) => deleteCollaboration.mutate(id),
-    visits: (id) => deleteVisit.mutate(id),
-    financial: (id) => deleteFinancial.mutate(id),
-    jrfSrf: (id) => deleteJrfSrf.mutate(id),
-    phd: (id) => deletePhd.mutate(id),
-    copyrights: (id) => deleteCopyright.mutate(id),
-  }
-
-  const handleDelete = (sectionId: string, itemId: number) => {
+  const handleDelete = useCallback((sectionId: string, itemId: number) => {
     const section = sectionId as SectionId
-    const deleteHandler = deleteHandlers[section]
-    if (deleteHandler) {
-      deleteHandler(itemId)
+    switch (section) {
+      case "patents":
+        deletePatent.mutate(itemId)
+        break
+      case "policy":
+        deletePolicy.mutate(itemId)
+        break
+      case "econtent":
+        deleteEContent.mutate(itemId)
+        break
+      case "consultancy":
+        deleteConsultancy.mutate(itemId)
+        break
+      case "collaborations":
+        deleteCollaboration.mutate(itemId)
+        break
+      case "visits":
+        deleteVisit.mutate(itemId)
+        break
+      case "financial":
+        deleteFinancial.mutate(itemId)
+        break
+      case "jrfSrf":
+        deleteJrfSrf.mutate(itemId)
+        break
+      case "phd":
+        deletePhd.mutate(itemId)
+        break
+      case "copyrights":
+        deleteCopyright.mutate(itemId)
+        break
     }
-  }
+  }, [deletePatent, deletePolicy, deleteEContent, deleteConsultancy, deleteCollaboration, deleteVisit, deleteFinancial, deleteJrfSrf, deletePhd, deleteCopyright])
 
-
-  const handleEdit = (sectionId: string, item: any) => {
+  const handleEdit = useCallback((sectionId: string, item: any) => {
     // Clear any previous document data before opening edit modal
     clearDocumentData()
     clearAutoFillData()
     setEditingItem({ ...item, sectionId })
     setFormData({ ...item })
     setIsEditDialogOpen(true)
-  }
+  }, [clearDocumentData, clearAutoFillData])
 
   // Update handlers using mutations
   const updateHandlers: Record<SectionId, (id: number, data: any) => void> = {
@@ -791,6 +806,422 @@ export default function ResearchContributionsPage() {
   }
 
   // File upload is handled in edit dialog - mutations will update the data automatically
+
+  // Helper function to display N/A for empty/null/undefined values
+  const displayValue = (value: any, fallback: string = "N/A"): string => {
+    if (value === null || value === undefined || value === "") return fallback
+    return String(value)
+  }
+
+  // Helper function to format date to dd/mm/yyyy
+  const formatDate = (dateValue: any): string => {
+    if (!dateValue) return "N/A"
+    
+    try {
+      const date = new Date(dateValue)
+      if (isNaN(date.getTime())) return "N/A"
+      
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      
+      return `${day}/${month}/${year}`
+    } catch {
+      // If it's already a formatted string, try to parse it
+      if (typeof dateValue === 'string') {
+        // Try to parse common date formats
+        const parsed = new Date(dateValue)
+        if (!isNaN(parsed.getTime())) {
+          const day = String(parsed.getDate()).padStart(2, '0')
+          const month = String(parsed.getMonth() + 1).padStart(2, '0')
+          const year = parsed.getFullYear()
+          return `${day}/${month}/${year}`
+        }
+        // If it's already in dd/mm/yyyy format, return as is
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+          return dateValue
+        }
+      }
+      return String(dateValue)
+    }
+  }
+
+  // Create columns for enhanced table - preserves exact same rendering as renderTableData
+  const createColumnsForSection = (section: any, handleEdit: (sectionId: string, item: any) => void, handleDelete: (sectionId: string, itemId: number) => void): ColumnDef<any>[] => {
+    const columns: ColumnDef<any>[] = []
+
+    // Patents columns
+    if (section.id === "patents") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.title)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={title}>{title}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "level", header: "Level", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.level)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "status", header: "Status", enableSorting: true, cell: ({ row }) => {
+          const status = typeof row.original.status === 'string' ? row.original.status : row.original.statusName || row.original.status || 'N/A'
+          const statusValue = displayValue(status)
+          return statusValue === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground px-2 sm:px-4">N/A</span> : <Badge variant={statusValue.toLowerCase() === "granted" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{statusValue}</Badge>
+        } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "Tech_Licence", header: "Transfer of Technology with Licence", enableSorting: true, cell: ({ row }) => {
+          const techLicence = displayValue(row.original.Tech_Licence, "No")
+          return <Badge variant={row.original.Tech_Licence ? "default" : "secondary"} className="text-[10px] sm:text-xs">{techLicence}</Badge>
+        } },
+        { accessorKey: "Earnings_Generate", header: "Earning Generated (Rupees)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">₹ {Number.parseInt(row.original.Earnings_Generate || "0").toLocaleString()}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "PatentApplicationNo", header: "Patent Application/Publication/Grant No.", enableSorting: true, cell: ({ row }) => {
+          const patentNo = displayValue(row.original.PatentApplicationNo)
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={patentNo}>{patentNo}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+      )
+    }
+    // Policy columns
+    else if (section.id === "policy") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.title)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[150px] sm:max-w-none truncate" title={title}>{title}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[150px] sm:max-w-none truncate" } },
+        { accessorKey: "level", header: "Level", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.level)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "organisation", header: "Organisation", enableSorting: true, cell: ({ row }) => {
+          const org = displayValue(row.original.organisation)
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={org}>{org}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // E-Content columns
+    else if (section.id === "econtent") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.title)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={title}>{title}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "e_content_type_name", header: "Type of E-Content Platform", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.e_content_type_name)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "Brief_Details", header: "Brief Details", enableSorting: true, cell: ({ row }) => {
+          const details = displayValue(row.original.Brief_Details)
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={details}>{details}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "Quadrant", header: "Quadrant", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.Quadrant)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "Publishing_date", header: "Publishing Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.Publishing_date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "Publishing_Authorities", header: "Publishing Authorities", enableSorting: true, cell: ({ row }) => {
+          const authorities = displayValue(row.original.Publishing_Authorities)
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={authorities}>{authorities}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "link", header: "Link", enableSorting: true, cell: ({ row }) => {
+          const link = row.original.link
+          return link ? <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs sm:text-sm px-2 sm:px-4">Link</a> : <span className="text-xs sm:text-sm text-muted-foreground px-2 sm:px-4">N/A</span>
+        } },
+        { accessorKey: "type_econtent_name", header: "Type of E Content", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.type_econtent_name)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Consultancy columns
+    else if (section.id === "consultancy") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.title || row.original.name)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={title}>{title}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "collaboratingInstitute", header: "Collaborating Institute / Industry", enableSorting: true, cell: ({ row }) => {
+          const inst = displayValue(row.original.collaboratingInstitute || row.original.collaborating_inst)
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={inst}>{inst}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "address", header: "Address", enableSorting: true, cell: ({ row }) => {
+          const addr = displayValue(row.original.address)
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={addr}>{addr}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "startDate", header: "Start Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.startDate || row.original.Start_Date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "duration", header: "Duration(in Months)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.duration ? `${row.original.duration} months` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "amount", header: "Amount(Rs.)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.amount ? `₹ ${Number(row.original.amount).toLocaleString()}` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "detailsOutcome", header: "Details / Outcome", enableSorting: true, cell: ({ row }) => {
+          const outcome = displayValue(row.original.detailsOutcome || row.original.outcome, "-")
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={outcome}>{outcome}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+      )
+    }
+    // Collaborations columns
+    else if (section.id === "collaborations") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "category", header: "Category", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.category)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "collaboratingInstitute", header: "Collaborating Institute", enableSorting: true, cell: ({ row }) => {
+          const inst = displayValue(row.original.collaboratingInstitute)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={inst}>{inst}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "nameOfCollaborator", header: "Name of Collaborator", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.nameOfCollaborator || row.original.collab_name, "-")
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "qsTheRanking", header: "QS/THE Ranking", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.qsTheRanking || row.original.collab_rank, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "address", header: "Address", enableSorting: true, cell: ({ row }) => {
+          const addr = displayValue(row.original.address, "-")
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={addr}>{addr}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "details", header: "Details", enableSorting: true, cell: ({ row }) => {
+          const details = displayValue(row.original.details, "-")
+          return <div className="max-w-[80px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={details}>{details}</div>
+        }, meta: { className: "max-w-[80px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "collaborationOutcome", header: "Collaboration Outcome", enableSorting: true, cell: ({ row }) => {
+          const outcome = displayValue(row.original.collaborationOutcome, "-")
+          return <div className="max-w-[80px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={outcome}>{outcome}</div>
+        }, meta: { className: "max-w-[80px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "status", header: "Status", enableSorting: true, cell: ({ row }) => {
+          const status = displayValue(row.original.status, "-")
+          return status === "N/A" || status === "-" ? <span className="text-xs sm:text-sm text-muted-foreground px-2 sm:px-4">N/A</span> : <Badge variant={status === "Active" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{status}</Badge>
+        } },
+        { accessorKey: "startingDate", header: "Starting Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.startingDate) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "duration", header: "Duration(months)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.duration ? `${row.original.duration} months` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "levelName", header: "Level", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.levelName, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "noOfBeneficiary", header: "No. of Beneficiary", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.noOfBeneficiary || row.original.beneficiary_num, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "mouSigned", header: "MOU Signed?", enableSorting: true, cell: ({ row }) => {
+          const mou = displayValue(row.original.mouSigned, "No")
+          return <Badge variant={row.original.mouSigned === "Yes" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{mou}</Badge>
+        } },
+        { accessorKey: "signingDate", header: "Signing Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.signingDate) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Visits columns
+    else if (section.id === "visits") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "instituteVisited", header: "Institute/Industry Visited", enableSorting: true, cell: ({ row }) => {
+          const inst = displayValue(row.original.instituteVisited || row.original.Institute_visited, "-")
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={inst}>{inst}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "durationOfVisit", header: "Duration of Visit(days)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.durationOfVisit || row.original.duration ? `${row.original.durationOfVisit || row.original.duration} days` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "roleName", header: "Role", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.roleName, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "sponsoredBy", header: "Sponsored By", enableSorting: true, cell: ({ row }) => {
+          const sponsor = displayValue(row.original.sponsoredBy || row.original.Sponsored_by, "-")
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={sponsor}>{sponsor}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "remarks", header: "Remarks", enableSorting: true, cell: ({ row }) => {
+          const remarks = displayValue(row.original.remarks, "-")
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={remarks}>{remarks}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Financial columns
+    else if (section.id === "financial") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "nameOfSupport", header: "Name Of Support", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.nameOfSupport || row.original.name, "-")
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "typeName", header: "Type", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.typeName, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "supportingAgency", header: "Supporting Agency", enableSorting: true, cell: ({ row }) => {
+          const agency = displayValue(row.original.supportingAgency || row.original.support, "-")
+          return <div className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" title={agency}>{agency}</div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate" } },
+        { accessorKey: "grantReceived", header: "Grant Received", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.grantReceived || row.original.grant_received ? `₹ ${Number(row.original.grantReceived || row.original.grant_received).toLocaleString()}` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "detailsOfEvent", header: "Details Of Event", enableSorting: true, cell: ({ row }) => {
+          const details = displayValue(row.original.detailsOfEvent || row.original.details, "-")
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={details}>{details}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "purposeOfGrant", header: "Purpose Of Grant", enableSorting: true, cell: ({ row }) => {
+          const purpose = displayValue(row.original.purposeOfGrant || row.original.purpose, "-")
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={purpose}>{purpose}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // JRF/SRF columns
+    else if (section.id === "jrfSrf") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "nameOfFellow", header: "Name Of Fellow", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.nameOfFellow || row.original.name, "-")
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "typeName", header: "Type", enableSorting: true, cell: ({ row }) => <Badge variant="outline" className="text-[10px] sm:text-xs">{displayValue(row.original.typeName, "-")}</Badge> },
+        { accessorKey: "projectTitle", header: "Project Title", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.projectTitle || row.original.title, "-")
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={title}>{title}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "duration", header: "Duration [in months]", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.duration ? `${row.original.duration} months` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "monthlyStipend", header: "Monthly Stipend", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{row.original.monthlyStipend || row.original.stipend ? `₹ ${Number(row.original.monthlyStipend || row.original.stipend).toLocaleString()}` : "N/A"}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // PhD columns
+    else if (section.id === "phd") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "regNo", header: "Reg No", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.regNo || row.original.regno, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "nameOfStudent", header: "Name of Student", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.nameOfStudent || row.original.name, "-")
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "dateOfRegistration", header: "Date of Registration", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.dateOfRegistration || row.original.start_date) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "topic", header: "Topic", enableSorting: true, cell: ({ row }) => {
+          const topic = displayValue(row.original.topic, "-")
+          return <div className="max-w-[100px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={topic}>{topic}</div>
+        }, meta: { className: "max-w-[100px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "statusName", header: "Status", enableSorting: true, cell: ({ row }) => <Badge variant="outline" className="text-[10px] sm:text-xs">{displayValue(row.original.statusName, "-")}</Badge> },
+        { accessorKey: "yearOfCompletion", header: "Year of Completion", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.yearOfCompletion || row.original.year_of_completion, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Copyrights columns
+    else if (section.id === "copyrights") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.title || row.original.Title, "-")
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={title}>{title}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "referenceNo", header: "Reference No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.referenceNo || row.original.RefNo, "-")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "publicationDate", header: "Publication Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.publicationDate || row.original.PublicationDate) || "N/A"
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "link", header: "Link", enableSorting: true, cell: ({ row }) => {
+          const link = row.original.link || row.original.Link
+          return link ? <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs sm:text-sm px-2 sm:px-4">Link</a> : <span className="text-xs sm:text-sm text-muted-foreground px-2 sm:px-4">N/A</span>
+        } },
+      )
+    }
+
+    // Add Supporting Document column (common for all sections)
+    columns.push({
+      id: "supportingDocument",
+      header: "Supporting Document",
+      enableSorting: false,
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            {item.supportingDocument && item.supportingDocument.length > 0 ? (
+              <>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm" title="View Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                      <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
+                    style={{ display: "flex", flexDirection: "column" }}
+                  >
+                    <DialogHeader className="p-3 sm:p-4 border-b">
+                      <DialogTitle className="text-sm sm:text-base">View Document</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+                      <div className="w-full h-full">
+                        <DocumentViewer
+                          documentUrl={item.supportingDocument[0]}
+                          documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                        />
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Badge variant="outline" className="text-[10px] sm:text-xs">file</Badge>
+              </>
+            ) : (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" title="Upload Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                    <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="w-[95vw] sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-sm sm:text-base">Upload Supporting Documents</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-sm text-muted-foreground">Please edit the item to upload documents</p>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        )
+      },
+    })
+
+    // Add Actions column (common for all sections)
+    columns.push({
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={(e) => {
+                e.stopPropagation()
+                handleEdit(section.id, item)
+              }} 
+              className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+              title="Edit"
+            >
+              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+            <ConfirmDeleteModal
+              itemName={item.title || item.name || "this item"}
+              trigger={<Button variant="ghost" size="sm" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>}
+              onConfirm={() => handleDelete(section.id, item.id)}
+            />
+          </div>
+        )
+      },
+    })
+
+    return columns
+  }
+
+  // Memoize columns for all sections at once (outside of map to follow Rules of Hooks)
+  const columnsBySection = useMemo(() => {
+    const columnsMap: Record<string, ColumnDef<any>[]> = {}
+    sections.forEach((section) => {
+      columnsMap[section.id] = createColumnsForSection(
+        section,
+        handleEdit,
+        handleDelete
+      )
+    })
+    return columnsMap
+  }, [sections, handleEdit, handleDelete])
 
   const renderTableData = (section: any, item: any) => {
     switch (section.id) {
@@ -1438,121 +1869,16 @@ export default function ResearchContributionsPage() {
                 </Button>
               </CardHeader>
               <CardContent className="p-3 sm:p-6">
-                <div className="rounded-md border overflow-x-auto -mx-2 sm:mx-0">
-                  <div className="inline-block min-w-full align-middle">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {section.columns.map((column) => (
-                            <TableHead key={column} className="whitespace-nowrap text-xs sm:text-sm px-2 sm:px-4">
-                              {column}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                    <TableBody>
-                      {loadingStates[section.id as SectionId] ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={section.columns.length}
-                            className="h-24 text-center text-muted-foreground"
-                          >
-                            <div className="flex items-center justify-center gap-2">
-                              <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                              <span className="text-xs sm:text-sm">Loading...</span>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : !data[section.id as keyof typeof data] ||
-                        data[section.id as keyof typeof data].length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={section.columns.length}
-                            className="h-24 text-center text-muted-foreground text-xs sm:text-sm px-2 sm:px-4"
-                          >
-                            No {section.title.toLowerCase()} found. Click "Add {section.title}" to get started.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        data[section.id as keyof typeof data].map((item: any) => (
-                          <TableRow key={item.id}>
-                            {renderTableData(section, item)}
-                            <TableCell className="px-2 sm:px-4">
-                              <div className="flex items-center gap-1 sm:gap-2">
-                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
-                                  <>
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" title="View Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
-                                          <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent
-                                        className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
-                                        style={{ display: "flex", flexDirection: "column" }}
-                                      >
-                                        <DialogHeader className="p-3 sm:p-4 border-b">
-                                          <DialogTitle className="text-sm sm:text-base">View Document</DialogTitle>
-                                        </DialogHeader>
-
-                                        {/* Scrollable Content */}
-                                        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
-                                          <div className="w-full h-full">
-                                            <DocumentViewer
-                                              documentUrl={item.supportingDocument[0]}
-                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
-                                            />
-                                          </div>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-
-                                    <Badge variant="outline" className="text-[10px] sm:text-xs">
-                                      file
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" title="Upload Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
-                                        <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="w-[95vw] sm:max-w-md">
-                                      <DialogHeader>
-                                        <DialogTitle className="text-sm sm:text-base">Upload Supporting Documents</DialogTitle>
-                                      </DialogHeader>
-                                      <p className="text-sm text-muted-foreground">Please edit the item to upload documents</p>
-                                    </DialogContent>
-                                  </Dialog>
-                                )}
-                              </div>
-                            </TableCell>
-
-
-
-                            <TableCell className="px-2 sm:px-4">
-                              <div className="flex items-center gap-1 sm:gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
-                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-
-                                <ConfirmDeleteModal
-                                  itemName={item.title}
-                                  trigger={<Button variant="ghost" size="sm" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
-                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>}
-                                  onConfirm={() => handleDelete(section.id, item.id)}
-                                />
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                  </div>
-                </div>
+                <EnhancedDataTable
+                  columns={columnsBySection[section.id] || []}
+                  data={data[section.id as keyof typeof data] || []}
+                  loading={loadingStates[section.id as SectionId]}
+                  pageSize={10}
+                  exportable={true}
+                  enableGlobalFilter={true}
+                  emptyMessage={`No ${section.title.toLowerCase()} found. Click "Add ${section.title}" to get started.`}
+                  wrapperClassName="rounded-md border overflow-x-auto -mx-2 sm:mx-0"
+                />
               </CardContent>
             </Card>
           </TabsContent>
