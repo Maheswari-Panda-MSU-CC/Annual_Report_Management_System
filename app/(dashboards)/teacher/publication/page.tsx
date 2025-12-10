@@ -9,12 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { toast } from "@/hooks/use-toast"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useTeacherPublications } from "@/hooks/use-teacher-data"
 import { usePaperMutations, useJournalMutations, useBookMutations } from "@/hooks/use-teacher-mutations"
 import { TableLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
+import type { ColumnDef } from "@tanstack/react-table"
 import {
   Plus,
   Edit,
@@ -419,8 +420,277 @@ export default function PublicationsPage() {
     }
   }
 
+  // Helper function to display N/A for empty/null/undefined values
+  const displayValue = (value: any, fallback: string = "N/A"): string => {
+    if (value === null || value === undefined || value === "") return fallback
+    return String(value)
+  }
 
+  // Create columns for enhanced table - preserves exact same rendering as renderTableData
+  const createColumnsForSection = (section: any, resPubLevelOptions: any[], bookTypeOptions: any[], journalAuthorTypeOptions: any[], handleView: (sectionId: string, itemId: number) => void, handleEdit: (sectionId: string, item: any) => void, handleDelete: (sectionId: string, itemId: number, itemName: string) => void): ColumnDef<any>[] => {
+      const columns: ColumnDef<any>[] = []
 
+      // Journals columns
+      if (section.id === "journals") {
+        columns.push(
+          { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "authors", header: "Author(s)", enableSorting: true, cell: ({ row }) => {
+            const authors = displayValue(row.original.authors)
+            return <div className="max-w-xs text-xs sm:text-sm"><div className="truncate" title={authors}>{authors}</div></div>
+          }, meta: { className: "max-w-xs text-xs sm:text-sm" } },
+          { accessorKey: "noOfAuthors", header: "No. of Authors", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.noOfAuthors)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "authorType", header: "Author Type", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.authorType)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+            const title = displayValue(row.original.title)
+            return <div className="font-medium max-w-xs text-xs sm:text-sm"><div className="truncate" title={title}>{title}</div></div>
+          }, meta: { className: "font-medium max-w-xs text-xs sm:text-sm" } },
+          { accessorKey: "type", header: "Type", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.type)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "issn", header: "ISSN (Without -)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.issn)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "isbn", header: "ISBN (Without -)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.isbn)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "journalBookName", header: "Journal/Book Name", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.journalBookName)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "volumeNo", header: "Volume No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.volumeNo)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "pageNo", header: "Page No. (Range)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm">{displayValue(row.original.pageNo)}</span>, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+            const dateValue = row.original.date ? (isNaN(new Date(row.original.date).getTime()) ? "N/A" : new Date(row.original.date).toLocaleDateString()) : "N/A"
+            return <span className="text-xs sm:text-sm">{dateValue}</span>
+          }, meta: { className: "text-xs sm:text-sm" } },
+          { accessorKey: "level", header: "Level", enableSorting: true, cell: ({ row }) => {
+            const level = displayValue(row.original.level)
+            return level === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={level === "International" ? "default" : "secondary"}>{level}</Badge>
+          } },
+          { accessorKey: "peerReviewed", header: "Peer Reviewed?", enableSorting: true, cell: ({ row }) => {
+            const peerReviewed = displayValue(row.original.peerReviewed)
+            return peerReviewed === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={peerReviewed === "Yes" ? "default" : "secondary"}>{peerReviewed}</Badge>
+          } },
+          { accessorKey: "hIndex", header: "H Index", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.hIndex)}</span> },
+          { accessorKey: "impactFactor", header: "Impact Factor", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.impactFactor)}</span> },
+          { accessorKey: "inScopus", header: "In Scopus?", enableSorting: true, cell: ({ row }) => {
+            const inScopus = displayValue(row.original.inScopus)
+            return inScopus === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={inScopus === "Yes" ? "default" : "secondary"}>{inScopus}</Badge>
+          } },
+          { accessorKey: "inUgcCare", header: "In UGC CARE?", enableSorting: true, cell: ({ row }) => {
+            const inUgcCare = displayValue(row.original.inUgcCare)
+            return inUgcCare === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={inUgcCare === "Yes" ? "default" : "secondary"}>{inUgcCare}</Badge>
+          } },
+          { accessorKey: "inClarivate", header: "In CLARIVATE?", enableSorting: true, cell: ({ row }) => {
+            const inClarivate = displayValue(row.original.inClarivate)
+            return inClarivate === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={inClarivate === "Yes" ? "default" : "secondary"}>{inClarivate}</Badge>
+          } },
+          { accessorKey: "inOldUgcList", header: "In Old UGC List?", enableSorting: true, cell: ({ row }) => {
+            const inOldUgcList = displayValue(row.original.inOldUgcList)
+            return inOldUgcList === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={inOldUgcList === "Yes" ? "default" : "secondary"}>{inOldUgcList}</Badge>
+          } },
+          { accessorKey: "chargesPaid", header: "Charges Paid?", enableSorting: true, cell: ({ row }) => {
+            const chargesPaid = displayValue(row.original.chargesPaid)
+            return chargesPaid === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={chargesPaid === "Yes" ? "destructive" : "default"}>{chargesPaid}</Badge>
+          } },
+        )
+      }
+      // Books columns
+      else if (section.id === "books") {
+        columns.push(
+          { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.srNo)}</span> },
+          { accessorKey: "authors", header: "Authors", enableSorting: true, cell: ({ row }) => {
+            const authors = displayValue(row.original.authors)
+            return <div className="max-w-xs"><div className="truncate" title={authors}>{authors}</div></div>
+          }, meta: { className: "max-w-xs" } },
+          { accessorKey: "title", header: "Title", enableSorting: true, cell: ({ row }) => {
+            const title = displayValue(row.original.title)
+            return <div className="font-medium max-w-xs"><div className="truncate" title={title}>{title}</div></div>
+          }, meta: { className: "font-medium max-w-xs" } },
+          { accessorKey: "isbn", header: "ISBN (Without -)", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.isbn)}</span> },
+          { accessorKey: "publisherName", header: "Publisher Name", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.publisherName)}</span> },
+          { accessorKey: "publishingDate", header: "Publishing Date", enableSorting: true, cell: ({ row }) => {
+            const dateValue = row.original.publishingDate ? (isNaN(new Date(row.original.publishingDate).getTime()) ? "N/A" : new Date(row.original.publishingDate).toLocaleDateString()) : "N/A"
+            return <span>{dateValue}</span>
+          } },
+          { accessorKey: "publishingPlace", header: "Publishing Place", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.publishingPlace)}</span> },
+          { accessorKey: "chargesPaid", header: "Charges Paid", enableSorting: true, cell: ({ row }) => {
+            const chargesPaid = displayValue(row.original.chargesPaid)
+            return chargesPaid === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={chargesPaid === "Yes" ? "destructive" : "default"}>{chargesPaid}</Badge>
+          } },
+          { accessorKey: "edited", header: "Edited", enableSorting: true, cell: ({ row }) => {
+            const edited = displayValue(row.original.edited)
+            return edited === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={edited === "Yes" ? "default" : "secondary"}>{edited}</Badge>
+          } },
+          { accessorKey: "chapterCount", header: "Chapter Count", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.chapterCount)}</span> },
+          { accessorKey: "publishingLevel", header: "Publishing Level", enableSorting: true, cell: ({ row }) => {
+            const levelName = resPubLevelOptions.find(l => l.id === row.original.publishingLevelId)?.name || ""
+            const displayLevel = displayValue(levelName)
+            return displayLevel === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={displayLevel === "International" ? "default" : "secondary"}>{displayLevel}</Badge>
+          } },
+          { accessorKey: "bookType", header: "Book Type", enableSorting: true, cell: ({ row }) => {
+            const bookType = bookTypeOptions.find(b => b.id === row.original.bookTypeId)?.name || ""
+            return <span>{displayValue(bookType)}</span>
+          } },
+          { accessorKey: "authorType", header: "Author Type", enableSorting: true, cell: ({ row }) => {
+            const authorType = journalAuthorTypeOptions.find(a => a.id === row.original.authorTypeId)?.name || ""
+            return <span>{displayValue(authorType)}</span>
+          } },
+        )
+      }
+      // Papers columns
+      else if (section.id === "papers") {
+        columns.push(
+          { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.srNo)}</span> },
+          { accessorKey: "authors", header: "Authors", enableSorting: true, cell: ({ row }) => {
+            const authors = displayValue(row.original.authors)
+            return <div className="max-w-xs"><div className="truncate" title={authors}>{authors}</div></div>
+          }, meta: { className: "max-w-xs" } },
+          { accessorKey: "presentationLevel", header: "Level", enableSorting: true, cell: ({ row }) => {
+            const level = displayValue(row.original.presentationLevel)
+            return level === "N/A" ? <span className="text-xs sm:text-sm text-muted-foreground">N/A</span> : <Badge variant={level === "International" ? "default" : "secondary"}>{level}</Badge>
+          } },
+          { accessorKey: "themeOfConference", header: "Paper Theme", enableSorting: true, cell: ({ row }) => {
+            const theme = displayValue(row.original.themeOfConference)
+            return <div className="max-w-xs"><div className="truncate" title={theme}>{theme}</div></div>
+          }, meta: { className: "max-w-xs" } },
+          { accessorKey: "modeOfParticipation", header: "Mode of Participation", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.modeOfParticipation)}</span> },
+          { accessorKey: "titleOfPaper", header: "Paper Title", enableSorting: true, cell: ({ row }) => {
+            const title = displayValue(row.original.titleOfPaper)
+            return <div className="font-medium max-w-xs"><div className="truncate" title={title}>{title}</div></div>
+          }, meta: { className: "font-medium max-w-xs" } },
+          { accessorKey: "organizingBody", header: "Organising Body", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.organizingBody)}</span> },
+          { accessorKey: "place", header: "Place", enableSorting: true, cell: ({ row }) => <span>{displayValue(row.original.place)}</span> },
+          { accessorKey: "dateOfPresentation", header: "Date of Publication", enableSorting: true, cell: ({ row }) => {
+            const dateValue = row.original.dateOfPresentation ? (isNaN(new Date(row.original.dateOfPresentation).getTime()) ? "N/A" : new Date(row.original.dateOfPresentation).toLocaleDateString()) : "N/A"
+            return <span>{dateValue}</span>
+          } },
+        )
+      }
+
+      // Add Supporting Document column
+      columns.push({
+        id: "supportingDocument",
+        header: "Supporting Document",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => {
+          const item = row.original
+          return (
+            <div className="flex items-center gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
+              {item.supportingDocument && item.supportingDocument.length > 0 ? (
+                <>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" title="View Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                        <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent
+                      className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
+                      style={{ display: "flex", flexDirection: "column" }}
+                    >
+                      <DialogHeader className="p-3 sm:p-4 border-b">
+                        <DialogTitle className="text-base sm:text-lg">View Document</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+                        <div className="w-full h-full">
+                          <DocumentViewer
+                            documentUrl={item.supportingDocument?.[0] || item.Image || ""}
+                            documentName={item.title || item.titleOfPaper || "Document"}
+                            documentType={(item.supportingDocument?.[0] || item.Image || "").split('.').pop()?.toLowerCase() || 'pdf'}
+                          />
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <Badge variant="outline" className="text-xs hidden sm:inline-flex">
+                    uploded file
+                  </Badge>
+                </>
+              ) : (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm" title="Upload Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                      <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="w-[90vw] sm:w-auto">
+                    <DialogHeader>
+                      <DialogTitle className="text-base sm:text-lg">Upload Supporting Documents</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">Please edit the publication to upload documents</p>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          )
+        },
+      })
+
+      // Add Actions column
+      columns.push({
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => {
+          const item = row.original
+          return (
+            <div className="flex items-center gap-1 sm:gap-2" onClick={(e) => e.stopPropagation()}>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleView(section.id, item.id)
+                }} 
+                className="h-7 w-7 sm:h-8 sm:w-8 p-0" 
+                title="View"
+              >
+                <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleEdit(section.id, item)
+                }} 
+                className="h-7 w-7 sm:h-8 sm:w-8 p-0" 
+                title="Edit"
+              >
+                <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDelete(section.id, item.id, item.title || item.titleOfPaper || "this item")
+                }}
+                className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                title="Delete"
+              >
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              </Button>
+            </div>
+          )
+        },
+      })
+
+      return columns
+    }
+
+  // Memoize columns for all sections at once (outside of map to follow Rules of Hooks)
+  const columnsBySection = useMemo(() => {
+    const columnsMap: Record<string, ColumnDef<any>[]> = {}
+    sections.forEach((section) => {
+      columnsMap[section.id] = createColumnsForSection(
+        section,
+        resPubLevelOptions,
+        bookTypeOptions,
+        journalAuthorTypeOptions,
+        handleView,
+        handleEdit,
+        handleDelete
+      )
+    })
+    return columnsMap
+  }, [sections, resPubLevelOptions, bookTypeOptions, journalAuthorTypeOptions, handleView, handleEdit, handleDelete])
+
+  // Keep renderTableData for backward compatibility (not used in new table but kept for reference)
   const renderTableData = (section: any, item: any) => {
     switch (section.id) {
       case "journals":
@@ -587,108 +857,16 @@ export default function PublicationsPage() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {section.columns.map((column) => (
-                            <TableHead key={column} className="whitespace-nowrap text-xs sm:text-sm">
-                              {column}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {data[section.id as keyof typeof data].length === 0 ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={section.columns.length}
-                              className="h-24 text-center text-muted-foreground"
-                            >
-                              No {section.title.toLowerCase()} found. Click "Add {section.title}" to get started.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          data[section.id as keyof typeof data].map((item: any) => (
-                            <TableRow key={item.id}>
-                              {renderTableData(section, item)}
-                              <TableCell>
-                              <div className="flex items-center gap-1 sm:gap-2">
-                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
-                                  <>
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" title="View Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
-                                          <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent
-                                        className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
-                                        style={{ display: "flex", flexDirection: "column" }}
-                                      >
-                                        <DialogHeader className="p-3 sm:p-4 border-b">
-                                          <DialogTitle className="text-base sm:text-lg">View Document</DialogTitle>
-                                        </DialogHeader>
-
-                                        {/* Scrollable Content */}
-                                        <div className="flex-1 overflow-y-auto p-2 sm:p-4">
-                                          <div className="w-full h-full">
-                                            <DocumentViewer
-                                              documentUrl={item.supportingDocument?.[0] || item.Image || ""}
-                                              documentName={item.title || item.titleOfPaper || "Document"}
-                                              documentType={(item.supportingDocument?.[0] || item.Image || "").split('.').pop()?.toLowerCase() || 'pdf'}
-                                            />
-                                          </div>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-
-                                    <Badge variant="outline" className="text-xs hidden sm:inline-flex">
-                                      uploded file
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" title="Upload Document" className="h-7 w-7 sm:h-8 sm:w-8 p-0">
-                                        <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="w-[90vw] sm:w-auto">
-                                      <DialogHeader>
-                                        <DialogTitle className="text-base sm:text-lg">Upload Supporting Documents</DialogTitle>
-                                      </DialogHeader>
-                                      <p className="text-sm text-muted-foreground">Please edit the publication to upload documents</p>
-                                    </DialogContent>
-                                  </Dialog>
-                                )}
-                              </div>
-                            </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-1 sm:gap-2">
-                                  <Button variant="ghost" size="sm" onClick={() => handleView(section.id, item.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="View">
-                                    <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                  <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-7 w-7 sm:h-8 sm:w-8 p-0" title="Edit">
-                                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleDelete(section.id, item.id, item.title || item.titleOfPaper || "this item")}
-                                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <EnhancedDataTable
+                    columns={columnsBySection[section.id] || []}
+                    data={data[section.id as keyof typeof data] || []}
+                    loading={isFetching}
+                    pageSize={10}
+                    exportable={true}
+                    enableGlobalFilter={true}
+                    emptyMessage={`No ${section.title.toLowerCase()} found. Click "Add ${section.title}" to get started.`}
+                    wrapperClassName="rounded-md border overflow-x-auto"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
