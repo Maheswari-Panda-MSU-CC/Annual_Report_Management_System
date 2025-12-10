@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
+import { ColumnDef } from "@tanstack/react-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -373,13 +374,13 @@ export default function TalksEventsPage() {
     window.history.pushState({}, "", url.toString())
   }
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = useCallback((files: FileList | null) => {
     setSelectedFiles(files)
-  }
+  }, [])
 
-  const handleDeleteClick = (sectionId: string, itemId: number, itemName: string) => {
+  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string) => {
     setDeleteConfirm({ sectionId, itemId, itemName })
-  }
+  }, [])
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
@@ -415,7 +416,7 @@ export default function TalksEventsPage() {
     }
   }
 
-  const handleEdit = (sectionId: string, item: any) => {
+  const handleEdit = useCallback((sectionId: string, item: any) => {
     setEditingItem({ ...item, sectionId })
     // Map UI format to form format
     let formItem: any = {}
@@ -474,7 +475,7 @@ export default function TalksEventsPage() {
     setFormData(formItem)
     form.reset(formItem)
     setIsEditDialogOpen(true)
-  }
+  }, [form])
 
   // Get form type from section ID for auto-fill
   const getFormTypeFromSectionId = (sectionId: string): string => {
@@ -819,7 +820,7 @@ export default function TalksEventsPage() {
     }
   }
 
-  const handleFileUpload = async (sectionId: string, itemId: number) => {
+  const handleFileUpload = useCallback(async (sectionId: string, itemId: number) => {
     if (!selectedFiles || selectedFiles.length === 0) {
       toast({
         title: "Error",
@@ -934,7 +935,7 @@ export default function TalksEventsPage() {
       // Error toast is handled by mutation and uploadFileToS3
       console.error("Error updating document:", error)
     }
-  }
+  }, [selectedFiles, data, toast, refresherMutations, academicProgramMutations, academicBodiesMutations, committeeMutations, talksMutations])
 
   const handleExtractInfo = async () => {
     // Note: This function is for legacy manual extraction
@@ -981,160 +982,327 @@ export default function TalksEventsPage() {
     }
   }
 
-  const renderTableData = (section: any, item: any) => {
-    switch (section.id) {
-      case "refresher":
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.name}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{item.courseType}</Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.startDate}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.endDate}</span>
-              </div>
-            </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.organizingUniversity}>
-                {item.organizingUniversity}
-              </div>
-            </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.organizingInstitute}>
-                {item.organizingInstitute}
-              </div>
-            </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.organizingDepartment}>
-                {item.organizingDepartment}
-              </div>
-            </TableCell>
-            <TableCell>{item.centre}</TableCell>
-          </>
-        )
-      case "academic-programs":
-        const programmeName = academicProgrammeOptions.find(p => p.id === item.programmeId || p.id === item.programme)?.name || item.programme || "N/A"
-        const participantName = participantTypeOptions.find(p => p.id === item.participated_as || p.id === item.participatedAs)?.name || item.participatedAs || "N/A"
-        const yearName = reportYearsOptions.find(y => y.id === item.year_name || y.id === parseInt(item.year))?.name || item.year || item.year_name || "N/A"
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.name}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{programmeName}</Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.place}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date}</span>
-              </div>
-            </TableCell>
-            <TableCell>{yearName}</TableCell>
-            <TableCell>
-              <Badge variant="secondary">{participantName}</Badge>
-            </TableCell>
-          </>
-        )
-      case "academic-bodies":
-        const academicBodiesYearName = reportYearsOptions.find(y => y.id === item.year_name || y.id === parseInt(item.year))?.name || item.year || item.year_name || "N/A"
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.name || item.courseTitle}</TableCell>
-            <TableCell>{item.acad_body || item.academicBody}</TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.place}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">{item.participated_as || item.participatedAs}</Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.submit_date || item.date}</span>
-              </div>
-            </TableCell>
-            <TableCell>{academicBodiesYearName}</TableCell>
-          </>
-        )
-      case "committees":
-        const levelName = committeeLevelOptions.find(l => l.id === item.levelId || l.id === item.level)?.name || item.level || "N/A"
-        const committeeYearName = reportYearsOptions.find(y => y.id === item.year_name || y.id === parseInt(item.year))?.name || item.year || item.year_name || "N/A"
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.name}</TableCell>
-            <TableCell>{item.committee_name || item.committeeName}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{levelName}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">{item.participated_as || item.participatedAs}</Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.submit_date || item.date}</span>
-              </div>
-            </TableCell>
-            <TableCell>{committeeYearName}</TableCell>
-          </>
-        )
-      case "talks":
-        const talksProgrammeName = talksProgrammeTypeOptions.find(p => p.id === item.programmeId || p.id === item.programme)?.name || item.programme || "N/A"
-        const talksParticipantName = talksParticipantTypeOptions.find(p => p.id === item.participated_as || p.id === item.participatedAs)?.name || item.participatedAs || "N/A"
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium">{item.name}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{talksProgrammeName}</Badge>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.place}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-sm">{item.date || item.talkDate}</span>
-              </div>
-            </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.title || item.titleOfEvent}>
-                {item.title || item.titleOfEvent}
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">{talksParticipantName}</Badge>
-            </TableCell>
-          </>
-        )
-      default:
-        return null
+  // Helper function to display N/A for empty/null/undefined values
+  const displayValue = (value: any, fallback: string = "N/A"): string => {
+    if (value === null || value === undefined || value === "") return fallback
+    return String(value)
+  }
+
+  // Helper function to format date to dd/mm/yyyy
+  const formatDate = (dateValue: any): string => {
+    if (!dateValue) return "N/A"
+    
+    try {
+      const date = new Date(dateValue)
+      if (isNaN(date.getTime())) return "N/A"
+      
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      
+      return `${day}/${month}/${year}`
+    } catch {
+      // If it's already a formatted string, try to parse it
+      if (typeof dateValue === 'string') {
+        // Try to parse common date formats
+        const parsed = new Date(dateValue)
+        if (!isNaN(parsed.getTime())) {
+          const day = String(parsed.getDate()).padStart(2, '0')
+          const month = String(parsed.getMonth() + 1).padStart(2, '0')
+          const year = parsed.getFullYear()
+          return `${day}/${month}/${year}`
+        }
+        // If it's already in dd/mm/yyyy format, return as is
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+          return dateValue
+        }
+      }
+      return String(dateValue)
     }
   }
 
+  // Create columns for enhanced table - preserves exact same rendering as renderTableData
+  const createColumnsForSection = (
+    section: any,
+    handleEdit: (sectionId: string, item: any) => void,
+    handleDelete: (sectionId: string, itemId: number, itemName: string) => void,
+    handleFileSelect: (files: FileList | null) => void,
+    handleFileUpload: (sectionId: string, itemId: number) => Promise<void>
+  ): ColumnDef<any>[] => {
+    const columns: ColumnDef<any>[] = []
+
+    // Refresher columns
+    if (section.id === "refresher") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "name", header: "Name", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.name)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "courseType", header: "Course Type", enableSorting: true, cell: ({ row }) => {
+          const courseType = displayValue(row.original.courseType)
+          return <Badge variant="outline" className="text-[10px] sm:text-xs">{courseType}</Badge>
+        } },
+        { accessorKey: "startDate", header: "Start Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.startDate || row.original.startdate)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "endDate", header: "End Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.endDate || row.original.enddate)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "organizingUniversity", header: "Organizing University", enableSorting: true, cell: ({ row }) => {
+          const university = displayValue(row.original.organizingUniversity || row.original.university)
+          return <div className="max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={university}>{university}</div>
+        }, meta: { className: "max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "organizingInstitute", header: "Organizing Institute", enableSorting: true, cell: ({ row }) => {
+          const institute = displayValue(row.original.organizingInstitute || row.original.institute)
+          return <div className="max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={institute}>{institute}</div>
+        }, meta: { className: "max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "organizingDepartment", header: "Organizing Department", enableSorting: true, cell: ({ row }) => {
+          const department = displayValue(row.original.organizingDepartment || row.original.department)
+          return <div className="max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={department}>{department}</div>
+        }, meta: { className: "max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "centre", header: "Centre", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.centre)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Academic Programs columns
+    else if (section.id === "academic-programs") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "name", header: "Name", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.name)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "programme", header: "Programme", enableSorting: true, cell: ({ row }) => {
+          const programmeName = academicProgrammeOptions.find(p => p.id === row.original.programmeId || p.id === row.original.programme)?.name || row.original.programme || "N/A"
+          return <div className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(programmeName)}</div>
+        } },
+        { accessorKey: "place", header: "Place", enableSorting: true, cell: ({ row }) => {
+          const place = displayValue(row.original.place)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><span>{place}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "year", header: "Year", enableSorting: true, cell: ({ row }) => {
+          const yearName = reportYearsOptions.find(y => y.id === row.original.year_name || y.id === parseInt(row.original.year))?.name || row.original.year || row.original.year_name || "N/A"
+          return <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(yearName)}</span>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "participatedAs", header: "Participated As", enableSorting: true, cell: ({ row }) => {
+          const participantName = participantTypeOptions.find(p => p.id === row.original.participated_as || p.id === row.original.participatedAs)?.name || row.original.participatedAs || "N/A"
+          return <Badge variant="secondary" className="text-[10px] sm:text-xs">{displayValue(participantName)}</Badge>
+        } },
+      )
+    }
+    // Academic Bodies columns
+    else if (section.id === "academic-bodies") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "name", header: "Name", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.name || row.original.courseTitle)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "academicBody", header: "Academic Body", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.acad_body || row.original.academicBody)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "place", header: "Place", enableSorting: true, cell: ({ row }) => {
+          const place = displayValue(row.original.place)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><span>{place}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "participatedAs", header: "Participated As", enableSorting: true, cell: ({ row }) => {
+          const participatedAs = displayValue(row.original.participated_as || row.original.participatedAs)
+          return <Badge variant="secondary" className="text-[10px] sm:text-xs">{participatedAs}</Badge>
+        } },
+        { accessorKey: "submit_date", header: "Submit Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.submit_date || row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "year", header: "Year", enableSorting: true, cell: ({ row }) => {
+          const yearName = reportYearsOptions.find(y => y.id === row.original.year_name || y.id === parseInt(row.original.year))?.name || row.original.year || row.original.year_name || "N/A"
+          return <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(yearName)}</span>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Committees columns
+    else if (section.id === "committees") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "name", header: "Name", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.name)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "committeeName", header: "Committee Name", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.committee_name || row.original.committeeName)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "level", header: "Level", enableSorting: true, cell: ({ row }) => {
+          const levelName = committeeLevelOptions.find(l => l.id === row.original.levelId || l.id === row.original.level)?.name || row.original.level || "N/A"
+          return <Badge variant="outline" className="text-[10px] sm:text-xs">{displayValue(levelName)}</Badge>
+        } },
+        { accessorKey: "participatedAs", header: "Participated As", enableSorting: true, cell: ({ row }) => {
+          const participatedAs = displayValue(row.original.participated_as || row.original.participatedAs)
+          return <Badge variant="secondary" className="text-[10px] sm:text-xs">{participatedAs}</Badge>
+        } },
+        { accessorKey: "submit_date", header: "Submit Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.submit_date || row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "year", header: "Year", enableSorting: true, cell: ({ row }) => {
+          const yearName = reportYearsOptions.find(y => y.id === row.original.year_name || y.id === parseInt(row.original.year))?.name || row.original.year || row.original.year_name || "N/A"
+          return <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(yearName)}</span>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+    // Talks columns
+    else if (section.id === "talks") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "name", header: "Name", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.name)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "programme", header: "Programme", enableSorting: true, cell: ({ row }) => {
+          const programmeName = talksProgrammeTypeOptions.find(p => p.id === row.original.programmeId || p.id === row.original.programme)?.name || row.original.programme || "N/A"
+          return <Badge variant="outline" className="text-[10px] sm:text-xs">{displayValue(programmeName)}</Badge>
+        } },
+        { accessorKey: "place", header: "Place", enableSorting: true, cell: ({ row }) => {
+          const place = displayValue(row.original.place)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><span>{place}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "talkDate", header: "Talk Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date || row.original.talkDate)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "titleOfEvent", header: "Title of Event", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.title || row.original.titleOfEvent)
+          return <div className="max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={title}>{title}</div>
+        }, meta: { className: "max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "participatedAs", header: "Participated As", enableSorting: true, cell: ({ row }) => {
+          const participantName = talksParticipantTypeOptions.find(p => p.id === row.original.participated_as || p.id === row.original.participatedAs)?.name || row.original.participatedAs || "N/A"
+          return <Badge variant="secondary" className="text-[10px] sm:text-xs">{displayValue(participantName)}</Badge>
+        } },
+      )
+    }
+
+    // Add Supporting Document column (common for all sections)
+    columns.push({
+      id: "supportingDocument",
+      header: "Documents",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            {item.supportingDocument && item.supportingDocument.length > 0 ? (
+              <>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm" title="View Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3" onClick={(e) => e.stopPropagation()}>
+                      <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
+                    style={{ display: "flex", flexDirection: "column" }}
+                  >
+                    <DialogHeader className="p-4 border-b">
+                      <DialogTitle>View Document</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <div className="w-full h-full">
+                        <DocumentViewer
+                          documentUrl={item.supportingDocument[0]}
+                          documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                        />
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Badge variant="outline" className="text-xs">
+                  file
+                </Badge>
+              </>
+            ) : (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" title="Upload Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3" onClick={(e) => e.stopPropagation()}>
+                    <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline ml-1">Upload</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[95vw] sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Upload Supporting Documents</DialogTitle>
+                  </DialogHeader>
+                  <FileUpload onFileSelect={handleFileSelect} />
+                  <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
+                    <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
+                    <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto">
+                      Upload Files
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        )
+      },
+    })
+
+    // Add Actions column (common for all sections)
+    columns.push({
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(section.id, item) }} className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
+              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={(e) => { 
+                e.stopPropagation()
+                handleDelete(section.id, item.id, item.name || "this record")
+              }}
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+          </div>
+        )
+      },
+    })
+
+    return columns
+  }
+
+  // Memoize columns for all sections at once (outside of map to follow Rules of Hooks)
+  const columnsBySection = useMemo(() => {
+    const columnsMap: Record<string, ColumnDef<any>[]> = {}
+    sections.forEach((section) => {
+      columnsMap[section.id] = createColumnsForSection(
+        section,
+        handleEdit,
+        handleDeleteClick,
+        handleFileSelect,
+        handleFileUpload
+      )
+    })
+    return columnsMap
+  }, [
+    sections,
+    academicProgrammeOptions,
+    participantTypeOptions,
+    reportYearsOptions,
+    committeeLevelOptions,
+    talksProgrammeTypeOptions,
+    talksParticipantTypeOptions,
+    handleEdit,
+    handleDeleteClick,
+    handleFileSelect,
+    handleFileUpload
+  ])
   // Clear fields handler for DocumentUpload
   const handleClearFields = () => {
     form.reset()
@@ -1308,121 +1476,16 @@ export default function TalksEventsPage() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {section.columns.map((column) => (
-                            <TableHead key={column} className="whitespace-nowrap">
-                              {column}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {loadingStates[section.id as keyof typeof loadingStates ] ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={section.columns.length}
-                              className="h-24 text-center text-muted-foreground"
-                            >
-                              <div className="flex items-center justify-center gap-2">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Loading...
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : !data[section.id as keyof typeof data] ||
-                        data[section.id as keyof typeof data].length === 0 ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={section.columns.length}
-                              className="h-24 text-center text-muted-foreground"
-                            >
-                              No {section.title.toLowerCase()} found. Click "Add {section.title}" to get started.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          data[section.id as keyof typeof data].map((item: any) => (
-                            <TableRow key={item.id}>
-                              {renderTableData(section, item)}
-                              <TableCell>
-                              <div className="flex items-center gap-2">
-                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
-                                  <>
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" title="View Document">
-                                          <FileText className="h-4 w-4" />
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent
-                                        className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden"
-                                        style={{ display: "flex", flexDirection: "column" }}
-                                      >
-                                        <DialogHeader className="p-4 border-b">
-                                          <DialogTitle>View Document</DialogTitle>
-                                        </DialogHeader>
-
-                                        {/* Scrollable Content */}
-                                        <div className="flex-1 overflow-y-auto p-4">
-                                          <div className="w-full h-full">
-                                            <DocumentViewer
-                                              documentUrl={Array.isArray(item.supportingDocument) ? item.supportingDocument[0] : item.supportingDocument}
-                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
-                                            />
-                                          </div>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-
-                                    <Badge variant="outline" className="text-xs">
-                                      file
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" title="Upload Document">
-                                        <Upload className="h-4 w-4" />
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                                      <DialogHeader>
-                                        <DialogTitle>Upload Supporting Documents</DialogTitle>
-                                      </DialogHeader>
-                                      <FileUpload onFileSelect={handleFileSelect} />
-                                      <div className="flex justify-end gap-2 mt-4">
-                                        <Button variant="outline">Cancel</Button>
-                                        <Button onClick={() => handleFileUpload(section.id, item.id)}>
-                                          Upload Files
-                                        </Button>
-                                      </div>
-                                    </DialogContent>
-                                  </Dialog>
-                                )}
-                              </div>
-                            </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)}>
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    onClick={() => handleDeleteClick(section.id, item.id, item.name || "this record")}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <EnhancedDataTable
+                    columns={columnsBySection[section.id] || []}
+                    data={data[section.id as keyof typeof data] || []}
+                    loading={loadingStates[section.id as keyof typeof loadingStates]}
+                    pageSize={10}
+                    exportable={true}
+                    enableGlobalFilter={true}
+                    emptyMessage={`No ${section.title.toLowerCase()} found. Click "Add ${section.title}" to get started.`}
+                    wrapperClassName="rounded-md border overflow-x-auto"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>

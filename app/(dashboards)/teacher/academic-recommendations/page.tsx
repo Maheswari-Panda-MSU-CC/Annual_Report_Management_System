@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -25,6 +24,8 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useTeacherAcademicRecommendations, teacherQueryKeys } from "@/hooks/use-teacher-data"
 import { useQueryClient } from "@tanstack/react-query"
 import { useArticlesMutations, useBooksMutations, useMagazinesMutations, useTechReportsMutations } from "@/hooks/use-teacher-academic-recommendations-mutations"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
+import { ColumnDef } from "@tanstack/react-table"
 import {
   Plus,
   Edit,
@@ -37,7 +38,6 @@ import {
   Calendar,
   Loader2,
 } from "lucide-react"
-import { DocumentViewer } from "@/components/document-viewer"
 import { JournalArticlesForm } from "@/components/forms/JournalArticlesForm"
 import { BooksForm } from "@/components/forms/BooksForm"
 import { MagazinesForm } from "@/components/forms/MagazinesForm"
@@ -150,6 +150,7 @@ function useInvalidateSection() {
     }
   }
 }
+
 
 export default function AcademicRecommendationsPage() {
   const searchParams = useSearchParams()
@@ -303,9 +304,9 @@ export default function AcademicRecommendationsPage() {
     window.history.pushState({}, "", url.toString())
   }
 
-  const handleDeleteClick = (sectionId: string, itemId: number, itemName: string) => {
+  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string) => {
     setDeleteConfirm({ sectionId, itemId, itemName })
-  }
+  }, [])
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
@@ -506,153 +507,329 @@ export default function AcademicRecommendationsPage() {
     }
   }
 
-  const renderTableData = (section: any, item: any) => {
-    switch (section.id) {
-      case "articles":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm">{item.srNo}</TableCell>
-            <TableCell className="font-medium max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.title}>
-                {item.title}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.issn}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.eISSN}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.volume_num}</TableCell>
-            <TableCell className="max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.publisherName}>
-                {item.publisherName}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.type}</TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant="outline" className="text-xs">{item.level}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant={item.peer_reviewed ? "default" : "secondary"} className="text-xs">
-                {item.peer_reviewed ? "Yes" : "No"}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.h_index}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.impact_factor}</TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant={item.in_scopus ? "default" : "secondary"} className="text-xs">{item.in_scopus ? "Yes" : "No"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant={item.in_ugc ? "default" : "secondary"} className="text-xs">{item.in_ugc ? "Yes" : "No"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant={item.in_clarivate ? "default" : "secondary"} className="text-xs">{item.in_clarivate ? "Yes" : "No"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant={item.in_oldUGCList ? "default" : "secondary"} className="text-xs">{item.in_oldUGCList ? "Yes" : "No"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.price}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.currency}</TableCell>
-          </>
-        )
-      case "books":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm">{item.srNo}</TableCell>
-            <TableCell className="font-medium max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.title}>
-                {item.title}
-              </div>
-            </TableCell>
-            <TableCell className="max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.authors}>
-                {item.authors}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.isbn}</TableCell>
-            <TableCell className="max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.publisher_name}>
-                {item.publisher_name}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant="outline" className="text-xs">{item.publishing_level}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.book_type}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.edition}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.volume}</TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.publication_date}</span>
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.ebook || "N/A"}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.digital_media || "N/A"}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.approx_price}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.currency}</TableCell>
-          </>
-        )
-      case "magazines":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm">{item.srNo}</TableCell>
-            <TableCell className="font-medium max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.title}>
-                {item.title}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.mode}</TableCell>
-            <TableCell className="max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.publishing_agency}>
-                {item.publishing_agency}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.volume}</TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.publication_date}</span>
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <Badge variant={item.is_additional_attachment ? "default" : "secondary"} className="text-xs">
-                {item.is_additional_attachment ? "Yes" : "No"}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.additional_attachment || "N/A"}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.no_of_issue_per_yr}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.price}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.currency}</TableCell>
-          </>
-        )
-      case "technical":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm">{item.srNo}</TableCell>
-            <TableCell className="font-medium max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.title}>
-                {item.title}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.subject}</TableCell>
-            <TableCell className="max-w-[150px] sm:max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.publisher_name}>
-                {item.publisher_name}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.publication_date}</span>
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.no_of_issue_per_year}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.price}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.currency}</TableCell>
-          </>
-        )
-      default:
-        return null
-    }
+  // Helper function to display values
+  const displayValue = (value: any, fallback: string = ""): string => {
+    if (value === null || value === undefined || value === "") return fallback
+    return String(value)
   }
+
+  // Create column definitions for each section
+  const createColumnsForSection = useCallback((section: any): ColumnDef<any>[] => {
+    const columns: ColumnDef<any>[] = []
+
+    if (section.id === "articles") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "title", 
+          header: "Journal Name", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const title = displayValue(row.original.title)
+            return (
+              <div className="font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4 truncate" title={title}>{title}</div>
+            )
+          },
+          meta: { className: "font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "issn", header: "ISSN (Without -)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.issn)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "eISSN", header: "E-ISSN (Without -)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.eISSN)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "volume_num", header: "Volume No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.volume_num)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "publisherName", 
+          header: "Publisher's Name", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const publisher = displayValue(row.original.publisherName)
+            return (
+              <div className="max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4 truncate" title={publisher}>{publisher}</div>
+            )
+          },
+          meta: { className: "max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "type", header: "Type", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.type)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "level", 
+          header: "Level", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant="outline" className="text-[10px] sm:text-xs">{displayValue(row.original.level)}</Badge>
+          )
+        },
+        { 
+          accessorKey: "peer_reviewed", 
+          header: "Peer Reviewed?", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant={row.original.peer_reviewed ? "default" : "secondary"} className="text-[10px] sm:text-xs">
+              {row.original.peer_reviewed ? "Yes" : "No"}
+            </Badge>
+          )
+        },
+        { accessorKey: "h_index", header: "H Index", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.h_index)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "impact_factor", header: "Impact Factor", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.impact_factor)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "in_scopus", 
+          header: "In Scopus?", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant={row.original.in_scopus ? "default" : "secondary"} className="text-[10px] sm:text-xs">
+              {row.original.in_scopus ? "Yes" : "No"}
+            </Badge>
+          )
+        },
+        { 
+          accessorKey: "in_ugc", 
+          header: "In UGC CARE?", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant={row.original.in_ugc ? "default" : "secondary"} className="text-[10px] sm:text-xs">
+              {row.original.in_ugc ? "Yes" : "No"}
+            </Badge>
+          )
+        },
+        { 
+          accessorKey: "in_clarivate", 
+          header: "In CLARIVATE?", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant={row.original.in_clarivate ? "default" : "secondary"} className="text-[10px] sm:text-xs">
+              {row.original.in_clarivate ? "Yes" : "No"}
+            </Badge>
+          )
+        },
+        { 
+          accessorKey: "in_oldUGCList", 
+          header: "In Old UGC List?", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant={row.original.in_oldUGCList ? "default" : "secondary"} className="text-[10px] sm:text-xs">
+              {row.original.in_oldUGCList ? "Yes" : "No"}
+            </Badge>
+          )
+        },
+        { accessorKey: "price", header: "Approx. Price", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.price)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "currency", header: "Currency", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.currency)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    } else if (section.id === "books") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "title", 
+          header: "Title", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const title = displayValue(row.original.title)
+            return (
+              <div className="font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4 truncate" title={title}>{title}</div>
+            )
+          },
+          meta: { className: "font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { 
+          accessorKey: "authors", 
+          header: "Author(s)", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const authors = displayValue(row.original.authors)
+            return (
+              <div className="max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4 truncate" title={authors}>{authors}</div>
+            )
+          },
+          meta: { className: "max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "isbn", header: "ISBN (Without -)", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.isbn)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "publisher_name", 
+          header: "Publisher Name", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const publisher = displayValue(row.original.publisher_name)
+            return (
+              <div className="max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4 truncate" title={publisher}>{publisher}</div>
+            )
+          },
+          meta: { className: "max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { 
+          accessorKey: "publishing_level", 
+          header: "Publishing Level", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant="outline" className="text-[10px] sm:text-xs">{displayValue(row.original.publishing_level)}</Badge>
+          )
+        },
+        { accessorKey: "book_type", header: "Book Type", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.book_type)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "edition", header: "Edition", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.edition)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "volume", header: "Volume No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.volume)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "publication_date", 
+          header: "Publication Date", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
+              <Calendar className="h-3 w-3 text-gray-400" />
+              <span>{displayValue(row.original.publication_date)}</span>
+            </div>
+          ),
+          meta: { className: "text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "ebook", header: "EBook", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.ebook, "N/A")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "digital_media", header: "Digital Media", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.digital_media, "N/A")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "approx_price", header: "Approx. Price", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.approx_price)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "currency", header: "Currency", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.currency)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    } else if (section.id === "magazines") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "title", 
+          header: "Title", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const title = displayValue(row.original.title)
+            return (
+              <div className="font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4 truncate" title={title}>{title}</div>
+            )
+          },
+          meta: { className: "font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "mode", header: "Mode", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.mode)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "publishing_agency", 
+          header: "Publishing Agency", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const agency = displayValue(row.original.publishing_agency)
+            return (
+              <div className="max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4 truncate" title={agency}>{agency}</div>
+            )
+          },
+          meta: { className: "max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "volume", header: "Volume No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.volume)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "publication_date", 
+          header: "Publication Date", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
+              <Calendar className="h-3 w-3 text-gray-400" />
+              <span>{displayValue(row.original.publication_date)}</span>
+            </div>
+          ),
+          meta: { className: "text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { 
+          accessorKey: "is_additional_attachment", 
+          header: "Additional Attachment?", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <Badge variant={row.original.is_additional_attachment ? "default" : "secondary"} className="text-[10px] sm:text-xs">
+              {row.original.is_additional_attachment ? "Yes" : "No"}
+            </Badge>
+          )
+        },
+        { accessorKey: "additional_attachment", header: "Additional Attachment", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.additional_attachment, "N/A")}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "no_of_issue_per_yr", header: "No. of Issues per Year", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.no_of_issue_per_yr)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "price", header: "Approx. Price", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.price)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "currency", header: "Currency", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.currency)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    } else if (section.id === "technical") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "title", 
+          header: "Title", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const title = displayValue(row.original.title)
+            return (
+              <div className="font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4 truncate" title={title}>{title}</div>
+            )
+          },
+          meta: { className: "font-medium max-w-[120px] sm:max-w-none text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "subject", header: "Subject", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.subject)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { 
+          accessorKey: "publisher_name", 
+          header: "Publisher's Name", 
+          enableSorting: true, 
+          cell: ({ row }) => {
+            const publisher = displayValue(row.original.publisher_name)
+            return (
+              <div className="max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4 truncate" title={publisher}>{publisher}</div>
+            )
+          },
+          meta: { className: "max-w-[120px] sm:max-w-xs text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { 
+          accessorKey: "publication_date", 
+          header: "Publication Date", 
+          enableSorting: true, 
+          cell: ({ row }) => (
+            <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4">
+              <Calendar className="h-3 w-3 text-gray-400" />
+              <span>{displayValue(row.original.publication_date)}</span>
+            </div>
+          ),
+          meta: { className: "text-xs sm:text-sm px-2 sm:px-4" }
+        },
+        { accessorKey: "no_of_issue_per_year", header: "No. of Issues per Year", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.no_of_issue_per_year)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "price", header: "Approx. Price", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.price)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "currency", header: "Currency", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.currency)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+
+    // Add Actions column for all sections
+    columns.push({
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={(e) => {
+                e.stopPropagation()
+                handleEdit(section.id, item)
+              }} 
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3"
+              title="Edit"
+            >
+              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDeleteClick(section.id, item.id, item.title || "this record")
+              }}
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
+              title="Delete"
+            >
+              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+          </div>
+        )
+      },
+    })
+
+    return columns
+  }, [handleEdit, handleDeleteClick])
+
+  // Memoize columns for all sections
+  const columnsBySection = useMemo(() => {
+    const columnsMap: Record<string, ColumnDef<any>[]> = {}
+    sections.forEach((section) => {
+      columnsMap[section.id] = createColumnsForSection(section)
+    })
+    return columnsMap
+  }, [createColumnsForSection])
 
   // Memoize edit data to prevent infinite loops
   const editDataRef = useRef<any>({})
@@ -846,65 +1023,16 @@ export default function AcademicRecommendationsPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        {section.columns.map((column) => (
-                  <TableHead key={column} className="whitespace-nowrap text-xs sm:text-sm">
-                    {column}
-                  </TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loadingStates[section.id as keyof typeof loadingStates] ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={section.columns.length}
-                            className="h-24 text-center text-sm sm:text-base text-muted-foreground"
-                          >
-                            <div className="flex items-center justify-center gap-2">
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Loading...
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ) : !data[section.id as keyof typeof data] ||
-                        data[section.id as keyof typeof data].length === 0 ? (
-                        <TableRow>
-                          <TableCell
-                            colSpan={section.columns.length}
-                            className="h-24 text-center text-sm sm:text-base text-muted-foreground"
-                          >
-                            No {section.title.toLowerCase()} found. Click "Add {section.title}" to get started.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        data[section.id as keyof typeof data].map((item: any) => (
-                          <TableRow key={item.id}>
-                            {renderTableData(section, item)}
-                            <TableCell className="text-xs sm:text-sm">
-                              <div className="flex items-center gap-1 sm:gap-2">
-                                <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-8 w-8 sm:h-9 sm:w-9 p-0">
-                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteClick(section.id, item.id, item.title || "this record")}
-                                  className="h-8 w-8 sm:h-9 sm:w-9 p-0"
-                                >
-                                  <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                <EnhancedDataTable
+                  columns={columnsBySection[section.id] || []}
+                  data={data[section.id as keyof typeof data] || []}
+                  loading={loadingStates[section.id as keyof typeof loadingStates]}
+                  pageSize={10}
+                  exportable={true}
+                  enableGlobalFilter={true}
+                  emptyMessage={`No ${section.title.toLowerCase()} found. Click "Add ${section.title}" to get started.`}
+                  wrapperClassName="rounded-md border overflow-x-auto"
+                />
               </CardContent>
             </Card>
           </TabsContent>

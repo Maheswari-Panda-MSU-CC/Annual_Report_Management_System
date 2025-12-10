@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
+import { ColumnDef } from "@tanstack/react-table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -266,13 +267,13 @@ export default function AwardsRecognitionPage() {
     window.history.pushState({}, "", url.toString())
   }
 
-  const handleFileSelect = (files: FileList | null) => {
+  const handleFileSelect = useCallback((files: FileList | null) => {
     setSelectedFiles(files)
-  }
+  }, [])
 
-  const handleDeleteClick = (sectionId: string, itemId: number, itemName: string) => {
+  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string) => {
     setDeleteConfirm({ sectionId, itemId, itemName })
-  }
+  }, [])
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
@@ -436,7 +437,7 @@ export default function AwardsRecognitionPage() {
     setIsEditDialogOpen(open)
   }
 
-  const handleEdit = (sectionId: string, item: any) => {
+  const handleEdit = useCallback((sectionId: string, item: any) => {
     setEditingItem({ ...item, sectionId })
     // Map UI format to form format
     let formItem: any = {}
@@ -476,7 +477,7 @@ export default function AwardsRecognitionPage() {
     setFormData(formItem)
     form.reset(formItem)
     setIsEditDialogOpen(true)
-  }
+  }, [form])
 
   // Helper function to upload document to S3 (matches research module pattern)
   const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
@@ -633,7 +634,7 @@ export default function AwardsRecognitionPage() {
     }
   }
 
-  const handleFileUpload = async (sectionId: string, itemId: number) => {
+  const handleFileUpload = useCallback(async (sectionId: string, itemId: number) => {
     if (!selectedFiles || selectedFiles.length === 0) {
       toast({
         title: "Error",
@@ -724,87 +725,246 @@ export default function AwardsRecognitionPage() {
     } catch (error) {
       // Error handling is done in uploadFileToS3 and mutation hook
     }
+  }, [selectedFiles, data, toast, performanceMutations, awardsMutations, extensionMutations])
+
+  // Helper function to display N/A for empty/null/undefined values
+  const displayValue = (value: any, fallback: string = "N/A"): string => {
+    if (value === null || value === undefined || value === "") return fallback
+    return String(value)
   }
 
-  const renderTableData = (section: any, item: any) => {
-    switch (section.id) {
-      case "performance":
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm">{item.titleOfPerformance}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.place}</TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.performanceDate}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge variant="outline">{item.natureOfPerformance}</Badge>
-            </TableCell>
-          </>
-        )
-      case "awards":
-        const awardLevelName = awardFellowLevelOptions.find(l => l.id === item.levelId || l.id === item.level)?.name || item.level || "N/A"
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm">{item.nameOfAwardFellowship || item.name}</TableCell>
-            <TableCell className="max-w-[120px] sm:max-w-xs">
-              <div className="truncate text-xs sm:text-sm" title={item.details}>
-                {item.details}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.nameOfAwardingAgency || item.organization}</TableCell>
-            <TableCell className="max-w-[120px] sm:max-w-xs">
-              <div className="truncate text-xs sm:text-sm" title={item.addressOfAwardingAgency || item.address}>
-                {item.addressOfAwardingAgency || item.address}
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.dateOfAward || item.date_of_award}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">{awardLevelName}</Badge>
-            </TableCell>
-          </>
-        )
-      case "extension":
-        const extensionLevelName = awardFellowLevelOptions.find(l => l.id === item.levelId || l.id === item.level)?.name || item.levelName || item.level || "N/A"
-        const sponserName = sponserNameOptions.find(s => s.id === item.sponseredId || s.id === item.sponsered)?.name || item.sponsoredBy || "N/A"
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm">{item.nameOfActivity || item.name_of_activity}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{item.natureOfActivity || item.names}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">{extensionLevelName}</Badge>
-            </TableCell>
-            <TableCell>{sponserName}</TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.place}</span>
-              </div>
-            </TableCell>
-            <TableCell>
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span className="text-xs sm:text-sm">{item.date}</span>
-              </div>
-            </TableCell>
-          </>
-        )
-      default:
-        return null
+  // Helper function to format date to dd/mm/yyyy
+  const formatDate = (dateValue: any): string => {
+    if (!dateValue) return "N/A"
+    
+    try {
+      const date = new Date(dateValue)
+      if (isNaN(date.getTime())) return "N/A"
+      
+      const day = String(date.getDate()).padStart(2, '0')
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const year = date.getFullYear()
+      
+      return `${day}/${month}/${year}`
+    } catch {
+      // If it's already a formatted string, try to parse it
+      if (typeof dateValue === 'string') {
+        // Try to parse common date formats
+        const parsed = new Date(dateValue)
+        if (!isNaN(parsed.getTime())) {
+          const day = String(parsed.getDate()).padStart(2, '0')
+          const month = String(parsed.getMonth() + 1).padStart(2, '0')
+          const year = parsed.getFullYear()
+          return `${day}/${month}/${year}`
+        }
+        // If it's already in dd/mm/yyyy format, return as is
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) {
+          return dateValue
+        }
+      }
+      return String(dateValue)
     }
   }
+
+  // Create columns for enhanced table - preserves exact same rendering as renderTableData
+  const createColumnsForSection = (
+    section: any, 
+    handleEdit: (sectionId: string, item: any) => void, 
+    handleDelete: (sectionId: string, itemId: number, itemName: string) => void,
+    handleFileSelect: (files: FileList | null) => void,
+    handleFileUpload: (sectionId: string, itemId: number) => Promise<void>
+  ): ColumnDef<any>[] => {
+    const columns: ColumnDef<any>[] = []
+
+    // Performance columns
+    if (section.id === "performance") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "titleOfPerformance", header: "Title of Performance", enableSorting: true, cell: ({ row }) => {
+          const title = displayValue(row.original.titleOfPerformance)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={title}>{title}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "place", header: "Place", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.place)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "performanceDate", header: "Performance Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.performanceDate || row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "natureOfPerformance", header: "Nature of Performance", enableSorting: true, cell: ({ row }) => {
+          const nature = displayValue(row.original.natureOfPerformance || row.original.perf_nature)
+          return <Badge variant="outline" className="text-[10px] sm:text-xs">{nature}</Badge>
+        } },
+      )
+    }
+    // Awards columns
+    else if (section.id === "awards") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "nameOfAwardFellowship", header: "Name of Award / Fellowship", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.nameOfAwardFellowship || row.original.name)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "details", header: "Details", enableSorting: true, cell: ({ row }) => {
+          const details = displayValue(row.original.details)
+          return <div className="max-w-[120px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={details}>{details}</div>
+        }, meta: { className: "max-w-[120px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "nameOfAwardingAgency", header: "Name of Awarding Agency", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.nameOfAwardingAgency || row.original.organization)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "addressOfAwardingAgency", header: "Address of Awarding Agency", enableSorting: true, cell: ({ row }) => {
+          const address = displayValue(row.original.addressOfAwardingAgency || row.original.address)
+          return <div className="max-w-[120px] sm:max-w-xs px-2 sm:px-4 truncate text-xs sm:text-sm" title={address}>{address}</div>
+        }, meta: { className: "max-w-[120px] sm:max-w-xs px-2 sm:px-4" } },
+        { accessorKey: "dateOfAward", header: "Date of Award", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.dateOfAward || row.original.date_of_award)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "level", header: "Level", enableSorting: true, cell: ({ row }) => {
+          const awardLevelName = awardFellowLevelOptions.find(l => l.id === row.original.levelId || l.id === row.original.level)?.name || row.original.level || "N/A"
+          return <Badge variant="secondary" className="text-[10px] sm:text-xs">{displayValue(awardLevelName)}</Badge>
+        } },
+      )
+    }
+    // Extension columns
+    else if (section.id === "extension") {
+      columns.push(
+        { accessorKey: "srNo", header: "Sr No.", enableSorting: true, cell: ({ row }) => <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(row.original.srNo)}</span>, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "nameOfActivity", header: "Name of Activity", enableSorting: true, cell: ({ row }) => {
+          const name = displayValue(row.original.nameOfActivity || row.original.name_of_activity)
+          return <div className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" title={name}>{name}</div>
+        }, meta: { className: "font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate" } },
+        { accessorKey: "natureOfActivity", header: "Nature of Activity", enableSorting: true, cell: ({ row }) => {
+          const nature = displayValue(row.original.natureOfActivity || row.original.names)
+          return <Badge variant="outline" className="text-[10px] sm:text-xs">{nature}</Badge>
+        } },
+        { accessorKey: "level", header: "Level", enableSorting: true, cell: ({ row }) => {
+          const extensionLevelName = awardFellowLevelOptions.find(l => l.id === row.original.levelId || l.id === row.original.level)?.name || row.original.levelName || row.original.level || "N/A"
+          return <Badge variant="secondary" className="text-[10px] sm:text-xs">{displayValue(extensionLevelName)}</Badge>
+        } },
+        { accessorKey: "sponsoredBy", header: "Sponsored By", enableSorting: true, cell: ({ row }) => {
+          const sponserName = sponserNameOptions.find(s => s.id === row.original.sponseredId || s.id === row.original.sponsered)?.name || row.original.sponsoredBy || "N/A"
+          return <span className="text-xs sm:text-sm px-2 sm:px-4">{displayValue(sponserName)}</span>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "place", header: "Place", enableSorting: true, cell: ({ row }) => {
+          const place = displayValue(row.original.place)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><MapPin className="h-3 w-3 text-gray-400" /><span>{place}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+        { accessorKey: "date", header: "Date", enableSorting: true, cell: ({ row }) => {
+          const date = formatDate(row.original.date)
+          return <div className="flex items-center gap-1 text-xs sm:text-sm px-2 sm:px-4"><Calendar className="h-3 w-3 text-gray-400" /><span>{date}</span></div>
+        }, meta: { className: "text-xs sm:text-sm px-2 sm:px-4" } },
+      )
+    }
+
+    // Add Supporting Document column (common for all sections)
+    columns.push({
+      id: "supportingDocument",
+      header: "Document",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            {item.supportingDocument && item.supportingDocument.length > 0 ? (
+              <>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm" title="View Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3" onClick={(e) => e.stopPropagation()}>
+                      <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent
+                    className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
+                    style={{ display: "flex", flexDirection: "column" }}
+                  >
+                    <DialogHeader className="p-4 border-b">
+                      <DialogTitle>View Document</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <div className="w-full h-full">
+                        <DocumentViewer
+                          documentUrl={item.supportingDocument[0]}
+                          documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
+                        />
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Badge variant="outline" className="text-xs">
+                  file
+                </Badge>
+              </>
+            ) : (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" title="Upload Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3" onClick={(e) => e.stopPropagation()}>
+                    <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline ml-1">Upload</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[95vw] sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Upload Supporting Documents</DialogTitle>
+                  </DialogHeader>
+                  <FileUpload onFileSelect={handleFileSelect} />
+                  <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
+                    <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
+                    <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto">
+                      Upload Files
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        )
+      },
+    })
+
+    // Add Actions column (common for all sections)
+    columns.push({
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const item = row.original
+        return (
+          <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEdit(section.id, item) }} className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
+              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={(e) => { 
+                e.stopPropagation()
+                handleDeleteClick(section.id, item.id, item.name || item.nameOfAwardFellowship || item.nameOfActivity || "this record")
+              }}
+              className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+            </Button>
+          </div>
+        )
+      },
+    })
+
+    return columns
+  }
+
+  // Memoize columns for all sections at once (outside of map to follow Rules of Hooks)
+  const columnsBySection = useMemo(() => {
+    const columnsMap: Record<string, ColumnDef<any>[]> = {}
+    sections.forEach((section) => {
+      columnsMap[section.id] = createColumnsForSection(
+        section,
+        handleEdit,
+        handleDeleteClick,
+        handleFileSelect,
+        handleFileUpload
+      )
+    })
+    return columnsMap
+  }, [sections, awardFellowLevelOptions, sponserNameOptions, handleEdit, handleDeleteClick, handleFileSelect, handleFileUpload])
+
+
 
   const renderForm = (sectionId: string, isEdit = false) => {
     const currentData = isEdit ? formData : {}
@@ -917,123 +1077,16 @@ export default function AwardsRecognitionPage() {
                   </Button>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          {section.columns.map((column) => (
-                            <TableHead key={column} className="whitespace-nowrap text-xs sm:text-sm">
-                              {column}
-                            </TableHead>
-                          ))}
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {loadingStates[section.id as keyof typeof loadingStates] ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={section.columns.length}
-                              className="h-24 text-center text-muted-foreground text-xs sm:text-sm"
-                            >
-                              <div className="flex items-center justify-center gap-2">
-                                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
-                                <span className="text-xs sm:text-sm">Loading...</span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ) : !data[section.id as keyof typeof data] ||
-                        data[section.id as keyof typeof data].length === 0 ? (
-                          <TableRow>
-                            <TableCell
-                              colSpan={section.columns.length}
-                              className="h-24 text-center text-muted-foreground text-xs sm:text-sm px-2"
-                            >
-                              No {section.title.toLowerCase()} found. Click "Add {section.title}" to get started.
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          data[section.id as keyof typeof data].map((item: any) => (
-                            <TableRow key={item.id}>
-                              {renderTableData(section, item)}
-                             <TableCell>
-                              <div className="flex items-center gap-1 sm:gap-2">
-                                {item.supportingDocument && item.supportingDocument.length > 0 ? (
-                                  <>
-                                    <Dialog>
-                                      <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" title="View Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
-                                          <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                                        </Button>
-                                      </DialogTrigger>
-                                      <DialogContent
-                                        className="w-[95vw] sm:w-[90vw] max-w-4xl h-[85vh] sm:h-[80vh] p-0 overflow-hidden"
-                                        style={{ display: "flex", flexDirection: "column" }}
-                                      >
-                                        <DialogHeader className="p-4 border-b">
-                                          <DialogTitle>View Document</DialogTitle>
-                                        </DialogHeader>
-
-                                        {/* Scrollable Content */}
-                                        <div className="flex-1 overflow-y-auto p-4">
-                                          <div className="w-full h-full">
-                                            <DocumentViewer
-                                              documentUrl={item.supportingDocument[0]}
-                                              documentType={item.supportingDocument?.[0]?.split('.').pop()?.toLowerCase() || ''}
-                                            />
-                                          </div>
-                                        </div>
-                                      </DialogContent>
-                                    </Dialog>
-
-                                    <Badge variant="outline" className="text-xs">
-                                       file
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <Dialog>
-                                    <DialogTrigger asChild>
-                                      <Button variant="ghost" size="sm" title="Upload Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
-                                        <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
-                                        <span className="hidden sm:inline ml-1">Upload</span>
-                                      </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-[95vw] sm:max-w-md">
-                                      <DialogHeader>
-                                        <DialogTitle>Upload Supporting Documents</DialogTitle>
-                                      </DialogHeader>
-                                      <FileUpload onFileSelect={handleFileSelect} />
-                                      <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
-                                        <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
-                                        <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto">
-                                          Upload Files
-                                        </Button>
-                                      </div>
-                                    </DialogContent>
-                                  </Dialog>
-                                )}
-                              </div>
-                            </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-1 sm:gap-2">
-                                  <Button variant="ghost" size="sm" onClick={() => handleEdit(section.id, item)} className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
-                                    <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    onClick={() => handleDeleteClick(section.id, item.id, item.name || item.nameOfAwardFellowship || item.nameOfActivity || "this record")}
-                                    className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
-                                  >
-                                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <EnhancedDataTable
+                    columns={columnsBySection[section.id] || []}
+                    data={data[section.id as keyof typeof data] || []}
+                    loading={loadingStates[section.id as keyof typeof loadingStates]}
+                    pageSize={10}
+                    exportable={true}
+                    enableGlobalFilter={true}
+                    emptyMessage={`No ${section.title.toLowerCase()} found. Click "Add ${section.title}" to get started.`}
+                    wrapperClassName="rounded-md border overflow-x-auto"
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
