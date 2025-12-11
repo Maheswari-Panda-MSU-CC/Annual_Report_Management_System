@@ -11,11 +11,11 @@ interface DropdownOption {
  * Find dropdown option by matching name (fuzzy match)
  */
 export function findDropdownOption(
-  extractedValue: string,
+  extractedValue: string | null | undefined,
   options: DropdownOption[],
   fieldName?: string
 ): number | string | null {
-  if (!extractedValue || !options || options.length === 0) {
+  if (!extractedValue || typeof extractedValue !== 'string' || !options || options.length === 0) {
     return null
   }
 
@@ -48,7 +48,10 @@ export function findDropdownOption(
 /**
  * Normalize value for matching
  */
-function normalizeValue(value: string): string {
+function normalizeValue(value: string | null | undefined): string {
+  if (!value || typeof value !== 'string') {
+    return ""
+  }
   return value
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, "")
@@ -60,9 +63,12 @@ function normalizeValue(value: string): string {
  * Special matching for level field
  */
 function matchLevel(
-  extractedValue: string,
+  extractedValue: string | null | undefined,
   options: DropdownOption[]
 ): number | string | null {
+  if (!extractedValue || typeof extractedValue !== 'string') {
+    return null
+  }
   const normalized = normalizeValue(extractedValue)
 
   // Common level mappings
@@ -98,7 +104,10 @@ function matchLevel(
 /**
  * Normalize mode values
  */
-export function normalizeModeValue(extractedValue: string): string | null {
+export function normalizeModeValue(extractedValue: string | null | undefined): string | null {
+  if (!extractedValue || typeof extractedValue !== 'string') {
+    return null
+  }
   const normalized = normalizeValue(extractedValue)
 
   const modeMap: Record<string, string> = {
@@ -123,7 +132,10 @@ export function normalizeModeValue(extractedValue: string): string | null {
 /**
  * Normalize boolean values
  */
-export function normalizeBooleanValue(extractedValue: string): boolean | null {
+export function normalizeBooleanValue(extractedValue: string | null | undefined): boolean | null {
+  if (!extractedValue || typeof extractedValue !== 'string') {
+    return null
+  }
   const normalized = normalizeValue(extractedValue)
 
   const trueValues = ["yes", "true", "1", "y", "paid", "reviewed", "included", "in"]

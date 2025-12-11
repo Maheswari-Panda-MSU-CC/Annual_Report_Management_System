@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +21,7 @@ import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { cn } from "@/lib/utils"
 
 interface BookFormData {
   authors: string
@@ -91,6 +92,26 @@ export default function EditBookPage() {
   // Watch edited field for conditional validation
   const isEdited = watch("edited")
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
   // Use auto-fill hook for document analysis data - watches context changes
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -107,52 +128,71 @@ export default function EditBookPage() {
     onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
       console.log("EDIT PAGE: Auto-fill triggered with fields", fields)
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
       // Authors - replace if exists in extraction
       if (fields.authors !== undefined) {
-        setValue("authors", fields.authors ? String(fields.authors) : "")
+        const authorsValue = fields.authors ? String(fields.authors) : ""
+        setValue("authors", authorsValue)
+        if (authorsValue) filledFieldNames.push("authors")
       }
       
       // Title - replace if exists in extraction
       if (fields.title !== undefined) {
-        setValue("title", fields.title ? String(fields.title) : "")
+        const titleValue = fields.title ? String(fields.title) : ""
+        setValue("title", titleValue)
+        if (titleValue) filledFieldNames.push("title")
       }
       
       // ISBN - replace if exists in extraction
       if (fields.isbn !== undefined) {
-        setValue("isbn", fields.isbn ? String(fields.isbn) : "")
+        const isbnValue = fields.isbn ? String(fields.isbn) : ""
+        setValue("isbn", isbnValue)
+        if (isbnValue) filledFieldNames.push("isbn")
       }
       
       // Publisher Name - replace if exists in extraction
       if (fields.publisher_name !== undefined) {
-        setValue("publisher_name", fields.publisher_name ? String(fields.publisher_name) : "")
+        const publisherNameValue = fields.publisher_name ? String(fields.publisher_name) : ""
+        setValue("publisher_name", publisherNameValue)
+        if (publisherNameValue) filledFieldNames.push("publisher_name")
       }
       
       // Submit Date - replace if exists in extraction
       if (fields.submit_date !== undefined) {
-        setValue("submit_date", fields.submit_date ? String(fields.submit_date) : "")
+        const submitDateValue = fields.submit_date ? String(fields.submit_date) : ""
+        setValue("submit_date", submitDateValue)
+        if (submitDateValue) filledFieldNames.push("submit_date")
       }
       
       // Place - replace if exists in extraction
       if (fields.place !== undefined) {
-        setValue("place", fields.place ? String(fields.place) : "")
+        const placeValue = fields.place ? String(fields.place) : ""
+        setValue("place", placeValue)
+        if (placeValue) filledFieldNames.push("place")
       }
       
       // Paid - replace if exists in extraction
       if (fields.paid !== undefined) {
         setValue("paid", Boolean(fields.paid))
+        filledFieldNames.push("paid")
       }
       
       // Edited - replace if exists in extraction
       if (fields.edited !== undefined) {
         setValue("edited", Boolean(fields.edited))
+        filledFieldNames.push("edited")
       }
       
       // Chapter Count - replace if exists in extraction
       if (fields.chap_count !== undefined) {
-        setValue("chap_count", fields.chap_count !== null && fields.chap_count !== undefined ? Number(fields.chap_count) : null)
+        const chapCountValue = fields.chap_count !== null && fields.chap_count !== undefined ? Number(fields.chap_count) : null
+        setValue("chap_count", chapCountValue)
+        if (chapCountValue !== null) filledFieldNames.push("chap_count")
       }
       
       // Publishing Level - replace if exists in extraction
@@ -163,6 +203,7 @@ export default function EditBookPage() {
           )
           if (matchingLevel) {
             setValue("publishing_level", matchingLevel.id)
+            filledFieldNames.push("publishing_level")
           } else {
             setValue("publishing_level", null)
           }
@@ -179,6 +220,7 @@ export default function EditBookPage() {
           )
           if (matchingBookType) {
             setValue("book_type", matchingBookType.id)
+            filledFieldNames.push("book_type")
           } else {
             setValue("book_type", null)
           }
@@ -195,6 +237,7 @@ export default function EditBookPage() {
           )
           if (matchingAuthorType) {
             setValue("author_type", matchingAuthorType.id)
+            filledFieldNames.push("author_type")
           } else {
             setValue("author_type", null)
           }
@@ -205,8 +248,13 @@ export default function EditBookPage() {
       
       // Chapter/Article Title - replace if exists in extraction
       if (fields.cha !== undefined) {
-        setValue("cha", fields.cha ? String(fields.cha) : "")
+        const chaValue = fields.cha ? String(fields.cha) : ""
+        setValue("cha", chaValue)
+        if (chaValue) filledFieldNames.push("cha")
       }
+      
+      // Update the auto-filled fields set AFTER processing all fields
+      setAutoFilledFields(new Set(filledFieldNames))
     },
     clearAfterUse: false, // Keep data for manual editing
   })
@@ -482,6 +530,7 @@ export default function EditBookPage() {
               isEditMode={true}
               onClearFields={() => {
                 reset()
+                setAutoFilledFields(new Set())
               }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
@@ -502,6 +551,13 @@ export default function EditBookPage() {
                   }
                 })}
                 placeholder="Enter all authors"
+                className={cn(
+                  isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("authors").onBlur(e)
+                  clearAutoFillHighlight("authors")
+                }}
               />
               {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
             </div>
@@ -522,9 +578,15 @@ export default function EditBookPage() {
                       label: a.name,
                     }))}
                     value={field.value?.toString() || ""}
-                    onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                    onValueChange={(val) => {
+                      field.onChange(val ? Number(val) : null)
+                      clearAutoFillHighlight("author_type")
+                    }}
                     placeholder="Select author type"
                     emptyMessage="No author type found"
+                    className={cn(
+                      isAutoFilled("author_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                    )}
                   />
                 )}
               />
@@ -542,6 +604,13 @@ export default function EditBookPage() {
                   maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                 })}
                 placeholder="Enter book title"
+                className={cn(
+                  isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("title").onBlur(e)
+                  clearAutoFillHighlight("title")
+                }}
               />
               {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
             </div>
@@ -632,9 +701,15 @@ export default function EditBookPage() {
                         label: l.name,
                       }))}
                       value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      onValueChange={(val) => {
+                        field.onChange(val ? Number(val) : null)
+                        clearAutoFillHighlight("publishing_level")
+                      }}
                       placeholder="Select publishing level"
                       emptyMessage="No level found"
+                      className={cn(
+                        isAutoFilled("publishing_level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                      )}
                     />
                   )}
                 />
@@ -658,9 +733,15 @@ export default function EditBookPage() {
                         label: b.name,
                       }))}
                       value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      onValueChange={(val) => {
+                        field.onChange(val ? Number(val) : null)
+                        clearAutoFillHighlight("book_type")
+                      }}
                       placeholder="Select book type"
                       emptyMessage="No book type found"
+                      className={cn(
+                        isAutoFilled("book_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                      )}
                     />
                   )}
                 />

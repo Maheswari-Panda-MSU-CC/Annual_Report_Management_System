@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +21,7 @@ import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { cn } from "@/lib/utils"
 
 interface PaperFormData {
   authors: string
@@ -70,6 +71,26 @@ export default function EditPaperPage() {
     formState: { errors },
   } = form
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
   // Use auto-fill hook for document analysis data - watches context changes
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -84,42 +105,59 @@ export default function EditPaperPage() {
     onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
       console.log("EDIT PAGE: Auto-fill triggered with fields", fields)
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
       // Authors - replace if exists in extraction
       if (fields.authors !== undefined) {
-        setValue("authors", fields.authors ? String(fields.authors) : "")
+        const authorsValue = fields.authors ? String(fields.authors) : ""
+        setValue("authors", authorsValue)
+        if (authorsValue) filledFieldNames.push("authors")
       }
       
       // Theme - replace if exists in extraction
       if (fields.theme !== undefined) {
-        setValue("theme", fields.theme ? String(fields.theme) : "")
+        const themeValue = fields.theme ? String(fields.theme) : ""
+        setValue("theme", themeValue)
+        if (themeValue) filledFieldNames.push("theme")
       }
       
       // Organising Body - replace if exists in extraction
       if (fields.organising_body !== undefined) {
-        setValue("organising_body", fields.organising_body ? String(fields.organising_body) : "")
+        const organisingBodyValue = fields.organising_body ? String(fields.organising_body) : ""
+        setValue("organising_body", organisingBodyValue)
+        if (organisingBodyValue) filledFieldNames.push("organising_body")
       }
       
       // Place - replace if exists in extraction
       if (fields.place !== undefined) {
-        setValue("place", fields.place ? String(fields.place) : "")
+        const placeValue = fields.place ? String(fields.place) : ""
+        setValue("place", placeValue)
+        if (placeValue) filledFieldNames.push("place")
       }
       
       // Date - replace if exists in extraction
       if (fields.date !== undefined) {
-        setValue("date", fields.date ? String(fields.date) : "")
+        const dateValue = fields.date ? String(fields.date) : ""
+        setValue("date", dateValue)
+        if (dateValue) filledFieldNames.push("date")
       }
       
       // Title of Paper - replace if exists in extraction
       if (fields.title_of_paper !== undefined) {
-        setValue("title_of_paper", fields.title_of_paper ? String(fields.title_of_paper) : "")
+        const titleOfPaperValue = fields.title_of_paper ? String(fields.title_of_paper) : ""
+        setValue("title_of_paper", titleOfPaperValue)
+        if (titleOfPaperValue) filledFieldNames.push("title_of_paper")
       }
       
       // Mode - replace if exists in extraction
       if (fields.mode !== undefined) {
-        setValue("mode", fields.mode ? String(fields.mode) : "")
+        const modeValue = fields.mode ? String(fields.mode) : ""
+        setValue("mode", modeValue)
+        if (modeValue) filledFieldNames.push("mode")
       }
       
       // Level - replace if exists in extraction
@@ -130,6 +168,7 @@ export default function EditPaperPage() {
           )
           if (matchingLevel) {
             setValue("level", matchingLevel.id)
+            filledFieldNames.push("level")
           } else {
             setValue("level", null)
           }
@@ -137,6 +176,9 @@ export default function EditPaperPage() {
           setValue("level", null)
         }
       }
+      
+      // Update the auto-filled fields set AFTER processing all fields
+      setAutoFilledFields(new Set(filledFieldNames))
     },
     clearAfterUse: false, // Keep data for manual editing
   })
@@ -392,6 +434,7 @@ export default function EditPaperPage() {
               isEditMode={true}
               onClearFields={() => {
                 reset()
+                setAutoFilledFields(new Set())
               }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
@@ -412,6 +455,13 @@ export default function EditPaperPage() {
                   }
                 })}
                 placeholder="Enter all authors"
+                className={cn(
+                  isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("authors").onBlur(e)
+                  clearAutoFillHighlight("authors")
+                }}
               />
               {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
             </div>
@@ -433,9 +483,15 @@ export default function EditPaperPage() {
                         label: l.name,
                       }))}
                       value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                      onValueChange={(val) => {
+                        field.onChange(val ? Number(val) : null)
+                        clearAutoFillHighlight("level")
+                      }}
                       placeholder="Select presentation level"
                       emptyMessage="No level found"
+                      className={cn(
+                        isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                      )}
                     />
                   )}
                 />
@@ -450,8 +506,16 @@ export default function EditPaperPage() {
                     validate: (v) => !v || ["Physical", "Virtual", "Hybrid"].includes(v) || "Mode must be Physical, Virtual, or Hybrid"
                   }}
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger>
+                    <Select 
+                      value={field.value} 
+                      onValueChange={(val) => {
+                        field.onChange(val)
+                        clearAutoFillHighlight("mode")
+                      }}
+                    >
+                      <SelectTrigger className={cn(
+                        isAutoFilled("mode") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                      )}>
                         <SelectValue placeholder="Select mode" />
                       </SelectTrigger>
                       <SelectContent>
@@ -473,7 +537,14 @@ export default function EditPaperPage() {
                 {...register("theme", {
                   maxLength: { value: 500, message: "Theme must not exceed 500 characters" }
                 })} 
-                placeholder="Enter conference theme" 
+                placeholder="Enter conference theme"
+                className={cn(
+                  isAutoFilled("theme") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("theme").onBlur(e)
+                  clearAutoFillHighlight("theme")
+                }}
               />
               {errors.theme && <p className="text-sm text-red-500 mt-1">{errors.theme.message}</p>}
             </div>
@@ -488,6 +559,13 @@ export default function EditPaperPage() {
                   maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                 })}
                 placeholder="Enter paper title"
+                className={cn(
+                  isAutoFilled("title_of_paper") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("title_of_paper").onBlur(e)
+                  clearAutoFillHighlight("title_of_paper")
+                }}
               />
               {errors.title_of_paper && <p className="text-sm text-red-500 mt-1">{errors.title_of_paper.message}</p>}
             </div>
@@ -504,7 +582,14 @@ export default function EditPaperPage() {
                       message: "Organizing body contains invalid characters"
                     }
                   })} 
-                  placeholder="Enter organizing body" 
+                  placeholder="Enter organizing body"
+                  className={cn(
+                    isAutoFilled("organising_body") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                  )}
+                  onBlur={(e) => {
+                    register("organising_body").onBlur(e)
+                    clearAutoFillHighlight("organising_body")
+                  }}
                 />
                 {errors.organising_body && <p className="text-sm text-red-500 mt-1">{errors.organising_body.message}</p>}
               </div>
@@ -519,7 +604,14 @@ export default function EditPaperPage() {
                       message: "Place contains invalid characters"
                     }
                   })} 
-                  placeholder="Enter place" 
+                  placeholder="Enter place"
+                  className={cn(
+                    isAutoFilled("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                  )}
+                  onBlur={(e) => {
+                    register("place").onBlur(e)
+                    clearAutoFillHighlight("place")
+                  }}
                 />
                 {errors.place && <p className="text-sm text-red-500 mt-1">{errors.place.message}</p>}
               </div>
@@ -532,7 +624,14 @@ export default function EditPaperPage() {
                 type="date" 
                 {...register("date", {
                   validate: (v) => !v || new Date(v) <= new Date() || "Date cannot be in the future"
-                })} 
+                })}
+                className={cn(
+                  isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("date").onBlur(e)
+                  clearAutoFillHighlight("date")
+                }}
               />
               {errors.date && <p className="text-sm text-red-500 mt-1">{errors.date.message}</p>}
             </div>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,6 +21,7 @@ import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 import { useAutoFillData } from "@/hooks/use-auto-fill-data"
+import { cn } from "@/lib/utils"
 
 interface JournalFormData {
   authors: string
@@ -103,6 +104,26 @@ export default function EditJournalArticlePage() {
     formState: { errors },
   } = form
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
   // Use auto-fill hook for document analysis data - watches context changes
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -119,47 +140,66 @@ export default function EditJournalArticlePage() {
     onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
       console.log("EDIT PAGE: Auto-fill triggered with fields", fields)
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
       // Authors - replace if exists in extraction
       if (fields.authors !== undefined) {
-        setValue("authors", fields.authors ? String(fields.authors) : "")
+        const authorsValue = fields.authors ? String(fields.authors) : ""
+        setValue("authors", authorsValue)
+        if (authorsValue) filledFieldNames.push("authors")
       }
       
       // Author Num - replace if exists in extraction
       if (fields.author_num !== undefined) {
-        setValue("author_num", fields.author_num !== null && fields.author_num !== undefined ? Number(fields.author_num) : null)
+        const authorNumValue = fields.author_num !== null && fields.author_num !== undefined ? Number(fields.author_num) : null
+        setValue("author_num", authorNumValue)
+        if (authorNumValue !== null) filledFieldNames.push("author_num")
       }
       
       // Title - replace if exists in extraction
       if (fields.title !== undefined) {
-        setValue("title", fields.title ? String(fields.title) : "")
+        const titleValue = fields.title ? String(fields.title) : ""
+        setValue("title", titleValue)
+        if (titleValue) filledFieldNames.push("title")
       }
       
       // ISBN - replace if exists in extraction
       if (fields.isbn !== undefined) {
-        setValue("isbn", fields.isbn ? String(fields.isbn) : "")
+        const isbnValue = fields.isbn ? String(fields.isbn) : ""
+        setValue("isbn", isbnValue)
+        if (isbnValue) filledFieldNames.push("isbn")
       }
       
       // Journal Name - replace if exists in extraction
       if (fields.journal_name !== undefined) {
-        setValue("journal_name", fields.journal_name ? String(fields.journal_name) : "")
+        const journalNameValue = fields.journal_name ? String(fields.journal_name) : ""
+        setValue("journal_name", journalNameValue)
+        if (journalNameValue) filledFieldNames.push("journal_name")
       }
       
       // Volume Num - replace if exists in extraction
       if (fields.volume_num !== undefined) {
-        setValue("volume_num", fields.volume_num !== null && fields.volume_num !== undefined ? Number(fields.volume_num) : null)
+        const volumeNumValue = fields.volume_num !== null && fields.volume_num !== undefined ? Number(fields.volume_num) : null
+        setValue("volume_num", volumeNumValue)
+        if (volumeNumValue !== null) filledFieldNames.push("volume_num")
       }
       
       // Page Num - replace if exists in extraction
       if (fields.page_num !== undefined) {
-        setValue("page_num", fields.page_num ? String(fields.page_num) : "")
+        const pageNumValue = fields.page_num ? String(fields.page_num) : ""
+        setValue("page_num", pageNumValue)
+        if (pageNumValue) filledFieldNames.push("page_num")
       }
       
       // Month Year - replace if exists in extraction
       if (fields.month_year !== undefined) {
-        setValue("month_year", fields.month_year ? String(fields.month_year) : "")
+        const monthYearValue = fields.month_year ? String(fields.month_year) : ""
+        setValue("month_year", monthYearValue)
+        if (monthYearValue) filledFieldNames.push("month_year")
       }
       
       // Author Type - replace if exists in extraction
@@ -170,6 +210,7 @@ export default function EditJournalArticlePage() {
           )
           if (matchingAuthorType) {
             setValue("author_type", matchingAuthorType.id)
+            filledFieldNames.push("author_type")
           } else {
             setValue("author_type", null)
           }
@@ -186,6 +227,7 @@ export default function EditJournalArticlePage() {
           )
           if (matchingLevel) {
             setValue("level", matchingLevel.id)
+            filledFieldNames.push("level")
           } else {
             setValue("level", null)
           }
@@ -197,46 +239,58 @@ export default function EditJournalArticlePage() {
       // Peer Reviewed - replace if exists in extraction
       if (fields.peer_reviewed !== undefined) {
         setValue("peer_reviewed", Boolean(fields.peer_reviewed))
+        filledFieldNames.push("peer_reviewed")
       }
       
       // H Index - replace if exists in extraction
       if (fields.h_index !== undefined) {
-        setValue("h_index", fields.h_index !== null && fields.h_index !== undefined ? Number(fields.h_index) : null)
+        const hIndexValue = fields.h_index !== null && fields.h_index !== undefined ? Number(fields.h_index) : null
+        setValue("h_index", hIndexValue)
+        if (hIndexValue !== null) filledFieldNames.push("h_index")
       }
       
       // Impact Factor - replace if exists in extraction
       if (fields.impact_factor !== undefined) {
-        setValue("impact_factor", fields.impact_factor !== null && fields.impact_factor !== undefined ? Number(fields.impact_factor) : null)
+        const impactFactorValue = fields.impact_factor !== null && fields.impact_factor !== undefined ? Number(fields.impact_factor) : null
+        setValue("impact_factor", impactFactorValue)
+        if (impactFactorValue !== null) filledFieldNames.push("impact_factor")
       }
       
       // In Scopus - replace if exists in extraction
       if (fields.in_scopus !== undefined) {
         setValue("in_scopus", Boolean(fields.in_scopus))
+        filledFieldNames.push("in_scopus")
       }
       
       // In UGC - replace if exists in extraction
       if (fields.in_ugc !== undefined) {
         setValue("in_ugc", Boolean(fields.in_ugc))
+        filledFieldNames.push("in_ugc")
       }
       
       // In Clarivate - replace if exists in extraction
       if (fields.in_clarivate !== undefined) {
         setValue("in_clarivate", Boolean(fields.in_clarivate))
+        filledFieldNames.push("in_clarivate")
       }
       
       // In Old UGC List - replace if exists in extraction
       if (fields.in_oldUGCList !== undefined) {
         setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
+        filledFieldNames.push("in_oldUGCList")
       }
       
       // Paid - replace if exists in extraction
       if (fields.paid !== undefined) {
         setValue("paid", Boolean(fields.paid))
+        filledFieldNames.push("paid")
       }
       
       // ISSN - replace if exists in extraction
       if (fields.issn !== undefined) {
-        setValue("issn", fields.issn ? String(fields.issn) : "")
+        const issnValue = fields.issn ? String(fields.issn) : ""
+        setValue("issn", issnValue)
+        if (issnValue) filledFieldNames.push("issn")
       }
       
       // Type - replace if exists in extraction
@@ -247,6 +301,7 @@ export default function EditJournalArticlePage() {
           )
           if (matchingType) {
             setValue("type", matchingType.id)
+            filledFieldNames.push("type")
           } else {
             setValue("type", null)
           }
@@ -257,8 +312,13 @@ export default function EditJournalArticlePage() {
       
       // DOI - replace if exists in extraction
       if (fields.DOI !== undefined) {
-        setValue("DOI", fields.DOI ? String(fields.DOI) : "")
+        const doiValue = fields.DOI ? String(fields.DOI) : ""
+        setValue("DOI", doiValue)
+        if (doiValue) filledFieldNames.push("DOI")
       }
+      
+      // Update the auto-filled fields set AFTER processing all fields
+      setAutoFilledFields(new Set(filledFieldNames))
     },
     clearAfterUse: false, // Keep data for manual editing
   })
@@ -533,6 +593,7 @@ export default function EditJournalArticlePage() {
               isEditMode={true}
               onClearFields={() => {
                 reset()
+                setAutoFilledFields(new Set())
               }}
             />
             <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
@@ -554,6 +615,13 @@ export default function EditJournalArticlePage() {
                     }
                   })}
                   placeholder="Enter all authors"
+                  className={cn(
+                    isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                  )}
+                  onBlur={(e) => {
+                    register("authors").onBlur(e)
+                    clearAutoFillHighlight("authors")
+                  }}
                 />
                 {errors.authors && <p className="text-sm text-red-500 mt-1">{errors.authors.message}</p>}
               </div>
@@ -584,18 +652,24 @@ export default function EditJournalArticlePage() {
                     required: "Author type is required",
                     validate: (v) => v !== null && v !== undefined || "Author type is required"
                   }}
-                  render={({ field }) => (
-                    <SearchableSelect
-                      options={journalAuthorTypeOptions.map((a) => ({
-                        value: a.id,
-                        label: a.name,
-                      }))}
-                      value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                      placeholder="Select author type"
-                      emptyMessage="No author type found"
-                    />
-                  )}
+                    render={({ field }) => (
+                      <SearchableSelect
+                        options={journalAuthorTypeOptions.map((a) => ({
+                          value: a.id,
+                          label: a.name,
+                        }))}
+                        value={field.value?.toString() || ""}
+                        onValueChange={(val) => {
+                          field.onChange(val ? Number(val) : null)
+                          clearAutoFillHighlight("author_type")
+                        }}
+                        placeholder="Select author type"
+                        emptyMessage="No author type found"
+                        className={cn(
+                          isAutoFilled("author_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                      />
+                    )}
                 />
                 {errors.author_type && <p className="text-sm text-red-500 mt-1">{errors.author_type.message}</p>}
               </div>
@@ -608,18 +682,24 @@ export default function EditJournalArticlePage() {
                     required: "Type is required",
                     validate: (v) => v !== null && v !== undefined || "Type is required"
                   }}
-                  render={({ field }) => (
-                    <SearchableSelect
-                      options={journalEditedTypeOptions.map((t) => ({
-                        value: t.id,
-                        label: t.name,
-                      }))}
-                      value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                      placeholder="Select type"
-                      emptyMessage="No type found"
-                    />
-                  )}
+                    render={({ field }) => (
+                      <SearchableSelect
+                        options={journalEditedTypeOptions.map((t) => ({
+                          value: t.id,
+                          label: t.name,
+                        }))}
+                        value={field.value?.toString() || ""}
+                        onValueChange={(val) => {
+                          field.onChange(val ? Number(val) : null)
+                          clearAutoFillHighlight("type")
+                        }}
+                        placeholder="Select type"
+                        emptyMessage="No type found"
+                        className={cn(
+                          isAutoFilled("type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                      />
+                    )}
                 />
                 {errors.type && <p className="text-sm text-red-500 mt-1">{errors.type.message}</p>}
               </div>
@@ -635,6 +715,13 @@ export default function EditJournalArticlePage() {
                   maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                 })}
                 placeholder="Enter article/paper title"
+                className={cn(
+                  isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                )}
+                onBlur={(e) => {
+                  register("title").onBlur(e)
+                  clearAutoFillHighlight("title")
+                }}
               />
               {errors.title && <p className="text-sm text-red-500 mt-1">{errors.title.message}</p>}
             </div>
@@ -727,18 +814,24 @@ export default function EditJournalArticlePage() {
                     required: "Level is required",
                     validate: (v) => v !== null && v !== undefined || "Level is required"
                   }}
-                  render={({ field }) => (
-                    <SearchableSelect
-                      options={resPubLevelOptions.map((l) => ({
-                        value: l.id,
-                        label: l.name,
-                      }))}
-                      value={field.value?.toString() || ""}
-                      onValueChange={(val) => field.onChange(val ? Number(val) : null)}
-                      placeholder="Select level"
-                      emptyMessage="No level found"
-                    />
-                  )}
+                    render={({ field }) => (
+                      <SearchableSelect
+                        options={resPubLevelOptions.map((l) => ({
+                          value: l.id,
+                          label: l.name,
+                        }))}
+                        value={field.value?.toString() || ""}
+                        onValueChange={(val) => {
+                          field.onChange(val ? Number(val) : null)
+                          clearAutoFillHighlight("level")
+                        }}
+                        placeholder="Select level"
+                        emptyMessage="No level found"
+                        className={cn(
+                          isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                      />
+                    )}
                 />
                 {errors.level && <p className="text-sm text-red-500 mt-1">{errors.level.message}</p>}
               </div>
