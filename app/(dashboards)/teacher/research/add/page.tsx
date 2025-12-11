@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useCallback, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,6 +21,7 @@ import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
+import { cn } from "@/lib/utils"
 
 export default function AddResearchPage() {
   const router = useRouter()
@@ -65,6 +66,93 @@ export default function AddResearchPage() {
   // Watch grant_sealed to enable/disable grant_year
   const grantSealed = watch("grant_sealed")
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
+  // Helper function to parse currency amounts (handles formats like 'INR 50,000/-', '₹50,000', '50,000/-', etc.)
+  const parseCurrencyAmount = useCallback((value: any): string => {
+    if (!value) return ""
+    
+    // Convert to string and trim
+    let strValue = String(value).trim()
+    
+    // Remove currency prefixes (INR, ₹, Rs., etc.) - case insensitive
+    strValue = strValue.replace(/^(INR|₹|Rs\.?|rupees?)\s*/i, '')
+    
+    // Remove trailing symbols like '/-', '-', etc.
+    strValue = strValue.replace(/[/\-]+$/, '')
+    
+    // Remove all commas and spaces
+    strValue = strValue.replace(/[,\s]/g, '')
+    
+    // Extract numeric value (including decimals) - match digits with optional decimal point and more digits
+    const numericMatch = strValue.match(/(\d+\.?\d*)/)
+    if (numericMatch) {
+      return numericMatch[1]
+    }
+    
+    // Fallback: try to parse as number (handles edge cases)
+    const parsed = parseFloat(strValue)
+    if (!isNaN(parsed) && isFinite(parsed)) {
+      return String(parsed)
+    }
+    
+    // Last resort: try to extract any number from the string
+    const anyNumberMatch = strValue.match(/\d+/)
+    if (anyNumberMatch) {
+      return anyNumberMatch[0]
+    }
+    
+    return ""
+  }, [])
+
+  // Helper function to validate and set dropdown field value
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
+
   // Note: Dropdown data is already available from Context, no need to fetch
 
   // Use auto-fill hook for document analysis data
@@ -84,34 +172,48 @@ export default function AddResearchPage() {
     onlyFillEmpty: false, // REPLACE existing data with new extracted data
     onAutoFill: (fields) => {
       console.log("RESEARCH PROJECTS fields", fields)
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
       // Title - replace if exists in extraction
       if (fields.title !== undefined) {
-        setValue("title", fields.title ? String(fields.title) : "")
+        const titleValue = fields.title ? String(fields.title) : ""
+        setValue("title", titleValue)
+        if (titleValue) {
+          filledFieldNames.push("title")
+        }
       }
       
       // Funding Agency - replace if exists in extraction
       if (fields.funding_agency !== undefined) {
-        setValue("funding_agency", fields.funding_agency !== null && fields.funding_agency !== undefined ? Number(fields.funding_agency) : null)
+        setDropdownValue("funding_agency", fields.funding_agency, fundingAgencyOptions, filledFieldNames)
       }
       
-      // Handle grant_sanctioned - remove commas if present, replace if exists
+      // Handle grant_sanctioned - parse currency format (e.g., 'INR 50,000/-'), replace if exists
       if (fields.grant_sanctioned !== undefined) {
         if (fields.grant_sanctioned) {
-          const grantValue = String(fields.grant_sanctioned).replace(/[,\s]/g, '')
+          const grantValue = parseCurrencyAmount(fields.grant_sanctioned)
           setValue("grant_sanctioned", grantValue)
+          if (grantValue) {
+            filledFieldNames.push("grant_sanctioned")
+          }
         } else {
           setValue("grant_sanctioned", "")
         }
       }
       
-      // Handle grant_received - remove commas if present, replace if exists
+      // Handle grant_received - parse currency format (e.g., 'INR 50,000/-'), replace if exists
       if (fields.grant_received !== undefined) {
         if (fields.grant_received) {
-          const grantValue = String(fields.grant_received).replace(/[,\s]/g, '')
+          const grantValue = parseCurrencyAmount(fields.grant_received)
           setValue("grant_received", grantValue)
+          if (grantValue) {
+            filledFieldNames.push("grant_received")
+          }
         } else {
           setValue("grant_received", "")
         }
@@ -119,7 +221,7 @@ export default function AddResearchPage() {
       
       // Project Nature - replace if exists in extraction
       if (fields.proj_nature !== undefined) {
-        setValue("proj_nature", fields.proj_nature !== null && fields.proj_nature !== undefined ? Number(fields.proj_nature) : null)
+        setDropdownValue("proj_nature", fields.proj_nature, projectNatureOptions, filledFieldNames)
       }
       
       // Handle duration - extract number from "9 months" format, replace if exists
@@ -138,6 +240,9 @@ export default function AddResearchPage() {
             }
           }
           setValue("duration", durationValue)
+          if (durationValue > 0) {
+            filledFieldNames.push("duration")
+          }
         } else {
           setValue("duration", 0)
         }
@@ -145,33 +250,44 @@ export default function AddResearchPage() {
       
       // Status - replace if exists in extraction
       if (fields.status !== undefined) {
-        setValue("status", fields.status !== null && fields.status !== undefined ? Number(fields.status) : null)
+        setDropdownValue("status", fields.status, projectStatusOptions, filledFieldNames)
       }
       
       // Start Date - replace if exists in extraction
       if (fields.start_date !== undefined) {
-        setValue("start_date", fields.start_date ? String(fields.start_date) : "")
+        const dateValue = fields.start_date ? String(fields.start_date) : ""
+        setValue("start_date", dateValue)
+        if (dateValue) {
+          filledFieldNames.push("start_date")
+        }
       }
       
       // Project Level - replace if exists in extraction
       if (fields.proj_level !== undefined) {
-        setValue("proj_level", fields.proj_level !== null && fields.proj_level !== undefined ? Number(fields.proj_level) : null)
+        setDropdownValue("proj_level", fields.proj_level, projectLevelOptions, filledFieldNames)
       }
       
       // Grant Year - replace if exists in extraction
       if (fields.grant_year !== undefined) {
-        setValue("grant_year", fields.grant_year ? String(fields.grant_year) : "")
+        const yearValue = fields.grant_year ? String(fields.grant_year) : ""
+        setValue("grant_year", yearValue)
+        if (yearValue) {
+          filledFieldNames.push("grant_year")
+        }
       }
       
       // Grant Sealed - replace if exists in extraction
       if (fields.grant_sealed !== undefined) {
         setValue("grant_sealed", Boolean(fields.grant_sealed))
+        // Note: grant_sealed is a boolean, so we track it if it's explicitly set
+        filledFieldNames.push("grant_sealed")
       }
       
+      // Update the auto-filled fields set AFTER processing all fields
+      setAutoFilledFields(new Set(filledFieldNames))
+      
       // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
+      const filledCount = filledFieldNames.length
       if (filledCount > 0) {
         toast({
           title: "Form Auto-filled",
@@ -234,13 +350,19 @@ export default function AddResearchPage() {
   const handleExtractFields = useCallback((fields: Record<string, any>) => {
     let fieldsPopulated = 0
 
+    // Track which fields were auto-filled (only non-empty fields)
+    const filledFieldNames: string[] = []
+
     // REPLACE all fields - set values even if they're empty/null in extracted data
     // This ensures existing data is replaced with new extracted data on each extraction
     
     // Title - replace if exists in extraction
     if (fields.title !== undefined) {
       setValue("title", fields.title || "")
-      if (fields.title) fieldsPopulated++
+      if (fields.title) {
+        fieldsPopulated++
+        filledFieldNames.push("title")
+      }
     }
     
     // Funding Agency - replace if exists in extraction
@@ -255,6 +377,7 @@ export default function AddResearchPage() {
         if (matchingAgency) {
           setValue("funding_agency", matchingAgency.id)
           fieldsPopulated++
+          filledFieldNames.push("funding_agency")
         } else {
           setValue("funding_agency", null)
         }
@@ -263,27 +386,29 @@ export default function AddResearchPage() {
       }
     }
     
-    // Grant Sanctioned - replace if exists in extraction
+    // Grant Sanctioned - parse currency format (e.g., 'INR 50,000/-'), replace if exists in extraction
     if (fields.totalGrantSanctioned !== undefined || fields.grant_sanctioned !== undefined || fields.seedGrant !== undefined) {
       const grantValue = fields.totalGrantSanctioned || fields.grant_sanctioned || fields.seedGrant
       if (grantValue) {
-        // Remove commas and convert to string for the form field
-        const cleanedValue = String(grantValue).replace(/[,\s]/g, '')
+        // Parse currency format and convert to string for the form field
+        const cleanedValue = parseCurrencyAmount(grantValue)
         setValue("grant_sanctioned", cleanedValue)
         fieldsPopulated++
+        filledFieldNames.push("grant_sanctioned")
       } else {
         setValue("grant_sanctioned", "")
       }
     }
     
-    // Grant Received - replace if exists in extraction
+    // Grant Received - parse currency format (e.g., 'INR 50,000/-'), replace if exists in extraction
     if (fields.totalGrantReceived !== undefined || fields.grant_received !== undefined) {
       const grantValue = fields.totalGrantReceived || fields.grant_received
       if (grantValue) {
-        // Remove commas and convert to string for the form field
-        const cleanedValue = String(grantValue).replace(/[,\s]/g, '')
+        // Parse currency format and convert to string for the form field
+        const cleanedValue = parseCurrencyAmount(grantValue)
         setValue("grant_received", cleanedValue)
         fieldsPopulated++
+        filledFieldNames.push("grant_received")
       } else {
         setValue("grant_received", "")
       }
@@ -302,12 +427,14 @@ export default function AddResearchPage() {
           if (matchingNature) {
             setValue("proj_nature", matchingNature.id)
             fieldsPopulated++
+            filledFieldNames.push("proj_nature")
           } else {
             setValue("proj_nature", null)
           }
         } else if (typeof value === 'number') {
           setValue("proj_nature", value)
           fieldsPopulated++
+          filledFieldNames.push("proj_nature")
         } else {
           setValue("proj_nature", null)
         }
@@ -328,6 +455,7 @@ export default function AddResearchPage() {
         if (matchingLevel) {
           setValue("proj_level", matchingLevel.id)
           fieldsPopulated++
+          filledFieldNames.push("proj_level")
         } else {
           setValue("proj_level", null)
         }
@@ -353,7 +481,10 @@ export default function AddResearchPage() {
           }
         }
         setValue("duration", durationValue)
-        if (durationValue > 0) fieldsPopulated++
+        if (durationValue > 0) {
+          fieldsPopulated++
+          filledFieldNames.push("duration")
+        }
       } else {
         setValue("duration", 0)
       }
@@ -371,6 +502,7 @@ export default function AddResearchPage() {
         if (matchingStatus) {
           setValue("status", matchingStatus.id)
           fieldsPopulated++
+          filledFieldNames.push("status")
         } else {
           setValue("status", null)
         }
@@ -383,15 +515,24 @@ export default function AddResearchPage() {
     if (fields.startDate !== undefined || fields.start_date !== undefined) {
       const dateValue = fields.startDate || fields.start_date
       setValue("start_date", dateValue || "")
-      if (dateValue) fieldsPopulated++
+      if (dateValue) {
+        fieldsPopulated++
+        filledFieldNames.push("start_date")
+      }
     }
     
     // Grant Year - replace if exists in extraction
     if (fields.seedGrantYear !== undefined || fields.grant_year !== undefined) {
       const yearValue = fields.seedGrantYear || fields.grant_year
       setValue("grant_year", yearValue ? String(yearValue) : "")
-      if (yearValue) fieldsPopulated++
+      if (yearValue) {
+        fieldsPopulated++
+        filledFieldNames.push("grant_year")
+      }
     }
+
+    // Update auto-filled fields tracking
+    setAutoFilledFields(new Set(filledFieldNames))
 
     if (fieldsPopulated > 0) {
       toast({
@@ -404,7 +545,7 @@ export default function AddResearchPage() {
         description: "Data fields have been updated (some fields may be empty)",
       })
     }
-  }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
+  }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions, projectNatureOptions, parseCurrencyAmount])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
     const teacherId = user?.role_id
@@ -559,6 +700,7 @@ export default function AddResearchPage() {
         // Clear document data on successful submission
         clearDocumentData()
         clearAutoFillData()
+        setAutoFilledFields(new Set())
         router.push("/teacher/research")
       },
     })
@@ -616,6 +758,7 @@ export default function AddResearchPage() {
                     onClearFields={() => {
                       // Clear all form fields when document is cleared
                       reset()
+                      setAutoFilledFields(new Set())
                     }}
                   />
                   {errors.Pdf && <p className="text-xs sm:text-sm text-red-500 mt-2">{errors.Pdf.message}</p>}
@@ -639,7 +782,19 @@ export default function AddResearchPage() {
                     name="title"
                     rules={{ required: "Project title is required" }}
                     render={({ field }) => (
-                      <Input {...field} id="title" placeholder="Enter project title" className="h-8 sm:h-10 text-xs sm:text-sm" />
+                      <Input 
+                        {...field} 
+                        id="title" 
+                        placeholder="Enter project title" 
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          clearAutoFillHighlight("title")
+                        }}
+                      />
                     )}
                   />
                   {errors.title && <p className="text-xs sm:text-sm text-red-500 mt-1">{errors.title.message}</p>}
@@ -661,10 +816,16 @@ export default function AddResearchPage() {
                           label: a.name,
                         }))}
                         value={field.value || ""}
-                        onValueChange={(val) => field.onChange(Number(val))}
+                        onValueChange={(val) => {
+                          field.onChange(Number(val))
+                          clearAutoFillHighlight("funding_agency")
+                        }}
                         placeholder="Select funding agency"
                         emptyMessage="No funding agency found"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("funding_agency") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
                       />
                     )}
                   />
@@ -689,10 +850,16 @@ export default function AddResearchPage() {
                           label: n.name,
                         }))}
                         value={field.value || ""}
-                        onValueChange={(val) => field.onChange(Number(val))}
+                        onValueChange={(val) => {
+                          field.onChange(Number(val))
+                          clearAutoFillHighlight("proj_nature")
+                        }}
                         placeholder="Select project nature"
                         emptyMessage="No project nature found"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("proj_nature") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
                       />
                     )}
                   />
@@ -717,10 +884,16 @@ export default function AddResearchPage() {
                           label: s.name,
                         }))}
                         value={field.value || ""}
-                        onValueChange={(val) => field.onChange(Number(val))}
+                        onValueChange={(val) => {
+                          field.onChange(Number(val))
+                          clearAutoFillHighlight("status")
+                        }}
                         placeholder="Select status"
                         emptyMessage="No status found"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("status") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
                       />
                     )}
                   />
@@ -743,10 +916,16 @@ export default function AddResearchPage() {
                           label: l.name,
                         }))}
                         value={field.value || ""}
-                        onValueChange={(val) => field.onChange(val ? Number(val) : null)}
+                        onValueChange={(val) => {
+                          field.onChange(val ? Number(val) : null)
+                          clearAutoFillHighlight("proj_level")
+                        }}
                         placeholder="Select project level"
                         emptyMessage="No level found"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("proj_level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
                       />
                     )}
                   />
@@ -763,7 +942,19 @@ export default function AddResearchPage() {
                     name="start_date"
                     rules={{ required: "Start date is required" }}
                     render={({ field }) => (
-                      <Input {...field} id="start_date" type="date" className="h-8 sm:h-10 text-xs sm:text-sm" />
+                      <Input 
+                        {...field} 
+                        id="start_date" 
+                        type="date" 
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("start_date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          clearAutoFillHighlight("start_date")
+                        }}
+                      />
                     )}
                   />
                   {errors.start_date && (
@@ -796,8 +987,12 @@ export default function AddResearchPage() {
                           onChange={(e) => {
                             const numValue = e.target.value === "" ? "" : Number(e.target.value)
                             onChange(numValue)
+                            clearAutoFillHighlight("duration")
                           }}
-                          className="h-8 sm:h-10 text-xs sm:text-sm"
+                          className={cn(
+                            "h-8 sm:h-10 text-xs sm:text-sm",
+                            isAutoFilled("duration") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                          )}
                         />
                       )
                     }}
@@ -825,7 +1020,14 @@ export default function AddResearchPage() {
                         placeholder="Enter sanctioned amount"
                         min="0"
                         step="0.01"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("grant_sanctioned") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          clearAutoFillHighlight("grant_sanctioned")
+                        }}
                       />
                     )}
                   />
@@ -852,7 +1054,14 @@ export default function AddResearchPage() {
                         placeholder="Enter received amount"
                         min="0"
                         step="0.01"
-                        className="h-8 sm:h-10 text-xs sm:text-sm"
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          isAutoFilled("grant_received") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
+                        onChange={(e) => {
+                          field.onChange(e)
+                          clearAutoFillHighlight("grant_received")
+                        }}
                       />
                     )}
                   />
@@ -919,11 +1128,16 @@ export default function AddResearchPage() {
                         max="2100"
                         maxLength={4}
                         disabled={!grantSealed}
-                        className={`h-8 sm:h-10 text-xs sm:text-sm ${!grantSealed ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                        className={cn(
+                          "h-8 sm:h-10 text-xs sm:text-sm",
+                          !grantSealed && "bg-gray-100 cursor-not-allowed",
+                          grantSealed && isAutoFilled("grant_year") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                        )}
                         onChange={(e) => {
                           // Limit to 4 digits
                           const value = e.target.value.replace(/\D/g, '').slice(0, 4)
                           field.onChange(value)
+                          clearAutoFillHighlight("grant_year")
                         }}
                       />
                     )}
