@@ -109,48 +109,46 @@ export default function AddConsultancyPage() {
         filledFieldNames.push("startDate")
       }
       
-      // Duration
+      // Duration - validate it's a valid number
       if (fields.duration !== undefined && fields.duration !== null) {
-        setValue("duration", Number(fields.duration))
-        filledFieldNames.push("duration")
+        const durationValue = Number(fields.duration)
+        if (!isNaN(durationValue) && durationValue >= 0) {
+          setValue("duration", durationValue)
+          filledFieldNames.push("duration")
+        }
       }
       
-      // Amount
+      // Amount - validate it's a valid number
       if (fields.amount !== undefined && fields.amount !== null) {
         // Handle comma-separated numbers
         const amountValue = String(fields.amount).replace(/,/g, '').trim()
         const numValue = Number(amountValue)
-        if (!isNaN(numValue)) {
+        if (!isNaN(numValue) && numValue >= 0) {
           setValue("amount", numValue)
-        } else {
-          setValue("amount", amountValue)
+          filledFieldNames.push("amount")
         }
-        filledFieldNames.push("amount")
       }
       
       // Details / Outcome - form field is "detailsOutcome"
       if (fields.detailsOutcome) {
         setValue("detailsOutcome", String(fields.detailsOutcome))
         filledFieldNames.push("detailsOutcome")
-      } else if (fields.details) {
+      } else if (fields.details || fields.outcome) {
         // Fallback if mapping didn't work
-        setValue("detailsOutcome", String(fields.details))
+        setValue("detailsOutcome", String(fields.details || fields.outcome))
         filledFieldNames.push("detailsOutcome")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

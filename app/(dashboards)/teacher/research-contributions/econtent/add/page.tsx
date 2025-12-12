@@ -72,18 +72,54 @@ export default function AddEContentPage() {
       // Clear previous highlighting when new document extraction happens
       setAutoFilledFields(new Set())
       
-      // Track which fields were auto-filled (only non-empty fields)
+      // Track which fields were auto-filled (only fields that were successfully set)
       const filledFieldNames: string[] = []
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
       
       // Auto-fill form fields from document analysis
       if (fields.title || fields.Title) {
         setValue("title", String(fields.title || fields.Title))
         filledFieldNames.push("title")
       }
+      
+      // Type of E-Content Platform - only highlight if a valid option was found and set
       if (fields.type !== undefined && fields.type !== null) {
-        setValue("typeOfEContentPlatform", typeof fields.type === 'number' ? fields.type : Number(fields.type))
-        filledFieldNames.push("typeOfEContentPlatform")
+        let typeValue: number | null = null
+        
+        if (typeof fields.type === 'number') {
+          if (isValidDropdownValue(fields.type, eContentTypeOptions)) {
+            typeValue = fields.type
+          }
+        } else {
+          // Try to find matching option by name
+          const typeOption = eContentTypeOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.type).toLowerCase()
+          )
+          if (typeOption) {
+            typeValue = typeOption.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(fields.type)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, eContentTypeOptions)) {
+              typeValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (typeValue !== null && eContentTypeOptions.some(opt => opt.id === typeValue)) {
+          setValue("typeOfEContentPlatform", typeValue, { shouldValidate: true })
+          filledFieldNames.push("typeOfEContentPlatform")
+        }
       }
+      
       if (fields.brief_details || fields.Brief_Details) {
         setValue("briefDetails", String(fields.brief_details || fields.Brief_Details))
         filledFieldNames.push("briefDetails")
@@ -104,24 +140,48 @@ export default function AddEContentPage() {
         setValue("link", String(fields.link || fields.Link))
         filledFieldNames.push("link")
       }
+      
+      // Type of E-Content - only highlight if a valid option was found and set
       if (fields.typeEcontentValue !== undefined && fields.typeEcontentValue !== null) {
-        setValue("typeOfEContent", typeof fields.typeEcontentValue === 'number' ? fields.typeEcontentValue : Number(fields.typeEcontentValue))
-        filledFieldNames.push("typeOfEContent")
+        let typeEcontentValue: number | null = null
+        
+        if (typeof fields.typeEcontentValue === 'number') {
+          if (isValidDropdownValue(fields.typeEcontentValue, typeEcontentValueOptions)) {
+            typeEcontentValue = fields.typeEcontentValue
+          }
+        } else {
+          // Try to find matching option by name
+          const typeOption = typeEcontentValueOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.typeEcontentValue).toLowerCase()
+          )
+          if (typeOption) {
+            typeEcontentValue = typeOption.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(fields.typeEcontentValue)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, typeEcontentValueOptions)) {
+              typeEcontentValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (typeEcontentValue !== null && typeEcontentValueOptions.some(opt => opt.id === typeEcontentValue)) {
+          setValue("typeOfEContent", typeEcontentValue, { shouldValidate: true })
+          filledFieldNames.push("typeOfEContent")
+        }
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

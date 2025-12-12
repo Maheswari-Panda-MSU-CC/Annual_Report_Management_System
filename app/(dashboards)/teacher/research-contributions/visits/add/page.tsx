@@ -107,25 +107,36 @@ export default function AddVisitsPage() {
         }
       }
       
-      // Role - this should already be matched to dropdown ID by the hook
+      // Role - only highlight if a valid option was found and set
       if (fields.role !== undefined && fields.role !== null) {
+        let roleValue: number | null = null
+        
         if (typeof fields.role === 'number') {
-          setValue("role", fields.role)
+          // Check if the number matches an option ID
+          if (academicVisitRoleOptions.some(opt => opt.id === fields.role)) {
+            roleValue = fields.role
+          }
         } else {
-          // If it's a string, try to find matching option
+          // Try to find matching option by name
           const roleOption = academicVisitRoleOptions.find(
             opt => opt.name.toLowerCase() === String(fields.role).toLowerCase()
           )
           if (roleOption) {
-            setValue("role", roleOption.id)
+            roleValue = roleOption.id
           } else {
+            // Try to convert to number and check
             const numValue = Number(fields.role)
-            if (!isNaN(numValue)) {
-              setValue("role", numValue)
+            if (!isNaN(numValue) && academicVisitRoleOptions.some(opt => opt.id === numValue)) {
+              roleValue = numValue
             }
           }
         }
-        filledFieldNames.push("role")
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (roleValue !== null && academicVisitRoleOptions.some(opt => opt.id === roleValue)) {
+          setValue("role", roleValue, { shouldValidate: true })
+          filledFieldNames.push("role")
+        }
       }
       
       // Sponsored By - form field is "sponsoredBy"
@@ -150,19 +161,16 @@ export default function AddVisitsPage() {
         filledFieldNames.push("date")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

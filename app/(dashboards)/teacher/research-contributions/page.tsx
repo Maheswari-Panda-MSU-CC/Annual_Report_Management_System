@@ -387,30 +387,316 @@ export default function ResearchContributionsPage() {
       // Clear previous highlighting when new document extraction happens
       setAutoFilledFields(new Set())
       
-      // Track which fields were auto-filled (only non-empty fields)
+      // Track which fields were auto-filled (only fields that were successfully set)
       const filledFieldNames: string[] = []
       
-      // Auto-fill form fields - replace existing data
+      if (!editingItem) return
+      
+      const sectionId = editingItem.sectionId
+      const dropdownOptions = getDropdownOptions(sectionId)
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
+      
+      // Helper function to validate and set dropdown field
+      const validateAndSetDropdown = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): string | null => {
+        if (value === undefined || value === null) return null
+        
+        let fieldValue: number | null = null
+        
+        if (typeof value === 'number') {
+          if (isValidDropdownValue(value, options)) {
+            fieldValue = value
+          }
+        } else {
+          // Try to find matching option by name
+          const option = options.find(
+            opt => opt.name.toLowerCase() === String(value).toLowerCase()
+          )
+          if (option) {
+            fieldValue = option.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(value)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, options)) {
+              fieldValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (fieldValue !== null && options.some(opt => opt.id === fieldValue)) {
+          setValue(fieldName, fieldValue, { shouldValidate: true })
+          return fieldName
+        }
+        return null
+      }
+      
+      // Process fields based on section type
       Object.entries(fields).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          setValue(key, value)
-          filledFieldNames.push(key)
+        if (value === undefined || value === null || value === "") return
+        
+        // Track the actual form field name that was set
+        let formFieldName: string | null = null
+        
+        switch (sectionId) {
+          case "patents":
+            if (key === "level" && dropdownOptions.level) {
+              formFieldName = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else if (key === "status" && dropdownOptions.status) {
+              formFieldName = validateAndSetDropdown("status", value, dropdownOptions.status)
+            } else if (key === "earning_generated" || key === "Earnings_Generate") {
+              const numValue = Number(value)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("Earnings_Generate", numValue)
+                formFieldName = "Earnings_Generate"
+              }
+            } else {
+              // Text fields
+              setValue(key, String(value))
+              formFieldName = key
+            }
+            break
+            
+          case "policy":
+            if (key === "level" && dropdownOptions.level) {
+              formFieldName = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else {
+              // Text fields
+              setValue(key, String(value))
+              formFieldName = key
+            }
+            break
+            
+          case "econtent":
+            if (key === "type" && dropdownOptions.type) {
+              formFieldName = validateAndSetDropdown("typeOfEContentPlatform", value, dropdownOptions.type)
+            } else if (key === "typeEcontentValue" && dropdownOptions.typeEcontentValue) {
+              formFieldName = validateAndSetDropdown("typeOfEContent", value, dropdownOptions.typeEcontentValue)
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "brief_details": "briefDetails",
+                "Brief_Details": "briefDetails",
+                "Publishing_date": "publishingDate",
+                "publishingDate": "publishingDate",
+                "Publishing_Authorities": "publishingAuthorities",
+                "publishingAuthorities": "publishingAuthorities",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "consultancy":
+            if (key === "duration") {
+              const numValue = Number(value)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("duration", numValue)
+                formFieldName = "duration"
+              }
+            } else if (key === "amount") {
+              const amountStr = String(value).replace(/,/g, '').trim()
+              const numValue = Number(amountStr)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("amount", numValue)
+                formFieldName = "amount"
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "name": "title",
+                "collaborating_inst": "collaboratingInstitute",
+                "Start_Date": "startDate",
+                "details": "detailsOutcome",
+                "outcome": "detailsOutcome",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "collaborations":
+            if (key === "category" && dropdownOptions.type) {
+              formFieldName = validateAndSetDropdown("category", value, dropdownOptions.type)
+            } else if ((key === "collabOutcome" || key === "outcome") && dropdownOptions.outcome) {
+              formFieldName = validateAndSetDropdown("collabOutcome", value, dropdownOptions.outcome)
+            } else if (key === "level" && dropdownOptions.level) {
+              formFieldName = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else if (key === "status") {
+              const validStatuses = ["Active", "Ongoing", "Completed", "Pending", "Cancelled"]
+              let statusValue: string | null = null
+              if (typeof value === 'string' && validStatuses.includes(value)) {
+                statusValue = value
+              } else {
+                const statusStr = String(value)
+                if (validStatuses.includes(statusStr)) {
+                  statusValue = statusStr
+                }
+              }
+              if (statusValue !== null) {
+                setValue("status", statusValue)
+                formFieldName = "status"
+              }
+            } else if (key === "duration") {
+              const numValue = Number(value)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("duration", numValue)
+                formFieldName = "duration"
+              }
+            } else if (key === "noOfBeneficiary" || key === "beneficiary_num" || key === "beneficiary_count") {
+              const numValue = Number(value)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("noOfBeneficiary", numValue)
+                formFieldName = "noOfBeneficiary"
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "collaborating_inst": "collaboratingInstitute",
+                "collab_name": "collabName",
+                "qs_ranking": "collabRank",
+                "starting_date": "startingDate",
+                "signing_date": "signingDate",
+                "MOU_signed": "mouSigned",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "visits":
+            if (key === "role" && dropdownOptions.role) {
+              formFieldName = validateAndSetDropdown("role", value, dropdownOptions.role)
+            } else if (key === "durationOfVisit" || key === "duration") {
+              const durationValue = typeof value === 'number' 
+                ? value 
+                : Number(String(value).replace(/[^0-9.]/g, ''))
+              if (!isNaN(durationValue) && durationValue > 0) {
+                setValue("durationOfVisit", durationValue)
+                formFieldName = "durationOfVisit"
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "institute": "instituteVisited",
+                "sponsored_by": "sponsoredBy",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "financial":
+            if (key === "type" && dropdownOptions.type) {
+              formFieldName = validateAndSetDropdown("type", value, dropdownOptions.type)
+            } else if (key === "grantReceived" || key === "grant" || key === "amount") {
+              const grantStr = String(value).replace(/,/g, '').trim()
+              const numValue = Number(grantStr)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("grantReceived", numValue)
+                formFieldName = "grantReceived"
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "title": "nameOfSupport",
+                "agency": "supportingAgency",
+                "event_details": "detailsOfEvent",
+                "purpose": "purposeOfGrant",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "jrfSrf":
+            if (key === "type" && dropdownOptions.type) {
+              formFieldName = validateAndSetDropdown("type", value, dropdownOptions.type)
+            } else if (key === "duration") {
+              const durationValue = typeof value === 'number' 
+                ? value 
+                : Number(String(value).replace(/[^0-9.]/g, ''))
+              if (!isNaN(durationValue) && durationValue > 0) {
+                setValue("duration", durationValue)
+                formFieldName = "duration"
+              }
+            } else if (key === "monthlyStipend" || key === "stipend") {
+              const stipendStr = String(value).replace(/,/g, '').trim()
+              const numValue = Number(stipendStr)
+              if (!isNaN(numValue) && numValue >= 0) {
+                setValue("monthlyStipend", numValue)
+                formFieldName = "monthlyStipend"
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "name": "nameOfFellow",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "phd":
+            if (key === "status" && dropdownOptions.status) {
+              formFieldName = validateAndSetDropdown("status", value, dropdownOptions.status)
+            } else if (key === "yearOfCompletion" || key === "completion_year") {
+              const yearValue = String(value).replace(/[^0-9]/g, '')
+              if (yearValue && yearValue.length === 4) {
+                setValue("yearOfCompletion", Number(yearValue))
+                formFieldName = "yearOfCompletion"
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "regno": "regNo",
+                "name": "nameOfStudent",
+                "start_date": "dateOfRegistration",
+              }
+              formFieldName = fieldMap[key] || key
+              setValue(formFieldName, String(value))
+            }
+            break
+            
+          case "copyrights":
+            // All text fields for copyrights
+            const fieldMap: Record<string, string> = {
+              "Title": "title",
+              "Reference_No": "referenceNo",
+              "Publication_Date": "publicationDate",
+              "Link": "link",
+            }
+            formFieldName = fieldMap[key] || key
+            setValue(formFieldName, String(value))
+            break
+            
+          default:
+            // Default: just set the value for unknown sections
+            setValue(key, String(value))
+            formFieldName = key
+        }
+        
+        if (formFieldName) {
+          filledFieldNames.push(formFieldName)
         }
       })
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Updated",
-          description: `${filledCount} field(s) replaced with new extracted data`,
+          description: `${filledFieldNames.length} field(s) replaced with new extracted data`,
         })
       }
     },

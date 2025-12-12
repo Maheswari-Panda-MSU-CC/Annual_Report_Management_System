@@ -87,27 +87,36 @@ export default function AddJrfSrfPage() {
         filledFieldNames.push("nameOfFellow")
       }
       
-      // Type - this should already be matched to dropdown ID by the hook
-      // But handle both number (ID) and string (name) cases
+      // Type - only highlight if a valid option was found and set
       if (fields.type !== undefined && fields.type !== null) {
+        let typeValue: number | null = null
+        
         if (typeof fields.type === 'number') {
-          setValue("type", fields.type)
+          // Check if the number matches an option ID
+          if (jrfSrfTypeOptions.some(opt => opt.id === fields.type)) {
+            typeValue = fields.type
+          }
         } else {
-          // If it's a string, try to find matching option
+          // Try to find matching option by name
           const typeOption = jrfSrfTypeOptions.find(
             opt => opt.name.toLowerCase() === String(fields.type).toLowerCase()
           )
           if (typeOption) {
-            setValue("type", typeOption.id)
+            typeValue = typeOption.id
           } else {
-            // If no match found, try to convert to number (in case it's a string number)
+            // Try to convert to number and check
             const numValue = Number(fields.type)
-            if (!isNaN(numValue)) {
-              setValue("type", numValue)
+            if (!isNaN(numValue) && jrfSrfTypeOptions.some(opt => opt.id === numValue)) {
+              typeValue = numValue
             }
           }
         }
-        filledFieldNames.push("type")
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (typeValue !== null && jrfSrfTypeOptions.some(opt => opt.id === typeValue)) {
+          setValue("type", typeValue, { shouldValidate: true })
+          filledFieldNames.push("type")
+        }
       }
       
       // Project Title - form field is "projectTitle"
@@ -127,26 +136,23 @@ export default function AddJrfSrfPage() {
         }
       }
       
-      // Monthly Stipend - form field is "monthlyStipend"
-      // Handle comma-separated numbers like "15,000"
+      // Monthly Stipend - validate it's a valid number
       if (fields.monthlyStipend !== undefined && fields.monthlyStipend !== null) {
+        // Handle comma-separated numbers like "15,000"
         const stipendValue = String(fields.monthlyStipend).replace(/,/g, '').trim()
         const numValue = Number(stipendValue)
-        if (!isNaN(numValue)) {
+        if (!isNaN(numValue) && numValue >= 0) {
           setValue("monthlyStipend", numValue)
-        } else if (stipendValue) {
-          // If it's not a valid number, set as string anyway
-          setValue("monthlyStipend", stipendValue)
+          filledFieldNames.push("monthlyStipend")
         }
-        filledFieldNames.push("monthlyStipend")
       } else if (fields.stipend !== undefined && fields.stipend !== null) {
         // Fallback for "stipend" field name
         const stipendValue = String(fields.stipend).replace(/,/g, '').trim()
         const numValue = Number(stipendValue)
-        if (!isNaN(numValue)) {
+        if (!isNaN(numValue) && numValue >= 0) {
           setValue("monthlyStipend", numValue)
+          filledFieldNames.push("monthlyStipend")
         }
-        filledFieldNames.push("monthlyStipend")
       }
       
       // Date - form field is "date"
@@ -155,19 +161,16 @@ export default function AddJrfSrfPage() {
         filledFieldNames.push("date")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

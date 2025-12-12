@@ -70,22 +70,85 @@ export default function AddPatentsPage() {
       // Clear previous highlighting when new document extraction happens
       setAutoFilledFields(new Set())
       
-      // Track which fields were auto-filled (only non-empty fields)
+      // Track which fields were auto-filled (only fields that were successfully set)
       const filledFieldNames: string[] = []
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
       
       // Auto-fill form fields from document analysis
       if (fields.title) {
         setValue("title", String(fields.title))
         filledFieldNames.push("title")
       }
+      
+      // Level - only highlight if a valid option was found and set
       if (fields.level !== undefined && fields.level !== null) {
-        setValue("level", Number(fields.level))
-        filledFieldNames.push("level")
+        let levelValue: number | null = null
+        
+        if (typeof fields.level === 'number') {
+          if (isValidDropdownValue(fields.level, resPubLevelOptions)) {
+            levelValue = fields.level
+          }
+        } else {
+          // Try to find matching option by name
+          const levelOption = resPubLevelOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.level).toLowerCase()
+          )
+          if (levelOption) {
+            levelValue = levelOption.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(fields.level)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, resPubLevelOptions)) {
+              levelValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (levelValue !== null && resPubLevelOptions.some(opt => opt.id === levelValue)) {
+          setValue("level", levelValue, { shouldValidate: true })
+          filledFieldNames.push("level")
+        }
       }
+      
+      // Status - only highlight if a valid option was found and set
       if (fields.status !== undefined && fields.status !== null) {
-        setValue("status", Number(fields.status))
-        filledFieldNames.push("status")
+        let statusValue: number | null = null
+        
+        if (typeof fields.status === 'number') {
+          if (isValidDropdownValue(fields.status, patentStatusOptions)) {
+            statusValue = fields.status
+          }
+        } else {
+          // Try to find matching option by name
+          const statusOption = patentStatusOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.status).toLowerCase()
+          )
+          if (statusOption) {
+            statusValue = statusOption.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(fields.status)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, patentStatusOptions)) {
+              statusValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (statusValue !== null && patentStatusOptions.some(opt => opt.id === statusValue)) {
+          setValue("status", statusValue, { shouldValidate: true })
+          filledFieldNames.push("status")
+        }
       }
+      
       if (fields.date) {
         setValue("date", String(fields.date))
         filledFieldNames.push("date")
@@ -95,27 +158,27 @@ export default function AddPatentsPage() {
         filledFieldNames.push("Tech_Licence")
       }
       if (fields.earning_generated !== undefined && fields.earning_generated !== null) {
-        setValue("Earnings_Generate", Number(fields.earning_generated))
-        filledFieldNames.push("Earnings_Generate")
+        const earningValue = Number(fields.earning_generated)
+        if (!isNaN(earningValue) && earningValue >= 0) {
+          setValue("Earnings_Generate", earningValue)
+          filledFieldNames.push("Earnings_Generate")
+        }
       }
       if (fields.PatentApplicationNo) {
         setValue("PatentApplicationNo", String(fields.PatentApplicationNo))
         filledFieldNames.push("PatentApplicationNo")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

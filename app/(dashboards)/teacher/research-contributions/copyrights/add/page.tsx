@@ -65,7 +65,7 @@ export default function AddCopyrightsPage() {
       // Clear previous highlighting when new document extraction happens
       setAutoFilledFields(new Set())
       
-      // Track which fields were auto-filled (only non-empty fields)
+      // Track which fields were auto-filled (only fields that were successfully set)
       const filledFieldNames: string[] = []
       
       // Auto-fill form fields from document analysis
@@ -86,19 +86,16 @@ export default function AddCopyrightsPage() {
         filledFieldNames.push("link")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

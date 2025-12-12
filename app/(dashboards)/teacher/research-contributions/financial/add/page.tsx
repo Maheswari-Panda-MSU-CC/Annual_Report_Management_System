@@ -90,25 +90,36 @@ export default function AddFinancialPage() {
         filledFieldNames.push("nameOfSupport")
       }
       
-      // Type - this should already be matched to dropdown ID by the hook
+      // Type - only highlight if a valid option was found and set
       if (fields.type !== undefined && fields.type !== null) {
+        let typeValue: number | null = null
+        
         if (typeof fields.type === 'number') {
-          setValue("type", fields.type)
+          // Check if the number matches an option ID
+          if (financialSupportTypeOptions.some(opt => opt.id === fields.type)) {
+            typeValue = fields.type
+          }
         } else {
-          // If it's a string, try to find matching option
+          // Try to find matching option by name
           const typeOption = financialSupportTypeOptions.find(
             opt => opt.name.toLowerCase() === String(fields.type).toLowerCase()
           )
           if (typeOption) {
-            setValue("type", typeOption.id)
+            typeValue = typeOption.id
           } else {
+            // Try to convert to number and check
             const numValue = Number(fields.type)
-            if (!isNaN(numValue)) {
-              setValue("type", numValue)
+            if (!isNaN(numValue) && financialSupportTypeOptions.some(opt => opt.id === numValue)) {
+              typeValue = numValue
             }
           }
         }
-        filledFieldNames.push("type")
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (typeValue !== null && financialSupportTypeOptions.some(opt => opt.id === typeValue)) {
+          setValue("type", typeValue, { shouldValidate: true })
+          filledFieldNames.push("type")
+        }
       }
       
       // Supporting Agency - form field is "supportingAgency"
@@ -121,25 +132,23 @@ export default function AddFinancialPage() {
         filledFieldNames.push("supportingAgency")
       }
       
-      // Grant Received - form field is "grantReceived"
-      // Handle comma-separated numbers like "15,000"
+      // Grant Received - validate it's a valid number
       if (fields.grantReceived !== undefined && fields.grantReceived !== null) {
+        // Handle comma-separated numbers like "15,000"
         const grantValue = String(fields.grantReceived).replace(/,/g, '').trim()
         const numValue = Number(grantValue)
-        if (!isNaN(numValue)) {
+        if (!isNaN(numValue) && numValue >= 0) {
           setValue("grantReceived", numValue)
-        } else if (grantValue) {
-          setValue("grantReceived", grantValue)
+          filledFieldNames.push("grantReceived")
         }
-        filledFieldNames.push("grantReceived")
       } else if (fields.amount !== undefined && fields.amount !== null) {
         // Fallback if mapping didn't work
         const grantValue = String(fields.amount).replace(/,/g, '').trim()
         const numValue = Number(grantValue)
-        if (!isNaN(numValue)) {
+        if (!isNaN(numValue) && numValue >= 0) {
           setValue("grantReceived", numValue)
+          filledFieldNames.push("grantReceived")
         }
-        filledFieldNames.push("grantReceived")
       }
       
       // Details of Event - form field is "detailsOfEvent"
@@ -168,19 +177,16 @@ export default function AddFinancialPage() {
         filledFieldNames.push("date")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

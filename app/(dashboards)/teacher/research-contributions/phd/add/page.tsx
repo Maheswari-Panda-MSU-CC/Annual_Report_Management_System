@@ -115,57 +115,64 @@ export default function AddPhdPage() {
         filledFieldNames.push("topic")
       }
       
-      // Status - this should already be matched to dropdown ID by the hook
+      // Status - only highlight if a valid option was found and set
       if (fields.status !== undefined && fields.status !== null) {
+        let statusValue: number | null = null
+        
         if (typeof fields.status === 'number') {
-          setValue("status", fields.status)
+          // Check if the number matches an option ID
+          if (phdGuidanceStatusOptions.some(opt => opt.id === fields.status)) {
+            statusValue = fields.status
+          }
         } else {
-          // If it's a string, try to find matching option
+          // Try to find matching option by name
           const statusOption = phdGuidanceStatusOptions.find(
             opt => opt.name.toLowerCase() === String(fields.status).toLowerCase()
           )
           if (statusOption) {
-            setValue("status", statusOption.id)
+            statusValue = statusOption.id
           } else {
-            // If no match found, try to convert to number
+            // Try to convert to number and check
             const numValue = Number(fields.status)
-            if (!isNaN(numValue)) {
-              setValue("status", numValue)
+            if (!isNaN(numValue) && phdGuidanceStatusOptions.some(opt => opt.id === numValue)) {
+              statusValue = numValue
             }
           }
         }
-        filledFieldNames.push("status")
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (statusValue !== null && phdGuidanceStatusOptions.some(opt => opt.id === statusValue)) {
+          setValue("status", statusValue, { shouldValidate: true })
+          filledFieldNames.push("status")
+        }
       }
       
-      // Year of Completion - form field is "yearOfCompletion"
+      // Year of Completion - validate it's a valid 4-digit year
       if (fields.yearOfCompletion !== undefined && fields.yearOfCompletion !== null) {
         const yearValue = String(fields.yearOfCompletion).replace(/[^0-9]/g, '')
-        if (yearValue) {
+        if (yearValue && yearValue.length === 4) {
           setValue("yearOfCompletion", Number(yearValue))
           filledFieldNames.push("yearOfCompletion")
         }
       } else if (fields.completion_year !== undefined && fields.completion_year !== null) {
         // Fallback if mapping didn't work
         const yearValue = String(fields.completion_year).replace(/[^0-9]/g, '')
-        if (yearValue) {
+        if (yearValue && yearValue.length === 4) {
           setValue("yearOfCompletion", Number(yearValue))
           filledFieldNames.push("yearOfCompletion")
         }
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },

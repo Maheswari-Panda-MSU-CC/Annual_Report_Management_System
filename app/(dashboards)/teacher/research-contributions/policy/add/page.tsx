@@ -72,18 +72,54 @@ export default function AddPolicyPage() {
       // Clear previous highlighting when new document extraction happens
       setAutoFilledFields(new Set())
       
-      // Track which fields were auto-filled (only non-empty fields)
+      // Track which fields were auto-filled (only fields that were successfully set)
       const filledFieldNames: string[] = []
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
       
       // Auto-fill form fields from document analysis
       if (fields.title) {
         setValue("title", String(fields.title))
         filledFieldNames.push("title")
       }
+      
+      // Level - only highlight if a valid option was found and set
       if (fields.level !== undefined && fields.level !== null) {
-        setValue("level", Number(fields.level))
-        filledFieldNames.push("level")
+        let levelValue: number | null = null
+        
+        if (typeof fields.level === 'number') {
+          if (isValidDropdownValue(fields.level, resPubLevelOptions)) {
+            levelValue = fields.level
+          }
+        } else {
+          // Try to find matching option by name
+          const levelOption = resPubLevelOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.level).toLowerCase()
+          )
+          if (levelOption) {
+            levelValue = levelOption.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(fields.level)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, resPubLevelOptions)) {
+              levelValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (levelValue !== null && resPubLevelOptions.some(opt => opt.id === levelValue)) {
+          setValue("level", levelValue, { shouldValidate: true })
+          filledFieldNames.push("level")
+        }
       }
+      
       if (fields.organisation) {
         setValue("organisation", String(fields.organisation))
         filledFieldNames.push("organisation")
@@ -93,19 +129,16 @@ export default function AddPolicyPage() {
         filledFieldNames.push("date")
       }
       
-      // Update auto-filled fields set
+      // Update auto-filled fields set (only fields that were actually set)
       if (filledFieldNames.length > 0) {
-        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+        setAutoFilledFields(new Set(filledFieldNames))
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },
