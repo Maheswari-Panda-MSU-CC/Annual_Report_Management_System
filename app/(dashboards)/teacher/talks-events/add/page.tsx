@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,6 +47,26 @@ export default function AddEventPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm()
   const { watch, setValue } = form
+
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
 
   // Mutations for each section
   const refresherMutations = useRefresherMutations()
@@ -179,87 +199,279 @@ export default function AddEventPage() {
     onlyFillEmpty: true,
     getFormValues: () => watch(),
     onAutoFill: (fields) => {
-    
-      // Map fields based on active tab
-      if (activeTab === "refresher") {
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.refresher_type || fields.course_type) {
-          setValue("refresher_type", String(fields.refresher_type || fields.course_type))
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only fields that were successfully set)
+      const filledFieldNames: string[] = []
+      
+      // Get dropdown options for current tab
+      const dropdownOptions = getDropdownOptionsForTab(activeTab)
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
         }
-        // Check mapped field names first (start_date, end_date), then form field names
-        if (fields.start_date || fields.startdate) {
-          setValue("startdate", String(fields.start_date || fields.startdate))
-        }
-        if (fields.end_date || fields.enddate) {
-          setValue("enddate", String(fields.end_date || fields.enddate))
-        }
-        if (fields.organizing_university || fields.university) {
-          setValue("university", String(fields.organizing_university || fields.university))
-        }
-        if (fields.organizing_institute || fields.institute) {
-          setValue("institute", String(fields.organizing_institute || fields.institute))
-        }
-        if (fields.organizing_department || fields.department) {
-          setValue("department", String(fields.organizing_department || fields.department))
-        }
-        if (fields.centre) setValue("centre", String(fields.centre))
-        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
-      } else if (activeTab === "academic-programs") {
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.programme) setValue("programme", String(fields.programme))
-        if (fields.place) setValue("place", String(fields.place))
-        if (fields.date) setValue("date", String(fields.date))
-        if (fields.year || fields.year_name) setValue("year_name", String(fields.year || fields.year_name))
-        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
-        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
-      } else if (activeTab === "academic-bodies") {
-        // Hook maps: "Course Title" → "name", "Academic Body" → "acad_body", "Year" → "year_name"
-        // So we use the mapped field names directly
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.acad_body) setValue("acad_body", String(fields.acad_body))
-        if (fields.place) setValue("place", String(fields.place))
-        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
-        // year_name is already mapped and processed by hook (dropdown matching)
-        if (fields.year_name) setValue("year_name", String(fields.year_name))
-        // Also handle legacy "year" field name for backward compatibility
-        if (fields.year && !fields.year_name) {
-          setValue("year_name", String(fields.year))
-        }
-        // submit_date is a date field - try to set from year if available
-        if (fields.submit_date) {
-          setValue("submit_date", String(fields.submit_date))
-        } else if (fields.year_name) {
-          // If we have a year, try to set submit_date to first day of that year
-          const yearValue = fields.year_name
-          // Check if it's a valid year (4 digits)
-          if (typeof yearValue === 'string' && /^\d{4}$/.test(yearValue)) {
-            setValue("submit_date", `${yearValue}-01-01`)
+        return false
+      }
+      
+      // Helper function to validate and set dropdown field
+      const validateAndSetDropdown = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+        if (value === undefined || value === null) return false
+        
+        let fieldValue: number | null = null
+        
+        if (typeof value === 'number') {
+          if (isValidDropdownValue(value, options)) {
+            fieldValue = value
+          }
+        } else {
+          // Try to find matching option by name
+          const option = options.find(
+            opt => opt.name.toLowerCase() === String(value).toLowerCase()
+          )
+          if (option) {
+            fieldValue = option.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(value)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, options)) {
+              fieldValue = numValue
+            }
           }
         }
-        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (fieldValue !== null && options.some(opt => opt.id === fieldValue)) {
+          setValue(fieldName, fieldValue, { shouldValidate: true })
+          return true
+        }
+        return false
+      }
+      
+      // Process fields based on active tab
+      if (activeTab === "refresher") {
+        // Name
+        if (fields.name) {
+          setValue("name", String(fields.name))
+          filledFieldNames.push("name")
+        }
+        
+        // Refresher Type (dropdown)
+        if (fields.refresher_type || fields.course_type) {
+          const value = fields.refresher_type || fields.course_type
+          if (dropdownOptions.refresher_type && validateAndSetDropdown("refresher_type", value, dropdownOptions.refresher_type)) {
+            filledFieldNames.push("refresher_type")
+          }
+        }
+        
+        // Start Date
+        if (fields.start_date || fields.startdate) {
+          setValue("startdate", String(fields.start_date || fields.startdate))
+          filledFieldNames.push("startdate")
+        }
+        
+        // End Date
+        if (fields.end_date || fields.enddate) {
+          setValue("enddate", String(fields.end_date || fields.enddate))
+          filledFieldNames.push("enddate")
+        }
+        
+        // University
+        if (fields.organizing_university || fields.university) {
+          setValue("university", String(fields.organizing_university || fields.university))
+          filledFieldNames.push("university")
+        }
+        
+        // Institute
+        if (fields.organizing_institute || fields.institute) {
+          setValue("institute", String(fields.organizing_institute || fields.institute))
+          filledFieldNames.push("institute")
+        }
+        
+        // Department
+        if (fields.organizing_department || fields.department) {
+          setValue("department", String(fields.organizing_department || fields.department))
+          filledFieldNames.push("department")
+        }
+        
+        // Centre
+        if (fields.centre) {
+          setValue("centre", String(fields.centre))
+          filledFieldNames.push("centre")
+        }
+        
+      } else if (activeTab === "academic-programs") {
+        // Name
+        if (fields.name) {
+          setValue("name", String(fields.name))
+          filledFieldNames.push("name")
+        }
+        
+        // Programme (dropdown)
+        if (fields.programme && dropdownOptions.programme) {
+          if (validateAndSetDropdown("programme", fields.programme, dropdownOptions.programme)) {
+            filledFieldNames.push("programme")
+          }
+        }
+        
+        // Place
+        if (fields.place) {
+          setValue("place", String(fields.place))
+          filledFieldNames.push("place")
+        }
+        
+        // Date
+        if (fields.date) {
+          setValue("date", String(fields.date))
+          filledFieldNames.push("date")
+        }
+        
+        // Year Name (dropdown)
+        if ((fields.year || fields.year_name) && dropdownOptions.year_name) {
+          if (validateAndSetDropdown("year_name", fields.year || fields.year_name, dropdownOptions.year_name)) {
+            filledFieldNames.push("year_name")
+          }
+        }
+        
+        // Participated As (dropdown)
+        if (fields.participated_as && dropdownOptions.participated_as) {
+          if (validateAndSetDropdown("participated_as", fields.participated_as, dropdownOptions.participated_as)) {
+            filledFieldNames.push("participated_as")
+          }
+        }
+        
+      } else if (activeTab === "academic-bodies") {
+        // Name
+        if (fields.name) {
+          setValue("name", String(fields.name))
+          filledFieldNames.push("name")
+        }
+        
+        // Academic Body
+        if (fields.acad_body) {
+          setValue("acad_body", String(fields.acad_body))
+          filledFieldNames.push("acad_body")
+        }
+        
+        // Place
+        if (fields.place) {
+          setValue("place", String(fields.place))
+          filledFieldNames.push("place")
+        }
+        
+        // Participated As
+        if (fields.participated_as) {
+          setValue("participated_as", String(fields.participated_as))
+          filledFieldNames.push("participated_as")
+        }
+        
+        // Year Name (dropdown)
+        if (fields.year_name && dropdownOptions.year_name) {
+          if (validateAndSetDropdown("year_name", fields.year_name, dropdownOptions.year_name)) {
+            filledFieldNames.push("year_name")
+          }
+        } else if (fields.year && !fields.year_name && dropdownOptions.year_name) {
+          if (validateAndSetDropdown("year_name", fields.year, dropdownOptions.year_name)) {
+            filledFieldNames.push("year_name")
+          }
+        }
+        
+        // Submit Date
+        if (fields.submit_date) {
+          setValue("submit_date", String(fields.submit_date))
+          filledFieldNames.push("submit_date")
+        } else if (fields.year_name) {
+          const yearValue = fields.year_name
+          if (typeof yearValue === 'string' && /^\d{4}$/.test(yearValue)) {
+            setValue("submit_date", `${yearValue}-01-01`)
+            filledFieldNames.push("submit_date")
+          }
+        }
+        
       } else if (activeTab === "committees") {
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.committee_name) setValue("committee_name", String(fields.committee_name))
-        if (fields.level) setValue("level", String(fields.level))
-        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
-        if (fields.submit_date || fields.year) setValue("submit_date", String(fields.submit_date || fields.year))
-        if (fields.year_name || fields.year) setValue("year_name", String(fields.year_name || fields.year))
-        if (fields.supporting_doc) setValue("supporting_doc", String(fields.supporting_doc))
+        // Name
+        if (fields.name) {
+          setValue("name", String(fields.name))
+          filledFieldNames.push("name")
+        }
+        
+        // Committee Name
+        if (fields.committee_name) {
+          setValue("committee_name", String(fields.committee_name))
+          filledFieldNames.push("committee_name")
+        }
+        
+        // Level (dropdown)
+        if (fields.level && dropdownOptions.level) {
+          if (validateAndSetDropdown("level", fields.level, dropdownOptions.level)) {
+            filledFieldNames.push("level")
+          }
+        }
+        
+        // Participated As
+        if (fields.participated_as) {
+          setValue("participated_as", String(fields.participated_as))
+          filledFieldNames.push("participated_as")
+        }
+        
+        // Submit Date
+        if (fields.submit_date) {
+          setValue("submit_date", String(fields.submit_date))
+          filledFieldNames.push("submit_date")
+        }
+        
+        // Year Name (dropdown)
+        if ((fields.year_name || fields.year) && dropdownOptions.year_name) {
+          if (validateAndSetDropdown("year_name", fields.year_name || fields.year, dropdownOptions.year_name)) {
+            filledFieldNames.push("year_name")
+          }
+        }
+        
       } else if (activeTab === "talks") {
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.programme) setValue("programme", String(fields.programme))
-        if (fields.place) setValue("place", String(fields.place))
-        if (fields.date || fields.talk_date) setValue("date", String(fields.date || fields.talk_date))
-        if (fields.title || fields.title_of_event) setValue("title", String(fields.title || fields.title_of_event))
-        if (fields.participated_as) setValue("participated_as", String(fields.participated_as))
-        if (fields.supporting_doc) {
-          setValue("supporting_doc", String(fields.supporting_doc))
-          setValue("Image", String(fields.supporting_doc)) // Talks also uses Image field
+        // Name
+        if (fields.name) {
+          setValue("name", String(fields.name))
+          filledFieldNames.push("name")
         }
-        if (fields.Image) {
-          setValue("supporting_doc", String(fields.Image))
-          setValue("Image", String(fields.Image))
+        
+        // Programme (dropdown)
+        if (fields.programme && dropdownOptions.programme) {
+          if (validateAndSetDropdown("programme", fields.programme, dropdownOptions.programme)) {
+            filledFieldNames.push("programme")
+          }
         }
+        
+        // Place
+        if (fields.place) {
+          setValue("place", String(fields.place))
+          filledFieldNames.push("place")
+        }
+        
+        // Date
+        if (fields.date || fields.talk_date) {
+          setValue("date", String(fields.date || fields.talk_date))
+          filledFieldNames.push("date")
+        }
+        
+        // Title
+        if (fields.title || fields.title_of_event) {
+          setValue("title", String(fields.title || fields.title_of_event))
+          filledFieldNames.push("title")
+        }
+        
+        // Participated As (dropdown)
+        if (fields.participated_as && dropdownOptions.participated_as) {
+          if (validateAndSetDropdown("participated_as", fields.participated_as, dropdownOptions.participated_as)) {
+            filledFieldNames.push("participated_as")
+          }
+        }
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames))
       }
     },
     clearAfterUse: false,
@@ -302,6 +514,7 @@ export default function AddEventPage() {
   // Clear fields handler
   const handleClearFields = () => {
     form.reset()
+    setAutoFilledFields(new Set()) // Clear highlighting
     // Also clear document URL from form state
     setValue("supporting_doc", "")
     if (activeTab === "talks") {
@@ -513,6 +726,7 @@ export default function AddEventPage() {
 
       // Reset form
       form.reset()
+      setAutoFilledFields(new Set()) // Clear highlighting
       setSelectedFiles(null)
 
       // Redirect back after a short delay
@@ -554,6 +768,7 @@ export default function AddEventPage() {
 
       // Reset form
       form.reset()
+      setAutoFilledFields(new Set()) // Clear highlighting
       setSelectedFiles(null)
 
       // Redirect back after a short delay
@@ -595,6 +810,7 @@ export default function AddEventPage() {
 
       // Reset form
       form.reset()
+      setAutoFilledFields(new Set()) // Clear highlighting
       setSelectedFiles(null)
 
       // Redirect back after a short delay
@@ -639,6 +855,7 @@ export default function AddEventPage() {
 
       // Reset form
       form.reset()
+      setAutoFilledFields(new Set()) // Clear highlighting
       setSelectedFiles(null)
 
       // Redirect back after a short delay
@@ -680,6 +897,7 @@ export default function AddEventPage() {
 
       // Reset form
       form.reset()
+      setAutoFilledFields(new Set()) // Clear highlighting
       setSelectedFiles(null)
 
       // Redirect back after a short delay
@@ -734,6 +952,8 @@ export default function AddEventPage() {
                 refresherTypeOptions={refresherTypeOptions}
                 onClearFields={handleClearFields}
                 onCancel={handleCancel}
+                isAutoFilled={isAutoFilled}
+                onFieldChange={clearAutoFillHighlight}
               />
               </CardContent>
             </Card>
@@ -765,6 +985,8 @@ export default function AddEventPage() {
                 reportYearsOptions={reportYearsOptions}
                 onClearFields={handleClearFields}
                 onCancel={handleCancel}
+                isAutoFilled={isAutoFilled}
+                onFieldChange={clearAutoFillHighlight}
               />
               </CardContent>
             </Card>
@@ -794,6 +1016,8 @@ export default function AddEventPage() {
                 reportYearsOptions={reportYearsOptions}
                 onClearFields={handleClearFields}
                 onCancel={handleCancel}
+                isAutoFilled={isAutoFilled}
+                onFieldChange={clearAutoFillHighlight}
               />
               </CardContent>
             </Card>
@@ -824,6 +1048,8 @@ export default function AddEventPage() {
                 reportYearsOptions={reportYearsOptions}
                 onClearFields={handleClearFields}
                 onCancel={handleCancel}
+                isAutoFilled={isAutoFilled}
+                onFieldChange={clearAutoFillHighlight}
               />
               </CardContent>
             </Card>
@@ -854,6 +1080,8 @@ export default function AddEventPage() {
                 talksParticipantTypeOptions={talksParticipantTypeOptions}
                 onClearFields={handleClearFields}
                 onCancel={handleCancel}
+                isAutoFilled={isAutoFilled}
+                onFieldChange={clearAutoFillHighlight}
               />
               </CardContent>
             </Card>

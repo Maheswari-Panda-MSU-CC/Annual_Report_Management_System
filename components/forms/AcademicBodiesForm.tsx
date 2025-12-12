@@ -11,6 +11,7 @@ import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { useEffect, useState } from "react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface AcademicBodiesFormProps {
     form: UseFormReturn<any>
@@ -25,6 +26,8 @@ interface AcademicBodiesFormProps {
     reportYearsOptions?: DropdownOption[]
     onClearFields?: () => void
     onCancel?: () => void
+    isAutoFilled?: (fieldName: string) => boolean
+    onFieldChange?: (fieldName: string) => void
 }
 
 export function AcademicBodiesForm({
@@ -40,6 +43,8 @@ export function AcademicBodiesForm({
     reportYearsOptions = [],
     onClearFields,
     onCancel,
+    isAutoFilled,
+    onFieldChange,
 }: AcademicBodiesFormProps) {
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -134,6 +139,9 @@ export function AcademicBodiesForm({
                             id="name" 
                             placeholder="Enter name"
                             maxLength={100}
+                            className={cn(
+                                isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("name", { 
                                 required: "Name is required",
                                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -143,7 +151,8 @@ export function AcademicBodiesForm({
                                         return "Name cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("name")
                             })} 
                         />
                         {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
@@ -155,6 +164,9 @@ export function AcademicBodiesForm({
                             id="acad_body" 
                             placeholder="Enter academic body"
                             maxLength={500}
+                            className={cn(
+                                isAutoFilled?.("acad_body") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("acad_body", { 
                                 required: "Academic body is required",
                                 minLength: { value: 2, message: "Academic body must be at least 2 characters" },
@@ -164,7 +176,8 @@ export function AcademicBodiesForm({
                                         return "Academic body cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("acad_body")
                             })} 
                         />
                         {errors.acad_body && <p className="text-sm text-red-600 mt-1">{errors.acad_body.message?.toString()}</p>}
@@ -176,6 +189,9 @@ export function AcademicBodiesForm({
                             id="place" 
                             placeholder="Enter location"
                             maxLength={150}
+                            className={cn(
+                                isAutoFilled?.("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("place", { 
                                 required: "Place is required",
                                 minLength: { value: 2, message: "Place must be at least 2 characters" },
@@ -185,7 +201,8 @@ export function AcademicBodiesForm({
                                         return "Place cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("place")
                             })} 
                         />
                         {errors.place && <p className="text-sm text-red-600 mt-1">{errors.place.message?.toString()}</p>}
@@ -197,6 +214,9 @@ export function AcademicBodiesForm({
                             id="participated_as" 
                             placeholder="e.g., Member, Chairman, Secretary"
                             maxLength={100}
+                            className={cn(
+                                isAutoFilled?.("participated_as") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("participated_as", { 
                                 required: "Participated As is required",
                                 minLength: { value: 2, message: "Participated As must be at least 2 characters" },
@@ -206,7 +226,8 @@ export function AcademicBodiesForm({
                                         return "Participated As cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("participated_as")
                             })} 
                         />
                         {errors.participated_as && <p className="text-sm text-red-600 mt-1">{errors.participated_as.message?.toString()}</p>}
@@ -218,6 +239,9 @@ export function AcademicBodiesForm({
                             id="submit_date" 
                             type="date" 
                             max={new Date().toISOString().split('T')[0]}
+                            className={cn(
+                                isAutoFilled?.("submit_date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("submit_date", { 
                                 required: "Submit date is required",
                                 validate: (value) => {
@@ -235,7 +259,8 @@ export function AcademicBodiesForm({
                                         return "Submit date must be after 1900"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("submit_date")
                             })} 
                         />
                         {errors.submit_date && <p className="text-sm text-red-600 mt-1">{errors.submit_date.message?.toString()}</p>}
@@ -261,6 +286,7 @@ export function AcademicBodiesForm({
                                     value={field.value}
                                     onValueChange={(value) => {
                                         field.onChange(value)
+                                        onFieldChange?.("year_name")
                                         // Clear error when value is selected
                                         if (value) {
                                             form.clearErrors("year_name")
@@ -268,6 +294,7 @@ export function AcademicBodiesForm({
                                     }}
                                     placeholder="Select year"
                                     emptyMessage="No year found"
+                                    className={isAutoFilled?.("year_name") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                                 />
                             )}
                         />

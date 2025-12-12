@@ -13,6 +13,7 @@ import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { Save, Brain, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface AcademicTalkFormProps {
     form: UseFormReturn<any>
@@ -28,6 +29,8 @@ interface AcademicTalkFormProps {
     talksParticipantTypeOptions?: DropdownOption[]
     onClearFields?: () => void
     onCancel?: () => void
+    isAutoFilled?: (fieldName: string) => boolean
+    onFieldChange?: (fieldName: string) => void
 }
 
 export function AcademicTalkForm({
@@ -44,6 +47,8 @@ export function AcademicTalkForm({
     talksParticipantTypeOptions = [],
     onClearFields,
     onCancel,
+    isAutoFilled,
+    onFieldChange,
 }: AcademicTalkFormProps) {
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -162,6 +167,9 @@ export function AcademicTalkForm({
                             id="name" 
                             placeholder="Enter your name"
                             maxLength={1000}
+                            className={cn(
+                                isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("name", { 
                                 required: "Name is required",
                                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -171,7 +179,8 @@ export function AcademicTalkForm({
                                         return "Name cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("name")
                             })} 
                         />
                         {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
@@ -197,6 +206,7 @@ export function AcademicTalkForm({
                                     value={field.value}
                                     onValueChange={(value) => {
                                         field.onChange(value)
+                                        onFieldChange?.("programme")
                                         // Clear error when value is selected
                                         if (value) {
                                             form.clearErrors("programme")
@@ -204,6 +214,7 @@ export function AcademicTalkForm({
                                     }}
                                     placeholder="Select programme type"
                                     emptyMessage="No programme type found"
+                                    className={isAutoFilled?.("programme") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                                 />
                             )}
                         />
@@ -216,6 +227,9 @@ export function AcademicTalkForm({
                             id="place" 
                             placeholder="Enter place of talk"
                             maxLength={1000}
+                            className={cn(
+                                isAutoFilled?.("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("place", { 
                                 required: "Place is required",
                                 minLength: { value: 2, message: "Place must be at least 2 characters" },
@@ -225,7 +239,8 @@ export function AcademicTalkForm({
                                         return "Place cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("place")
                             })} 
                         />
                         {errors.place && <p className="text-sm text-red-600 mt-1">{errors.place.message?.toString()}</p>}
@@ -237,6 +252,9 @@ export function AcademicTalkForm({
                             id="date" 
                             type="date" 
                             max={new Date().toISOString().split('T')[0]}
+                            className={cn(
+                                isAutoFilled?.("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("date", { 
                                 required: "Talk date is required",
                                 validate: (value) => {
@@ -254,7 +272,8 @@ export function AcademicTalkForm({
                                         return "Talk date must be after 1900"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("date")
                             })} 
                         />
                         {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
@@ -266,6 +285,9 @@ export function AcademicTalkForm({
                             id="title" 
                             placeholder="Enter title"
                             maxLength={1000}
+                            className={cn(
+                                isAutoFilled?.("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+                            )}
                             {...register("title", { 
                                 required: "Title is required",
                                 minLength: { value: 2, message: "Title must be at least 2 characters" },
@@ -275,7 +297,8 @@ export function AcademicTalkForm({
                                         return "Title cannot be only whitespace"
                                     }
                                     return true
-                                }
+                                },
+                                onChange: () => onFieldChange?.("title")
                             })} 
                         />
                         {errors.title && <p className="text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
@@ -301,6 +324,7 @@ export function AcademicTalkForm({
                                     value={field.value}
                                     onValueChange={(value) => {
                                         field.onChange(value)
+                                        onFieldChange?.("participated_as")
                                         // Clear error when value is selected
                                         if (value) {
                                             form.clearErrors("participated_as")
@@ -308,6 +332,7 @@ export function AcademicTalkForm({
                                     }}
                                     placeholder="Select role"
                                     emptyMessage="No role found"
+                                    className={isAutoFilled?.("participated_as") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                                 />
                             )}
                         />

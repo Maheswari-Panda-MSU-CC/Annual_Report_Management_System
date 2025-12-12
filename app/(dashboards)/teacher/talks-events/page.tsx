@@ -162,6 +162,26 @@ export default function TalksEventsPage() {
   const queryClient = useQueryClient()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   
+  // Track auto-filled fields for highlighting in edit modal
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+  
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
   const { confirm, DialogComponent: ConfirmDialog } = useConfirmationDialog()
@@ -416,8 +436,254 @@ export default function TalksEventsPage() {
     }
   }
 
+  // Get form type from section ID for auto-fill
+  const getFormTypeFromSectionId = (sectionId: string): string => {
+    return sectionId // formType is same as sectionId
+  }
+
+  // Get dropdown options based on section
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+    switch (sectionId) {
+      case "refresher":
+        return { refresher_type: refresherTypeOptions }
+      case "academic-programs":
+        return {
+          programme: academicProgrammeOptions,
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "academic-bodies":
+        return {
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "committees":
+        return {
+          level: committeeLevelOptions,
+          participated_as: participantTypeOptions,
+          year_name: reportYearsOptions,
+        }
+      case "talks":
+        return {
+          programme: talksProgrammeTypeOptions,
+          participated_as: talksParticipantTypeOptions,
+        }
+      default:
+        return {}
+    }
+  }
+
+  // Auto-fill hook for edit modal - only active when editing
+  // Moved before handleEdit to make clearAutoFillData available
+  const formType = editingItem ? getFormTypeFromSectionId(editingItem.sectionId) : ""
+  const { 
+    documentUrl: autoFillDocumentUrl, 
+    clearData: clearAutoFillData,
+  } = useAutoFillData({
+    formType,
+    dropdownOptions: editingItem ? getDropdownOptions(editingItem.sectionId) : {},
+    onlyFillEmpty: false, // REPLACE existing data in edit mode
+    getFormValues: () => form.watch(),
+    onAutoFill: (fields) => {
+      setAutoFilledFields(new Set()) // Clear previous highlighting
+      const filledFieldNames: string[] = []
+      
+      if (!editingItem) return
+      
+      const sectionId = editingItem.sectionId
+      const dropdownOptions = getDropdownOptions(sectionId)
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
+      
+      // Helper function to validate and set dropdown field
+      const validateAndSetDropdown = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+        if (value === undefined || value === null) return false
+        
+        let fieldValue: number | null = null
+        
+        if (typeof value === 'number') {
+          if (isValidDropdownValue(value, options)) {
+            fieldValue = value
+          }
+        } else {
+          // Try to find matching option by name
+          const option = options.find(
+            opt => opt.name.toLowerCase() === String(value).toLowerCase()
+          )
+          if (option) {
+            fieldValue = option.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(value)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, options)) {
+              fieldValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (fieldValue !== null && options.some(opt => opt.id === fieldValue)) {
+          form.setValue(fieldName, fieldValue, { shouldValidate: true })
+          return true
+        }
+        return false
+      }
+      
+      // Process fields based on section type
+      Object.entries(fields).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return
+        
+        // Handle dropdown fields based on section
+        let isValid = false
+        
+        switch (sectionId) {
+          case "refresher":
+            if (key === "refresher_type" || key === "course_type") {
+              const fieldName = "refresher_type"
+              const fieldValue = key === "refresher_type" ? value : fields.refresher_type || value
+              if (dropdownOptions.refresher_type && validateAndSetDropdown(fieldName, fieldValue, dropdownOptions.refresher_type)) {
+                isValid = true
+              }
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "start_date": "startdate",
+                "end_date": "enddate",
+                "organizing_university": "university",
+                "organizing_institute": "institute",
+                "organizing_department": "department",
+              }
+              const formFieldName = fieldMap[key] || key
+              form.setValue(formFieldName, String(value))
+              isValid = true
+            }
+            break
+            
+          case "academic-programs":
+            if (key === "programme" && dropdownOptions.programme) {
+              isValid = validateAndSetDropdown("programme", value, dropdownOptions.programme)
+            } else if (key === "year_name" || key === "year") {
+              const fieldName = "year_name"
+              const fieldValue = key === "year_name" ? value : fields.year_name || value
+              if (dropdownOptions.year_name && validateAndSetDropdown(fieldName, fieldValue, dropdownOptions.year_name)) {
+                isValid = true
+              }
+            } else if (key === "participated_as" && dropdownOptions.participated_as) {
+              isValid = validateAndSetDropdown("participated_as", value, dropdownOptions.participated_as)
+            } else {
+              // Text fields
+              form.setValue(key, String(value))
+              isValid = true
+            }
+            break
+            
+          case "academic-bodies":
+            if (key === "year_name" || key === "year") {
+              const fieldName = "year_name"
+              const fieldValue = key === "year_name" ? value : fields.year_name || value
+              if (dropdownOptions.year_name && validateAndSetDropdown(fieldName, fieldValue, dropdownOptions.year_name)) {
+                isValid = true
+              }
+            } else {
+              // Text fields
+              form.setValue(key, String(value))
+              isValid = true
+            }
+            break
+            
+          case "committees":
+            if (key === "level" && dropdownOptions.level) {
+              isValid = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else if (key === "year_name" || key === "year") {
+              const fieldName = "year_name"
+              const fieldValue = key === "year_name" ? value : fields.year_name || value
+              if (dropdownOptions.year_name && validateAndSetDropdown(fieldName, fieldValue, dropdownOptions.year_name)) {
+                isValid = true
+              }
+            } else {
+              // Text fields
+              form.setValue(key, String(value))
+              isValid = true
+            }
+            break
+            
+          case "talks":
+            if (key === "programme" && dropdownOptions.programme) {
+              isValid = validateAndSetDropdown("programme", value, dropdownOptions.programme)
+            } else if (key === "participated_as" && dropdownOptions.participated_as) {
+              isValid = validateAndSetDropdown("participated_as", value, dropdownOptions.participated_as)
+            } else {
+              // Text fields - handle field name mapping
+              const fieldMap: Record<string, string> = {
+                "talk_date": "date",
+                "title_of_event": "title",
+              }
+              const formFieldName = fieldMap[key] || key
+              form.setValue(formFieldName, String(value))
+              isValid = true
+            }
+            break
+            
+          default:
+            // Default for other fields not explicitly handled
+            form.setValue(key, String(value))
+            isValid = true
+            break
+        }
+        
+        if (isValid) {
+          // Use the actual form field name for highlighting
+          let actualFieldName = key;
+          if (sectionId === "refresher" && (key === "start_date" || key === "end_date" || key === "organizing_university" || key === "organizing_institute" || key === "organizing_department")) {
+            const fieldMap: Record<string, string> = {
+              "start_date": "startdate",
+              "end_date": "enddate",
+              "organizing_university": "university",
+              "organizing_institute": "institute",
+              "organizing_department": "department",
+            }
+            actualFieldName = fieldMap[key] || key;
+          } else if (sectionId === "refresher" && (key === "refresher_type" || key === "course_type")) {
+            actualFieldName = "refresher_type";
+          } else if ((sectionId === "academic-programs" || sectionId === "academic-bodies" || sectionId === "committees") && key === "year") {
+            actualFieldName = "year_name";
+          } else if (sectionId === "talks" && (key === "talk_date" || key === "title_of_event")) {
+            const fieldMap: Record<string, string> = {
+              "talk_date": "date",
+              "title_of_event": "title",
+            }
+            actualFieldName = fieldMap[key] || key;
+          }
+          filledFieldNames.push(actualFieldName)
+        }
+      })
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames))
+      }
+      
+      // Show toast notification
+      if (filledFieldNames.length > 0) {
+        toast({
+          title: "Form Updated",
+          description: `${filledFieldNames.length} field(s) replaced with new extracted data`,
+        })
+      }
+    },
+    clearAfterUse: false,
+  })
+
   const handleEdit = useCallback((sectionId: string, item: any) => {
     setEditingItem({ ...item, sectionId })
+    setAutoFilledFields(new Set()) // Clear highlighting when opening edit modal
+    clearAutoFillData() // Clear auto-fill data
     // Map UI format to form format
     let formItem: any = {}
     
@@ -475,76 +741,7 @@ export default function TalksEventsPage() {
     setFormData(formItem)
     form.reset(formItem)
     setIsEditDialogOpen(true)
-  }, [form])
-
-  // Get form type from section ID for auto-fill
-  const getFormTypeFromSectionId = (sectionId: string): string => {
-    return sectionId // formType is same as sectionId
-  }
-
-  // Get dropdown options based on section
-  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
-    switch (sectionId) {
-      case "refresher":
-        return { refresher_type: refresherTypeOptions }
-      case "academic-programs":
-        return {
-          programme: academicProgrammeOptions,
-          participated_as: participantTypeOptions,
-          year_name: reportYearsOptions,
-        }
-      case "academic-bodies":
-        return {
-          participated_as: participantTypeOptions,
-          year_name: reportYearsOptions,
-        }
-      case "committees":
-        return {
-          level: committeeLevelOptions,
-          participated_as: participantTypeOptions,
-          year_name: reportYearsOptions,
-        }
-      case "talks":
-        return {
-          programme: talksProgrammeTypeOptions,
-          participated_as: talksParticipantTypeOptions,
-        }
-      default:
-        return {}
-    }
-  }
-
-  // Auto-fill hook for edit modal - only active when editing
-  const formType = editingItem ? getFormTypeFromSectionId(editingItem.sectionId) : ""
-  const { 
-    documentUrl: autoFillDocumentUrl, 
-    clearData: clearAutoFillData,
-  } = useAutoFillData({
-    formType,
-    dropdownOptions: editingItem ? getDropdownOptions(editingItem.sectionId) : {},
-    onlyFillEmpty: false, // REPLACE existing data in edit mode
-    getFormValues: () => form.watch(),
-    onAutoFill: (fields) => {
-      // Auto-fill form fields - replace existing data
-      Object.entries(fields).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          form.setValue(key, value)
-        }
-      })
-      
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
-        toast({
-          title: "Form Updated",
-          description: `${filledCount} field(s) replaced with new extracted data`,
-        })
-      }
-    },
-    clearAfterUse: false,
-  })
+  }, [form, clearAutoFillData])
 
   // Cancel handler for edit modal
   const handleModalCancel = async (event?: React.MouseEvent) => {
@@ -752,6 +949,7 @@ export default function TalksEventsPage() {
       // Only clear document context data
       clearDocumentData()
       clearAutoFillData()
+      setAutoFilledFields(new Set()) // Clear highlighting on successful update
       setIsEditDialogOpen(false)
       setEditingItem(null)
       // Note: form data is preserved in edit mode - user can continue editing if needed
@@ -1306,6 +1504,7 @@ export default function TalksEventsPage() {
   // Clear fields handler for DocumentUpload
   const handleClearFields = () => {
     form.reset()
+    setAutoFilledFields(new Set()) // Clear highlighting
     // Also clear document URL from form state
     const formValues = form.getValues()
     if (formValues.supporting_doc) {
@@ -1334,6 +1533,8 @@ export default function TalksEventsPage() {
             editData={currentData}
             refresherTypeOptions={refresherTypeOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "academic-programs":
@@ -1352,6 +1553,8 @@ export default function TalksEventsPage() {
             participantTypeOptions={participantTypeOptions}
             reportYearsOptions={reportYearsOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "academic-bodies":
@@ -1368,6 +1571,8 @@ export default function TalksEventsPage() {
             editData={currentData}
             reportYearsOptions={reportYearsOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "committees":
@@ -1385,6 +1590,8 @@ export default function TalksEventsPage() {
             committeeLevelOptions={committeeLevelOptions}
             reportYearsOptions={reportYearsOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "talks":
@@ -1402,6 +1609,8 @@ export default function TalksEventsPage() {
             talksProgrammeTypeOptions={talksProgrammeTypeOptions}
             talksParticipantTypeOptions={talksParticipantTypeOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
             />
           )
       default:

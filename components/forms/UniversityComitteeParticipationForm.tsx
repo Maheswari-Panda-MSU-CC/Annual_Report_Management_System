@@ -14,6 +14,7 @@ import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { Save, Brain, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface CommitteeFormProps {
   form: UseFormReturn<any>
@@ -29,6 +30,8 @@ interface CommitteeFormProps {
   reportYearsOptions?: DropdownOption[]
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function UniversityCommitteeParticipationForm({
@@ -45,6 +48,8 @@ export function UniversityCommitteeParticipationForm({
   reportYearsOptions = [],
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: CommitteeFormProps) {
   const router = useRouter()
   const {
@@ -149,6 +154,9 @@ export function UniversityCommitteeParticipationForm({
               id="name" 
               placeholder="Enter name"
               maxLength={100}
+              className={cn(
+                isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("name", { 
                 required: "Name is required",
                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -158,7 +166,8 @@ export function UniversityCommitteeParticipationForm({
                     return "Name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("name")
               })} 
             />
             {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
@@ -170,6 +179,9 @@ export function UniversityCommitteeParticipationForm({
               id="committee_name" 
               placeholder="Enter committee name"
               maxLength={500}
+              className={cn(
+                isAutoFilled?.("committee_name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("committee_name", { 
                 required: "Committee name is required",
                 minLength: { value: 2, message: "Committee name must be at least 2 characters" },
@@ -179,7 +191,8 @@ export function UniversityCommitteeParticipationForm({
                     return "Committee name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("committee_name")
               })} 
             />
             {errors.committee_name && <p className="text-sm text-red-600 mt-1">{errors.committee_name.message?.toString()}</p>}
@@ -205,6 +218,7 @@ export function UniversityCommitteeParticipationForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange?.("level")
                     // Clear error when value is selected
                     if (value) {
                       form.clearErrors("level")
@@ -212,6 +226,7 @@ export function UniversityCommitteeParticipationForm({
                   }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
             />
@@ -224,6 +239,9 @@ export function UniversityCommitteeParticipationForm({
               id="participated_as" 
               placeholder="e.g., Member, Chairman, Secretary"
               maxLength={100}
+              className={cn(
+                isAutoFilled?.("participated_as") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("participated_as", { 
                 required: "Participated As is required",
                 minLength: { value: 2, message: "Participated As must be at least 2 characters" },
@@ -233,7 +251,8 @@ export function UniversityCommitteeParticipationForm({
                     return "Participated As cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("participated_as")
               })} 
             />
             {errors.participated_as && <p className="text-sm text-red-600 mt-1">{errors.participated_as.message?.toString()}</p>}
@@ -245,6 +264,9 @@ export function UniversityCommitteeParticipationForm({
               id="submit_date" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              className={cn(
+                isAutoFilled?.("submit_date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("submit_date", { 
                 required: "Submit date is required",
                 validate: (value) => {
@@ -262,7 +284,8 @@ export function UniversityCommitteeParticipationForm({
                     return "Submit date must be after 1900"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("submit_date")
               })} 
             />
             {errors.submit_date && <p className="text-sm text-red-600 mt-1">{errors.submit_date.message?.toString()}</p>}
@@ -288,6 +311,7 @@ export function UniversityCommitteeParticipationForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange?.("year_name")
                     // Clear error when value is selected
                     if (value) {
                       form.clearErrors("year_name")
@@ -295,6 +319,7 @@ export function UniversityCommitteeParticipationForm({
                   }}
                   placeholder="Select year"
                   emptyMessage="No year found"
+                  className={isAutoFilled?.("year_name") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
             />

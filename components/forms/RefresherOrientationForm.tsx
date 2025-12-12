@@ -11,6 +11,7 @@ import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface RefresherOrientationFormProps {
   form: UseFormReturn<any>
@@ -25,6 +26,8 @@ interface RefresherOrientationFormProps {
   refresherTypeOptions?: DropdownOption[]
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function RefresherOrientationForm({
@@ -40,6 +43,8 @@ export function RefresherOrientationForm({
   refresherTypeOptions = [],
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: RefresherOrientationFormProps) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -147,6 +152,9 @@ export function RefresherOrientationForm({
               id="name" 
               placeholder="Enter course name"
               maxLength={500}
+              className={cn(
+                isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("name", { 
                 required: "Name is required",
                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -156,7 +164,8 @@ export function RefresherOrientationForm({
                     return "Name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("name")
               })} 
             />
             {errors.name && (
@@ -184,6 +193,7 @@ export function RefresherOrientationForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange?.("refresher_type")
                     // Clear error when value is selected
                     if (value) {
                       form.clearErrors("refresher_type")
@@ -191,6 +201,7 @@ export function RefresherOrientationForm({
                   }}
                   placeholder="Select course type"
                   emptyMessage="No course type found"
+                  className={isAutoFilled?.("refresher_type") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
             />
@@ -205,6 +216,9 @@ export function RefresherOrientationForm({
               id="startdate" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              className={cn(
+                isAutoFilled?.("startdate") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("startdate", { 
                 required: "Start date is required",
                 validate: (value) => {
@@ -222,7 +236,8 @@ export function RefresherOrientationForm({
                     return "Start date must be after 1900"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("startdate")
               })} 
             />
             {errors.startdate && (
@@ -236,6 +251,9 @@ export function RefresherOrientationForm({
               id="enddate" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              className={cn(
+                isAutoFilled?.("enddate") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("enddate", {
                 validate: (value) => {
                   if (!value) return true // Optional field
@@ -266,7 +284,8 @@ export function RefresherOrientationForm({
                   }
                   
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("enddate")
               })} 
             />
             {errors.enddate && (
@@ -280,6 +299,9 @@ export function RefresherOrientationForm({
               id="university" 
               placeholder="Enter university name"
               maxLength={200}
+              className={cn(
+                isAutoFilled?.("university") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("university", { 
                 required: "Organizing University is required",
                 minLength: { value: 2, message: "University name must be at least 2 characters" },
@@ -289,7 +311,8 @@ export function RefresherOrientationForm({
                     return "University name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("university")
               })} 
             />
             {errors.university && (
@@ -303,6 +326,9 @@ export function RefresherOrientationForm({
               id="institute" 
               placeholder="Enter institute name"
               maxLength={200}
+              className={cn(
+                isAutoFilled?.("institute") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("institute", { 
                 required: "Organizing Institute is required",
                 minLength: { value: 2, message: "Institute name must be at least 2 characters" },
@@ -312,7 +338,8 @@ export function RefresherOrientationForm({
                     return "Institute name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("institute")
               })} 
             />
             {errors.institute && (
@@ -326,6 +353,9 @@ export function RefresherOrientationForm({
               id="department" 
               placeholder="Enter department name"
               maxLength={200}
+              className={cn(
+                isAutoFilled?.("department") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("department", { 
                 required: "Organizing Department is required",
                 minLength: { value: 2, message: "Department name must be at least 2 characters" },
@@ -335,7 +365,8 @@ export function RefresherOrientationForm({
                     return "Department name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("department")
               })} 
             />
             {errors.department && (
@@ -349,6 +380,9 @@ export function RefresherOrientationForm({
               id="centre" 
               placeholder="Enter centre name (optional)"
               maxLength={200}
+              className={cn(
+                isAutoFilled?.("centre") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("centre", {
                 maxLength: { value: 200, message: "Centre name must not exceed 200 characters" },
                 validate: (value) => {
@@ -356,7 +390,8 @@ export function RefresherOrientationForm({
                     return "Centre name must be at least 2 characters if provided"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("centre")
               })} 
             />
             {errors.centre && (

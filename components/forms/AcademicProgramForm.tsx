@@ -13,6 +13,7 @@ import { DocumentViewer } from "../document-viewer"
 import { Save, Brain, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface AcademicProgramFormProps {
   form: UseFormReturn<any>
@@ -29,6 +30,8 @@ interface AcademicProgramFormProps {
   reportYearsOptions?: DropdownOption[]
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function AcademicProgramForm({
@@ -46,6 +49,8 @@ export function AcademicProgramForm({
   reportYearsOptions = [],
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: AcademicProgramFormProps) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -146,6 +151,9 @@ export function AcademicProgramForm({
               id="name" 
               placeholder="Enter name" 
               maxLength={150}
+              className={cn(
+                isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("name", { 
                 required: "Name is required",
                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -155,7 +163,8 @@ export function AcademicProgramForm({
                     return "Name cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("name")
               })} 
             />
             {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
@@ -181,6 +190,7 @@ export function AcademicProgramForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange?.("programme")
                     // Clear error when value is selected
                     if (value) {
                       form.clearErrors("programme")
@@ -188,6 +198,7 @@ export function AcademicProgramForm({
                   }}
                   placeholder="Select programme type"
                   emptyMessage="No programme type found"
+                  className={isAutoFilled?.("programme") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
             />
@@ -200,6 +211,9 @@ export function AcademicProgramForm({
               id="place" 
               placeholder="Enter location" 
               maxLength={150}
+              className={cn(
+                isAutoFilled?.("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("place", { 
                 required: "Place is required",
                 minLength: { value: 2, message: "Place must be at least 2 characters" },
@@ -209,7 +223,8 @@ export function AcademicProgramForm({
                     return "Place cannot be only whitespace"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("place")
               })} 
             />
             {errors.place && <p className="text-sm text-red-600 mt-1">{errors.place.message?.toString()}</p>}
@@ -221,6 +236,9 @@ export function AcademicProgramForm({
               id="date" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              className={cn(
+                isAutoFilled?.("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              )}
               {...register("date", { 
                 required: "Date is required",
                 validate: (value) => {
@@ -238,7 +256,8 @@ export function AcademicProgramForm({
                     return "Date must be after 1900"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("date")
               })} 
             />
             {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
@@ -264,6 +283,7 @@ export function AcademicProgramForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange?.("year_name")
                     // Clear error when value is selected
                     if (value) {
                       form.clearErrors("year_name")
@@ -271,6 +291,7 @@ export function AcademicProgramForm({
                   }}
                   placeholder="Select year"
                   emptyMessage="No year found"
+                  className={isAutoFilled?.("year_name") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
             />
@@ -297,6 +318,7 @@ export function AcademicProgramForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange?.("participated_as")
                     // Clear error when value is selected
                     if (value) {
                       form.clearErrors("participated_as")
@@ -304,6 +326,7 @@ export function AcademicProgramForm({
                   }}
                   placeholder="Select role"
                   emptyMessage="No role found"
+                  className={isAutoFilled?.("participated_as") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
             />
