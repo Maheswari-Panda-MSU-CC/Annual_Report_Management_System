@@ -10,6 +10,7 @@ import { Save, Loader2 } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface ExtensionActivityFormProps {
   form: UseFormReturn<any>
@@ -25,6 +26,8 @@ interface ExtensionActivityFormProps {
   sponserNameOptions?: DropdownOption[]
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function ExtensionActivityForm({
@@ -41,6 +44,8 @@ export function ExtensionActivityForm({
   sponserNameOptions = [],
   onClearFields,
   onCancel,
+  isAutoFilled = () => false,
+  onFieldChange = () => {},
 }: ExtensionActivityFormProps) {
   const { register, handleSubmit, setValue, watch, control, clearErrors, formState: { errors } } = form
   const formData = watch()
@@ -144,6 +149,8 @@ export function ExtensionActivityForm({
               id="name_of_activity"
               placeholder="Enter name of activity"
               maxLength={150}
+              className={cn(isAutoFilled("name_of_activity") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("name_of_activity")}
               {...register("name_of_activity", {
                 required: "Name of Activity is required",
                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -165,6 +172,8 @@ export function ExtensionActivityForm({
               id="names"
               placeholder="Enter nature of activity"
               maxLength={100}
+              className={cn(isAutoFilled("names") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("names")}
               {...register("names", {
                 required: "Nature of Activity is required",
                 minLength: { value: 2, message: "Nature must be at least 2 characters" },
@@ -192,6 +201,7 @@ export function ExtensionActivityForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange("level")
                     // Clear error when value changes in edit mode
                     if (isEdit && errors.level) {
                       clearErrors("level")
@@ -199,6 +209,7 @@ export function ExtensionActivityForm({
                   }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  className={cn(isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
                 />
               )}
             />
@@ -217,6 +228,7 @@ export function ExtensionActivityForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange("sponsered")
                     // Clear error when value changes in edit mode
                     if (isEdit && errors.sponsered) {
                       clearErrors("sponsered")
@@ -224,6 +236,7 @@ export function ExtensionActivityForm({
                   }}
                   placeholder="Select sponsor"
                   emptyMessage="No sponsor found"
+                  className={cn(isAutoFilled("sponsered") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
                 />
               )}
             />
@@ -236,6 +249,8 @@ export function ExtensionActivityForm({
               id="place"
               placeholder="Enter place"
               maxLength={150}
+              className={cn(isAutoFilled("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("place")}
               {...register("place", {
                 required: "Place is required",
                 minLength: { value: 2, message: "Place must be at least 2 characters" },
@@ -257,6 +272,8 @@ export function ExtensionActivityForm({
               id="date"
               type="date"
               max={new Date().toISOString().split('T')[0]}
+              className={cn(isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("date")}
               {...register("date", {
                 required: "Date is required",
                 validate: (value) => {

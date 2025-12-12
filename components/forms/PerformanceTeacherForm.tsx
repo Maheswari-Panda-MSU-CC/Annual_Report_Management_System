@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Save, Loader2 } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
+import { cn } from "@/lib/utils"
 
 interface PerformanceTeacherFormProps {
   form: UseFormReturn<any>
@@ -20,6 +21,8 @@ interface PerformanceTeacherFormProps {
   editData?: Record<string, any>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function PerformanceTeacherForm({
@@ -34,6 +37,8 @@ export function PerformanceTeacherForm({
   editData = {},
   onClearFields,
   onCancel,
+  isAutoFilled = () => false,
+  onFieldChange = () => {},
 }: PerformanceTeacherFormProps) {
   const { register, handleSubmit, setValue, watch, clearErrors, formState: { errors } } = form
   const formData = watch()
@@ -137,6 +142,8 @@ export function PerformanceTeacherForm({
               id="name"
               placeholder="Enter title of performance"
               maxLength={100}
+              className={cn(isAutoFilled("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("name")}
               {...register("name", {
                 required: "Title of Performance is required",
                 minLength: { value: 2, message: "Title must be at least 2 characters" },
@@ -158,6 +165,8 @@ export function PerformanceTeacherForm({
               id="place"
               placeholder="Enter place"
               maxLength={150}
+              className={cn(isAutoFilled("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("place")}
               {...register("place", {
                 required: "Place is required",
                 minLength: { value: 2, message: "Place must be at least 2 characters" },
@@ -179,6 +188,8 @@ export function PerformanceTeacherForm({
               id="date"
               type="date"
               max={new Date().toISOString().split('T')[0]}
+              className={cn(isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("date")}
               {...register("date", {
                 required: "Performance Date is required",
                 validate: (value) => {
@@ -201,6 +212,8 @@ export function PerformanceTeacherForm({
               id="perf_nature"
               placeholder="Enter nature of performance"
               maxLength={250}
+              className={cn(isAutoFilled("perf_nature") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("perf_nature")}
               {...register("perf_nature", {
                 required: "Nature of Performance is required",
                 minLength: { value: 2, message: "Nature must be at least 2 characters" },

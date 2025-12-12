@@ -11,6 +11,7 @@ import { Save, Loader2 } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface AwardsFellowshipFormProps {
   form: UseFormReturn<any>
@@ -25,6 +26,8 @@ interface AwardsFellowshipFormProps {
   awardFellowLevelOptions?: DropdownOption[]
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function AwardsFellowshipForm({
@@ -40,6 +43,8 @@ export function AwardsFellowshipForm({
   awardFellowLevelOptions = [],
   onClearFields,
   onCancel,
+  isAutoFilled = () => false,
+  onFieldChange = () => {},
 }: AwardsFellowshipFormProps) {
   const { register, handleSubmit, setValue, watch, control, clearErrors, formState: { errors } } = form
   const formData = watch()
@@ -143,6 +148,8 @@ export function AwardsFellowshipForm({
               id="name"
               placeholder="Enter name of award/fellowship"
               maxLength={500}
+              className={cn(isAutoFilled("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("name")}
               {...register("name", {
                 required: "Name of Award/Fellowship is required",
                 minLength: { value: 2, message: "Name must be at least 2 characters" },
@@ -164,6 +171,8 @@ export function AwardsFellowshipForm({
               id="organization"
               placeholder="Enter name of awarding agency"
               maxLength={500}
+              className={cn(isAutoFilled("organization") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("organization")}
               {...register("organization", {
                 required: "Name of Awarding Agency is required",
                 minLength: { value: 2, message: "Organization name must be at least 2 characters" },
@@ -185,6 +194,8 @@ export function AwardsFellowshipForm({
               id="date_of_award"
               type="date"
               max={new Date().toISOString().split('T')[0]}
+              className={cn(isAutoFilled("date_of_award") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+              onBlur={() => onFieldChange("date_of_award")}
               {...register("date_of_award", {
                 required: "Date of Award is required",
                 validate: (value) => {
@@ -213,6 +224,7 @@ export function AwardsFellowshipForm({
                   value={field.value}
                   onValueChange={(value) => {
                     field.onChange(value)
+                    onFieldChange("level")
                     // Clear error when value changes in edit mode
                     if (isEdit && errors.level) {
                       clearErrors("level")
@@ -220,6 +232,7 @@ export function AwardsFellowshipForm({
                   }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  className={cn(isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
                 />
               )}
             />
@@ -234,6 +247,8 @@ export function AwardsFellowshipForm({
             placeholder="Enter award details (optional)"
             maxLength={500}
             rows={3}
+            className={cn(isAutoFilled("details") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+            onBlur={() => onFieldChange("details")}
             {...register("details", {
               maxLength: { value: 500, message: "Details must not exceed 500 characters" },
               validate: (value) => {
@@ -255,6 +270,8 @@ export function AwardsFellowshipForm({
             placeholder="Enter address of awarding agency (optional)"
             maxLength={500}
             rows={2}
+            className={cn(isAutoFilled("address") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
+            onBlur={() => onFieldChange("address")}
             {...register("address", {
               maxLength: { value: 500, message: "Address must not exceed 500 characters" },
               validate: (value) => {

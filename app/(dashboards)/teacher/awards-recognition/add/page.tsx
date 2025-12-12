@@ -53,12 +53,26 @@ export default function AddAwardsPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const [extractionError, setExtractionError] = useState<string | null>(null)
   const [extractionSuccess, setExtractionSuccess] = useState<string | null>(null)
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
   const form = useForm({
     mode: "onSubmit",
     reValidateMode: "onChange",
   })
   const { watch, setValue } = form
   const prevActiveTabRef = useRef<string>(activeTab)
+
+  // Helper functions for auto-fill highlighting
+  const isAutoFilled = useCallback((fieldName: string): boolean => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(fieldName)
+      return newSet
+    })
+  }, [])
 
   // Mutation hooks
   const performanceMutations = usePerformanceMutations()
@@ -110,40 +124,105 @@ export default function AddAwardsPage() {
     onlyFillEmpty: true,
     getFormValues: () => watch(),
     onAutoFill: (fields) => {
-      // Fields are already mapped by categories-field-mapping in the hook
-      // Just fill based on activeTab
-      if (activeTab === "performance") {
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.place) setValue("place", String(fields.place))
-        if (fields.date) setValue("date", String(fields.date))
-        if (fields.perf_nature) setValue("perf_nature", String(fields.perf_nature))
-        if (fields.Image) setValue("Image", String(fields.Image))
-      } else if (activeTab === "awards") {
-        if (fields.name) setValue("name", String(fields.name))
-        if (fields.details) setValue("details", String(fields.details))
-        if (fields.organization) setValue("organization", String(fields.organization))
-        if (fields.address) setValue("address", String(fields.address))
-        if (fields.date_of_award) setValue("date_of_award", String(fields.date_of_award))
-        if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
-        if (fields.Image) setValue("Image", String(fields.Image))
-      } else if (activeTab === "extension") {
-        if (fields.name_of_activity) setValue("name_of_activity", String(fields.name_of_activity))
-        if (fields.names) setValue("names", String(fields.names))
-        if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
-        if (fields.sponsered !== undefined && fields.sponsered !== null) setValue("sponsered", Number(fields.sponsered))
-        if (fields.place) setValue("place", String(fields.place))
-        if (fields.date) setValue("date", String(fields.date))
-        if (fields.Image) setValue("Image", String(fields.Image))
+      setAutoFilledFields(new Set()) // Clear previous highlighting
+      const filledFieldNames: string[] = []
+      const dropdownOptions = getDropdownOptionsForTab(activeTab)
+
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
       }
-      
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+
+      // Helper function to validate and set dropdown field
+      const validateAndSetDropdown = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+        if (value === undefined || value === null) return false
+
+        let fieldValue: number | null = null
+
+        if (typeof value === 'number') {
+          if (isValidDropdownValue(value, options)) {
+            fieldValue = value
+          }
+        } else {
+          // Try to find matching option by name
+          const option = options.find(
+            opt => opt.name.toLowerCase() === String(value).toLowerCase()
+          )
+          if (option) {
+            fieldValue = option.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(value)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, options)) {
+              fieldValue = numValue
+            }
+          }
+        }
+
+        // Only set and highlight if we found a valid value that exists in options
+        if (fieldValue !== null && options.some(opt => opt.id === fieldValue)) {
+          setValue(fieldName, fieldValue, { shouldValidate: true })
+          return true
+        }
+        return false
+      }
+
+      // Process fields based on active tab
+      Object.entries(fields).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return
+
+        let isValid = false
+        let actualFieldName = key
+
+        switch (activeTab) {
+          case "performance":
+            // All fields are text inputs
+            setValue(key, String(value))
+            isValid = true
+            break
+
+          case "awards":
+            if (key === "level" && dropdownOptions.level) {
+              isValid = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else {
+              // Text fields
+              setValue(key, String(value))
+              isValid = true
+            }
+            break
+
+          case "extension":
+            if (key === "level" && dropdownOptions.level) {
+              isValid = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else if (key === "sponsered" && dropdownOptions.sponsered) {
+              isValid = validateAndSetDropdown("sponsered", value, dropdownOptions.sponsered)
+            } else {
+              // Text fields
+              setValue(key, String(value))
+              isValid = true
+            }
+            break
+
+          default:
+            setValue(key, String(value))
+            isValid = true
+            break
+        }
+
+        if (isValid) {
+          filledFieldNames.push(actualFieldName)
+        }
+      })
+
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames))
         toast({
-          title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          title: "Form Updated",
+          description: `${filledFieldNames.length} field(s) replaced with new extracted data`,
         })
       }
     },
@@ -189,6 +268,7 @@ export default function AddAwardsPage() {
     form.reset()
     // Also clear document URL from form state
     setValue("Image", "")
+    setAutoFilledFields(new Set())
   }
 
   // Get section title for current tab
@@ -487,6 +567,7 @@ export default function AddAwardsPage() {
       form.reset()
       setUploadedFiles((prev) => ({ ...prev, performance: null }))
       setExtractionStatus((prev) => ({ ...prev, performance: false }))
+      setAutoFilledFields(new Set())
 
       // Redirect back after a short delay
       setTimeout(() => {
@@ -541,6 +622,7 @@ export default function AddAwardsPage() {
       form.reset()
       setUploadedFiles((prev) => ({ ...prev, awards: null }))
       setExtractionStatus((prev) => ({ ...prev, awards: false }))
+      setAutoFilledFields(new Set())
 
       // Redirect back after a short delay
       setTimeout(() => {
@@ -595,6 +677,7 @@ export default function AddAwardsPage() {
       form.reset()
       setUploadedFiles((prev) => ({ ...prev, extension: null }))
       setExtractionStatus((prev) => ({ ...prev, extension: false }))
+      setAutoFilledFields(new Set())
 
       // Redirect back after a short delay
       setTimeout(() => {
@@ -674,6 +757,8 @@ export default function AddAwardsPage() {
                   isEdit={false}
                   onClearFields={handleClearFields}
                   onCancel={handleCancel}
+                  isAutoFilled={isAutoFilled}
+                  onFieldChange={clearAutoFillHighlight}
                 />
               </CardContent>
             </Card>
@@ -709,6 +794,8 @@ export default function AddAwardsPage() {
                   awardFellowLevelOptions={awardFellowLevelOptions}
                   onClearFields={handleClearFields}
                   onCancel={handleCancel}
+                  isAutoFilled={isAutoFilled}
+                  onFieldChange={clearAutoFillHighlight}
                 />
               </CardContent>
             </Card>
@@ -745,6 +832,8 @@ export default function AddAwardsPage() {
                   sponserNameOptions={sponserNameOptions}
                   onClearFields={handleClearFields}
                   onCancel={handleCancel}
+                  isAutoFilled={isAutoFilled}
+                  onFieldChange={clearAutoFillHighlight}
                 />
               </CardContent>
             </Card>

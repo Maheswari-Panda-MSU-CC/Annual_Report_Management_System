@@ -147,12 +147,26 @@ export default function AwardsRecognitionPage() {
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
 
   const [formData, setFormData] = useState<any>({})
   const form = useForm({
     mode: "onSubmit", // Only validate on submit, not on change
     reValidateMode: "onChange", // Re-validate on change after first submit
   })
+
+  // Helper functions for auto-fill highlighting
+  const isAutoFilled = useCallback((fieldName: string): boolean => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(fieldName)
+      return newSet
+    })
+  }, [])
 
   // React Query hooks
   const { performance, awards, extension, isLoading, isFetching, data: queryData } = useTeacherAwardsRecognition()
@@ -338,21 +352,108 @@ export default function AwardsRecognitionPage() {
     onlyFillEmpty: false, // REPLACE existing data in edit mode
     getFormValues: () => form.watch(),
     onAutoFill: (fields) => {
-      // Auto-fill form fields - replace existing data
+      setAutoFilledFields(new Set()) // Clear previous highlighting
+      const filledFieldNames: string[] = []
+
+      if (!editingItem) return
+
+      const sectionId = editingItem.sectionId
+      const dropdownOptions = getDropdownOptions(sectionId)
+
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
+
+      // Helper function to validate and set dropdown field
+      const validateAndSetDropdown = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+        if (value === undefined || value === null) return false
+
+        let fieldValue: number | null = null
+
+        if (typeof value === 'number') {
+          if (isValidDropdownValue(value, options)) {
+            fieldValue = value
+          }
+        } else {
+          // Try to find matching option by name
+          const option = options.find(
+            opt => opt.name.toLowerCase() === String(value).toLowerCase()
+          )
+          if (option) {
+            fieldValue = option.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(value)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, options)) {
+              fieldValue = numValue
+            }
+          }
+        }
+
+        // Only set and highlight if we found a valid value that exists in options
+        if (fieldValue !== null && options.some(opt => opt.id === fieldValue)) {
+          form.setValue(fieldName, fieldValue, { shouldValidate: true })
+          return true
+        }
+        return false
+      }
+
+      // Process fields based on section type
       Object.entries(fields).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          form.setValue(key, value)
+        if (value === undefined || value === null || value === "") return
+
+        let isValid = false
+
+        switch (sectionId) {
+          case "performance":
+            // All fields are text inputs
+            form.setValue(key, String(value))
+            isValid = true
+            break
+
+          case "awards":
+            if (key === "level" && dropdownOptions.level) {
+              isValid = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else {
+              // Text fields
+              form.setValue(key, String(value))
+              isValid = true
+            }
+            break
+
+          case "extension":
+            if (key === "level" && dropdownOptions.level) {
+              isValid = validateAndSetDropdown("level", value, dropdownOptions.level)
+            } else if (key === "sponsered" && dropdownOptions.sponsered) {
+              isValid = validateAndSetDropdown("sponsered", value, dropdownOptions.sponsered)
+            } else {
+              // Text fields
+              form.setValue(key, String(value))
+              isValid = true
+            }
+            break
+
+          default:
+            form.setValue(key, String(value))
+            isValid = true
+            break
+        }
+
+        if (isValid) {
+          filledFieldNames.push(key)
         }
       })
-      
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames))
         toast({
           title: "Form Updated",
-          description: `${filledCount} field(s) replaced with new extracted data`,
+          description: `${filledFieldNames.length} field(s) replaced with new extracted data`,
         })
       }
     },
@@ -367,6 +468,7 @@ export default function AwardsRecognitionPage() {
     if (formValues.Image) {
       form.setValue("Image", "")
     }
+    setAutoFilledFields(new Set())
   }
 
   // Cancel handler for edit modal
@@ -411,6 +513,7 @@ export default function AwardsRecognitionPage() {
       form.reset()
       clearDocumentData()
       clearAutoFillData()
+      setAutoFilledFields(new Set())
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
@@ -439,6 +542,8 @@ export default function AwardsRecognitionPage() {
 
   const handleEdit = useCallback((sectionId: string, item: any) => {
     setEditingItem({ ...item, sectionId })
+    setAutoFilledFields(new Set()) // Clear highlighting when opening edit modal
+    clearAutoFillData() // Clear auto-fill data
     // Map UI format to form format
     let formItem: any = {}
     
@@ -477,7 +582,7 @@ export default function AwardsRecognitionPage() {
     setFormData(formItem)
     form.reset(formItem)
     setIsEditDialogOpen(true)
-  }, [form])
+  }, [form, clearAutoFillData])
 
   // Helper function to upload document to S3 (matches research module pattern)
   const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
@@ -626,6 +731,7 @@ export default function AwardsRecognitionPage() {
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
+      setAutoFilledFields(new Set()) // Clear highlighting on successful update
       // Don't reset form in edit mode - preserve form state
       // form.reset() // Removed - keep form state after successful update
     } catch (error: any) {
@@ -981,6 +1087,8 @@ export default function AwardsRecognitionPage() {
             isEdit={isEdit}
             editData={currentData}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "awards":
@@ -995,6 +1103,8 @@ export default function AwardsRecognitionPage() {
             editData={currentData}
             awardFellowLevelOptions={awardFellowLevelOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "extension":
@@ -1010,6 +1120,8 @@ export default function AwardsRecognitionPage() {
             awardFellowLevelOptions={awardFellowLevelOptions}
             sponserNameOptions={sponserNameOptions}
             onClearFields={handleClearFields}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       default:
