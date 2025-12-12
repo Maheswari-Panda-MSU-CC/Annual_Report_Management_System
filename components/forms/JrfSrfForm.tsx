@@ -12,6 +12,7 @@ import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useEffect, useState } from "react"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface JrfSrfFormProps {
   form: UseFormReturn<any>
@@ -26,6 +27,8 @@ interface JrfSrfFormProps {
   jrfSrfTypeOptions?: Array<{ id: number; name: string }>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function JrfSrfForm({
@@ -40,6 +43,8 @@ export function JrfSrfForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: JrfSrfFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -156,9 +161,13 @@ export function JrfSrfForm({
           <Input
             id="nameOfFellow"
             placeholder="Enter fellow name"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("nameOfFellow") && "bg-blue-50 border-blue-200"
+            )}
             {...register("nameOfFellow", {
               required: "Name of fellow is required",
+              onChange: () => onFieldChange?.("nameOfFellow")
             })}
           />
           {errors.nameOfFellow && (
@@ -179,9 +188,13 @@ export function JrfSrfForm({
                 <SearchableSelect
                   options={jrfSrfTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(val) => {
+                    field.onChange(val)
+                    onFieldChange?.("type")
+                  }}
                   placeholder="Select type"
                   emptyMessage="No type found"
+                  className={isAutoFilled?.("type") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -195,9 +208,13 @@ export function JrfSrfForm({
             <Input
               id="projectTitle"
               placeholder="Enter project title"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("projectTitle") && "bg-blue-50 border-blue-200"
+              )}
               {...register("projectTitle", {
                 required: "Project title is required",
+                onChange: () => onFieldChange?.("projectTitle")
               })}
             />
             {errors.projectTitle && (
@@ -216,10 +233,14 @@ export function JrfSrfForm({
               type="number"
               placeholder="Enter duration"
               min="1"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("duration") && "bg-blue-50 border-blue-200"
+              )}
               {...register("duration", {
                 required: "Duration is required",
                 min: { value: 1, message: "Duration must be at least 1 month" },
+                onChange: () => onFieldChange?.("duration")
               })}
             />
             {errors.duration && (
@@ -237,7 +258,10 @@ export function JrfSrfForm({
               placeholder="Enter stipend amount"
               min="0"
               step="0.01"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("monthlyStipend") && "bg-blue-50 border-blue-200"
+              )}
               {...register("monthlyStipend", {
                 min: { value: 0, message: "Stipend must be positive" },
                 validate: (value) => {
@@ -245,7 +269,8 @@ export function JrfSrfForm({
                     return "Please enter a valid number"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("monthlyStipend")
               })}
             />
             {errors.monthlyStipend && (
@@ -260,7 +285,10 @@ export function JrfSrfForm({
             <Input
               id="date"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
+              )}
               max={new Date().toISOString().split('T')[0]}
               {...register("date", {
                 validate: (value) => {
@@ -268,7 +296,8 @@ export function JrfSrfForm({
                     return "Date cannot be in the future"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("date")
               })}
             />
             {errors.date && (

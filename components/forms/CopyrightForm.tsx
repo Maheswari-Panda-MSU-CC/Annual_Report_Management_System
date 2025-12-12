@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Save, Loader2 } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
+import { cn } from "@/lib/utils"
 
 interface CopyrightFormProps {
   form: UseFormReturn<any>
@@ -22,6 +23,8 @@ interface CopyrightFormProps {
   editData?: Record<string, any>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function CopyrightForm({
@@ -37,6 +40,8 @@ export function CopyrightForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: CopyrightFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -129,13 +134,17 @@ export function CopyrightForm({
           <Input
             id="title"
             placeholder="Enter copyright title"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
+            )}
             {...register("title", { 
               required: "Copyright title is required",
               minLength: {
                 value: 3,
                 message: "Title must be at least 3 characters long"
-              }
+              },
+              onChange: () => onFieldChange?.("title")
             })}
           />
           {errors.title && (
@@ -149,13 +158,17 @@ export function CopyrightForm({
             <Input
               id="referenceNo"
               placeholder="Enter reference number"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("referenceNo") && "bg-blue-50 border-blue-200"
+              )}
               {...register("referenceNo", { 
                 required: "Reference number is required",
                 minLength: {
                   value: 2,
                   message: "Reference number must be at least 2 characters long"
-                }
+                },
+                onChange: () => onFieldChange?.("referenceNo")
               })}
             />
             {errors.referenceNo && (
@@ -168,7 +181,10 @@ export function CopyrightForm({
             <Input
               id="publicationDate"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("publicationDate") && "bg-blue-50 border-blue-200"
+              )}
               max={new Date().toISOString().split('T')[0]}
               {...register("publicationDate", {
                 validate: (value) => {
@@ -176,7 +192,8 @@ export function CopyrightForm({
                     return "Publication date cannot be in the future"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("publicationDate")
               })}
             />
             {errors.publicationDate && (
@@ -191,7 +208,10 @@ export function CopyrightForm({
             id="link"
             type="url"
             placeholder="Enter registry link (optional)"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("link") && "bg-blue-50 border-blue-200"
+            )}
             {...register("link", {
               validate: (value) => {
                 if (value && value.trim() !== "") {
@@ -203,7 +223,8 @@ export function CopyrightForm({
                   }
                 }
                 return true
-              }
+              },
+              onChange: () => onFieldChange?.("link")
             })}
           />
           {errors.link && (

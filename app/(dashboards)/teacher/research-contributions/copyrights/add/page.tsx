@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +25,26 @@ export default function AddCopyrightsPage() {
   const { setValue, watch, reset } = form
   const [isExtracting, setIsExtracting] = useState(false)
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
@@ -42,11 +62,34 @@ export default function AddCopyrightsPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
-      if (fields.title || fields.Title) setValue("title", String(fields.title || fields.Title))
-      if (fields.referenceNo || fields.Reference_No) setValue("referenceNo", String(fields.referenceNo || fields.Reference_No))
-      if (fields.publicationDate || fields.Publication_Date) setValue("publicationDate", String(fields.publicationDate || fields.Publication_Date))
-      if (fields.link || fields.Link) setValue("link", String(fields.link || fields.Link))
+      if (fields.title || fields.Title) {
+        setValue("title", String(fields.title || fields.Title))
+        filledFieldNames.push("title")
+      }
+      if (fields.referenceNo || fields.Reference_No) {
+        setValue("referenceNo", String(fields.referenceNo || fields.Reference_No))
+        filledFieldNames.push("referenceNo")
+      }
+      if (fields.publicationDate || fields.Publication_Date) {
+        setValue("publicationDate", String(fields.publicationDate || fields.Publication_Date))
+        filledFieldNames.push("publicationDate")
+      }
+      if (fields.link || fields.Link) {
+        setValue("link", String(fields.link || fields.Link))
+        filledFieldNames.push("link")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
@@ -99,6 +142,7 @@ export default function AddCopyrightsPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -283,6 +327,8 @@ export default function AddCopyrightsPage() {
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
             />
           </CardContent>
         </Card>

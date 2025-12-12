@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,26 @@ export default function AddVisitsPage() {
   const form = useForm()
   const { setValue, watch, reset } = form
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
@@ -47,6 +67,12 @@ export default function AddVisitsPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
       // Note: fields are already mapped by categories-field-mapping.ts hook
       // Form field names: instituteVisited, durationOfVisit, role, sponsoredBy, remarks, date
@@ -54,9 +80,11 @@ export default function AddVisitsPage() {
       // Institute Visited - form field is "instituteVisited"
       if (fields.instituteVisited) {
         setValue("instituteVisited", String(fields.instituteVisited))
+        filledFieldNames.push("instituteVisited")
       } else if (fields.institute) {
         // Fallback if mapping didn't work
         setValue("instituteVisited", String(fields.institute))
+        filledFieldNames.push("instituteVisited")
       }
       
       // Duration of Visit - form field is "durationOfVisit"
@@ -66,6 +94,7 @@ export default function AddVisitsPage() {
           : Number(String(fields.durationOfVisit).replace(/[^0-9.]/g, ''))
         if (!isNaN(durationValue)) {
           setValue("durationOfVisit", durationValue)
+          filledFieldNames.push("durationOfVisit")
         }
       } else if (fields.duration !== undefined && fields.duration !== null) {
         // Fallback if mapping didn't work
@@ -74,6 +103,7 @@ export default function AddVisitsPage() {
           : Number(String(fields.duration).replace(/[^0-9.]/g, ''))
         if (!isNaN(durationValue)) {
           setValue("durationOfVisit", durationValue)
+          filledFieldNames.push("durationOfVisit")
         }
       }
       
@@ -95,24 +125,34 @@ export default function AddVisitsPage() {
             }
           }
         }
+        filledFieldNames.push("role")
       }
       
       // Sponsored By - form field is "sponsoredBy"
       if (fields.sponsoredBy) {
         setValue("sponsoredBy", String(fields.sponsoredBy))
+        filledFieldNames.push("sponsoredBy")
       } else if (fields.sponsored_by) {
         // Fallback if mapping didn't work
         setValue("sponsoredBy", String(fields.sponsored_by))
+        filledFieldNames.push("sponsoredBy")
       }
       
       // Remarks
       if (fields.remarks) {
         setValue("remarks", String(fields.remarks))
+        filledFieldNames.push("remarks")
       }
       
       // Date
       if (fields.date) {
         setValue("date", String(fields.date))
+        filledFieldNames.push("date")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
       }
       
       // Show toast notification
@@ -166,6 +206,7 @@ export default function AddVisitsPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -357,6 +398,8 @@ export default function AddVisitsPage() {
             initialDocumentUrl={autoFillDocumentUrl}
             onClearFields={handleClearFields}
             onCancel={handleCancel}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
           </CardContent>
         </Card>

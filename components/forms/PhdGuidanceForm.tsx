@@ -13,6 +13,7 @@ import { DocumentViewer } from "../document-viewer"
 import { Textarea } from "@/components/ui/textarea"
 import { useEffect, useState } from "react"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface PhdGuidanceFormProps {
   form: UseFormReturn<any>
@@ -27,6 +28,8 @@ interface PhdGuidanceFormProps {
   phdGuidanceStatusOptions?: Array<{ id: number; name: string }>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function PhdGuidanceForm({
@@ -43,6 +46,8 @@ export function PhdGuidanceForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: PhdGuidanceFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -154,8 +159,14 @@ export function PhdGuidanceForm({
             <Input
               id="regNo"
               placeholder="Enter registration number"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("regNo", { required: "Registration number is required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("regNo") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("regNo", { 
+                required: "Registration number is required",
+                onChange: () => onFieldChange?.("regNo")
+              })}
             />
             {errors.regNo && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.regNo.message?.toString()}</p>}
           </div>
@@ -165,8 +176,14 @@ export function PhdGuidanceForm({
             <Input
               id="nameOfStudent"
               placeholder="Enter student's name"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("nameOfStudent", { required: "Student name is required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("nameOfStudent") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("nameOfStudent", { 
+                required: "Student name is required",
+                onChange: () => onFieldChange?.("nameOfStudent")
+              })}
             />
             {errors.nameOfStudent && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.nameOfStudent.message?.toString()}</p>}
           </div>
@@ -178,7 +195,10 @@ export function PhdGuidanceForm({
             <Input
               id="dateOfRegistration"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("dateOfRegistration") && "bg-blue-50 border-blue-200"
+              )}
               max={new Date().toISOString().split('T')[0]}
               {...register("dateOfRegistration", { 
                 required: "Date of registration is required",
@@ -187,7 +207,8 @@ export function PhdGuidanceForm({
                     return "Date cannot be in the future"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("dateOfRegistration")
               })}
             />
             {errors.dateOfRegistration && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.dateOfRegistration.message?.toString()}</p>}
@@ -201,7 +222,10 @@ export function PhdGuidanceForm({
               placeholder="Enter year (e.g., 2024)"
               min="1900"
               max={new Date().getFullYear() + 10}
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("yearOfCompletion") && "bg-blue-50 border-blue-200"
+              )}
               {...register("yearOfCompletion", {
                 validate: (value) => {
                   if (value) {
@@ -211,7 +235,8 @@ export function PhdGuidanceForm({
                     }
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("yearOfCompletion")
               })}
             />
             {errors.yearOfCompletion && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.yearOfCompletion.message?.toString()}</p>}
@@ -224,8 +249,14 @@ export function PhdGuidanceForm({
             id="topic"
             placeholder="Enter research topic"
             rows={3}
-            className="text-sm sm:text-base mt-1"
-            {...register("topic", { required: "Research topic is required" })}
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("topic") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("topic", { 
+              required: "Research topic is required",
+              onChange: () => onFieldChange?.("topic")
+            })}
           />
           {errors.topic && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.topic.message?.toString()}</p>}
         </div>
@@ -240,9 +271,13 @@ export function PhdGuidanceForm({
               <SearchableSelect
                 options={phdGuidanceStatusOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                 value={field.value}
-                onValueChange={field.onChange}
+                onValueChange={(val) => {
+                  field.onChange(val)
+                  onFieldChange?.("status")
+                }}
                 placeholder="Select status"
                 emptyMessage="No status found"
+                className={isAutoFilled?.("status") ? "bg-blue-50 border-blue-200" : undefined}
               />
             )}
           />

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,6 +25,26 @@ export default function AddPhdPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
   const { setValue, watch, reset } = form
+
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
 
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
@@ -49,6 +69,12 @@ export default function AddPhdPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
       // Note: fields are already mapped by categories-field-mapping.ts hook
       // Form field names: regNo, nameOfStudent, dateOfRegistration, topic, status, yearOfCompletion
@@ -56,30 +82,37 @@ export default function AddPhdPage() {
       // Registration Number - form field is "regNo"
       if (fields.regNo) {
         setValue("regNo", String(fields.regNo))
+        filledFieldNames.push("regNo")
       } else if (fields.regno) {
         // Fallback if mapping didn't work
         setValue("regNo", String(fields.regno))
+        filledFieldNames.push("regNo")
       }
       
       // Name of Student - form field is "nameOfStudent"
       if (fields.nameOfStudent) {
         setValue("nameOfStudent", String(fields.nameOfStudent))
+        filledFieldNames.push("nameOfStudent")
       } else if (fields.name) {
         // Fallback if mapping didn't work
         setValue("nameOfStudent", String(fields.name))
+        filledFieldNames.push("nameOfStudent")
       }
       
       // Date of Registration - form field is "dateOfRegistration"
       if (fields.dateOfRegistration) {
         setValue("dateOfRegistration", String(fields.dateOfRegistration))
+        filledFieldNames.push("dateOfRegistration")
       } else if (fields.start_date) {
         // Fallback if mapping didn't work
         setValue("dateOfRegistration", String(fields.start_date))
+        filledFieldNames.push("dateOfRegistration")
       }
       
       // Topic - form field is "topic"
       if (fields.topic) {
         setValue("topic", String(fields.topic))
+        filledFieldNames.push("topic")
       }
       
       // Status - this should already be matched to dropdown ID by the hook
@@ -101,6 +134,7 @@ export default function AddPhdPage() {
             }
           }
         }
+        filledFieldNames.push("status")
       }
       
       // Year of Completion - form field is "yearOfCompletion"
@@ -108,13 +142,20 @@ export default function AddPhdPage() {
         const yearValue = String(fields.yearOfCompletion).replace(/[^0-9]/g, '')
         if (yearValue) {
           setValue("yearOfCompletion", Number(yearValue))
+          filledFieldNames.push("yearOfCompletion")
         }
       } else if (fields.completion_year !== undefined && fields.completion_year !== null) {
         // Fallback if mapping didn't work
         const yearValue = String(fields.completion_year).replace(/[^0-9]/g, '')
         if (yearValue) {
           setValue("yearOfCompletion", Number(yearValue))
+          filledFieldNames.push("yearOfCompletion")
         }
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
       }
       
       // Show toast notification
@@ -168,6 +209,7 @@ export default function AddPhdPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -357,6 +399,8 @@ export default function AddPhdPage() {
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
             />
           </CardContent>
         </Card>

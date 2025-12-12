@@ -12,6 +12,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Save } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface AcademicVisitFormProps {
   form: UseFormReturn<any>
@@ -26,6 +27,8 @@ interface AcademicVisitFormProps {
   academicVisitRoleOptions?: Array<{ id: number; name: string }>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function AcademicVisitForm({
@@ -42,6 +45,8 @@ export function AcademicVisitForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: AcademicVisitFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -147,8 +152,14 @@ export function AcademicVisitForm({
           <Input
             id="instituteVisited"
             placeholder="Enter institute/industry name"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-            {...register("instituteVisited", { required: "Institute name is required" })}
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("instituteVisited") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("instituteVisited", { 
+              required: "Institute name is required",
+              onChange: () => onFieldChange?.("instituteVisited")
+            })}
           />
           {errors.instituteVisited && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.instituteVisited.message?.toString()}</p>}
         </div>
@@ -161,10 +172,14 @@ export function AcademicVisitForm({
               type="number"
               placeholder="Enter duration"
               min="1"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("durationOfVisit") && "bg-blue-50 border-blue-200"
+              )}
               {...register("durationOfVisit", { 
                 required: "Duration is required",
-                min: { value: 1, message: "Duration must be at least 1 day" }
+                min: { value: 1, message: "Duration must be at least 1 day" },
+                onChange: () => onFieldChange?.("durationOfVisit")
               })}
             />
             {errors.durationOfVisit && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.durationOfVisit.message?.toString()}</p>}
@@ -180,9 +195,13 @@ export function AcademicVisitForm({
                 <SearchableSelect
                   options={academicVisitRoleOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(val) => {
+                    field.onChange(val)
+                    onFieldChange?.("role")
+                  }}
                   placeholder="Select role"
                   emptyMessage="No role found"
+                  className={isAutoFilled?.("role") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -198,8 +217,13 @@ export function AcademicVisitForm({
             <Input
               id="sponsoredBy"
               placeholder="e.g., University, Government, Self-funded"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("sponsoredBy")}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("sponsoredBy") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("sponsoredBy", {
+                onChange: () => onFieldChange?.("sponsoredBy")
+              })}
             />
           </div>
 
@@ -208,7 +232,10 @@ export function AcademicVisitForm({
             <Input
               id="date"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
+              )}
               max={new Date().toISOString().split('T')[0]}
               {...register("date", { 
                 required: "Visit date is required",
@@ -217,7 +244,8 @@ export function AcademicVisitForm({
                     return "Visit date cannot be in the future"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("date")
               })}
             />
             {errors.date && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
@@ -230,8 +258,13 @@ export function AcademicVisitForm({
             id="remarks"
             placeholder="Outcomes, collaborations, etc."
             rows={4}
-            className="text-sm sm:text-base mt-1"
-            {...register("remarks")}
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("remarks") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("remarks", {
+              onChange: () => onFieldChange?.("remarks")
+            })}
           />
         </div>
 

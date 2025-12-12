@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
+import { useCallback } from "react"
 
 export default function AddConsultancyPage() {
   const router = useRouter()
@@ -24,6 +25,26 @@ export default function AddConsultancyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
 
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
@@ -42,6 +63,12 @@ export default function AddConsultancyPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
       // Note: fields are already mapped by categories-field-mapping.ts hook
       // Form field names: title, collaboratingInstitute, address, startDate, duration, amount, detailsOutcome
@@ -49,35 +76,43 @@ export default function AddConsultancyPage() {
       // Title - form field is "title"
       if (fields.title) {
         setValue("title", String(fields.title))
+        filledFieldNames.push("title")
       } else if (fields.name) {
         // Fallback if mapping didn't work (backend uses name, form uses title)
         setValue("title", String(fields.name))
+        filledFieldNames.push("title")
       }
       
       // Collaborating Institute - form field is "collaboratingInstitute"
       if (fields.collaboratingInstitute) {
         setValue("collaboratingInstitute", String(fields.collaboratingInstitute))
+        filledFieldNames.push("collaboratingInstitute")
       } else if (fields.collaborating_inst) {
         // Fallback if mapping didn't work
         setValue("collaboratingInstitute", String(fields.collaborating_inst))
+        filledFieldNames.push("collaboratingInstitute")
       }
       
       // Address
       if (fields.address) {
         setValue("address", String(fields.address))
+        filledFieldNames.push("address")
       }
       
       // Start Date - form field is "startDate"
       if (fields.startDate) {
         setValue("startDate", String(fields.startDate))
+        filledFieldNames.push("startDate")
       } else if (fields.Start_Date) {
         // Fallback if mapping didn't work
         setValue("startDate", String(fields.Start_Date))
+        filledFieldNames.push("startDate")
       }
       
       // Duration
       if (fields.duration !== undefined && fields.duration !== null) {
         setValue("duration", Number(fields.duration))
+        filledFieldNames.push("duration")
       }
       
       // Amount
@@ -90,14 +125,22 @@ export default function AddConsultancyPage() {
         } else {
           setValue("amount", amountValue)
         }
+        filledFieldNames.push("amount")
       }
       
       // Details / Outcome - form field is "detailsOutcome"
       if (fields.detailsOutcome) {
         setValue("detailsOutcome", String(fields.detailsOutcome))
+        filledFieldNames.push("detailsOutcome")
       } else if (fields.details) {
         // Fallback if mapping didn't work
         setValue("detailsOutcome", String(fields.details))
+        filledFieldNames.push("detailsOutcome")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
       }
       
       // Show toast notification
@@ -151,6 +194,7 @@ export default function AddConsultancyPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -343,6 +387,8 @@ export default function AddConsultancyPage() {
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
             />
           </CardContent>
         </Card>

@@ -15,6 +15,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface CollaborationFormProps {
   form: UseFormReturn<any>
@@ -31,6 +32,8 @@ interface CollaborationFormProps {
   collaborationsTypeOptions?: Array<{ id: number; name: string }>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function CollaborationForm({
@@ -49,6 +52,8 @@ export function CollaborationForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: CollaborationFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -203,9 +208,13 @@ export function CollaborationForm({
                 <SearchableSelect
                   options={collaborationsTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(val) => {
+                    field.onChange(val)
+                    onFieldChange?.("category")
+                  }}
                   placeholder="Select category"
                   emptyMessage="No category found"
+                  className={isAutoFilled?.("category") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -216,7 +225,16 @@ export function CollaborationForm({
 
           <div>
             <Label className="text-sm sm:text-base">Collaborating Institute *</Label>
-            <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("collaboratingInstitute", { required: "Institute is required" })} />
+            <Input 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("collaboratingInstitute") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("collaboratingInstitute", { 
+                required: "Institute is required",
+                onChange: () => onFieldChange?.("collaboratingInstitute")
+              })} 
+            />
             {errors.collaboratingInstitute && (
               <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.collaboratingInstitute.message?.toString()}</p>
             )}
@@ -225,76 +243,186 @@ export function CollaborationForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label className="text-sm sm:text-base">Name of Collaboration</Label>
-            <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("collabName")} />
+            <Label className="text-sm sm:text-base">Name of Collaboration *</Label>
+            <Input 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("collabName") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("collabName", {
+                required: "Name of collaboration is required",
+                onChange: () => onFieldChange?.("collabName")
+              })} 
+            />
+            {errors.collabName && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.collabName.message?.toString()}</p>
+            )}
           </div>
           <div>
-            <Label className="text-sm sm:text-base">QS/THE Ranking</Label>
-            <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("collabRank")} />
+            <Label className="text-sm sm:text-base">QS/THE Ranking *</Label>
+            <Input 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("collabRank") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("collabRank", {
+                required: "QS/THE Ranking is required",
+                onChange: () => onFieldChange?.("collabRank")
+              })} 
+            />
+            {errors.collabRank && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.collabRank.message?.toString()}</p>
+            )}
           </div>
         </div>
 
         <div className="mt-4">
-          <Label className="text-sm sm:text-base">Address</Label>
-          <Input className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("address")} />
+          <Label className="text-sm sm:text-base">Address *</Label>
+          <Input 
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("address") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("address", {
+              required: "Address is required",
+              onChange: () => onFieldChange?.("address")
+            })} 
+          />
+          {errors.address && (
+            <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.address.message?.toString()}</p>
+          )}
         </div>
 
         <div className="mt-4">
-          <Label className="text-sm sm:text-base">Details</Label>
-          <Textarea rows={3} className="text-sm sm:text-base mt-1" {...register("details")} />
+          <Label className="text-sm sm:text-base">Details *</Label>
+          <Textarea 
+            rows={3} 
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("details") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("details", {
+              required: "Details are required",
+              onChange: () => onFieldChange?.("details")
+            })} 
+          />
+          {errors.details && (
+            <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.details.message?.toString()}</p>
+          )}
         </div>
 
         <div className="mt-4">
-          <Label className="text-sm sm:text-base">Collaboration Outcome</Label>
+          <Label className="text-sm sm:text-base">Collaboration Outcome *</Label>
           <Controller
             name="collabOutcome"
             control={control}
+            rules={{ required: "Collaboration outcome is required" }}
             render={({ field }) => (
               <SearchableSelect
                 options={collaborationsOutcomeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                 value={field.value}
-                onValueChange={field.onChange}
+                onValueChange={(val) => {
+                  field.onChange(val)
+                  onFieldChange?.("collabOutcome")
+                }}
                 placeholder="Select collaboration outcome"
                 emptyMessage="No outcome found"
+                className={isAutoFilled?.("collabOutcome") ? "bg-blue-50 border-blue-200" : undefined}
               />
             )}
           />
+          {errors.collabOutcome && (
+            <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.collabOutcome.message?.toString()}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label className="text-sm sm:text-base">Status</Label>
-            <Select value={formData.status || ""} onValueChange={(val) => {
-              setValue("status", val)
-              // Clear duration if status is not Completed
-              if (val !== "Completed") {
-                setValue("duration", null)
-              }
-            }}>
-              <SelectTrigger className="text-sm sm:text-base h-9 sm:h-10 mt-1">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Ongoing">Ongoing</SelectItem>
-                <SelectItem value="Completed">Completed</SelectItem>
-                <SelectItem value="Pending">Pending</SelectItem>
-                <SelectItem value="Cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-sm sm:text-base">Status *</Label>
+            <Controller
+              name="status"
+              control={control}
+              rules={{ required: "Status is required" }}
+              render={({ field }) => (
+                <Select 
+                  value={field.value || ""} 
+                  onValueChange={(val) => {
+                    field.onChange(val)
+                    onFieldChange?.("status")
+                    // Clear duration if status is not Completed
+                    if (val !== "Completed") {
+                      setValue("duration", null)
+                    }
+                    // Trigger validation for duration field when status changes
+                    setTimeout(() => {
+                      form.trigger("duration")
+                    }, 0)
+                  }}
+                >
+                  <SelectTrigger className={cn(
+                    "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                    isAutoFilled?.("status") && "bg-blue-50 border-blue-200"
+                  )}>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Ongoing">Ongoing</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.status && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.status.message?.toString()}</p>
+            )}
           </div>
           <div>
-            <Label className="text-sm sm:text-base">Starting Date</Label>
-            <Input type="date" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("startingDate")} />
+            <Label className="text-sm sm:text-base">Starting Date *</Label>
+            <Input 
+              type="date" 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("startingDate") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("startingDate", {
+                required: "Starting date is required",
+                onChange: () => onFieldChange?.("startingDate")
+              })} 
+            />
+            {errors.startingDate && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.startingDate.message?.toString()}</p>
+            )}
           </div>
           <div>
             <Label className="text-sm sm:text-base">Duration (months)</Label>
             <Input 
               type="number" 
-              className={`text-sm sm:text-base h-9 sm:h-10 mt-1 ${isDurationDisabled ? "bg-gray-100 cursor-not-allowed" : ""}`}
-              {...register("duration", { min: 0 })} 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("duration") && "bg-blue-50 border-blue-200",
+                isDurationDisabled && "bg-gray-100 cursor-not-allowed"
+              )}
+              {...register("duration", { 
+                validate: (value) => {
+                  const currentStatus = watch("status")
+                  if (currentStatus === "Completed" && (value === null || value === undefined || value === "")) {
+                    return "Duration is required when status is Completed"
+                  }
+                  if (value !== null && value !== undefined && value !== "" && Number(value) < 0) {
+                    return "Duration must be 0 or greater"
+                  }
+                  return true
+                },
+                onChange: () => onFieldChange?.("duration")
+              })} 
               disabled={isDurationDisabled}
             />
+            {errors.duration && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.duration.message?.toString()}</p>
+            )}
             {isDurationDisabled && (
               <p className="text-xs text-gray-500 mt-1">Duration can only be set when status is Completed</p>
             )}
@@ -303,57 +431,103 @@ export function CollaborationForm({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label className="text-sm sm:text-base">Level</Label>
+            <Label className="text-sm sm:text-base">Level *</Label>
             <Controller
               name="level"
               control={control}
+              rules={{ required: "Level is required" }}
               render={({ field }) => (
                 <SearchableSelect
                   options={collaborationsLevelOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(val) => {
+                    field.onChange(val)
+                    onFieldChange?.("level")
+                  }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
+            {errors.level && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.level.message?.toString()}</p>
+            )}
           </div>
           <div>
-            <Label className="text-sm sm:text-base">No. of Beneficiary</Label>
-            <Input type="number" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("noOfBeneficiary", { min: 0 })} />
+            <Label className="text-sm sm:text-base">No. of Beneficiary *</Label>
+            <Input 
+              type="number" 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("noOfBeneficiary") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("noOfBeneficiary", { 
+                required: "Number of beneficiary is required",
+                min: { value: 0, message: "Number of beneficiary must be 0 or greater" },
+                onChange: () => onFieldChange?.("noOfBeneficiary")
+              })} 
+            />
+            {errors.noOfBeneficiary && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.noOfBeneficiary.message?.toString()}</p>
+            )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-4">
           <div>
-            <Label className="text-sm sm:text-base">MOU Signed?</Label>
-            <Select 
-              value={formData.mouSigned !== undefined ? String(formData.mouSigned) : ""} 
-              onValueChange={(val) => {
-                setValue("mouSigned", val === "true")
-                // Clear signing date if MOU is not signed
-                if (val === "false") {
-                  setValue("signingDate", null)
-                }
-              }}
-            >
-              <SelectTrigger className="text-sm sm:text-base h-9 sm:h-10 mt-1">
-                <SelectValue placeholder="Select option" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="true">Yes</SelectItem>
-                <SelectItem value="false">No</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-sm sm:text-base">MOU Signed? *</Label>
+            <Controller
+              name="mouSigned"
+              control={control}
+              rules={{ required: "MOU Signed status is required" }}
+              render={({ field }) => (
+                <Select 
+                  value={field.value !== undefined ? String(field.value) : ""} 
+                  onValueChange={(val) => {
+                    field.onChange(val === "true")
+                    onFieldChange?.("mouSigned")
+                    // Clear signing date if MOU is not signed
+                    if (val === "false") {
+                      setValue("signingDate", null)
+                    }
+                  }}
+                >
+                  <SelectTrigger className={cn(
+                    "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                    isAutoFilled?.("mouSigned") && "bg-blue-50 border-blue-200"
+                  )}>
+                    <SelectValue placeholder="Select option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Yes</SelectItem>
+                    <SelectItem value="false">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            {errors.mouSigned && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.mouSigned.message?.toString()}</p>
+            )}
           </div>
           <div>
             <Label className="text-sm sm:text-base">Signing Date</Label>
             <Input 
               type="date" 
-              className={`text-sm sm:text-base h-9 sm:h-10 mt-1 ${!isSigningDateEnabled ? "bg-gray-100 cursor-not-allowed" : ""}`}
-              {...register("signingDate")} 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("signingDate") && "bg-blue-50 border-blue-200",
+                !isSigningDateEnabled && "bg-gray-100 cursor-not-allowed"
+              )}
+              {...register("signingDate", {
+                required: false,
+                onChange: () => onFieldChange?.("signingDate")
+              })} 
               disabled={!isSigningDateEnabled}
             />
+            {errors.signingDate && (
+              <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.signingDate.message?.toString()}</p>
+            )}
             {!isSigningDateEnabled && (
               <p className="text-xs text-gray-500 mt-1">Signing date is only available when MOU is signed</p>
             )}

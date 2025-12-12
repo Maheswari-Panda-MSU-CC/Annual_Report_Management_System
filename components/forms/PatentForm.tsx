@@ -12,6 +12,7 @@ import { useEffect, useState } from "react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { PatentFormProps } from "@/types/interfaces"
+import { cn } from "@/lib/utils"
 
 export function PatentForm({
     form,
@@ -28,6 +29,8 @@ export function PatentForm({
     initialDocumentUrl,
     onClearFields,
     onCancel,
+    isAutoFilled,
+    onFieldChange,
 }: PatentFormProps) {
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -151,8 +154,14 @@ export function PatentForm({
                     <Input 
                         id="title" 
                         placeholder="Enter patent title" 
-                        className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-                        {...register("title", { required: "Patent title is required" })} 
+                        className={cn(
+                            "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                            isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
+                        )}
+                        {...register("title", { 
+                            required: "Patent title is required",
+                            onChange: () => onFieldChange?.("title")
+                        })} 
                     />
                     {errors.title && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
                 </div>
@@ -171,9 +180,13 @@ export function PatentForm({
                                         label: l.name,
                                     }))}
                                     value={field.value || ""}
-                                    onValueChange={(val) => field.onChange(Number(val))}
+                                    onValueChange={(val) => {
+                                        field.onChange(Number(val))
+                                        onFieldChange?.("level")
+                                    }}
                                     placeholder="Select level"
                                     emptyMessage="No level found"
+                                    className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200" : undefined}
                                 />
                             )}
                         />
@@ -193,9 +206,13 @@ export function PatentForm({
                                         label: s.name,
                                     }))}
                                     value={field.value || ""}
-                                    onValueChange={(val) => field.onChange(Number(val))}
+                                    onValueChange={(val) => {
+                                        field.onChange(Number(val))
+                                        onFieldChange?.("status")
+                                    }}
                                     placeholder="Select status"
                                     emptyMessage="No status found"
+                                    className={isAutoFilled?.("status") ? "bg-blue-50 border-blue-200" : undefined}
                                 />
                             )}
                         />
@@ -209,8 +226,14 @@ export function PatentForm({
                         <Input 
                             id="date" 
                             type="date" 
-                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-                            {...register("date", { required: "Date is required" })} 
+                            className={cn(
+                                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                                isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
+                            )}
+                            {...register("date", { 
+                                required: "Date is required",
+                                onChange: () => onFieldChange?.("date")
+                            })} 
                         />
                         {errors.date && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
                     </div>
@@ -220,8 +243,13 @@ export function PatentForm({
                         <Input 
                             id="Tech_Licence" 
                             placeholder="Enter technology licence details" 
-                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-                            {...register("Tech_Licence")} 
+                            className={cn(
+                                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                                isAutoFilled?.("Tech_Licence") && "bg-blue-50 border-blue-200"
+                            )}
+                            {...register("Tech_Licence", {
+                                onChange: () => onFieldChange?.("Tech_Licence")
+                            })} 
                         />
                     </div>
                 </div>
@@ -233,9 +261,13 @@ export function PatentForm({
                             id="Earnings_Generate" 
                             type="number" 
                             placeholder="Enter amount" 
-                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+                            className={cn(
+                                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                                isAutoFilled?.("Earnings_Generate") && "bg-blue-50 border-blue-200"
+                            )}
                             {...register("Earnings_Generate", {
-                                min: { value: 0, message: "Amount must be positive" }
+                                min: { value: 0, message: "Amount must be positive" },
+                                onChange: () => onFieldChange?.("Earnings_Generate")
                             })} 
                         />
                         {errors.Earnings_Generate && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.Earnings_Generate.message?.toString()}</p>}
@@ -246,8 +278,13 @@ export function PatentForm({
                         <Input 
                             id="PatentApplicationNo" 
                             placeholder="Enter patent number" 
-                            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-                            {...register("PatentApplicationNo")} 
+                            className={cn(
+                                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                                isAutoFilled?.("PatentApplicationNo") && "bg-blue-50 border-blue-200"
+                            )}
+                            {...register("PatentApplicationNo", {
+                                onChange: () => onFieldChange?.("PatentApplicationNo")
+                            })} 
                         />
                     </div>
                 </div>

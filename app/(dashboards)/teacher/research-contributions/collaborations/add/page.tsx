@@ -3,7 +3,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +28,26 @@ export default function AddCollaborationsPage() {
   const { setValue, watch, reset } = form
 
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
 
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
@@ -58,158 +78,276 @@ export default function AddCollaborationsPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only fields that were successfully set)
+      const filledFieldNames: string[] = []
+      
+      // Helper function to check if a dropdown value matches an option
+      const isValidDropdownValue = (value: number | string, options: Array<{ id: number; name: string }>): boolean => {
+        if (typeof value === 'number') {
+          return options.some(opt => opt.id === value)
+        }
+        return false
+      }
+      
       // Auto-fill form fields from document analysis
       // Note: fields are already mapped by categories-field-mapping.ts hook
       // Form field names: category, collaboratingInstitute, collabName, collabRank, address, details, collabOutcome, status, startingDate, duration, level, noOfBeneficiary, mouSigned, signingDate
       
-      // Category
-      if (fields.category) {
-        setValue("category", String(fields.category))
+      // Category - only highlight if a valid option was found and set
+      if (fields.category !== undefined && fields.category !== null) {
+        let categoryValue: number | null = null
+        
+        if (typeof fields.category === 'number') {
+          // Check if the number matches an option ID
+          if (isValidDropdownValue(fields.category, collaborationsTypeOptions)) {
+            categoryValue = fields.category
+          }
+        } else {
+          // Try to find matching option by name
+          const categoryOption = collaborationsTypeOptions.find(
+            opt => opt.name.toLowerCase() === String(fields.category).toLowerCase()
+          )
+          if (categoryOption) {
+            categoryValue = categoryOption.id
+          } else {
+            // Try to convert to number and check
+            const numValue = Number(fields.category)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, collaborationsTypeOptions)) {
+              categoryValue = numValue
+            }
+          }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (categoryValue !== null && collaborationsTypeOptions.some(opt => opt.id === categoryValue)) {
+          setValue("category", categoryValue, { shouldValidate: true })
+          filledFieldNames.push("category")
+        }
       }
       
       // Collaborating Institute - form field is "collaboratingInstitute"
       if (fields.collaboratingInstitute) {
         setValue("collaboratingInstitute", String(fields.collaboratingInstitute))
+        filledFieldNames.push("collaboratingInstitute")
       } else if (fields.collaborating_inst) {
         // Fallback if mapping didn't work
         setValue("collaboratingInstitute", String(fields.collaborating_inst))
+        filledFieldNames.push("collaboratingInstitute")
       }
       
       // Collaborator Name - form field is "collabName"
       if (fields.collabName) {
         setValue("collabName", String(fields.collabName))
+        filledFieldNames.push("collabName")
       } else if (fields.collab_name) {
         // Fallback if mapping didn't work
         setValue("collabName", String(fields.collab_name))
+        filledFieldNames.push("collabName")
       }
       
       // Collaborator Rank - form field is "collabRank"
       if (fields.collabRank) {
         setValue("collabRank", String(fields.collabRank))
+        filledFieldNames.push("collabRank")
       } else if (fields.qs_ranking) {
         // Fallback if mapping didn't work
         setValue("collabRank", String(fields.qs_ranking))
+        filledFieldNames.push("collabRank")
       }
       
       // Address
       if (fields.address) {
         setValue("address", String(fields.address))
+        filledFieldNames.push("address")
       }
       
       // Details
       if (fields.details) {
         setValue("details", String(fields.details))
+        filledFieldNames.push("details")
       }
       
-      // Collaboration Outcome - form field is "collabOutcome"
+      // Collaboration Outcome - only highlight if a valid option was found and set
+      let outcomeSet = false
       if (fields.collabOutcome !== undefined && fields.collabOutcome !== null) {
+        let outcomeValue: number | null = null
+        
         if (typeof fields.collabOutcome === 'number') {
-          setValue("collabOutcome", fields.collabOutcome)
+          // Check if the number matches an option ID
+          if (isValidDropdownValue(fields.collabOutcome, collaborationsOutcomeOptions)) {
+            outcomeValue = fields.collabOutcome
+          }
         } else {
-          // If it's a string, try to find matching option
+          // Try to find matching option by name
           const outcomeOption = collaborationsOutcomeOptions.find(
             opt => opt.name.toLowerCase() === String(fields.collabOutcome).toLowerCase()
           )
           if (outcomeOption) {
-            setValue("collabOutcome", outcomeOption.id)
+            outcomeValue = outcomeOption.id
           } else {
+            // Try to convert to number and check
             const numValue = Number(fields.collabOutcome)
-            if (!isNaN(numValue)) {
-              setValue("collabOutcome", numValue)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, collaborationsOutcomeOptions)) {
+              outcomeValue = numValue
             }
           }
         }
-      } else if (fields.outcome !== undefined && fields.outcome !== null) {
-        // Fallback if mapping didn't work
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (outcomeValue !== null && collaborationsOutcomeOptions.some(opt => opt.id === outcomeValue)) {
+          setValue("collabOutcome", outcomeValue, { shouldValidate: true })
+          filledFieldNames.push("collabOutcome")
+          outcomeSet = true
+        }
+      }
+      
+      // Fallback for outcome field
+      if (!outcomeSet && fields.outcome !== undefined && fields.outcome !== null) {
+        let outcomeValue: number | null = null
+        
         if (typeof fields.outcome === 'number') {
-          setValue("collabOutcome", fields.outcome)
+          if (isValidDropdownValue(fields.outcome, collaborationsOutcomeOptions)) {
+            outcomeValue = fields.outcome
+          }
         } else {
           const outcomeOption = collaborationsOutcomeOptions.find(
             opt => opt.name.toLowerCase() === String(fields.outcome).toLowerCase()
           )
           if (outcomeOption) {
-            setValue("collabOutcome", outcomeOption.id)
+            outcomeValue = outcomeOption.id
           } else {
             const numValue = Number(fields.outcome)
-            if (!isNaN(numValue)) {
-              setValue("collabOutcome", numValue)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, collaborationsOutcomeOptions)) {
+              outcomeValue = numValue
             }
           }
         }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (outcomeValue !== null && collaborationsOutcomeOptions.some(opt => opt.id === outcomeValue)) {
+          setValue("collabOutcome", outcomeValue, { shouldValidate: true })
+          filledFieldNames.push("collabOutcome")
+          outcomeSet = true
+        }
       }
       
-      // Status
+      // Status - only highlight if a valid status value
+      const validStatuses = ["Active", "Ongoing", "Completed", "Pending", "Cancelled"]
       if (fields.status !== undefined && fields.status !== null) {
-        setValue("status", typeof fields.status === 'number' ? fields.status : Number(fields.status))
+        let statusValue: string | null = null
+        
+        if (typeof fields.status === 'string') {
+          if (validStatuses.includes(fields.status)) {
+            statusValue = fields.status
+          }
+        } else {
+          // If it's a number, try to convert to string and check
+          const statusStr = String(fields.status)
+          if (validStatuses.includes(statusStr)) {
+            statusValue = statusStr
+          }
+        }
+        
+        if (statusValue !== null) {
+          setValue("status", statusValue)
+          filledFieldNames.push("status")
+        }
       }
       
       // Starting Date - form field is "startingDate"
       if (fields.startingDate) {
         setValue("startingDate", String(fields.startingDate))
+        filledFieldNames.push("startingDate")
       } else if (fields.starting_date) {
         // Fallback if mapping didn't work
         setValue("startingDate", String(fields.starting_date))
+        filledFieldNames.push("startingDate")
       }
       
       // Duration
       if (fields.duration !== undefined && fields.duration !== null) {
         setValue("duration", Number(fields.duration))
+        filledFieldNames.push("duration")
       }
       
-      // Level
+      // Level - only highlight if a valid option was found and set
       if (fields.level !== undefined && fields.level !== null) {
+        let levelValue: number | null = null
+        
         if (typeof fields.level === 'number') {
-          setValue("level", fields.level)
+          if (isValidDropdownValue(fields.level, collaborationsLevelOptions)) {
+            levelValue = fields.level
+          }
         } else {
+          // Try to find matching option by name
           const levelOption = collaborationsLevelOptions.find(
             opt => opt.name.toLowerCase() === String(fields.level).toLowerCase()
           )
           if (levelOption) {
-            setValue("level", levelOption.id)
+            levelValue = levelOption.id
           } else {
+            // Try to convert to number and check
             const numValue = Number(fields.level)
-            if (!isNaN(numValue)) {
-              setValue("level", numValue)
+            if (!isNaN(numValue) && isValidDropdownValue(numValue, collaborationsLevelOptions)) {
+              levelValue = numValue
             }
           }
+        }
+        
+        // Only set and highlight if we found a valid value that exists in options
+        if (levelValue !== null && collaborationsLevelOptions.some(opt => opt.id === levelValue)) {
+          setValue("level", levelValue, { shouldValidate: true })
+          filledFieldNames.push("level")
         }
       }
       
       // Number of Beneficiary - form field is "noOfBeneficiary"
       if (fields.noOfBeneficiary !== undefined && fields.noOfBeneficiary !== null) {
         setValue("noOfBeneficiary", Number(fields.noOfBeneficiary))
+        filledFieldNames.push("noOfBeneficiary")
       } else if (fields.beneficiary_num !== undefined && fields.beneficiary_num !== null) {
         // Fallback if mapping didn't work
         setValue("noOfBeneficiary", Number(fields.beneficiary_num))
+        filledFieldNames.push("noOfBeneficiary")
       } else if (fields.beneficiary_count !== undefined && fields.beneficiary_count !== null) {
         // Fallback if mapping didn't work
         setValue("noOfBeneficiary", Number(fields.beneficiary_count))
+        filledFieldNames.push("noOfBeneficiary")
       }
       
       // MOU Signed - form field is "mouSigned"
       if (fields.mouSigned !== undefined) {
         setValue("mouSigned", Boolean(fields.mouSigned))
+        filledFieldNames.push("mouSigned")
       } else if (fields.MOU_signed !== undefined) {
         // Fallback if mapping didn't work
         setValue("mouSigned", Boolean(fields.MOU_signed))
+        filledFieldNames.push("mouSigned")
       }
       
       // Signing Date - form field is "signingDate"
       if (fields.signingDate) {
         setValue("signingDate", String(fields.signingDate))
+        filledFieldNames.push("signingDate")
       } else if (fields.signing_date) {
         // Fallback if mapping didn't work
         setValue("signingDate", String(fields.signing_date))
+        filledFieldNames.push("signingDate")
       }
       
-      // Show toast notification
-      const filledCount = Object.keys(fields).filter(
-        k => fields[k] !== null && fields[k] !== undefined && fields[k] !== ""
-      ).length
-      if (filledCount > 0) {
+      // Update auto-filled fields set (only fields that were actually set)
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames))
+      }
+      
+      // Show toast notification with actual count of filled fields
+      if (filledFieldNames.length > 0) {
         toast({
           title: "Form Auto-filled",
-          description: `Populated ${filledCount} field(s) from document analysis.`,
+          description: `Populated ${filledFieldNames.length} field(s) from document analysis.`,
         })
       }
     },
@@ -253,6 +391,7 @@ export default function AddCollaborationsPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -298,6 +437,19 @@ export default function AddCollaborationsPage() {
   }
 
   const handleSubmit = async (data: any) => {
+    // Trigger validation for all fields before submission
+    const isValid = await form.trigger()
+    
+    if (!isValid) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all required fields correctly.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+    
     if (!user?.role_id) {
       toast({
         title: "Error",
@@ -462,6 +614,8 @@ export default function AddCollaborationsPage() {
               collaborationsTypeOptions={collaborationsTypeOptions}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
             />
           </CardContent>
         </Card>

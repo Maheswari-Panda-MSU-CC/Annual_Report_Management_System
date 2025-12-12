@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { useDropDowns } from "@/hooks/use-dropdowns"
+import { cn } from "@/lib/utils"
 
 interface FinancialFormProps {
   form: UseFormReturn<any>
@@ -27,6 +28,8 @@ interface FinancialFormProps {
   financialSupportTypeOptions?: Array<{ id: number; name: string }>
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 export function FinancialForm({
@@ -43,6 +46,8 @@ export function FinancialForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
+  isAutoFilled,
+  onFieldChange,
 }: FinancialFormProps & { initialDocumentUrl?: string }) {
   const router = useRouter()
   const {
@@ -157,9 +162,13 @@ export function FinancialForm({
           <Input
             id="nameOfSupport"
             placeholder="Enter support name"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("nameOfSupport") && "bg-blue-50 border-blue-200"
+            )}
             {...register("nameOfSupport", {
               required: "Support name is required",
+              onChange: () => onFieldChange?.("nameOfSupport")
             })}
           />
           {errors.nameOfSupport && (
@@ -180,9 +189,13 @@ export function FinancialForm({
                 <SearchableSelect
                   options={financialSupportTypeOptions.map(opt => ({ value: opt.id, label: opt.name }))}
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(val) => {
+                    field.onChange(val)
+                    onFieldChange?.("type")
+                  }}
                   placeholder="Select type"
                   emptyMessage="No type found"
+                  className={isAutoFilled?.("type") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -196,9 +209,13 @@ export function FinancialForm({
             <Input
               id="supportingAgency"
               placeholder="Enter agency name"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("supportingAgency") && "bg-blue-50 border-blue-200"
+              )}
               {...register("supportingAgency", {
                 required: "Supporting agency is required",
+                onChange: () => onFieldChange?.("supportingAgency")
               })}
             />
             {errors.supportingAgency && (
@@ -218,7 +235,10 @@ export function FinancialForm({
               placeholder="Enter amount"
               min="0"
               step="0.01"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("grantReceived") && "bg-blue-50 border-blue-200"
+              )}
               {...register("grantReceived", {
                 required: "Grant amount is required",
                 min: { value: 0, message: "Grant amount must be positive" },
@@ -227,7 +247,8 @@ export function FinancialForm({
                     return "Please enter a valid number"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("grantReceived")
               })}
             />
             {errors.grantReceived && (
@@ -242,7 +263,10 @@ export function FinancialForm({
             <Input
               id="date"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
+              )}
               max={new Date().toISOString().split('T')[0]}
               {...register("date", { 
                 required: "Date is required",
@@ -251,7 +275,8 @@ export function FinancialForm({
                     return "Date cannot be in the future"
                   }
                   return true
-                }
+                },
+                onChange: () => onFieldChange?.("date")
               })}
             />
             {errors.date && (
@@ -268,8 +293,13 @@ export function FinancialForm({
             id="detailsOfEvent"
             rows={3}
             placeholder="Enter details"
-            className="text-sm sm:text-base mt-1"
-            {...register("detailsOfEvent")}
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("detailsOfEvent") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("detailsOfEvent", {
+              onChange: () => onFieldChange?.("detailsOfEvent")
+            })}
           />
         </div>
 
@@ -279,8 +309,13 @@ export function FinancialForm({
             id="purposeOfGrant"
             rows={3}
             placeholder="Enter purpose of grant"
-            className="text-sm sm:text-base mt-1"
-            {...register("purposeOfGrant")}
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("purposeOfGrant") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("purposeOfGrant", {
+              onChange: () => onFieldChange?.("purposeOfGrant")
+            })}
           />
         </div>
 

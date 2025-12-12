@@ -213,6 +213,8 @@ export interface PatentFormProps {
   initialDocumentUrl?: string
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 // ---------- Policy Form ----------
@@ -230,6 +232,8 @@ export interface PolicyFormProps {
   initialDocumentUrl?: string
   onClearFields?: () => void
   onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 // ---------- E-Content Form ----------
@@ -246,6 +250,10 @@ export interface EContentFormProps {
   eContentTypeOptions?: Array<{ id: number; name: string }>
   typeEcontentValueOptions?: Array<{ id: number; name: string }>
   initialDocumentUrl?: string
+  onClearFields?: () => void
+  onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }
 
 // ---------- Consultancy Form ----------
@@ -260,4 +268,8 @@ export interface ConsultancyFormProps {
   isEdit?: boolean
   editData?: Record<string, any>
   initialDocumentUrl?: string
+  onClearFields?: () => void
+  onCancel?: () => void
+  isAutoFilled?: (fieldName: string) => boolean
+  onFieldChange?: (fieldName: string) => void
 }

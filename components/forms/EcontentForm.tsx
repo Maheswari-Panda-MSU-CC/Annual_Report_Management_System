@@ -13,6 +13,7 @@ import { useDropDowns } from "@/hooks/use-dropdowns"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { EContentFormProps } from "@/types/interfaces"
+import { cn } from "@/lib/utils"
 
 export function EContentForm({
   form,
@@ -29,7 +30,9 @@ export function EContentForm({
   initialDocumentUrl,
   onClearFields,
   onCancel,
-}: EContentFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void }) {
+  isAutoFilled,
+  onFieldChange,
+}: EContentFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void; isAutoFilled?: (fieldName: string) => boolean; onFieldChange?: (fieldName: string) => void }) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
@@ -148,8 +151,14 @@ export function EContentForm({
           <Input
             id="title"
             placeholder="Enter e-content title"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-            {...register("title", { required: "Title is required" })}
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("title", { 
+              required: "Title is required",
+              onChange: () => onFieldChange?.("title")
+            })}
           />
           {errors.title && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
         </div>
@@ -168,9 +177,13 @@ export function EContentForm({
                     label: t.name,
                   }))}
                   value={field.value || ""}
-                  onValueChange={(val) => field.onChange(Number(val))}
+                  onValueChange={(val) => {
+                    field.onChange(Number(val))
+                    onFieldChange?.("typeOfEContentPlatform")
+                  }}
                   placeholder="Select platform"
                   emptyMessage="No platform found"
+                  className={isAutoFilled?.("typeOfEContentPlatform") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -194,9 +207,13 @@ export function EContentForm({
                     { value: 6, label: "6" },
                   ]}
                   value={field.value || ""}
-                  onValueChange={(val) => field.onChange(Number(val))}
+                  onValueChange={(val) => {
+                    field.onChange(Number(val))
+                    onFieldChange?.("quadrant")
+                  }}
                   placeholder="Select quadrant"
                   emptyMessage="No quadrant found"
+                  className={isAutoFilled?.("quadrant") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -209,8 +226,14 @@ export function EContentForm({
           <Textarea
             id="briefDetails"
             placeholder="Enter brief details"
-            className="text-sm sm:text-base mt-1"
-            {...register("briefDetails", { required: "Brief details are required" })}
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("briefDetails") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("briefDetails", { 
+              required: "Brief details are required",
+              onChange: () => onFieldChange?.("briefDetails")
+            })}
           />
           {errors.briefDetails && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.briefDetails.message?.toString()}</p>}
         </div>
@@ -221,8 +244,14 @@ export function EContentForm({
             <Input
               id="publishingDate"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("publishingDate", { required: "Publishing date is required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("publishingDate") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("publishingDate", { 
+                required: "Publishing date is required",
+                onChange: () => onFieldChange?.("publishingDate")
+              })}
             />
             {errors.publishingDate && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.publishingDate.message?.toString()}</p>}
           </div>
@@ -232,8 +261,14 @@ export function EContentForm({
             <Input
               id="publishingAuthorities"
               placeholder="Enter publishing authorities"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("publishingAuthorities", { required: "Publishing authorities are required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("publishingAuthorities") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("publishingAuthorities", { 
+                required: "Publishing authorities are required",
+                onChange: () => onFieldChange?.("publishingAuthorities")
+              })}
             />
             {errors.publishingAuthorities && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.publishingAuthorities.message?.toString()}</p>}
           </div>
@@ -246,8 +281,13 @@ export function EContentForm({
               id="link"
               type="url"
               placeholder="Enter link"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("link")}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("link") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("link", {
+                onChange: () => onFieldChange?.("link")
+              })}
             />
           </div>
 
@@ -263,9 +303,13 @@ export function EContentForm({
                     label: t.name,
                   }))}
                   value={field.value || ""}
-                  onValueChange={(val) => field.onChange(Number(val))}
+                  onValueChange={(val) => {
+                    field.onChange(Number(val))
+                    onFieldChange?.("typeOfEContent")
+                  }}
                   placeholder="Select type"
                   emptyMessage="No type found"
+                  className={isAutoFilled?.("typeOfEContent") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />

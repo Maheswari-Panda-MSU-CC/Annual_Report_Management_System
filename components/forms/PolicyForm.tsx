@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { PolicyFormProps } from "@/types/interfaces"
+import { cn } from "@/lib/utils"
 
 export default function PolicyForm({
   form,
@@ -24,9 +25,11 @@ export default function PolicyForm({
   isEdit = false,
   editData = {},
   resPubLevelOptions: propResPubLevelOptions,
-  initialDocumentUrl,
-  onClearFields,
-  onCancel,
+    initialDocumentUrl,
+    onClearFields,
+    onCancel,
+    isAutoFilled,
+    onFieldChange,
 }: PolicyFormProps) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
@@ -135,7 +138,18 @@ export default function PolicyForm({
       <div className="bg-gray-50 p-3 sm:p-4 rounded-lg space-y-4 sm:space-y-6">
         <div>
           <Label htmlFor="title" className="text-sm sm:text-base">Title *</Label>
-          <Input id="title" placeholder="Enter policy title" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("title", { required: "Title is required" })} />
+          <Input 
+            id="title" 
+            placeholder="Enter policy title" 
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("title", { 
+              required: "Title is required",
+              onChange: () => onFieldChange?.("title")
+            })} 
+          />
           {errors.title && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
         </div>
 
@@ -153,9 +167,13 @@ export default function PolicyForm({
                     label: l.name,
                   }))}
                   value={field.value || ""}
-                  onValueChange={(val) => field.onChange(Number(val))}
+                  onValueChange={(val) => {
+                    field.onChange(Number(val))
+                    onFieldChange?.("level")
+                  }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
             />
@@ -164,14 +182,36 @@ export default function PolicyForm({
 
           <div>
             <Label htmlFor="organisation" className="text-sm sm:text-base">Organisation *</Label>
-            <Input id="organisation" placeholder="Enter organisation" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("organisation", { required: "Organisation is required" })} />
+            <Input 
+              id="organisation" 
+              placeholder="Enter organisation" 
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("organisation") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("organisation", { 
+                required: "Organisation is required",
+                onChange: () => onFieldChange?.("organisation")
+              })} 
+            />
             {errors.organisation && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.organisation.message?.toString()}</p>}
           </div>
         </div>
 
         <div>
           <Label htmlFor="date" className="text-sm sm:text-base">Date *</Label>
-          <Input id="date" type="date" className="text-sm sm:text-base h-9 sm:h-10 mt-1" {...register("date", { required: "Date is required" })} />
+          <Input 
+            id="date" 
+            type="date" 
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("date", { 
+              required: "Date is required",
+              onChange: () => onFieldChange?.("date")
+            })} 
+          />
           {errors.date && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
         </div>
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { useState, useEffect,useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { PatentForm } from "@/components/forms/PatentForm"
 import { toast } from "@/components/ui/use-toast"
@@ -22,6 +22,26 @@ export default function AddPatentsPage() {
   const { setValue, watch, reset } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+  
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
   
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
@@ -47,16 +67,46 @@ export default function AddPatentsPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
-      if (fields.title) setValue("title", String(fields.title))
-      if (fields.level !== undefined && fields.level !== null) setValue("level", Number(fields.level))
-      if (fields.status !== undefined && fields.status !== null) setValue("status", Number(fields.status))
-      if (fields.date) setValue("date", String(fields.date))
-      if (fields.transfer_of_technology) setValue("Tech_Licence", String(fields.transfer_of_technology))
+      if (fields.title) {
+        setValue("title", String(fields.title))
+        filledFieldNames.push("title")
+      }
+      if (fields.level !== undefined && fields.level !== null) {
+        setValue("level", Number(fields.level))
+        filledFieldNames.push("level")
+      }
+      if (fields.status !== undefined && fields.status !== null) {
+        setValue("status", Number(fields.status))
+        filledFieldNames.push("status")
+      }
+      if (fields.date) {
+        setValue("date", String(fields.date))
+        filledFieldNames.push("date")
+      }
+      if (fields.transfer_of_technology) {
+        setValue("Tech_Licence", String(fields.transfer_of_technology))
+        filledFieldNames.push("Tech_Licence")
+      }
       if (fields.earning_generated !== undefined && fields.earning_generated !== null) {
         setValue("Earnings_Generate", Number(fields.earning_generated))
+        filledFieldNames.push("Earnings_Generate")
       }
-      if (fields.PatentApplicationNo) setValue("PatentApplicationNo", String(fields.PatentApplicationNo))
+      if (fields.PatentApplicationNo) {
+        setValue("PatentApplicationNo", String(fields.PatentApplicationNo))
+        filledFieldNames.push("PatentApplicationNo")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
@@ -109,6 +159,7 @@ export default function AddPatentsPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -262,6 +313,8 @@ export default function AddPatentsPage() {
           initialDocumentUrl={autoFillDocumentUrl}
           onClearFields={handleClearFields}
           onCancel={handleCancel}
+          isAutoFilled={isAutoFilled}
+          onFieldChange={clearAutoFillHighlight}
         />
       </div>
     </>

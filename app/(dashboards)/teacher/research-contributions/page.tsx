@@ -294,6 +294,26 @@ export default function ResearchContributionsPage() {
   
   const [isSubmitting,setIsSubmitting]=useState(false);
   
+  // Track auto-filled fields for highlighting in edit modal
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+  
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
   
@@ -364,12 +384,24 @@ export default function ResearchContributionsPage() {
     onlyFillEmpty: false, // REPLACE existing data in edit mode
     getFormValues: () => watch(),
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields - replace existing data
       Object.entries(fields).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== "") {
           setValue(key, value)
+          filledFieldNames.push(key)
         }
       })
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
@@ -430,6 +462,7 @@ export default function ResearchContributionsPage() {
       form.reset()
       clearDocumentData()
       clearAutoFillData()
+      setAutoFilledFields(new Set())
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
@@ -479,6 +512,7 @@ export default function ResearchContributionsPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
   
   // React Query hooks for data fetching - LAZY LOADING: Only fetch active tab and previously fetched tabs
@@ -658,6 +692,7 @@ export default function ResearchContributionsPage() {
     // Clear any previous document data before opening edit modal
     clearDocumentData()
     clearAutoFillData()
+    setAutoFilledFields(new Set()) // Clear highlighting when opening edit modal
     setEditingItem({ ...item, sectionId })
     setFormData({ ...item })
     setIsEditDialogOpen(true)
@@ -790,9 +825,10 @@ export default function ResearchContributionsPage() {
       setFormData({})
       setSelectedFiles(null)
       form.reset()
-      // Clear document data after successful save
+      // Clear document data and highlighting after successful save
       clearDocumentData()
       clearAutoFillData()
+      setAutoFilledFields(new Set()) // Clear highlighting on successful update
     } catch (error: any) {
       toast({
         title: "Error",
@@ -1642,6 +1678,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "policy":
@@ -1660,6 +1698,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "econtent":
@@ -1679,6 +1719,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "consultancy":
@@ -1696,6 +1738,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "collaborations":
@@ -1716,6 +1760,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "visits":
@@ -1734,6 +1780,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "financial":
@@ -1752,6 +1800,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "jrfSrf":
@@ -1770,6 +1820,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "phd":
@@ -1788,6 +1840,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       case "copyrights":
@@ -1805,6 +1859,8 @@ export default function ResearchContributionsPage() {
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
             onClearFields={handleClearFields}
             onCancel={isEdit ? handleModalCancel : undefined}
+            isAutoFilled={isAutoFilled}
+            onFieldChange={clearAutoFillHighlight}
           />
         )
       default:

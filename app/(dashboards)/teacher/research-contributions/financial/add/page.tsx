@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +27,26 @@ export default function AddFinancialPage() {
   const form = useForm()
   const { setValue, watch, reset } = form
 
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
+
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
@@ -50,6 +70,12 @@ export default function AddFinancialPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
       // Note: fields are already mapped by categories-field-mapping.ts hook
       // Form field names: nameOfSupport, type, supportingAgency, grantReceived, detailsOfEvent, purposeOfGrant, date
@@ -57,9 +83,11 @@ export default function AddFinancialPage() {
       // Name of Support - form field is "nameOfSupport"
       if (fields.nameOfSupport) {
         setValue("nameOfSupport", String(fields.nameOfSupport))
+        filledFieldNames.push("nameOfSupport")
       } else if (fields.title) {
         // Fallback if mapping didn't work
         setValue("nameOfSupport", String(fields.title))
+        filledFieldNames.push("nameOfSupport")
       }
       
       // Type - this should already be matched to dropdown ID by the hook
@@ -80,14 +108,17 @@ export default function AddFinancialPage() {
             }
           }
         }
+        filledFieldNames.push("type")
       }
       
       // Supporting Agency - form field is "supportingAgency"
       if (fields.supportingAgency) {
         setValue("supportingAgency", String(fields.supportingAgency))
+        filledFieldNames.push("supportingAgency")
       } else if (fields.agency) {
         // Fallback if mapping didn't work
         setValue("supportingAgency", String(fields.agency))
+        filledFieldNames.push("supportingAgency")
       }
       
       // Grant Received - form field is "grantReceived"
@@ -100,6 +131,7 @@ export default function AddFinancialPage() {
         } else if (grantValue) {
           setValue("grantReceived", grantValue)
         }
+        filledFieldNames.push("grantReceived")
       } else if (fields.amount !== undefined && fields.amount !== null) {
         // Fallback if mapping didn't work
         const grantValue = String(fields.amount).replace(/,/g, '').trim()
@@ -107,27 +139,38 @@ export default function AddFinancialPage() {
         if (!isNaN(numValue)) {
           setValue("grantReceived", numValue)
         }
+        filledFieldNames.push("grantReceived")
       }
       
       // Details of Event - form field is "detailsOfEvent"
       if (fields.detailsOfEvent) {
         setValue("detailsOfEvent", String(fields.detailsOfEvent))
+        filledFieldNames.push("detailsOfEvent")
       } else if (fields.event_details) {
         // Fallback if mapping didn't work
         setValue("detailsOfEvent", String(fields.event_details))
+        filledFieldNames.push("detailsOfEvent")
       }
       
       // Purpose of Grant - form field is "purposeOfGrant"
       if (fields.purposeOfGrant) {
         setValue("purposeOfGrant", String(fields.purposeOfGrant))
+        filledFieldNames.push("purposeOfGrant")
       } else if (fields.purpose) {
         // Fallback if mapping didn't work
         setValue("purposeOfGrant", String(fields.purpose))
+        filledFieldNames.push("purposeOfGrant")
       }
       
       // Date - form field is "date"
       if (fields.date) {
         setValue("date", String(fields.date))
+        filledFieldNames.push("date")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
       }
       
       // Show toast notification
@@ -181,6 +224,7 @@ export default function AddFinancialPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -373,6 +417,8 @@ export default function AddFinancialPage() {
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
             />
           </CardContent>
         </Card>

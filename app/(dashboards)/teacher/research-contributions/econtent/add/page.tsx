@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect,useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,6 +24,26 @@ export default function AddEContentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
 
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
@@ -49,16 +69,50 @@ export default function AddEContentPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
-      if (fields.title || fields.Title) setValue("title", String(fields.title || fields.Title))
-      if (fields.type !== undefined && fields.type !== null) {
-        setValue("type", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+      if (fields.title || fields.Title) {
+        setValue("title", String(fields.title || fields.Title))
+        filledFieldNames.push("title")
       }
-      if (fields.brief_details || fields.Brief_Details) setValue("briefDetails", String(fields.brief_details || fields.Brief_Details))
-      if (fields.quadrant || fields.Quadrant) setValue("quadrant", String(fields.quadrant || fields.Quadrant))
-      if (fields.Publishing_date || fields.publishingDate) setValue("publishingDate", String(fields.Publishing_date || fields.publishingDate))
-      if (fields.Publishing_Authorities || fields.publishingAuthorities) setValue("publishingAuthorities", String(fields.Publishing_Authorities || fields.publishingAuthorities))
-      if (fields.link || fields.Link) setValue("link", String(fields.link || fields.Link))
+      if (fields.type !== undefined && fields.type !== null) {
+        setValue("typeOfEContentPlatform", typeof fields.type === 'number' ? fields.type : Number(fields.type))
+        filledFieldNames.push("typeOfEContentPlatform")
+      }
+      if (fields.brief_details || fields.Brief_Details) {
+        setValue("briefDetails", String(fields.brief_details || fields.Brief_Details))
+        filledFieldNames.push("briefDetails")
+      }
+      if (fields.quadrant || fields.Quadrant) {
+        setValue("quadrant", String(fields.quadrant || fields.Quadrant))
+        filledFieldNames.push("quadrant")
+      }
+      if (fields.Publishing_date || fields.publishingDate) {
+        setValue("publishingDate", String(fields.Publishing_date || fields.publishingDate))
+        filledFieldNames.push("publishingDate")
+      }
+      if (fields.Publishing_Authorities || fields.publishingAuthorities) {
+        setValue("publishingAuthorities", String(fields.Publishing_Authorities || fields.publishingAuthorities))
+        filledFieldNames.push("publishingAuthorities")
+      }
+      if (fields.link || fields.Link) {
+        setValue("link", String(fields.link || fields.Link))
+        filledFieldNames.push("link")
+      }
+      if (fields.typeEcontentValue !== undefined && fields.typeEcontentValue !== null) {
+        setValue("typeOfEContent", typeof fields.typeEcontentValue === 'number' ? fields.typeEcontentValue : Number(fields.typeEcontentValue))
+        filledFieldNames.push("typeOfEContent")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
+      }
       
       // Show toast notification
       const filledCount = Object.keys(fields).filter(
@@ -111,6 +165,7 @@ export default function AddEContentPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleExtractInfo = async () => {
@@ -306,6 +361,8 @@ export default function AddEContentPage() {
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
            />
           </CardContent>
         </Card>

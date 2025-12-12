@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -23,6 +23,26 @@ export default function AddJrfSrfPage() {
   const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
   const { setValue, watch, reset } = form
+
+  // Track auto-filled fields for highlighting
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+
+  // Helper function to check if a field is auto-filled
+  const isAutoFilled = useCallback((fieldName: string) => {
+    return autoFilledFields.has(fieldName)
+  }, [autoFilledFields])
+
+  // Helper function to clear auto-fill highlight for a field
+  const clearAutoFillHighlight = useCallback((fieldName: string) => {
+    setAutoFilledFields(prev => {
+      if (prev.has(fieldName)) {
+        const next = new Set(prev)
+        next.delete(fieldName)
+        return next
+      }
+      return prev
+    })
+  }, [])
 
   // Document analysis context
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
@@ -47,6 +67,12 @@ export default function AddJrfSrfPage() {
     onlyFillEmpty: true, // Only fill empty fields to prevent overwriting user input
     getFormValues: () => watch(), // Pass current form values to check if fields are empty
     onAutoFill: (fields) => {
+      // Clear previous highlighting when new document extraction happens
+      setAutoFilledFields(new Set())
+      
+      // Track which fields were auto-filled (only non-empty fields)
+      const filledFieldNames: string[] = []
+      
       // Auto-fill form fields from document analysis
       // Note: fields are already mapped by categories-field-mapping.ts hook
       // So we use the mapped field names directly (nameOfFellow, projectTitle, monthlyStipend, etc.)
@@ -54,9 +80,11 @@ export default function AddJrfSrfPage() {
       // Name of Fellow - form field is "nameOfFellow"
       if (fields.nameOfFellow) {
         setValue("nameOfFellow", String(fields.nameOfFellow))
+        filledFieldNames.push("nameOfFellow")
       } else if (fields.name) {
         // Fallback if mapping didn't work
         setValue("nameOfFellow", String(fields.name))
+        filledFieldNames.push("nameOfFellow")
       }
       
       // Type - this should already be matched to dropdown ID by the hook
@@ -79,11 +107,13 @@ export default function AddJrfSrfPage() {
             }
           }
         }
+        filledFieldNames.push("type")
       }
       
       // Project Title - form field is "projectTitle"
       if (fields.projectTitle) {
         setValue("projectTitle", String(fields.projectTitle))
+        filledFieldNames.push("projectTitle")
       }
       
       // Duration - form field is "duration"
@@ -93,6 +123,7 @@ export default function AddJrfSrfPage() {
           : Number(String(fields.duration).replace(/[^0-9.]/g, ''))
         if (!isNaN(durationValue)) {
           setValue("duration", durationValue)
+          filledFieldNames.push("duration")
         }
       }
       
@@ -107,6 +138,7 @@ export default function AddJrfSrfPage() {
           // If it's not a valid number, set as string anyway
           setValue("monthlyStipend", stipendValue)
         }
+        filledFieldNames.push("monthlyStipend")
       } else if (fields.stipend !== undefined && fields.stipend !== null) {
         // Fallback for "stipend" field name
         const stipendValue = String(fields.stipend).replace(/,/g, '').trim()
@@ -114,11 +146,18 @@ export default function AddJrfSrfPage() {
         if (!isNaN(numValue)) {
           setValue("monthlyStipend", numValue)
         }
+        filledFieldNames.push("monthlyStipend")
       }
       
       // Date - form field is "date"
       if (fields.date) {
         setValue("date", String(fields.date))
+        filledFieldNames.push("date")
+      }
+      
+      // Update auto-filled fields set
+      if (filledFieldNames.length > 0) {
+        setAutoFilledFields(new Set(filledFieldNames)) // Use new Set instead of merging
       }
       
       // Show toast notification
@@ -172,6 +211,7 @@ export default function AddJrfSrfPage() {
   // Clear fields handler
   const handleClearFields = () => {
     reset()
+    setAutoFilledFields(new Set())
   }
 
   const handleSubmit = async (data: any) => {
@@ -320,6 +360,8 @@ export default function AddJrfSrfPage() {
               initialDocumentUrl={autoFillDocumentUrl || undefined}
               onClearFields={handleClearFields}
               onCancel={handleCancel}
+              isAutoFilled={isAutoFilled}
+              onFieldChange={clearAutoFillHighlight}
             />
           </CardContent>
         </Card>

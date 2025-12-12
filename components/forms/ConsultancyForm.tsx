@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "../document-viewer"
 import { ConsultancyFormProps } from "@/types/interfaces"
+import { cn } from "@/lib/utils"
 
 export function ConsultancyForm({
   form,
@@ -21,10 +22,12 @@ export function ConsultancyForm({
   handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
-  initialDocumentUrl,
-  onClearFields,
-  onCancel,
-}: ConsultancyFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void }) {
+    initialDocumentUrl,
+    onClearFields,
+    onCancel,
+    isAutoFilled,
+    onFieldChange,
+}: ConsultancyFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void; isAutoFilled?: (fieldName: string) => boolean; onFieldChange?: (fieldName: string) => void }) {
   const router = useRouter()
   const {
     register,
@@ -128,8 +131,14 @@ export function ConsultancyForm({
           <Input
             id="title"
             placeholder="Enter consultancy project title"
-            className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-            {...register("title", { required: "Title is required" })}
+            className={cn(
+              "text-sm sm:text-base h-9 sm:h-10 mt-1",
+              isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("title", { 
+              required: "Title is required",
+              onChange: () => onFieldChange?.("title")
+            })}
           />
           {errors.title && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.title.message?.toString()}</p>}
         </div>
@@ -140,8 +149,14 @@ export function ConsultancyForm({
             <Input
               id="collaboratingInstitute"
               placeholder="Enter institute/industry name"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("collaboratingInstitute", { required: "Collaborating Institute is required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("collaboratingInstitute") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("collaboratingInstitute", { 
+                required: "Collaborating Institute is required",
+                onChange: () => onFieldChange?.("collaboratingInstitute")
+              })}
             />
             {errors.collaboratingInstitute && (
               <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.collaboratingInstitute.message?.toString()}</p>
@@ -153,8 +168,14 @@ export function ConsultancyForm({
             <Input
               id="address"
               placeholder="Enter address"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("address", { required: "Address is required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("address") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("address", { 
+                required: "Address is required",
+                onChange: () => onFieldChange?.("address")
+              })}
             />
             {errors.address && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.address.message?.toString()}</p>}
           </div>
@@ -166,8 +187,14 @@ export function ConsultancyForm({
             <Input
               id="startDate"
               type="date"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("startDate", { required: "Start date is required" })}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("startDate") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("startDate", { 
+                required: "Start date is required",
+                onChange: () => onFieldChange?.("startDate")
+              })}
             />
             {errors.startDate && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.startDate.message?.toString()}</p>}
           </div>
@@ -178,8 +205,13 @@ export function ConsultancyForm({
               id="duration"
               type="number"
               placeholder="Enter duration"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("duration")}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("duration") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("duration", {
+                onChange: () => onFieldChange?.("duration")
+              })}
             />
           </div>
 
@@ -189,8 +221,13 @@ export function ConsultancyForm({
               id="amount"
               type="number"
               placeholder="Enter amount"
-              className="text-sm sm:text-base h-9 sm:h-10 mt-1"
-              {...register("amount")}
+              className={cn(
+                "text-sm sm:text-base h-9 sm:h-10 mt-1",
+                isAutoFilled?.("amount") && "bg-blue-50 border-blue-200"
+              )}
+              {...register("amount", {
+                onChange: () => onFieldChange?.("amount")
+              })}
             />
           </div>
         </div>
@@ -201,8 +238,13 @@ export function ConsultancyForm({
             id="detailsOutcome"
             placeholder="Enter details about the consultancy project and its outcomes"
             rows={4}
-            className="text-sm sm:text-base mt-1"
-            {...register("detailsOutcome")}
+            className={cn(
+              "text-sm sm:text-base mt-1",
+              isAutoFilled?.("detailsOutcome") && "bg-blue-50 border-blue-200"
+            )}
+            {...register("detailsOutcome", {
+              onChange: () => onFieldChange?.("detailsOutcome")
+            })}
           />
         </div>
 
