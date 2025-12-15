@@ -7,7 +7,6 @@ import { Controller } from "react-hook-form"
 import { Save } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { useEffect, useState } from "react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useDropDowns } from "@/hooks/use-dropdowns"
@@ -18,10 +17,6 @@ export function PatentForm({
     form,
     onSubmit,
     isSubmitting,
-    isExtracting = false,
-    selectedFiles = null,
-    handleFileSelect = () => { },
-    handleExtractInfo = () => { },
     isEdit = false,
     editData = {},
     resPubLevelOptions: propResPubLevelOptions,

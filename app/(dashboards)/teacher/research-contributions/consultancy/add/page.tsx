@@ -23,8 +23,6 @@ export default function AddConsultancyPage() {
   const form = useForm()
   const { setValue, watch, reset } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
 
   // Track auto-filled fields for highlighting
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
@@ -195,48 +193,6 @@ export default function AddConsultancyPage() {
     setAutoFilledFields(new Set())
   }
 
-  const handleExtractInfo = async () => {
-    setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "consultancy" }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: "consultancy" }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          form.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-          duration: 3000,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }
-
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
       toast({
@@ -354,9 +310,9 @@ export default function AddConsultancyPage() {
             variant="outline"
             onClick={handleCancel}
             className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
-            disabled={isLoading || isSubmitting}
+            disabled={isSubmitting}
           >
-            {isLoading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />}
+            <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Back to </span>Consultancy Undertaken
           </Button>
         </div>
@@ -377,10 +333,6 @@ export default function AddConsultancyPage() {
               form={form}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting || createConsultancy.isPending}
-              isExtracting={isExtracting}
-              selectedFiles={null}
-              handleFileSelect={() => {}}
-              handleExtractInfo={handleExtractInfo}
               isEdit={false}
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}

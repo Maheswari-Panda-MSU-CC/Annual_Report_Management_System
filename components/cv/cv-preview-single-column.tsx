@@ -221,24 +221,14 @@ export const CVPreviewSingleColumn = memo(({
                       <span style={{ fontSize: "12px", color: "#1f2937" }}>{personal.phone}</span>
                     </>
                   )}
-                  {personal.address && (
-                    <>
-                      <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>Address:</span>
-                      <span style={{ fontSize: "12px", color: "#1f2937" }}>{personal.address}</span>
-                    </>
-                  )}
+               
                   {personal.dateOfBirth && (
                     <>
                       <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>Date of Birth:</span>
                       <span style={{ fontSize: "12px", color: "#1f2937" }}>{personal.dateOfBirth}</span>
                     </>
                   )}
-                  {personal.nationality && (
-                    <>
-                      <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>Nationality:</span>
-                      <span style={{ fontSize: "12px", color: "#1f2937" }}>{personal.nationality}</span>
-                    </>
-                  )}
+                 
                   {personal.orcid && (
                     <>
                       <span style={{ fontSize: "12px", color: "#6b7280", fontWeight: "500" }}>ORCHID:</span>

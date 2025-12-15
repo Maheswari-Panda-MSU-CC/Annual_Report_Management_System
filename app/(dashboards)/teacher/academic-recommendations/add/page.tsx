@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, FileText, BookOpen, Newspaper, FileCheck, Loader2, Brain } from "lucide-react"
+import { ArrowLeft, FileText, BookOpen, Newspaper, FileCheck } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
@@ -15,7 +15,6 @@ import { JournalArticlesForm } from "@/components/forms/JournalArticlesForm"
 import { BooksForm } from "@/components/forms/BooksForm"
 import { MagazinesForm } from "@/components/forms/MagazinesForm"
 import { TechReportsForm } from "@/components/forms/TechReportsForm"
-import FileUpload from "@/components/shared/FileUpload"
 
 export default function AddAcademicRecommendationsPage() {
   const router = useRouter()
@@ -23,8 +22,6 @@ export default function AddAcademicRecommendationsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("articles")
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm({
     mode: "onSubmit",
     reValidateMode: "onChange",
@@ -63,40 +60,6 @@ export default function AddAcademicRecommendationsPage() {
     form.clearErrors()
   }, [activeTab, form])
 
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFiles(files)
-  }
-
-  const handleExtractInfo = useCallback(async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
-        toast({
-          title: "No Document Uploaded",
-          description: "Please upload a document before extracting information.",
-          variant: "destructive",
-        })
-        return
-      }
-
-      setIsExtracting(true)
-      try {
-      // Simulate document processing
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // TODO: Implement actual extraction logic
-      toast({
-        title: "Extraction Complete",
-        description: "Information extracted successfully. Please review and verify the fields.",
-      })
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to extract information",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }, [selectedFiles, toast])
 
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
@@ -182,7 +145,6 @@ export default function AddAcademicRecommendationsPage() {
 
       // Reset form
       form.reset()
-      setSelectedFiles(null)
 
       // Redirect after a short delay
       setTimeout(() => {
@@ -201,10 +163,6 @@ export default function AddAcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={false}
             editData={{}}
             resPubLevelOptions={resPubLevelOptions}
@@ -217,10 +175,6 @@ export default function AddAcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={false}
             editData={{}}
             resPubLevelOptions={resPubLevelOptions}
@@ -233,10 +187,6 @@ export default function AddAcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={false}
             editData={{}}
           />
@@ -247,10 +197,6 @@ export default function AddAcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSubmit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={false}
             editData={{}}
           />

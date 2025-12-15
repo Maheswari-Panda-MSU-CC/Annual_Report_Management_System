@@ -46,7 +46,7 @@ export default function EditPaperPage() {
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
-  const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+  const { resPubLevelOptions } = useDropDowns()
 
   const form = useForm<PaperFormData>({
     defaultValues: {

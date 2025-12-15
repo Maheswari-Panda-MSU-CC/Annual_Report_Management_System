@@ -6,13 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Edit, Download, Calendar, MapPin, Building, User, FileText, Presentation } from "lucide-react"
+import { ArrowLeft, Edit, Calendar, MapPin, Building, User, FileText, Presentation } from "lucide-react"
 import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
 import { DocumentViewer } from "@/components/document-viewer"
 import { useAuth } from "@/app/api/auth/auth-provider"
-import { useDropDowns } from "@/hooks/use-dropdowns"
 
 interface PaperPublication {
   papid: number
@@ -37,15 +36,6 @@ export default function PaperDetailPage() {
   const [paper, setPaper] = useState<PaperPublication | null>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  
-  const {
-    resPubLevelOptions,
-    fetchResPubLevels,
-  } = useDropDowns()
-
-  useEffect(() => {
-    fetchResPubLevels()
-  }, [])
 
   useEffect(() => {
     if (params.id && user?.role_id) {
@@ -76,23 +66,6 @@ export default function PaperDetailPage() {
       console.error("Error fetching paper:", error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleDownloadDocument = () => {
-    if (paper?.Image) {
-      const documentUrl = paper.Image.startsWith('http') 
-        ? paper.Image 
-        : `/api/s3/download?path=${encodeURIComponent(paper.Image)}&userId=${user?.role_id || 0}`
-      
-      const link = document.createElement("a")
-      link.href = documentUrl
-      link.download = `${paper.title_of_paper}.pdf`
-      link.target = "_blank"
-      link.rel = "noopener noreferrer"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
     }
   }
 

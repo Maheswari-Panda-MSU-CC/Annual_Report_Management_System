@@ -23,8 +23,6 @@ export default function AddPolicyPage() {
   const { setValue, watch, reset } = form
 
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
 
   // Track auto-filled fields for highlighting
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
@@ -185,11 +183,6 @@ export default function AddPolicyPage() {
     setAutoFilledFields(new Set())
   }
 
-  const handleExtractInfo = async () => {
-    setIsExtracting(true)
-    // Extraction is handled by DocumentUpload component
-    setIsExtracting(false)
-  }
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
       toast({
@@ -310,9 +303,9 @@ export default function AddPolicyPage() {
             variant="outline"
             onClick={handleCancel}
             className="flex items-center gap-2 text-xs sm:text-sm h-8 sm:h-10"
-            disabled={isLoading || isSubmitting}
+            disabled={isSubmitting}
           >
-            {isLoading ? <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" /> : <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />}
+            <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Back to </span>Policy Documents
           </Button>
         </div>
@@ -331,10 +324,6 @@ export default function AddPolicyPage() {
               form={form}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting || createPolicy.isPending}
-              isExtracting={isExtracting}
-              selectedFiles={null}
-              handleFileSelect={() => {}}
-              handleExtractInfo={handleExtractInfo}
               isEdit={false}
               resPubLevelOptions={resPubLevelOptions}
               initialDocumentUrl={autoFillDocumentUrl}

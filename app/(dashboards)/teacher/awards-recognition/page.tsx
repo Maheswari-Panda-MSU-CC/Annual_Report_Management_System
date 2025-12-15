@@ -18,9 +18,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 import { Plus, Edit, Trash2, Upload, BarChart3, Users, Save, Calendar, Trophy, FileText, Loader2, MapPin } from "lucide-react"
@@ -28,8 +25,7 @@ import { DocumentViewer } from "@/components/document-viewer"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { useTeacherAwardsRecognition, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { useTeacherAwardsRecognition } from "@/hooks/use-teacher-data"
 import { usePerformanceMutations, useAwardsMutations, useExtensionMutations } from "@/hooks/use-teacher-awards-recognition-mutations"
 import { PerformanceTeacherForm } from "@/components/forms/PerformanceTeacherForm"
 import { AwardsFellowshipForm } from "@/components/forms/AwardsFellowshipForm"
@@ -38,26 +34,6 @@ import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
 
-// Helper hook to invalidate section queries
-function useInvalidateSection() {
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-  const teacherId = user?.role_id ? parseInt(user.role_id.toString()) : 0
-
-  return (sectionId: string) => {
-    if (!teacherId || teacherId <= 0) return
-    
-    const queryKey = 
-      sectionId === "performance" ? teacherQueryKeys.awards.performance(teacherId) :
-      sectionId === "awards" ? teacherQueryKeys.awards.awards(teacherId) :
-      sectionId === "extension" ? teacherQueryKeys.awards.extension(teacherId) :
-      null
-    
-    if (queryKey) {
-      queryClient.invalidateQueries({ queryKey })
-    }
-  }
-}
 
 const sections = [
   {
@@ -108,34 +84,6 @@ const sections = [
   },
 ]
 
-interface FileUploadProps {
-  onFileSelect: (files: FileList | null) => void
-  acceptedTypes?: string
-  multiple?: boolean
-}
-
-function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png,.bmp", multiple = true }: FileUploadProps) {
-  return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-      <Upload className="mx-auto h-12 w-12 text-gray-400" />
-      <div className="mt-4">
-        <label htmlFor="file-upload" className="cursor-pointer">
-          <span className="mt-2 block text-sm font-medium text-gray-900">Upload files or drag and drop</span>
-          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, JPEG, PNG, BMP up to 10MB each</span>
-        </label>
-        <input
-          id="file-upload"
-          name="file-upload"
-          type="file"
-          className="sr-only"
-          accept={acceptedTypes}
-          multiple={multiple}
-          onChange={(e) => onFileSelect(e.target.files)}
-        />
-      </div>
-    </div>
-  )
-}
 
 export default function AwardsRecognitionPage() {
   const searchParams = useSearchParams()
@@ -169,8 +117,7 @@ export default function AwardsRecognitionPage() {
   }, [])
 
   // React Query hooks
-  const { performance, awards, extension, isLoading, isFetching, data: queryData } = useTeacherAwardsRecognition()
-  const invalidateSection = useInvalidateSection()
+  const { performance, awards, extension, data: queryData } = useTeacherAwardsRecognition()
 
   // Mutation hooks
   const performanceMutations = usePerformanceMutations()
@@ -323,7 +270,7 @@ export default function AwardsRecognitionPage() {
   }
 
   // Get dropdown options for section
-  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number; name: string }> } => {
     switch (sectionId) {
       case "performance":
         return {}
@@ -968,7 +915,7 @@ export default function AwardsRecognitionPage() {
         const item = row.original
         return (
           <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
-            {item.supportingDocument && item.supportingDocument.length > 0 ? (
+            {item.supportingDocument && item.supportingDocument.length > 0 && (
               <>
                 <Dialog>
                   <DialogTrigger asChild>
@@ -997,27 +944,6 @@ export default function AwardsRecognitionPage() {
                   file
                 </Badge>
               </>
-            ) : (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" title="Upload Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3" onClick={(e) => e.stopPropagation()}>
-                    <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline ml-1">Upload</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-[95vw] sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Upload Supporting Documents</DialogTitle>
-                  </DialogHeader>
-                  <FileUpload onFileSelect={handleFileSelect} />
-                  <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
-                    <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
-                    <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto">
-                      Upload Files
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
             )}
           </div>
         )
@@ -1082,8 +1008,6 @@ export default function AwardsRecognitionPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             onClearFields={handleClearFields}
@@ -1097,8 +1021,6 @@ export default function AwardsRecognitionPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             awardFellowLevelOptions={awardFellowLevelOptions}
@@ -1113,8 +1035,6 @@ export default function AwardsRecognitionPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             awardFellowLevelOptions={awardFellowLevelOptions}
@@ -1127,17 +1047,7 @@ export default function AwardsRecognitionPage() {
       default:
         return (
           <div className="grid gap-4">
-            <div>
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                placeholder="Enter title"
-              />
-            </div>
-            <div>
-              <Label>Image (JPEG/BMP/PNG) OR PDF</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
-            </div>
+            Default Page Content
           </div>
         )
     }

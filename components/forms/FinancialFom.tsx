@@ -11,7 +11,6 @@ import { Save, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { Textarea } from "@/components/ui/textarea"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { cn } from "@/lib/utils"
 
@@ -19,10 +18,6 @@ interface FinancialFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   financialSupportTypeOptions?: Array<{ id: number; name: string }>
@@ -36,10 +31,6 @@ export function FinancialForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   financialSupportTypeOptions: propFinancialSupportTypeOptions,
@@ -54,11 +45,9 @@ export function FinancialForm({
     register,
     handleSubmit,
     setValue,
-    watch,
     control,
     formState: { errors },
   } = form
-  const formData = watch()
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
     (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)

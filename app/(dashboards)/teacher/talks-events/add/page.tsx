@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, FileText, Users, Building, Presentation } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { RefresherOrientationForm } from "@/components/forms/RefresherOrientationForm"
@@ -43,7 +42,6 @@ export default function AddEventPage() {
       ? tab 
       : "refresher"
   })
-  const [isExtracting, setIsExtracting] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const form = useForm()
   const { watch, setValue } = form
@@ -96,7 +94,7 @@ export default function AddEventPage() {
 
 
   // Get dropdown options for current tab
-  const getDropdownOptionsForTab = (tab: string): Record<string, Array<{ id: number | string; name: string }>> => {
+  const getDropdownOptionsForTab = (tab: string): Record<string, Array<{ id: number; name: string }>> => {
     switch (tab) {
       case "refresher":
         return {
@@ -945,9 +943,6 @@ export default function AddEventPage() {
                 form={form}
                 onSubmit={handleRefresherSubmit}
                 isSubmitting={isSubmitting}
-                isExtracting={isExtracting}
-                selectedFiles={selectedFiles}
-                handleFileSelect={setSelectedFiles}
                 isEdit={false}
                 refresherTypeOptions={refresherTypeOptions}
                 onClearFields={handleClearFields}
@@ -976,9 +971,6 @@ export default function AddEventPage() {
                 form={form}
                 onSubmit={handleContributionSubmit}
                 isSubmitting={isSubmitting}
-                isExtracting={isExtracting}
-                selectedFiles={selectedFiles}
-                handleFileSelect={setSelectedFiles}
                 isEdit={false}
                 academicProgrammeOptions={academicProgrammeOptions}
                 participantTypeOptions={participantTypeOptions}
@@ -1009,9 +1001,6 @@ export default function AddEventPage() {
                 form={form}
                 onSubmit={handleAcademicBodySubmit}
                 isSubmitting={isSubmitting}
-                isExtracting={isExtracting}
-                selectedFiles={selectedFiles}
-                handleFileSelect={setSelectedFiles}
                 isEdit={false}
                 reportYearsOptions={reportYearsOptions}
                 onClearFields={handleClearFields}
@@ -1040,9 +1029,6 @@ export default function AddEventPage() {
                 form={form}
                 onSubmit={handleCommitteeSubmit}
                 isSubmitting={isSubmitting}
-                isExtracting={isExtracting}
-                selectedFiles={selectedFiles}
-                handleFileSelect={setSelectedFiles}
                 isEdit={false}
                 committeeLevelOptions={committeeLevelOptions}
                 reportYearsOptions={reportYearsOptions}
@@ -1072,9 +1058,6 @@ export default function AddEventPage() {
                 form={form}
                 onSubmit={handleTalksSubmit}
                 isSubmitting={isSubmitting}
-                isExtracting={isExtracting}
-                selectedFiles={selectedFiles}
-                handleFileSelect={setSelectedFiles}
                 isEdit={false}
                 talksProgrammeTypeOptions={talksProgrammeTypeOptions}
                 talksParticipantTypeOptions={talksParticipantTypeOptions}

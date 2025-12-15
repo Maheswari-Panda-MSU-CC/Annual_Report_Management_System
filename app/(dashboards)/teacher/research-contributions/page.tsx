@@ -6,7 +6,7 @@ import { useNavigationWithLoading } from "@/hooks/use-navigation-with-loading"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { TableCell} from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
@@ -46,8 +46,8 @@ import { FinancialForm } from "@/components/forms/FinancialFom"
 import { JrfSrfForm } from "@/components/forms/JrfSrfForm"
 import { PhdGuidanceForm } from "@/components/forms/PhdGuidanceForm"
 import { CopyrightForm } from "@/components/forms/CopyrightForm"
-import { SECTION_ROUTES, API_ENDPOINTS, type SectionId } from "./utils/research-contributions-config"
-import { createUpdateMapper, UPDATE_REQUEST_BODIES, UPDATE_SUCCESS_MESSAGES } from "./utils/update-mappers"
+import { SECTION_ROUTES, type SectionId } from "./utils/research-contributions-config"
+import { createUpdateMapper } from "./utils/update-mappers"
 import { 
   useTeacherPatents, 
   useTeacherPolicy, 
@@ -76,19 +76,7 @@ import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
 
-// Initial data structure
-const initialData = {
-  patents: [],
-  policy: [],
-  econtent: [],
-  consultancy: [],
-  collaborations: [],
-  visits: [],
-  financial: [],
-  jrfSrf: [],
-  phd: [],
-  copyrights: [],
-}
+
 
 const sections = [
   {
@@ -246,34 +234,6 @@ const sections = [
   },
 ]
 
-interface FileUploadProps {
-  onFileSelect: (files: FileList | null) => void
-  acceptedTypes?: string
-  multiple?: boolean
-}
-
-function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", multiple = true }: FileUploadProps) {
-  return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-      <Upload className="mx-auto h-12 w-12 text-gray-400" />
-      <div className="mt-4">
-        <label htmlFor="file-upload" className="cursor-pointer">
-          <span className="mt-2 block text-sm font-medium text-gray-900">Upload files or drag and drop</span>
-          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, PNG up to 10MB each</span>
-        </label>
-        <input
-          id="file-upload"
-          name="file-upload"
-          type="file"
-          className="sr-only"
-          accept={acceptedTypes}
-          multiple={multiple}
-          onChange={(e) => onFileSelect(e.target.files)}
-          />
-      </div>
-    </div>
-  )
-}
 
 export default function ResearchContributionsPage() {
   const searchParams = useSearchParams()
@@ -281,11 +241,9 @@ export default function ResearchContributionsPage() {
   const [activeTab, setActiveTab] = useState("patents")
   // Track which sections have been fetched to enable lazy loading
   const [fetchedSections, setFetchedSections] = useState<Set<string>>(new Set(["patents"]))
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [formData, setFormData] = useState<any>({})
-  const router = useRouter()
   const { navigate, isPending: isNavigating } = useNavigationWithLoading()
   
   const form=useForm();
@@ -350,7 +308,7 @@ export default function ResearchContributionsPage() {
   }
   
   // Get dropdown options based on section
-  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number; name: string }> } => {
     switch (sectionId) {
       case "patents":
         return { level: resPubLevelOptions, status: patentStatusOptions }
@@ -752,7 +710,6 @@ export default function ResearchContributionsPage() {
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
-      setSelectedFiles(null)
       return true
     } finally {
       // Reset the ref after a short delay to allow for async operations
@@ -934,9 +891,6 @@ export default function ResearchContributionsPage() {
     window.history.pushState({}, "", url.toString())
   }
 
-  const handleFileSelect = (files: FileList | null) => {
-    setSelectedFiles(files)
-  }
 
   const handleDelete = useCallback((sectionId: string, itemId: number) => {
     const section = sectionId as SectionId
@@ -1109,7 +1063,6 @@ export default function ResearchContributionsPage() {
       setIsEditDialogOpen(false)
       setEditingItem(null)
       setFormData({})
-      setSelectedFiles(null)
       form.reset()
       // Clear document data and highlighting after successful save
       clearDocumentData()
@@ -1544,403 +1497,6 @@ export default function ResearchContributionsPage() {
     })
     return columnsMap
   }, [sections, handleEdit, handleDelete])
-
-  const renderTableData = (section: any, item: any) => {
-    switch (section.id) {
-      case "patents":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.level}</TableCell>
-            <TableCell className="px-2 sm:px-4">
-              <Badge variant={typeof item.status === 'string' && item.status.toLowerCase() === "granted" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{typeof item.status === 'string' ? item.status : item.statusName || item.status || 'N/A'}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.date}</span>
-              </div>
-            </TableCell>
-            <TableCell className="px-2 sm:px-4">
-              <Badge variant={item.Tech_Licence ? "default" : "secondary"} className="text-[10px] sm:text-xs">
-                {item.Tech_Licence || "No"}
-              </Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">₹ {Number.parseInt(item.Earnings_Generate || "0").toLocaleString()}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.PatentApplicationNo}</TableCell>
-          </>
-        )
-      case "policy":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[150px] sm:max-w-none truncate">{item.title}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.level}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.organisation}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.date}</span>
-              </div>
-            </TableCell>
-          </>
-        )
-      case "econtent":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.e_content_type_name || ""}</TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.Brief_Details}>
-                {item.Brief_Details}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.Quadrant}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.Publishing_date}</span>
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.Publishing_Authorities}</TableCell>
-            <TableCell className="px-2 sm:px-4">
-              {item.link && (
-                <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs sm:text-sm">
-                  Link
-                </a>
-              )}
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.type_econtent_name || ""}</TableCell>
-          </>
-        )
-      case "consultancy":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title || item.name}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.collaboratingInstitute || item.collaborating_inst}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.address}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.startDate || item.Start_Date}</span>
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.duration ? `${item.duration} months` : "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.amount ? `₹ ${Number(item.amount).toLocaleString()}` : "-"}</TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.detailsOutcome || item.outcome}>
-                {item.detailsOutcome || item.outcome || "-"}
-              </div>
-            </TableCell>
-          </>
-        )
-      case "collaborations":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.category}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.collaboratingInstitute}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.nameOfCollaborator || item.collab_name || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.qsTheRanking || item.collab_rank || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.address || "-"}</TableCell>
-            <TableCell className="max-w-[80px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.details}>
-                {item.details || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="max-w-[80px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.collaborationOutcome}>
-                {item.collaborationOutcome || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="px-2 sm:px-4">
-              <Badge variant={item.status === "Active" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{item.status || "-"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.startingDate || "-"}</span>
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.duration ? `${item.duration} months` : "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.levelName || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.noOfBeneficiary || item.beneficiary_num || "-"}</TableCell>
-            <TableCell className="px-2 sm:px-4">
-              <Badge variant={item.mouSigned === "Yes" ? "default" : "secondary"} className="text-[10px] sm:text-xs">{item.mouSigned || "No"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.signingDate || "-"}</span>
-              </div>
-            </TableCell>
-          </>
-        )
-      case "visits":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.instituteVisited || item.Institute_visited || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.durationOfVisit || item.duration ? `${item.durationOfVisit || item.duration} days` : "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.roleName || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.sponsoredBy || item.Sponsored_by || "-"}</TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.remarks}>
-                {item.remarks || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.date || "-"}</span>
-              </div>
-            </TableCell>
-          </>
-        )
-      case "financial":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.nameOfSupport || item.name || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.typeName || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4 max-w-[100px] sm:max-w-none truncate">{item.supportingAgency || item.support || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.grantReceived || item.grant_received ? `₹ ${Number(item.grantReceived || item.grant_received).toLocaleString()}` : "-"}</TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.detailsOfEvent || item.details}>
-                {item.detailsOfEvent || item.details || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.purposeOfGrant || item.purpose}>
-                {item.purposeOfGrant || item.purpose || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.date || "-"}</span>
-              </div>
-            </TableCell>
-          </>
-        )
-      case "jrfSrf":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.nameOfFellow || item.name || "-"}</TableCell>
-            <TableCell className="px-2 sm:px-4">
-              <Badge variant="outline" className="text-[10px] sm:text-xs">{item.typeName || "-"}</Badge>
-            </TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.projectTitle || item.title}>
-                {item.projectTitle || item.title || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.duration ? `${item.duration} months` : "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.monthlyStipend || item.stipend ? `₹ ${Number(item.monthlyStipend || item.stipend).toLocaleString()}` : "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.date || "-"}</span>
-              </div>
-            </TableCell>
-          </>
-        )
-      case "phd":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.regNo || item.regno || "-"}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.nameOfStudent || item.name || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.dateOfRegistration || item.start_date || "-"}</span>
-              </div>
-            </TableCell>
-            <TableCell className="max-w-[100px] sm:max-w-xs px-2 sm:px-4">
-              <div className="truncate text-xs sm:text-sm" title={item.topic}>
-                {item.topic || "-"}
-              </div>
-            </TableCell>
-            <TableCell className="px-2 sm:px-4">
-              <Badge variant="outline" className="text-[10px] sm:text-xs">{item.statusName || "-"}</Badge>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.yearOfCompletion || item.year_of_completion || "-"}</TableCell>
-          </>
-        )
-      case "copyrights":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.srNo}</TableCell>
-            <TableCell className="font-medium text-xs sm:text-sm px-2 sm:px-4 max-w-[120px] sm:max-w-none truncate">{item.title || item.Title || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">{item.referenceNo || item.RefNo || "-"}</TableCell>
-            <TableCell className="text-xs sm:text-sm px-2 sm:px-4">
-              <div className="flex items-center gap-1">
-                <Calendar className="h-3 w-3 text-gray-400" />
-                <span>{item.publicationDate || item.PublicationDate || "-"}</span>
-              </div>
-            </TableCell>
-            <TableCell className="px-2 sm:px-4">
-              {item.link || item.Link ? (
-                <a 
-                  href={item.link || item.Link} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="text-blue-600 hover:underline text-xs sm:text-sm"
-                >
-                  Link
-                </a>
-              ) : (
-                "-"
-              )}
-            </TableCell>
-          </>
-        )
-      default:
-        return null
-    }
-  }
-
-  const handleExtractInfo = async () => {
-          // Check for document in multiple places:
-          // 1. selectedFiles (new upload)
-          // 2. form's supportingDocument field (existing document in edit mode)
-          // 3. autoFillDocumentUrl (from document analysis context)
-          // 4. editingItem's supportingDocument (existing document)
-          const formValues = form.getValues()
-          const hasSelectedFiles = selectedFiles && selectedFiles.length > 0
-          const hasFormDocument = formValues?.supportingDocument && 
-                                 (Array.isArray(formValues.supportingDocument) ? formValues.supportingDocument[0] : formValues.supportingDocument)
-          const hasAutoFillDocument = !!autoFillDocumentUrl
-          const hasEditItemDocument = editingItem?.supportingDocument && 
-                                     (Array.isArray(editingItem.supportingDocument) ? editingItem.supportingDocument[0] : editingItem.supportingDocument)
-          
-          const hasDocument = hasSelectedFiles || hasFormDocument || hasAutoFillDocument || hasEditItemDocument
-          
-          if (!hasDocument) {
-            toast({
-              title: "Error",
-              description: "Please upload a document first.",
-              variant: "destructive",
-              duration: 3000,
-            })
-            return
-          }
-      
-          setIsExtracting(true)
-          try {
-            const res = await fetch("/api/llm/get-category", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ type: activeTab }),
-            })
-            const { category } = await res.json()
-      
-            const res2 = await fetch("/api/llm/get-formfields", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ category, type: activeTab }),
-            })
-            const { data, success, extracted_fields, confidence } = await res2.json()
-      
-            if (success) {
-              Object.entries(data).forEach(([key, value]) => {
-                form.setValue(key, value)
-              })
-      
-              toast({
-                title: "Success",
-                description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-                  confidence * 100
-                )}% confidence)`,
-                duration: 3000,
-              })
-            }
-          } catch (error) {
-            toast({
-              title: "Error",
-              description: "Failed to auto-fill form.",
-              variant: "destructive",
-              duration: 3000,
-            })
-          } finally {
-            setIsExtracting(false)
-          }
-        }
-      
-  // This handleSubmit is only used for the edit dialog form submission
-  // For add page, use the handleSubmit in patents/add/page.tsx
-  const handleSubmit = async (data: any) => {
-    if (!user?.role_id) {
-      toast({
-        title: "Error",
-        description: "User information not available. Please refresh the page.",
-        variant: "destructive",
-        duration: 3000,
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      // Handle dummy document upload
-      let docUrl = null
-      if (selectedFiles && selectedFiles.length > 0) {
-        docUrl = `https://dummy-document-url-${Date.now()}.pdf`
-      }
-
-      const patentData = {
-        title: data.title,
-        level: data.level,
-        status: data.status,
-        date: data.date,
-        Tech_Licence: data.Tech_Licence || "",
-        Earnings_Generate: data.Earnings_Generate ? Number(data.Earnings_Generate) : null,
-        PatentApplicationNo: data.PatentApplicationNo || "",
-        doc: docUrl,
-      }
-
-      const res = await fetch("/api/teacher/research-contributions/patents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherId: user.role_id,
-          patent: patentData,
-        }),
-      })
-
-      const result = await res.json()
-
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to add patent")
-      }
-
-      toast({
-        title: "Success",
-        description: "Patent added successfully!",
-        duration: 3000,
-      })
-      
-      // Navigate back to main page
-      navigate("/teacher/research-contributions?tab=patents")
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to add patent. Please try again.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsSubmitting(false)
-      setSelectedFiles(null)
-      form.reset()
-    }
-  }
-
       
       
   const renderForm = (sectionId: string, isEdit = false) => {
@@ -1953,10 +1509,6 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={isEdit}
             editData={currentData}
             resPubLevelOptions={resPubLevelOptions}
@@ -1974,10 +1526,6 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={isEdit}
             editData={currentData}
             resPubLevelOptions={resPubLevelOptions}
@@ -1994,10 +1542,7 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+           
             isEdit={isEdit}
             editData={currentData}
             eContentTypeOptions={eContentTypeOptions}
@@ -2015,10 +1560,6 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={isEdit}
             editData={currentData}
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
@@ -2034,10 +1575,6 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={true}
             editData={currentData}
             collaborationsLevelOptions={collaborationsLevelOptions}
@@ -2056,11 +1593,7 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
-            isEdit={true}
+             isEdit={true}
             editData={currentData}
             academicVisitRoleOptions={academicVisitRoleOptions}
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
@@ -2076,11 +1609,7 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
-            isEdit={true}
+           isEdit={true}
             editData={currentData}
             financialSupportTypeOptions={financialSupportTypeOptions}
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}
@@ -2096,10 +1625,7 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+          
             isEdit={true}
             editData={currentData}
             jrfSrfTypeOptions={jrfSrfTypeOptions}
@@ -2116,10 +1642,7 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+            
             isEdit={true}
             editData={currentData}
             phdGuidanceStatusOptions={phdGuidanceStatusOptions}
@@ -2136,10 +1659,6 @@ export default function ResearchContributionsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
             isEdit={true}
             editData={currentData}
             initialDocumentUrl={isEdit ? autoFillDocumentUrl : undefined}

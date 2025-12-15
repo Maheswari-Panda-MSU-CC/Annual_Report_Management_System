@@ -51,7 +51,6 @@ export default function AddJournalArticlePage() {
   const { toast } = useToast()
   const { user } = useAuth()
   const { createJournal } = useJournalMutations()
-  const [isExtracting, setIsExtracting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
@@ -94,7 +93,6 @@ export default function AddJournalArticlePage() {
     setValue,
     control,
     reset,
-    watch,
     formState: { errors },
   } = form
 

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { ArrowLeft, Presentation, Brain, Loader2 } from "lucide-react"
+import { ArrowLeft, Presentation, Loader2 } from "lucide-react"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
@@ -38,11 +38,10 @@ export default function AddConferencePaperPage() {
   const { toast } = useToast()
   const { user } = useAuth()
   const { createPaper } = usePaperMutations()
-  const [isExtracting, setIsExtracting] = useState(false)
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
-  const { resPubLevelOptions, fetchResPubLevels } = useDropDowns()
+  const { resPubLevelOptions } = useDropDowns()
 
   const form = useForm<PaperFormData>({
     defaultValues: {
@@ -145,7 +144,6 @@ export default function AddConferencePaperPage() {
     handleSubmit,
     setValue,
     control,
-    watch,
     reset,
     formState: { errors },
   } = form
@@ -168,10 +166,6 @@ export default function AddConferencePaperPage() {
       }
       return prev
     })
-  }, [])
-
-  useEffect(() => {
-    fetchResPubLevels()
   }, [])
 
   // Unsaved changes guard

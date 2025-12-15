@@ -8,7 +8,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Save } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { ConsultancyFormProps } from "@/types/interfaces"
 import { cn } from "@/lib/utils"
 
@@ -16,10 +15,6 @@ export function ConsultancyForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
     initialDocumentUrl,
@@ -33,11 +28,9 @@ export function ConsultancyForm({
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = form
 
-  const formData = watch()
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
     (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)

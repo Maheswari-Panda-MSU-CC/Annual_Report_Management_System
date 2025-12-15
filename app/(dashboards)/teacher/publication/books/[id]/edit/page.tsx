@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { ArrowLeft, BookOpen, Loader2 } from "lucide-react"
-import { toast, useToast } from "@/hooks/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import { useForm, Controller } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
@@ -54,10 +54,7 @@ export default function EditBookPage() {
   const {
     journalAuthorTypeOptions,
     resPubLevelOptions,
-    bookTypeOptions,
-    fetchJournalAuthorTypes,
-    fetchResPubLevels,
-    fetchBookTypes,
+    bookTypeOptions
   } = useDropDowns()
 
   const form = useForm<BookFormData>({

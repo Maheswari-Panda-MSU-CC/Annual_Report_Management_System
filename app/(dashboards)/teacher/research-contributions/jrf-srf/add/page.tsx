@@ -20,7 +20,6 @@ export default function AddJrfSrfPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
   const { setValue, watch, reset } = form
 
@@ -355,9 +354,6 @@ export default function AddJrfSrfPage() {
               form={form}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting || createJrfSrf.isPending}
-              isExtracting={isExtracting}
-              selectedFiles={null}
-              handleFileSelect={() => {}}
               isEdit={false}
               jrfSrfTypeOptions={jrfSrfTypeOptions}
               initialDocumentUrl={autoFillDocumentUrl || undefined}

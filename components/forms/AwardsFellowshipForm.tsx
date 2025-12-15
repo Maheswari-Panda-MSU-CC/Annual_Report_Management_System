@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { UseFormReturn } from "react-hook-form"
 import { useEffect, useState } from "react"
 import { Controller } from "react-hook-form"
@@ -17,10 +18,6 @@ interface AwardsFellowshipFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   awardFellowLevelOptions?: DropdownOption[]
@@ -34,10 +31,6 @@ export function AwardsFellowshipForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   awardFellowLevelOptions = [],
@@ -83,6 +76,111 @@ export function AwardsFellowshipForm({
     }
   }, [formData.Image, documentUrl])
 
+  // Register form fields with merged onBlur handlers
+  const nameRegister = (() => {
+    const { onBlur, ...rest } = register("name", {
+      required: "Name of Award/Fellowship is required",
+      minLength: { value: 2, message: "Name must be at least 2 characters" },
+      maxLength: { value: 500, message: "Name must not exceed 500 characters" },
+      validate: (value) => {
+        if (value && value.trim().length < 2) {
+          return "Name cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("name")
+      }
+    }
+  })()
+
+  const organizationRegister = (() => {
+    const { onBlur, ...rest } = register("organization", {
+      required: "Name of Awarding Agency is required",
+      minLength: { value: 2, message: "Organization name must be at least 2 characters" },
+      maxLength: { value: 500, message: "Organization name must not exceed 500 characters" },
+      validate: (value) => {
+        if (value && value.trim().length < 2) {
+          return "Organization name cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("organization")
+      }
+    }
+  })()
+
+  const dateOfAwardRegister = (() => {
+    const { onBlur, ...rest } = register("date_of_award", {
+      required: "Date of Award is required",
+      validate: (value) => {
+        if (value && new Date(value) > new Date()) {
+          return "Date of award cannot be in the future"
+        }
+        if (value && new Date(value).getFullYear() < 1900) {
+          return "Date of award must be after 1900"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("date_of_award")
+      }
+    }
+  })()
+
+  const detailsRegister = (() => {
+    const { onBlur, ...rest } = register("details", {
+      maxLength: { value: 500, message: "Details must not exceed 500 characters" },
+      validate: (value) => {
+        // If provided, must not be only whitespace
+        if (value && value.trim().length === 0) {
+          return "Details cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => {
+        onBlur(e)
+        onFieldChange("details")
+      }
+    }
+  })()
+
+  const addressRegister = (() => {
+    const { onBlur, ...rest } = register("address", {
+      maxLength: { value: 500, message: "Address must not exceed 500 characters" },
+      validate: (value) => {
+        // If provided, must not be only whitespace
+        if (value && value.trim().length === 0) {
+          return "Address cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLTextAreaElement>) => {
+        onBlur(e)
+        onFieldChange("address")
+      }
+    }
+  })()
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Step 1: Upload */}
@@ -108,7 +206,7 @@ export function AwardsFellowshipForm({
             // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
           allowedFileTypes={["pdf", "jpg", "jpeg", "png", "bmp"]}
-          maxFileSize={10 * 1024 * 1024} // 10MB
+          maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}
           onClearFields={onClearFields}
@@ -149,18 +247,7 @@ export function AwardsFellowshipForm({
               placeholder="Enter name of award/fellowship"
               maxLength={500}
               className={cn(isAutoFilled("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("name")}
-              {...register("name", {
-                required: "Name of Award/Fellowship is required",
-                minLength: { value: 2, message: "Name must be at least 2 characters" },
-                maxLength: { value: 500, message: "Name must not exceed 500 characters" },
-                validate: (value) => {
-                  if (value && value.trim().length < 2) {
-                    return "Name cannot be only whitespace"
-                  }
-                  return true
-                }
-              })}
+              {...nameRegister}
             />
             {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message?.toString()}</p>}
           </div>
@@ -172,18 +259,7 @@ export function AwardsFellowshipForm({
               placeholder="Enter name of awarding agency"
               maxLength={500}
               className={cn(isAutoFilled("organization") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("organization")}
-              {...register("organization", {
-                required: "Name of Awarding Agency is required",
-                minLength: { value: 2, message: "Organization name must be at least 2 characters" },
-                maxLength: { value: 500, message: "Organization name must not exceed 500 characters" },
-                validate: (value) => {
-                  if (value && value.trim().length < 2) {
-                    return "Organization name cannot be only whitespace"
-                  }
-                  return true
-                }
-              })}
+              {...organizationRegister}
             />
             {errors.organization && <p className="text-sm text-red-600 mt-1">{errors.organization.message?.toString()}</p>}
           </div>
@@ -195,19 +271,7 @@ export function AwardsFellowshipForm({
               type="date"
               max={new Date().toISOString().split('T')[0]}
               className={cn(isAutoFilled("date_of_award") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("date_of_award")}
-              {...register("date_of_award", {
-                required: "Date of Award is required",
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
-                    return "Date of award cannot be in the future"
-                  }
-                  if (value && new Date(value).getFullYear() < 1900) {
-                    return "Date of award must be after 1900"
-                  }
-                  return true
-                }
-              })}
+              {...dateOfAwardRegister}
             />
             {errors.date_of_award && <p className="text-sm text-red-600 mt-1">{errors.date_of_award.message?.toString()}</p>}
           </div>
@@ -248,17 +312,7 @@ export function AwardsFellowshipForm({
             maxLength={500}
             rows={3}
             className={cn(isAutoFilled("details") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-            onBlur={() => onFieldChange("details")}
-            {...register("details", {
-              maxLength: { value: 500, message: "Details must not exceed 500 characters" },
-              validate: (value) => {
-                // If provided, must not be only whitespace
-                if (value && value.trim().length === 0) {
-                  return "Details cannot be only whitespace"
-                }
-                return true
-              }
-            })}
+            {...detailsRegister}
           />
           {errors.details && <p className="text-sm text-red-600 mt-1">{errors.details.message?.toString()}</p>}
         </div>
@@ -271,17 +325,7 @@ export function AwardsFellowshipForm({
             maxLength={500}
             rows={2}
             className={cn(isAutoFilled("address") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-            onBlur={() => onFieldChange("address")}
-            {...register("address", {
-              maxLength: { value: 500, message: "Address must not exceed 500 characters" },
-              validate: (value) => {
-                // If provided, must not be only whitespace
-                if (value && value.trim().length === 0) {
-                  return "Address cannot be only whitespace"
-                }
-                return true
-              }
-            })}
+            {...addressRegister}
           />
           {errors.address && <p className="text-sm text-red-600 mt-1">{errors.address.message?.toString()}</p>}
         </div>

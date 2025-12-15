@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { Save, Brain, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
@@ -19,10 +18,6 @@ interface AcademicProgramFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   academicProgrammeOptions?: DropdownOption[]
@@ -38,10 +33,6 @@ export function AcademicProgramForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   academicProgrammeOptions = [],
@@ -111,7 +102,7 @@ export function AcademicProgramForm({
             // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
           allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
-          maxFileSize={5 * 1024 * 1024} // 5MB
+          maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}
           onClearFields={onClearFields}

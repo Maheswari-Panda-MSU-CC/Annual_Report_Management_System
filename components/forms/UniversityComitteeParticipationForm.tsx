@@ -20,10 +20,6 @@ interface CommitteeFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   committeeLevelOptions?: DropdownOption[]
@@ -38,10 +34,6 @@ export function UniversityCommitteeParticipationForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   committeeLevelOptions = [],
@@ -116,7 +108,7 @@ export function UniversityCommitteeParticipationForm({
             // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
           allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
-          maxFileSize={5 * 1024 * 1024} // 5MB
+          maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}
           onClearFields={onClearFields}

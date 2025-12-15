@@ -2,18 +2,13 @@
 
 import type React from "react"
 
-import { useState, useCallback, useEffect, useRef, useMemo } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, FileText, Award, Users, Brain, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { ArrowLeft, FileText, Award, Users } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
@@ -25,18 +20,6 @@ import { useAutoFillData } from "@/hooks/use-auto-fill-data"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard"
 import { useFormCancelHandler } from "@/hooks/use-form-cancel-handler"
-
-interface UploadStatus {
-  performance: File | null
-  awards: File | null
-  extension: File | null
-}
-
-interface ExtractionStatus {
-  performance: boolean
-  awards: boolean
-  extension: boolean
-}
 
 export default function AddAwardsPage() {
   const router = useRouter()
@@ -50,9 +33,6 @@ export default function AddAwardsPage() {
     return (tab && ["performance", "awards", "extension"].includes(tab)) ? tab : "performance"
   })
   
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [extractionError, setExtractionError] = useState<string | null>(null)
-  const [extractionSuccess, setExtractionSuccess] = useState<string | null>(null)
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
   const form = useForm({
     mode: "onSubmit",
@@ -91,7 +71,7 @@ export default function AddAwardsPage() {
   } = useDropDowns()
 
   // Get dropdown options for current tab
-  const getDropdownOptionsForTab = (tab: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+  const getDropdownOptionsForTab = (tab: string): { [fieldName: string]: Array<{ id: number; name: string }> } => {
     switch (tab) {
       case "performance":
         return {}
@@ -271,34 +251,6 @@ export default function AddAwardsPage() {
     setAutoFilledFields(new Set())
   }
 
-  // Get section title for current tab
-  const getSectionTitle = (tab: string): string => {
-    switch (tab) {
-      case "performance":
-        return "Performance by Individual/Group"
-      case "awards":
-        return "Awards/Fellowship/Recognition"
-      case "extension":
-        return "Extension"
-      default:
-        return "Awards & Recognition"
-    }
-  }
-
-  // Get section icon for current tab
-  const getSectionIcon = (tab: string) => {
-    switch (tab) {
-      case "performance":
-        return <FileText className="h-5 w-5" />
-      case "awards":
-        return <Award className="h-5 w-5" />
-      case "extension":
-        return <Users className="h-5 w-5" />
-      default:
-        return <Award className="h-5 w-5" />
-    }
-  }
-
   // Handle URL tab parameter changes
   useEffect(() => {
     const tab = searchParams.get("tab")
@@ -323,160 +275,6 @@ export default function AddAwardsPage() {
     }
   }, [activeTab, autoFillDocumentUrl, hasAutoFillData, setValue])
 
-  // Track uploaded files separately
-  const [uploadedFiles, setUploadedFiles] = useState<UploadStatus>({
-    performance: null,
-    awards: null,
-    extension: null,
-  })
-
-  // Track extraction status
-  const [extractionStatus, setExtractionStatus] = useState<ExtractionStatus>({
-    performance: false,
-    awards: false,
-    extension: false,
-  })
-
-  const handleExtractInformation = useCallback(
-    async (tab: string) => {
-      // DocumentUpload component handles file presence check internally
-      // No need to check here - it will show error if no file
-
-      setIsExtracting(true)
-      setExtractionError(null)
-      setExtractionSuccess(null)
-
-      try {
-        // Simulate document processing delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        // First API call to get category
-        const categoryResponse = await fetch("/api/llm/get-category", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            type: tab,
-            documentType: "award_document",
-            fileName: uploadedFiles[tab as keyof UploadStatus]?.name || "document",
-          }),
-        })
-
-        if (!categoryResponse.ok) {
-          throw new Error(`Failed to get category: ${categoryResponse.statusText}`)
-        }
-
-        const categoryData = await categoryResponse.json()
-
-        // Second API call to get form fields
-        const formFieldsResponse = await fetch("/api/llm/get-formfields", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            category: categoryData.category || tab,
-            type: tab,
-            documentContent: `Sample ${tab} document content for extraction`,
-          }),
-        })
-
-        if (!formFieldsResponse.ok) {
-          throw new Error(`Failed to get form fields: ${formFieldsResponse.statusText}`)
-        }
-
-        const formFieldsData = await formFieldsResponse.json()
-
-        if (formFieldsData.success && formFieldsData.data) {
-          const data = formFieldsData.data
-
-          // Update the appropriate form state based on the tab using form.setValue
-          if (tab === "performance") {
-            const currentValues = form.getValues()
-            form.setValue("name", data.titleOfPerformance || data.title || data.performanceTitle || currentValues.name || "")
-            form.setValue("place", data.place || data.venue || data.location || currentValues.place || "")
-            form.setValue("date", data.performanceDate || data.date || data.eventDate || currentValues.date || "")
-            form.setValue("perf_nature", data.natureOfPerformance || data.nature || data.performanceType || data.type || currentValues.perf_nature || "")
-            setExtractionStatus((prev) => ({ ...prev, performance: true }))
-          } else if (tab === "awards") {
-            const currentValues = form.getValues()
-            form.setValue("name", data.nameOfAwardFellowship || data.name || data.awardName || data.title || currentValues.name || "")
-            form.setValue("details", data.details || data.description || data.summary || currentValues.details || "")
-            form.setValue("organization", data.nameOfAwardingAgency || data.agency || data.awardingBody || data.awardingAgency || data.organization || currentValues.organization || "")
-            form.setValue("address", data.addressOfAwardingAgency || data.agencyAddress || data.address || data.organizationAddress || currentValues.address || "")
-            form.setValue("date_of_award", data.dateOfAward || data.date || data.dateReceived || data.awardDate || data.dateAwarded || currentValues.date_of_award || "")
-            // For level, we need to find the matching option ID from awardFellowLevelOptions
-            if (data.level || data.scope) {
-              const levelName = data.level || data.scope
-              const levelOption = awardFellowLevelOptions.find(opt => 
-                opt.name.toLowerCase().includes(levelName.toLowerCase()) || 
-                levelName.toLowerCase().includes(opt.name.toLowerCase())
-              )
-              if (levelOption) {
-                form.setValue("level", levelOption.id)
-              }
-            }
-            setExtractionStatus((prev) => ({ ...prev, awards: true }))
-          } else if (tab === "extension") {
-            const currentValues = form.getValues()
-            form.setValue("name_of_activity", data.nameOfActivity || data.name || data.activityName || data.title || currentValues.name_of_activity || "")
-            form.setValue("names", data.natureOfActivity || data.nature || data.activityType || data.type || currentValues.names || "")
-            form.setValue("place", data.place || data.venue || data.location || currentValues.place || "")
-            form.setValue("date", data.date || data.activityDate || data.eventDate || currentValues.date || "")
-            // For level, we need to find the matching option ID from awardFellowLevelOptions
-            if (data.level || data.scope) {
-              const levelName = data.level || data.scope
-              const levelOption = awardFellowLevelOptions.find(opt => 
-                opt.name.toLowerCase().includes(levelName.toLowerCase()) || 
-                levelName.toLowerCase().includes(opt.name.toLowerCase())
-              )
-              if (levelOption) {
-                form.setValue("level", levelOption.id)
-              }
-            }
-            // For sponsered, we need to find the matching option ID from sponserNameOptions
-            if (data.sponsoredBy || data.sponsor || data.organizingBody || data.organizer) {
-              const sponsorName = data.sponsoredBy || data.sponsor || data.organizingBody || data.organizer
-              const sponsorOption = sponserNameOptions.find(opt => 
-                opt.name.toLowerCase().includes(sponsorName.toLowerCase()) || 
-                sponsorName.toLowerCase().includes(opt.name.toLowerCase())
-              )
-              if (sponsorOption) {
-                form.setValue("sponsered", sponsorOption.id)
-              }
-            }
-            setExtractionStatus((prev) => ({ ...prev, extension: true }))
-          }
-
-          const extractedFieldsCount = formFieldsData.extracted_fields || Object.keys(data).length
-          const confidence = formFieldsData.confidence || 0.85
-
-          setExtractionSuccess(
-            `Successfully extracted ${extractedFieldsCount} fields with ${Math.round(confidence * 100)}% confidence`,
-          )
-
-          toast({
-            title: "Success",
-            description: `Form auto-filled with ${extractedFieldsCount} fields (${Math.round(confidence * 100)}% confidence)`,
-          })
-        } else {
-          throw new Error("No data extracted from document")
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : "Failed to extract information. Please try again."
-        setExtractionError(errorMessage)
-        toast({
-          title: "Extraction Error",
-          description: errorMessage,
-          variant: "destructive",
-        })
-      } finally {
-        setIsExtracting(false)
-      }
-    },
-    [toast, uploadedFiles, awardFellowLevelOptions, sponserNameOptions, form],
-  )
 
   // Helper function to upload document to S3 (matches research module pattern)
   const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
@@ -565,8 +363,6 @@ export default function AddAwardsPage() {
 
       // Reset form
       form.reset()
-      setUploadedFiles((prev) => ({ ...prev, performance: null }))
-      setExtractionStatus((prev) => ({ ...prev, performance: false }))
       setAutoFilledFields(new Set())
 
       // Redirect back after a short delay
@@ -620,8 +416,6 @@ export default function AddAwardsPage() {
 
       // Reset form
       form.reset()
-      setUploadedFiles((prev) => ({ ...prev, awards: null }))
-      setExtractionStatus((prev) => ({ ...prev, awards: false }))
       setAutoFilledFields(new Set())
 
       // Redirect back after a short delay
@@ -675,8 +469,6 @@ export default function AddAwardsPage() {
 
       // Reset form
       form.reset()
-      setUploadedFiles((prev) => ({ ...prev, extension: null }))
-      setExtractionStatus((prev) => ({ ...prev, extension: false }))
       setAutoFilledFields(new Set())
 
       // Redirect back after a short delay
@@ -688,27 +480,6 @@ export default function AddAwardsPage() {
     }
   }
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, section: string) => {
-    const file = e.target.files?.[0] || null
-
-    // Update uploaded files state
-    setUploadedFiles((prev) => ({
-      ...prev,
-      [section]: file,
-    }))
-
-    // Reset extraction status when new file is uploaded
-    setExtractionStatus((prev) => ({ ...prev, [section]: false }))
-    setExtractionError(null)
-    setExtractionSuccess(null)
-
-    if (file) {
-      toast({
-        title: "File Uploaded",
-        description: `${file.name} has been uploaded successfully.`,
-      })
-    }
-  }
 
   return (
       <>
@@ -742,18 +513,6 @@ export default function AddAwardsPage() {
                   form={form}
                   onSubmit={handlePerformanceSubmit}
                   isSubmitting={isSubmitting}
-                  isExtracting={isExtracting}
-                  selectedFiles={uploadedFiles.performance ? (() => {
-                    const dt = new DataTransfer()
-                    dt.items.add(uploadedFiles.performance!)
-                    return dt.files
-                  })() : null}
-                  handleFileSelect={(files) => {
-                    if (files && files.length > 0) {
-                      handleFileUpload({ target: { files } } as any, "performance")
-                    }
-                  }}
-                  handleExtractInfo={() => handleExtractInformation("performance")}
                   isEdit={false}
                   onClearFields={handleClearFields}
                   onCancel={handleCancel}
@@ -777,19 +536,7 @@ export default function AddAwardsPage() {
                 <AwardsFellowshipForm
                   form={form}
                   onSubmit={handleAwardSubmit}
-                  isSubmitting={isSubmitting}
-                  isExtracting={isExtracting}
-                  selectedFiles={uploadedFiles.awards ? (() => {
-                    const dt = new DataTransfer()
-                    dt.items.add(uploadedFiles.awards!)
-                    return dt.files
-                  })() : null}
-                  handleFileSelect={(files) => {
-                    if (files && files.length > 0) {
-                      handleFileUpload({ target: { files } } as any, "awards")
-                    }
-                  }}
-                  handleExtractInfo={() => handleExtractInformation("awards")}
+                  isSubmitting={isSubmitting} 
                   isEdit={false}
                   awardFellowLevelOptions={awardFellowLevelOptions}
                   onClearFields={handleClearFields}
@@ -815,18 +562,6 @@ export default function AddAwardsPage() {
                   form={form}
                   onSubmit={handleExtensionSubmit}
                   isSubmitting={isSubmitting}
-                  isExtracting={isExtracting}
-                  selectedFiles={uploadedFiles.extension ? (() => {
-                    const dt = new DataTransfer()
-                    dt.items.add(uploadedFiles.extension!)
-                    return dt.files
-                  })() : null}
-                  handleFileSelect={(files: FileList | null) => {
-                    if (files && files.length > 0) {
-                      handleFileUpload({ target: { files } } as any, "extension")
-                    }
-                  }}
-                  handleExtractInfo={() => handleExtractInformation("extension")}
                   isEdit={false}
                   awardFellowLevelOptions={awardFellowLevelOptions}
                   sponserNameOptions={sponserNameOptions}

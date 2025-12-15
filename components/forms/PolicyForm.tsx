@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label"
 import { Controller } from "react-hook-form"
 import { Save } from "lucide-react"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useDropDowns } from "@/hooks/use-dropdowns"
@@ -18,10 +17,6 @@ export default function PolicyForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   resPubLevelOptions: propResPubLevelOptions,
@@ -32,8 +27,7 @@ export default function PolicyForm({
     onFieldChange,
 }: PolicyFormProps) {
   const router = useRouter()
-  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
-  const formData = watch()
+  const { register, handleSubmit, setValue, control, formState: { errors } } = form
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
     (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)
@@ -223,7 +217,7 @@ export default function PolicyForm({
           type="button"
           variant="outline"
           onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=policy"))}
-          disabled={isSubmitting || isExtracting}
+          disabled={isSubmitting}
           className="w-full sm:w-auto text-xs sm:text-sm"
         >
           Cancel

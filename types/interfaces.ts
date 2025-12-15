@@ -222,10 +222,6 @@ export interface PolicyFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   resPubLevelOptions?: Array<{ id: number; name: string }>
@@ -241,10 +237,6 @@ export interface EContentFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   eContentTypeOptions?: Array<{ id: number; name: string }>
@@ -261,10 +253,6 @@ export interface ConsultancyFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   initialDocumentUrl?: string

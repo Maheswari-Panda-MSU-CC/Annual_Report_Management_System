@@ -18,10 +18,6 @@ interface AcademicVisitFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   academicVisitRoleOptions?: Array<{ id: number; name: string }>
@@ -35,10 +31,6 @@ export function AcademicVisitForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   academicVisitRoleOptions: propAcademicVisitRoleOptions,

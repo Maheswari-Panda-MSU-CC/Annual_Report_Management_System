@@ -9,7 +9,6 @@ import { Save, Loader2 } from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useRouter } from "next/navigation"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { useEffect, useState } from "react"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { cn } from "@/lib/utils"
@@ -35,8 +34,6 @@ export function JrfSrfForm({
   form,
   onSubmit,
   isSubmitting,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   jrfSrfTypeOptions: propJrfSrfTypeOptions,
@@ -51,11 +48,9 @@ export function JrfSrfForm({
     register,
     handleSubmit,
     setValue,
-    watch,
     control,
     formState: { errors },
   } = form
-  const formData = watch()
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
     (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)

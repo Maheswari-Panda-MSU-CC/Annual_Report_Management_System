@@ -1,4 +1,4 @@
-import { LoginForm } from "@/components/forms/login-form"
+import { LoginForm } from "@/components/forms/LoginForm"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Image from "next/image"
 

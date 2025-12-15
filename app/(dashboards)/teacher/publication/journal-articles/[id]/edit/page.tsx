@@ -62,10 +62,7 @@ export default function EditJournalArticlePage() {
   const {
     journalAuthorTypeOptions,
     journalEditedTypeOptions,
-    resPubLevelOptions,
-    fetchJournalAuthorTypes,
-    fetchJournalEditedTypes,
-    fetchResPubLevels,
+    resPubLevelOptions
   } = useDropDowns()
 
   const form = useForm<JournalFormData>({

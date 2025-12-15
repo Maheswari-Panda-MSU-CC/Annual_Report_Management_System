@@ -23,7 +23,6 @@ export default function AddCopyrightsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const form = useForm()
   const { setValue, watch, reset } = form
-  const [isExtracting, setIsExtracting] = useState(false)
 
   // Track auto-filled fields for highlighting
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
@@ -140,46 +139,6 @@ export default function AddCopyrightsPage() {
   const handleClearFields = () => {
     reset()
     setAutoFilledFields(new Set())
-  }
-
-  const handleExtractInfo = async () => {
-    setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "copyright" }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: "copyright" }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          form.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExtracting(false)
-    }
   }
 
   const handleSubmit = async (data: any) => {
@@ -316,10 +275,6 @@ export default function AddCopyrightsPage() {
               form={form}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting || createCopyright.isPending}
-              isExtracting={isExtracting}
-              selectedFiles={null}
-              handleFileSelect={() => {}}
-              handleExtractInfo={handleExtractInfo}
               isEdit={false}
               initialDocumentUrl={autoFillDocumentUrl}
               onClearFields={handleClearFields}

@@ -5,11 +5,9 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { useTeacherPublications } from "@/hooks/use-teacher-data"
 import { usePaperMutations, useJournalMutations, useBookMutations } from "@/hooks/use-teacher-mutations"
@@ -216,15 +214,14 @@ function PublicationStats({ data, onStatClick }: { data: typeof initialData; onS
 export default function PublicationsPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState("journals")
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
 
   // Use React Query for data fetching with automatic caching
-  const { journals, books, papers, isLoading, isFetching, data: rawData } = useTeacherPublications()
+  const { journals, books, papers, isLoading, isFetching } = useTeacherPublications()
   const { deletePaper } = usePaperMutations()
   const { deleteJournal } = useJournalMutations()
-  const { deleteBook } = useBookMutations()
+  const { deleteBook } = useBookMutations()     
   
   // Show loading only if we have no data at all (first load)
   const isInitialLoading = isLoading && !journals.data && !books.data && !papers.data
@@ -235,7 +232,6 @@ export default function PublicationsPage() {
   // Dropdowns
   const {
     journalAuthorTypeOptions,
-    journalEditedTypeOptions,
     resPubLevelOptions,
     bookTypeOptions,
   } = useDropDowns()
@@ -689,126 +685,6 @@ export default function PublicationsPage() {
     return <TableLoadingSkeleton />
   }
 
-  // Keep renderTableData for backward compatibility (not used in new table but kept for reference)
-  const renderTableData = (section: any, item: any) => {
-    switch (section.id) {
-      case "journals":
-        return (
-          <>
-            <TableCell className="text-xs sm:text-sm">{item.srNo}</TableCell>
-            <TableCell className="max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.authors}>
-                {item.authors}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.noOfAuthors}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.authorType}</TableCell>
-            <TableCell className="font-medium max-w-xs text-xs sm:text-sm">
-              <div className="truncate" title={item.title}>
-                {item.title}
-              </div>
-            </TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.type}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.issn}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.isbn}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.journalBookName}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.volumeNo}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{item.pageNo}</TableCell>
-            <TableCell className="text-xs sm:text-sm">{new Date(item.date).toLocaleDateString()}</TableCell>
-            <TableCell>
-              <Badge variant={item.level === "International" ? "default" : "secondary"}>{item.level}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.peerReviewed === "Yes" ? "default" : "secondary"}>{item.peerReviewed}</Badge>
-            </TableCell>
-            <TableCell>{item.hIndex}</TableCell>
-            <TableCell>{item.impactFactor}</TableCell>
-           
-            <TableCell>
-              <Badge variant={item.inScopus === "Yes" ? "default" : "secondary"}>{item.inScopus}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.inUgcCare === "Yes" ? "default" : "secondary"}>{item.inUgcCare}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.inClarivate === "Yes" ? "default" : "secondary"}>{item.inClarivate}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.inOldUgcList === "Yes" ? "default" : "secondary"}>{item.inOldUgcList}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.chargesPaid === "Yes" ? "destructive" : "default"}>{item.chargesPaid}</Badge>
-            </TableCell>
-          </>
-        )
-      case "books":
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.authors}>
-                {item.authors}
-              </div>
-            </TableCell>
-            <TableCell className="font-medium max-w-xs">
-              <div className="truncate" title={item.title}>
-                {item.title}
-              </div>
-            </TableCell>
-            <TableCell>{item.isbn}</TableCell>
-            <TableCell>{item.publisherName}</TableCell>
-            <TableCell>{item.publishingDate ? new Date(item.publishingDate).toLocaleDateString() : ""}</TableCell>
-            <TableCell>{item.publishingPlace}</TableCell>
-            <TableCell>
-              <Badge variant={item.chargesPaid === "Yes" ? "destructive" : "default"}>{item.chargesPaid}</Badge>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.edited === "Yes" ? "default" : "secondary"}>{item.edited}</Badge>
-            </TableCell>
-            <TableCell>{item.chapterCount}</TableCell>
-            <TableCell>
-              <Badge variant={item.publishingLevel === "International" ? "default" : "secondary"}>
-                {resPubLevelOptions.find(l => l.id === item.publishingLevelId)?.name || item.publishingLevel}
-              </Badge>
-            </TableCell>
-            <TableCell>{bookTypeOptions.find(b => b.id === item.bookTypeId)?.name || item.bookType}</TableCell>
-            <TableCell>{journalAuthorTypeOptions.find(a => a.id === item.authorTypeId)?.name || item.authorType}</TableCell>
-          </>
-        )
-      case "papers":
-        return (
-          <>
-            <TableCell>{item.srNo}</TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.authors}>
-                {item.authors}
-              </div>
-            </TableCell>
-            <TableCell>
-              <Badge variant={item.presentationLevel === "International" ? "default" : "secondary"}>
-                {item.presentationLevel}
-              </Badge>
-            </TableCell>
-            <TableCell className="max-w-xs">
-              <div className="truncate" title={item.themeOfConference}>
-                {item.themeOfConference}
-              </div>
-            </TableCell>
-            <TableCell>{item.modeOfParticipation}</TableCell>
-            <TableCell className="font-medium max-w-xs">
-              <div className="truncate" title={item.titleOfPaper}>
-                {item.titleOfPaper}
-              </div>
-            </TableCell>
-            <TableCell>{item.organizingBody}</TableCell>
-            <TableCell>{item.place}</TableCell>
-            <TableCell>{item.dateOfPresentation ? new Date(item.dateOfPresentation).toLocaleDateString() : ""}</TableCell>
-          </>
-        )
-      default:
-        return null
-    }
-  }
 
   return (
       <div className="space-y-4 sm:space-y-6">

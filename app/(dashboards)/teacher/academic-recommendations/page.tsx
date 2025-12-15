@@ -17,12 +17,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/components/ui/use-toast"
 import { useForm } from "react-hook-form"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { useTeacherAcademicRecommendations, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { useTeacherAcademicRecommendations } from "@/hooks/use-teacher-data"
 import { useArticlesMutations, useBooksMutations, useMagazinesMutations, useTechReportsMutations } from "@/hooks/use-teacher-academic-recommendations-mutations"
 import { EnhancedDataTable } from "@/components/ui/enhanced-data-table"
 import { ColumnDef } from "@tanstack/react-table"
@@ -129,33 +127,11 @@ const sections = [
   },
 ]
 
-// Helper hook to invalidate section queries
-function useInvalidateSection() {
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-  const teacherId = user?.role_id ? parseInt(user.role_id.toString()) : 0
-
-  return (sectionId: string) => {
-    if (!teacherId || teacherId <= 0) return
-    
-    const queryKey = 
-      sectionId === "articles" ? teacherQueryKeys.academicRecommendations.articles(teacherId) :
-      sectionId === "books" ? teacherQueryKeys.academicRecommendations.books(teacherId) :
-      sectionId === "magazines" ? teacherQueryKeys.academicRecommendations.magazines(teacherId) :
-      sectionId === "technical" ? teacherQueryKeys.academicRecommendations.technical(teacherId) :
-      null
-    
-    if (queryKey) {
-      queryClient.invalidateQueries({ queryKey })
-    }
-  }
-}
 
 
 export default function AcademicRecommendationsPage() {
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const { toast } = useToast()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("articles")
   const [editingItem, setEditingItem] = useState<any>(null)
@@ -167,8 +143,7 @@ export default function AcademicRecommendationsPage() {
   })
 
   // React Query hooks
-  const { articles, books, magazines, technical, isLoading, isFetching, data: queryData } = useTeacherAcademicRecommendations()
-  const invalidateSection = useInvalidateSection()
+  const { articles, books, magazines, technical, data: queryData } = useTeacherAcademicRecommendations()
 
   // Mutation hooks
   const articlesMutations = useArticlesMutations()
@@ -958,10 +933,6 @@ export default function AcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            selectedFiles={null}
-            handleFileSelect={() => {}}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             resPubLevelOptions={resPubLevelOptions}
@@ -974,10 +945,6 @@ export default function AcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            selectedFiles={null}
-            handleFileSelect={() => {}}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             resPubLevelOptions={resPubLevelOptions}
@@ -990,10 +957,6 @@ export default function AcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            selectedFiles={null}
-            handleFileSelect={() => {}}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
           />
@@ -1004,10 +967,6 @@ export default function AcademicRecommendationsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={false}
-            selectedFiles={null}
-            handleFileSelect={() => {}}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
           />

@@ -15,10 +15,6 @@ interface JournalArticlesFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   resPubLevelOptions?: DropdownOption[]
@@ -35,17 +31,12 @@ export function JournalArticlesForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   resPubLevelOptions = [],
   journalEditedTypeOptions = [],
 }: JournalArticlesFormProps) {
-  const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
-  const formData = watch()
+  const { register, handleSubmit, setValue, control, formState: { errors } } = form
 
   const editDataString = JSON.stringify(editData || {})
   

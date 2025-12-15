@@ -11,7 +11,6 @@ import { useRouter } from "next/navigation"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "../document-viewer"
 import { EContentFormProps } from "@/types/interfaces"
 import { cn } from "@/lib/utils"
 
@@ -19,10 +18,6 @@ export function EContentForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   eContentTypeOptions: propEContentTypeOptions,
@@ -35,7 +30,6 @@ export function EContentForm({
 }: EContentFormProps & { initialDocumentUrl?: string; onClearFields?: () => void; onCancel?: () => void; isAutoFilled?: (fieldName: string) => boolean; onFieldChange?: (fieldName: string) => void }) {
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
-  const formData = watch()
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
     (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)

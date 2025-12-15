@@ -22,7 +22,6 @@ export default function AddPhdPage() {
   const router = useRouter()
   const { user } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
   const form = useForm()
   const { setValue, watch, reset } = form
 
@@ -218,49 +217,6 @@ export default function AddPhdPage() {
     reset()
     setAutoFilledFields(new Set())
   }
-
-  const handleExtractInfo = async () => {
-    setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "phd" }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: "phd" }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          form.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-          duration: 3000,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-        duration: 3000,
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }
-
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
       toast({
@@ -397,10 +353,6 @@ export default function AddPhdPage() {
               form={form}
               onSubmit={handleSubmit}
               isSubmitting={isSubmitting || createPhd.isPending}
-              isExtracting={isExtracting}
-              selectedFiles={null}
-              handleFileSelect={() => {}}
-              handleExtractInfo={handleExtractInfo}
               isEdit={false}
               phdGuidanceStatusOptions={phdGuidanceStatusOptions}
               initialDocumentUrl={autoFillDocumentUrl}

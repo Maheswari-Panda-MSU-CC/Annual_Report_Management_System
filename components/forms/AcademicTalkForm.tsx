@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { Save, Brain, Loader2 } from "lucide-react"
+import { Save} from "lucide-react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
 import { cn } from "@/lib/utils"
@@ -19,10 +19,6 @@ interface AcademicTalkFormProps {
     form: UseFormReturn<any>
     onSubmit: (data: any) => void
     isSubmitting: boolean
-    isExtracting?: boolean
-    selectedFiles?: FileList | null
-    handleFileSelect?: (files: FileList | null) => void
-    handleExtractInfo?: () => void
     isEdit?: boolean
     editData?: Record<string, any>
     talksProgrammeTypeOptions?: DropdownOption[]
@@ -37,10 +33,6 @@ export function AcademicTalkForm({
     form,
     onSubmit,
     isSubmitting,
-    isExtracting = false,
-    selectedFiles = null,
-    handleFileSelect = () => { },
-    handleExtractInfo = () => { },
     isEdit = false,
     editData = {},
     talksProgrammeTypeOptions = [],
@@ -111,7 +103,7 @@ export function AcademicTalkForm({
                         // Don't call handleExtractInfo - it uses old API and causes false errors
                     }}
                     allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
-                    maxFileSize={5 * 1024 * 1024} // 5MB
+                    maxFileSize={1 * 1024 * 1024} // 1MB
                     className="w-full"
                     isEditMode={isEdit}
                     onClearFields={onClearFields}

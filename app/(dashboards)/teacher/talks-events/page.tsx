@@ -45,8 +45,7 @@ import { UniversityCommitteeParticipationForm } from "@/components/forms/Univers
 import { AcademicTalkForm } from "@/components/forms/AcademicTalkForm"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { useTeacherTalksEvents, teacherQueryKeys } from "@/hooks/use-teacher-data"
-import { useQueryClient } from "@tanstack/react-query"
+import { useTeacherTalksEvents } from "@/hooks/use-teacher-data"
 import {
   useRefresherMutations,
   useAcademicProgramMutations,
@@ -159,7 +158,6 @@ export default function TalksEventsPage() {
   const [formData, setFormData] = useState<any>({})
   const form = useForm()
   const router = useRouter()
-  const queryClient = useQueryClient()
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   
   // Track auto-filled fields for highlighting in edit modal
@@ -371,20 +369,6 @@ export default function TalksEventsPage() {
     talksQuery.isFetching,
   ])
 
-  // Helper function to invalidate queries for a specific section
-  const invalidateSection = (sectionId: string) => {
-    if (sectionId === "refresher") {
-      queryClient.invalidateQueries({ queryKey: teacherQueryKeys.talks.refresher(teacherId) })
-    } else if (sectionId === "academic-programs") {
-      queryClient.invalidateQueries({ queryKey: [...teacherQueryKeys.talks.all(teacherId), "academic-contri"] })
-    } else if (sectionId === "academic-bodies") {
-      queryClient.invalidateQueries({ queryKey: [...teacherQueryKeys.talks.all(teacherId), "academic-participation"] })
-    } else if (sectionId === "committees") {
-      queryClient.invalidateQueries({ queryKey: [...teacherQueryKeys.talks.all(teacherId), "committees"] })
-    } else if (sectionId === "talks") {
-      queryClient.invalidateQueries({ queryKey: teacherQueryKeys.talks.talks(teacherId) })
-    }
-  }
 
   // Update URL when tab changes
   const handleTabChange = (value: string) => {
@@ -442,7 +426,7 @@ export default function TalksEventsPage() {
   }
 
   // Get dropdown options based on section
-  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number | string; name: string }> } => {
+  const getDropdownOptions = (sectionId: string): { [fieldName: string]: Array<{ id: number; name: string }> } => {
     switch (sectionId) {
       case "refresher":
         return { refresher_type: refresherTypeOptions }
@@ -1135,50 +1119,6 @@ export default function TalksEventsPage() {
     }
   }, [selectedFiles, data, toast, refresherMutations, academicProgramMutations, academicBodiesMutations, committeeMutations, talksMutations])
 
-  const handleExtractInfo = async () => {
-    // Note: This function is for legacy manual extraction
-    // DocumentUpload component handles extraction internally via "Extract Data Fields" button
-    // So we don't need to check selectedFiles here - DocumentUpload manages its own file state
-    // This function is kept for backward compatibility but may not be used
-    
-    setIsExtracting(true)
-    try {
-      const res = await fetch("/api/llm/get-category", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: activeTab }),
-      })
-      const { category } = await res.json()
-
-      const res2 = await fetch("/api/llm/get-formfields", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, type: activeTab }),
-      })
-      const { data, success, extracted_fields, confidence } = await res2.json()
-
-      if (success) {
-        Object.entries(data).forEach(([key, value]) => {
-          formData.setValue(key, value)
-        })
-
-        toast({
-          title: "Success",
-          description: `Form auto-filled with ${extracted_fields} fields (${Math.round(
-            confidence * 100
-          )}% confidence)`,
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to auto-fill form.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsExtracting(false)
-    }
-  }
 
   // Helper function to display N/A for empty/null/undefined values
   const displayValue = (value: any, fallback: string = "N/A"): string => {
@@ -1528,7 +1468,7 @@ export default function TalksEventsPage() {
             isExtracting={isExtracting}
             selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             refresherTypeOptions={refresherTypeOptions}
@@ -1546,7 +1486,7 @@ export default function TalksEventsPage() {
             isExtracting={isExtracting}
             selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             academicProgrammeOptions={academicProgrammeOptions}
@@ -1566,7 +1506,7 @@ export default function TalksEventsPage() {
             isExtracting={isExtracting}
             selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             reportYearsOptions={reportYearsOptions}
@@ -1584,7 +1524,7 @@ export default function TalksEventsPage() {
             isExtracting={isExtracting}
             selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             committeeLevelOptions={committeeLevelOptions}
@@ -1603,7 +1543,7 @@ export default function TalksEventsPage() {
             isExtracting={isExtracting}
             selectedFiles={selectedFiles}
             handleFileSelect={handleFileSelect}
-            handleExtractInfo={handleExtractInfo}
+            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             talksProgrammeTypeOptions={talksProgrammeTypeOptions}

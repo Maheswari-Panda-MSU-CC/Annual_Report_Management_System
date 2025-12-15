@@ -21,7 +21,6 @@ export default function AddPatentsPage() {
   const form = useForm()
   const { setValue, watch, reset } = form
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
   
   // Track auto-filled fields for highlighting
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
@@ -225,12 +224,6 @@ export default function AddPatentsPage() {
     setAutoFilledFields(new Set())
   }
 
-  const handleExtractInfo = async () => {
-    setIsExtracting(true)
-    // Extraction is handled by DocumentUpload component
-    setIsExtracting(false)
-  }
-
   const handleSubmit = async (data: any) => {
     if (!user?.role_id) {
       toast({
@@ -366,10 +359,6 @@ export default function AddPatentsPage() {
           form={form}
           onSubmit={handleSubmit}
           isSubmitting={isSubmitting || createPatent.isPending}
-          isExtracting={isExtracting}
-          selectedFiles={null}
-          handleFileSelect={() => {}}
-          handleExtractInfo={handleExtractInfo}
           isEdit={false}
           resPubLevelOptions={resPubLevelOptions}
           patentStatusOptions={patentStatusOptions}

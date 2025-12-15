@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, Edit, Download, Calendar, Hash, User, FileText, Award } from "lucide-react"
+import { ArrowLeft, Edit, Calendar, Hash, User, FileText, Award } from "lucide-react"
 import Link from "next/link"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
@@ -84,22 +84,6 @@ export default function JournalArticleDetailPage() {
     }
   }
 
-  const handleDownloadDocument = () => {
-    if (article?.Image) {
-      const documentUrl = article.Image.startsWith('http') 
-        ? article.Image 
-        : `/api/s3/download?path=${encodeURIComponent(article.Image)}&userId=${user?.role_id || 0}`
-      
-      const link = document.createElement("a")
-      link.href = documentUrl
-      link.download = `${article.title}.pdf`
-      link.target = "_blank"
-      link.rel = "noopener noreferrer"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-  }
 
   if (loading) {
     return (

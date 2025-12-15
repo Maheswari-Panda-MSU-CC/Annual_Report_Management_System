@@ -16,10 +16,6 @@ interface ExtensionActivityFormProps {
   form: UseFormReturn<any>
   onSubmit: (data: any) => void
   isSubmitting: boolean
-  isExtracting?: boolean
-  selectedFiles?: FileList | null
-  handleFileSelect?: (files: FileList | null) => void
-  handleExtractInfo?: () => void
   isEdit?: boolean
   editData?: Record<string, any>
   awardFellowLevelOptions?: DropdownOption[]
@@ -34,10 +30,6 @@ export function ExtensionActivityForm({
   form,
   onSubmit,
   isSubmitting,
-  isExtracting = false,
-  selectedFiles = null,
-  handleFileSelect = () => {},
-  handleExtractInfo = () => {},
   isEdit = false,
   editData = {},
   awardFellowLevelOptions = [],
@@ -84,6 +76,92 @@ export function ExtensionActivityForm({
     }
   }, [formData.Image, documentUrl])
 
+  // Register form fields with merged onBlur handlers
+  const nameOfActivityRegister = (() => {
+    const { onBlur, ...rest } = register("name_of_activity", {
+      required: "Name of Activity is required",
+      minLength: { value: 2, message: "Name must be at least 2 characters" },
+      maxLength: { value: 150, message: "Name must not exceed 150 characters" },
+      validate: (value) => {
+        if (value && value.trim().length < 2) {
+          return "Name cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("name_of_activity")
+      }
+    }
+  })()
+
+  const namesRegister = (() => {
+    const { onBlur, ...rest } = register("names", {
+      required: "Nature of Activity is required",
+      minLength: { value: 2, message: "Nature must be at least 2 characters" },
+      maxLength: { value: 100, message: "Nature must not exceed 100 characters" },
+      validate: (value) => {
+        if (value && value.trim().length < 2) {
+          return "Nature cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("names")
+      }
+    }
+  })()
+
+  const placeRegister = (() => {
+    const { onBlur, ...rest } = register("place", {
+      required: "Place is required",
+      minLength: { value: 2, message: "Place must be at least 2 characters" },
+      maxLength: { value: 150, message: "Place must not exceed 150 characters" },
+      validate: (value) => {
+        if (value && value.trim().length < 2) {
+          return "Place cannot be only whitespace"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("place")
+      }
+    }
+  })()
+
+  const dateRegister = (() => {
+    const { onBlur, ...rest } = register("date", {
+      required: "Date is required",
+      validate: (value) => {
+        if (value && new Date(value) > new Date()) {
+          return "Date cannot be in the future"
+        }
+        if (value && new Date(value).getFullYear() < 1900) {
+          return "Date must be after 1900"
+        }
+        return true
+      }
+    })
+    return {
+      ...rest,
+      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+        onBlur(e)
+        onFieldChange("date")
+      }
+    }
+  })()
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Step 1: Upload */}
@@ -109,7 +187,7 @@ export function ExtensionActivityForm({
             // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
           allowedFileTypes={["pdf", "jpg", "jpeg", "png", "bmp"]}
-          maxFileSize={10 * 1024 * 1024} // 10MB
+          maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}
           onClearFields={onClearFields}
@@ -150,18 +228,7 @@ export function ExtensionActivityForm({
               placeholder="Enter name of activity"
               maxLength={150}
               className={cn(isAutoFilled("name_of_activity") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("name_of_activity")}
-              {...register("name_of_activity", {
-                required: "Name of Activity is required",
-                minLength: { value: 2, message: "Name must be at least 2 characters" },
-                maxLength: { value: 150, message: "Name must not exceed 150 characters" },
-                validate: (value) => {
-                  if (value && value.trim().length < 2) {
-                    return "Name cannot be only whitespace"
-                  }
-                  return true
-                }
-              })}
+              {...nameOfActivityRegister}
             />
             {errors.name_of_activity && <p className="text-sm text-red-600 mt-1">{errors.name_of_activity.message?.toString()}</p>}
           </div>
@@ -173,18 +240,7 @@ export function ExtensionActivityForm({
               placeholder="Enter nature of activity"
               maxLength={100}
               className={cn(isAutoFilled("names") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("names")}
-              {...register("names", {
-                required: "Nature of Activity is required",
-                minLength: { value: 2, message: "Nature must be at least 2 characters" },
-                maxLength: { value: 100, message: "Nature must not exceed 100 characters" },
-                validate: (value) => {
-                  if (value && value.trim().length < 2) {
-                    return "Nature cannot be only whitespace"
-                  }
-                  return true
-                }
-              })}
+              {...namesRegister}
             />
             {errors.names && <p className="text-sm text-red-600 mt-1">{errors.names.message?.toString()}</p>}
           </div>
@@ -250,18 +306,7 @@ export function ExtensionActivityForm({
               placeholder="Enter place"
               maxLength={150}
               className={cn(isAutoFilled("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("place")}
-              {...register("place", {
-                required: "Place is required",
-                minLength: { value: 2, message: "Place must be at least 2 characters" },
-                maxLength: { value: 150, message: "Place must not exceed 150 characters" },
-                validate: (value) => {
-                  if (value && value.trim().length < 2) {
-                    return "Place cannot be only whitespace"
-                  }
-                  return true
-                }
-              })}
+              {...placeRegister}
             />
             {errors.place && <p className="text-sm text-red-600 mt-1">{errors.place.message?.toString()}</p>}
           </div>
@@ -273,19 +318,7 @@ export function ExtensionActivityForm({
               type="date"
               max={new Date().toISOString().split('T')[0]}
               className={cn(isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800")}
-              onBlur={() => onFieldChange("date")}
-              {...register("date", {
-                required: "Date is required",
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
-                    return "Date cannot be in the future"
-                  }
-                  if (value && new Date(value).getFullYear() < 1900) {
-                    return "Date must be after 1900"
-                  }
-                  return true
-                }
-              })}
+              {...dateRegister}
             />
             {errors.date && <p className="text-sm text-red-600 mt-1">{errors.date.message?.toString()}</p>}
           </div>
