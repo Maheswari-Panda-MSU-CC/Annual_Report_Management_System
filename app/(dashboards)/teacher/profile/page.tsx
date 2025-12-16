@@ -16,37 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText, Eye } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { DocumentViewer } from "@/components/document-viewer"
-
-// FileUpload Component
-interface FileUploadProps {
-  onFileSelect: (files: FileList | null) => void
-  acceptedTypes?: string
-  multiple?: boolean
-}
-
-function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png,.bmp", multiple = false }: FileUploadProps) {
-  return (
-    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
-      <Upload className="mx-auto h-8 w-8 text-gray-400" />
-      <div className="mt-2">
-        <label htmlFor="file-upload" className="cursor-pointer">
-          <span className="mt-1 block text-xs font-medium text-gray-900">Upload file or drag and drop</span>
-          <span className="mt-1 block text-[10px] text-gray-500">PDF, JPG, JPEG, PNG, BMP up to 10MB</span>
-        </label>
-        <input
-          id="file-upload"
-          name="file-upload"
-          type="file"
-          className="sr-only"
-          accept={acceptedTypes}
-          multiple={multiple}
-          onChange={(e) => onFileSelect(e.target.files)}
-        />
-      </div>
-    </div>
-  )
-}
+import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { TeacherInfo, ExperienceEntry, PostDocEntry, EducationEntry, TeacherData, Faculty, Department, Designation, FacultyOption, DepartmentOption, DesignationOption, DegreeTypeOption } from "@/types/interfaces"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
@@ -198,7 +168,9 @@ export default function ProfilePage() {
   const [experienceEditingIds, setExperienceEditingIds] = useState<Set<number>>(new Set());
   const [postDocEditingIds, setPostDocEditingIds] = useState<Set<number>>(new Set());
   const [educationEditingIds, setEducationEditingIds] = useState<Set<number>>(new Set());
-  const [selectedFiles, setSelectedFiles] = useState<{ type: 'phd' | 'education', index: number, files: FileList | null } | null>(null);
+  // Document upload state for each entry
+  const [phdDocumentUrls, setPhdDocumentUrls] = useState<Record<number, string>>({});
+  const [educationDocumentUrls, setEducationDocumentUrls] = useState<Record<number, string>>({});
 
 
   const { facultyOptions, departmentOptions, degreeTypeOptions, permanentDesignationOptions, temporaryDesignationOptions, fetchFaculties, fetchDepartments, fetchDegreeTypes, fetchParmanentDesignations, fetchTemporaryDesignations } = useDropDowns()
@@ -995,17 +967,12 @@ export default function ProfilePage() {
     }
   }
 
-  // Handle file selection for document upload
-  const handleFileSelect = (files: FileList | null, type: 'phd' | 'education', index: number) => {
-    setSelectedFiles({ type, index, files })
-  }
-
   // Handle document upload for PhD Research
-  const handlePhdDocumentUpload = async (index: number, id: number) => {
-    if (!selectedFiles || selectedFiles.type !== 'phd' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0) {
+  const handlePhdDocumentUpload = async (index: number, id: number, documentUrl: string) => {
+    if (!documentUrl) {
       toast({
         title: "Error",
-        description: "Please select a file first.",
+        description: "Please upload a document first.",
         variant: "destructive",
       })
       return
@@ -1018,8 +985,24 @@ export default function ProfilePage() {
         return
       }
 
-      // For now, using a placeholder URL - in production, upload to S3 and get the URL
-      const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+      // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
+      const fileName = documentUrl.split('/').pop() || 'document.pdf'
+      
+      // Upload to S3 and get the URL
+      const uploadRes = await fetch('/api/shared/s3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName }),
+      })
+
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to upload document to S3')
+      }
+
+      const uploadData = await uploadRes.json()
+      const s3Url = uploadData.url
+
       const entry = postDocForm.getValues(`researches.${index}`)
       
       const res = await fetch('/api/teacher/profile/phd-research', {
@@ -1027,16 +1010,16 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           teacherId, 
-          research: { ...entry, doc: dummyUrl } 
+          research: { ...entry, doc: s3Url } 
         }),
       })
 
       if (!res.ok) {
-        throw new Error('Failed to upload document')
+        throw new Error('Failed to save document')
       }
 
       await invalidateProfile()
-      setSelectedFiles(null)
+      setPhdDocumentUrls(prev => ({ ...prev, [id]: s3Url }))
       toast({ 
         title: "Success", 
         description: "Document uploaded successfully." 
@@ -1048,11 +1031,11 @@ export default function ProfilePage() {
   }
 
   // Handle document upload for Education
-  const handleEducationDocumentUpload = async (index: number, id: number) => {
-    if (!selectedFiles || selectedFiles.type !== 'education' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0) {
+  const handleEducationDocumentUpload = async (index: number, id: number, documentUrl: string) => {
+    if (!documentUrl) {
       toast({
         title: "Error",
-        description: "Please select a file first.",
+        description: "Please upload a document first.",
         variant: "destructive",
       })
       return
@@ -1065,8 +1048,24 @@ export default function ProfilePage() {
         return
       }
 
-      // For now, using a placeholder URL - in production, upload to S3 and get the URL
-      const dummyUrl = "http://localhost:3000/assets/demo_document.pdf"
+      // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
+      const fileName = documentUrl.split('/').pop() || 'document.pdf'
+      
+      // Upload to S3 and get the URL
+      const uploadRes = await fetch('/api/shared/s3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName }),
+      })
+
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to upload document to S3')
+      }
+
+      const uploadData = await uploadRes.json()
+      const s3Url = uploadData.url
+
       const entry = educationForm.getValues(`educations.${index}`)
       
       const res = await fetch('/api/teacher/profile/graduation', {
@@ -1074,16 +1073,16 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           teacherId, 
-          education: { ...entry, Image: dummyUrl } 
+          education: { ...entry, Image: s3Url } 
         }),
       })
 
       if (!res.ok) {
-        throw new Error('Failed to upload document')
+        throw new Error('Failed to save document')
       }
 
       await invalidateProfile()
-      setSelectedFiles(null)
+      setEducationDocumentUrls(prev => ({ ...prev, [id]: s3Url }))
       toast({ 
         title: "Success", 
         description: "Document uploaded successfully." 
@@ -2657,47 +2656,49 @@ export default function ProfilePage() {
                         />
                       </TableCell>
                       <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
-                        {entry.doc ? (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <Eye className="h-4 w-4" />
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.doc ? "View/Update Document" : "Upload Document"}>
+                              {entry.doc ? <Eye className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <DialogHeader>
+                              <DialogTitle>{entry.doc ? "View/Update Supporting Document" : "Upload Supporting Document"}</DialogTitle>
+                            </DialogHeader>
+                            <DocumentUpload
+                              documentUrl={phdDocumentUrls[field.Id] || entry.doc}
+                              onChange={(url) => {
+                                if (url) {
+                                  setPhdDocumentUrls(prev => ({ ...prev, [field.Id]: url }))
+                                }
+                              }}
+                              onClear={() => {
+                                setPhdDocumentUrls(prev => {
+                                  const newUrls = { ...prev }
+                                  delete newUrls[field.Id]
+                                  return newUrls
+                                })
+                              }}
+                              hideExtractButton={true}
+                              isEditMode={!!entry.doc}
+                            />
+                            <div className="flex justify-end gap-2 mt-4">
+                              <Button 
+                                variant="default" 
+                                onClick={() => {
+                                  const currentUrl = phdDocumentUrls[field.Id] || entry.doc
+                                  if (currentUrl) {
+                                    handlePhdDocumentUpload(index, field.Id, currentUrl)
+                                  }
+                                }}
+                                disabled={!phdDocumentUrls[field.Id] && !entry.doc}
+                              >
+                                Save Document
                               </Button>
-                            </DialogTrigger>
-                            <DialogContent className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden" style={{ display: "flex", flexDirection: "column" }}>
-                              <DialogHeader className="p-4 border-b">
-                                <DialogTitle>View Supporting Document</DialogTitle>
-                              </DialogHeader>
-                              <div className="flex-1 overflow-y-auto p-4">
-                                <DocumentViewer
-                                  documentUrl={entry.doc}
-                                  documentName={`Post-Doc Document - ${entry.Institute || 'Document'}`}
-                                  documentType={(entry.doc || "").split('.').pop()?.toLowerCase() || 'pdf'}
-                                />
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Upload Document">
-                                <Upload className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Upload Supporting Document</DialogTitle>
-                              </DialogHeader>
-                              <FileUpload onFileSelect={(files) => handleFileSelect(files, 'phd', index)} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
-                              <div className="flex justify-end gap-2 mt-4">
-                                <Button variant="outline" onClick={() => setSelectedFiles(null)}>Cancel</Button>
-                                <Button onClick={() => handlePhdDocumentUpload(index, field.Id)} disabled={!selectedFiles || selectedFiles.type !== 'phd' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0}>
-                                  Upload File
-                                </Button>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        )}
+                            </div>
+                          </DialogContent>
+                        </Dialog>
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
@@ -3033,50 +3034,52 @@ export default function ProfilePage() {
                         />
                       </TableCell>
                       <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
-                        {entry.Image ? (
+                        {entry.Image || rowEditing ? (
                           <Dialog>
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                <Eye className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.Image ? "View/Update Document" : "Upload Document"}>
+                                {entry.Image ? <Eye className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="w-[90vw] max-w-4xl h-[80vh] p-0 overflow-hidden" style={{ display: "flex", flexDirection: "column" }}>
-                              <DialogHeader className="p-4 border-b">
-                                <DialogTitle>View Document</DialogTitle>
+                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>{entry.Image ? "View/Update Document" : "Upload Document"}</DialogTitle>
                               </DialogHeader>
-                              <div className="flex-1 overflow-y-auto p-4">
-                                <DocumentViewer
-                                  documentUrl={entry.Image}
-                                  documentName={`Education Document - ${entry.university_name || 'Document'}`}
-                                  documentType={(entry.Image || "").split('.').pop()?.toLowerCase() || 'pdf'}
-                                />
+                              <DocumentUpload
+                                documentUrl={educationDocumentUrls[field.gid] || entry.Image || undefined}
+                                onChange={(url) => {
+                                  if (url) {
+                                    setEducationDocumentUrls(prev => ({ ...prev, [field.gid]: url }))
+                                  }
+                                }}
+                                onClear={() => {
+                                  setEducationDocumentUrls(prev => {
+                                    const newUrls = { ...prev }
+                                    delete newUrls[field.gid]
+                                    return newUrls
+                                  })
+                                }}
+                                hideExtractButton={true}
+                                isEditMode={!!entry.Image}
+                              />
+                              <div className="flex justify-end gap-2 mt-4">
+                                <Button 
+                                  variant="default" 
+                                  onClick={() => {
+                                    const currentUrl = educationDocumentUrls[field.gid] || entry.Image
+                                    if (currentUrl) {
+                                      handleEducationDocumentUpload(index, field.gid, currentUrl)
+                                    }
+                                  }}
+                                  disabled={!educationDocumentUrls[field.gid] && !entry.Image}
+                                >
+                                  Save Document
+                                </Button>
                               </div>
                             </DialogContent>
                           </Dialog>
                         ) : (
-                          rowEditing ? (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Upload Document">
-                                  <Upload className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Upload Document</DialogTitle>
-                                </DialogHeader>
-                                <FileUpload onFileSelect={(files) => handleFileSelect(files, 'education', index)} acceptedTypes=".pdf,.jpg,.jpeg,.png,.bmp" />
-                                <div className="flex justify-end gap-2 mt-4">
-                                  <Button variant="outline" onClick={() => setSelectedFiles(null)}>Cancel</Button>
-                                  <Button onClick={() => handleEducationDocumentUpload(index, field.gid)} disabled={!selectedFiles || selectedFiles.type !== 'education' || selectedFiles.index !== index || !selectedFiles.files || selectedFiles.files.length === 0}>
-                                    Upload File
-                                  </Button>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          ) : (
-                            <span className="text-xs text-gray-400">No document</span>
-                          )
+                          <span className="text-xs text-gray-400">No document</span>
                         )}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4 whitespace-nowrap">
