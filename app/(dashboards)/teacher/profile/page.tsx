@@ -171,6 +171,9 @@ export default function ProfilePage() {
   // Document upload state for each entry
   const [phdDocumentUrls, setPhdDocumentUrls] = useState<Record<number, string>>({});
   const [educationDocumentUrls, setEducationDocumentUrls] = useState<Record<number, string>>({});
+  // Dialog open state for document upload/view
+  const [phdDialogOpen, setPhdDialogOpen] = useState<Record<number, boolean>>({});
+  const [educationDialogOpen, setEducationDialogOpen] = useState<Record<number, boolean>>({});
 
 
   const { facultyOptions, departmentOptions, degreeTypeOptions, permanentDesignationOptions, temporaryDesignationOptions, fetchFaculties, fetchDepartments, fetchDegreeTypes, fetchParmanentDesignations, fetchTemporaryDesignations } = useDropDowns()
@@ -985,23 +988,40 @@ export default function ProfilePage() {
         return
       }
 
-      // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
-      const fileName = documentUrl.split('/').pop() || 'document.pdf'
-      
-      // Upload to S3 and get the URL
-      const uploadRes = await fetch('/api/shared/s3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName }),
-      })
+      // Check if it's a local file that needs to be uploaded to S3
+      const isLocalFile = documentUrl.startsWith('/uploaded-document/')
+      let s3Url = documentUrl // Default to existing URL (might already be S3 URL)
 
-      if (!uploadRes.ok) {
-        const errorData = await uploadRes.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to upload document to S3')
+      // Only upload to S3 if it's a local file
+      if (isLocalFile) {
+        // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
+        const fileName = documentUrl.split('/').pop() || 'document.pdf'
+        
+        // Upload to S3 and get the URL
+        const uploadRes = await fetch('/api/shared/s3', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName }),
+        })
+
+        if (!uploadRes.ok) {
+          const errorData = await uploadRes.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to upload document to S3')
+        }
+
+        const uploadData = await uploadRes.json()
+        s3Url = uploadData.url
+
+        // Delete local file after successful S3 upload
+        try {
+          await fetch('/api/shared/local-document-upload', {
+            method: 'DELETE',
+          })
+        } catch (deleteError) {
+          console.error('Error deleting local file:', deleteError)
+          // Don't fail the upload if deletion fails
+        }
       }
-
-      const uploadData = await uploadRes.json()
-      const s3Url = uploadData.url
 
       const entry = postDocForm.getValues(`researches.${index}`)
       
@@ -1019,7 +1039,13 @@ export default function ProfilePage() {
       }
 
       await invalidateProfile()
-      setPhdDocumentUrls(prev => ({ ...prev, [id]: s3Url }))
+      // Update state with S3 URL
+      setPhdDocumentUrls(prev => {
+        const newUrls = { ...prev, [id]: s3Url }
+        return newUrls
+      })
+      // Close the dialog after successful save
+      setPhdDialogOpen(prev => ({ ...prev, [id]: false }))
       toast({ 
         title: "Success", 
         description: "Document uploaded successfully." 
@@ -1048,23 +1074,40 @@ export default function ProfilePage() {
         return
       }
 
-      // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
-      const fileName = documentUrl.split('/').pop() || 'document.pdf'
-      
-      // Upload to S3 and get the URL
-      const uploadRes = await fetch('/api/shared/s3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName }),
-      })
+      // Check if it's a local file that needs to be uploaded to S3
+      const isLocalFile = documentUrl.startsWith('/uploaded-document/')
+      let s3Url = documentUrl // Default to existing URL (might already be S3 URL)
 
-      if (!uploadRes.ok) {
-        const errorData = await uploadRes.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to upload document to S3')
+      // Only upload to S3 if it's a local file
+      if (isLocalFile) {
+        // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
+        const fileName = documentUrl.split('/').pop() || 'document.pdf'
+        
+        // Upload to S3 and get the URL
+        const uploadRes = await fetch('/api/shared/s3', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileName }),
+        })
+
+        if (!uploadRes.ok) {
+          const errorData = await uploadRes.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to upload document to S3')
+        }
+
+        const uploadData = await uploadRes.json()
+        s3Url = uploadData.url
+
+        // Delete local file after successful S3 upload
+        try {
+          await fetch('/api/shared/local-document-upload', {
+            method: 'DELETE',
+          })
+        } catch (deleteError) {
+          console.error('Error deleting local file:', deleteError)
+          // Don't fail the upload if deletion fails
+        }
       }
-
-      const uploadData = await uploadRes.json()
-      const s3Url = uploadData.url
 
       const entry = educationForm.getValues(`educations.${index}`)
       
@@ -1082,7 +1125,13 @@ export default function ProfilePage() {
       }
 
       await invalidateProfile()
-      setEducationDocumentUrls(prev => ({ ...prev, [id]: s3Url }))
+      // Update state with S3 URL
+      setEducationDocumentUrls(prev => {
+        const newUrls = { ...prev, [id]: s3Url }
+        return newUrls
+      })
+      // Close the dialog after successful save
+      setEducationDialogOpen(prev => ({ ...prev, [id]: false }))
       toast({ 
         title: "Success", 
         description: "Document uploaded successfully." 
@@ -2656,46 +2705,58 @@ export default function ProfilePage() {
                         />
                       </TableCell>
                       <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
-                        <Dialog>
+                        <Dialog 
+                          open={phdDialogOpen[field.Id] || false}
+                          onOpenChange={(open) => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: open }))}
+                        >
                           <DialogTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.doc ? "View/Update Document" : "Upload Document"}>
-                              {entry.doc ? <Eye className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                              {entry.doc ? <FileText className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
                             </Button>
                           </DialogTrigger>
                           <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
                               <DialogTitle>{entry.doc ? "View/Update Supporting Document" : "Upload Supporting Document"}</DialogTitle>
                             </DialogHeader>
-                            <DocumentUpload
-                              documentUrl={phdDocumentUrls[field.Id] || entry.doc}
-                              onChange={(url) => {
-                                if (url) {
-                                  setPhdDocumentUrls(prev => ({ ...prev, [field.Id]: url }))
-                                }
-                              }}
-                              onClear={() => {
-                                setPhdDocumentUrls(prev => {
-                                  const newUrls = { ...prev }
-                                  delete newUrls[field.Id]
-                                  return newUrls
-                                })
-                              }}
-                              hideExtractButton={true}
-                              isEditMode={!!entry.doc}
-                            />
-                            <div className="flex justify-end gap-2 mt-4">
-                              <Button 
-                                variant="default" 
-                                onClick={() => {
-                                  const currentUrl = phdDocumentUrls[field.Id] || entry.doc
-                                  if (currentUrl) {
-                                    handlePhdDocumentUpload(index, field.Id, currentUrl)
+                            <div className="space-y-4">
+                              <DocumentUpload
+                                documentUrl={phdDocumentUrls[field.Id] || entry.doc}
+                                onChange={(url) => {
+                                  if (url) {
+                                    setPhdDocumentUrls(prev => ({ ...prev, [field.Id]: url }))
                                   }
                                 }}
-                                disabled={!phdDocumentUrls[field.Id] && !entry.doc}
-                              >
-                                Save Document
-                              </Button>
+                                onClear={() => {
+                                  setPhdDocumentUrls(prev => {
+                                    const newUrls = { ...prev }
+                                    delete newUrls[field.Id]
+                                    return newUrls
+                                  })
+                                }}
+                                hideExtractButton={true}
+                                isEditMode={!!entry.doc}
+                              />
+                              <div className="flex justify-end gap-2 pt-4 border-t">
+                                <Button 
+                                  variant="outline"
+                                  onClick={() => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: false }))}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  variant="default" 
+                                  className="cursor-pointer"
+                                  onClick={async () => {
+                                    const currentUrl = phdDocumentUrls[field.Id] || entry.doc
+                                    if (currentUrl) {
+                                      await handlePhdDocumentUpload(index, field.Id, currentUrl)
+                                    }
+                                  }}
+                                  disabled={!phdDocumentUrls[field.Id] && !entry.doc}
+                                >
+                                  Save Document
+                                </Button>
+                              </div>
                             </div>
                           </DialogContent>
                         </Dialog>
@@ -3035,46 +3096,58 @@ export default function ProfilePage() {
                       </TableCell>
                       <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
                         {entry.Image || rowEditing ? (
-                          <Dialog>
+                          <Dialog 
+                            open={educationDialogOpen[field.gid] || false}
+                            onOpenChange={(open) => setEducationDialogOpen(prev => ({ ...prev, [field.gid]: open }))}
+                          >
                             <DialogTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.Image ? "View/Update Document" : "Upload Document"}>
-                                {entry.Image ? <Eye className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                                {entry.Image ? <FileText className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
                               <DialogHeader>
                                 <DialogTitle>{entry.Image ? "View/Update Document" : "Upload Document"}</DialogTitle>
                               </DialogHeader>
-                              <DocumentUpload
-                                documentUrl={educationDocumentUrls[field.gid] || entry.Image || undefined}
-                                onChange={(url) => {
-                                  if (url) {
-                                    setEducationDocumentUrls(prev => ({ ...prev, [field.gid]: url }))
-                                  }
-                                }}
-                                onClear={() => {
-                                  setEducationDocumentUrls(prev => {
-                                    const newUrls = { ...prev }
-                                    delete newUrls[field.gid]
-                                    return newUrls
-                                  })
-                                }}
-                                hideExtractButton={true}
-                                isEditMode={!!entry.Image}
-                              />
-                              <div className="flex justify-end gap-2 mt-4">
-                                <Button 
-                                  variant="default" 
-                                  onClick={() => {
-                                    const currentUrl = educationDocumentUrls[field.gid] || entry.Image
-                                    if (currentUrl) {
-                                      handleEducationDocumentUpload(index, field.gid, currentUrl)
+                              <div className="space-y-4">
+                                <DocumentUpload
+                                  documentUrl={educationDocumentUrls[field.gid] || entry.Image || undefined}
+                                  onChange={(url) => {
+                                    if (url) {
+                                      setEducationDocumentUrls(prev => ({ ...prev, [field.gid]: url }))
                                     }
                                   }}
-                                  disabled={!educationDocumentUrls[field.gid] && !entry.Image}
-                                >
-                                  Save Document
-                                </Button>
+                                  onClear={() => {
+                                    setEducationDocumentUrls(prev => {
+                                      const newUrls = { ...prev }
+                                      delete newUrls[field.gid]
+                                      return newUrls
+                                    })
+                                  }}
+                                  hideExtractButton={true}
+                                  isEditMode={!!entry.Image}
+                                />
+                                <div className="flex justify-end gap-2 pt-4 border-t">
+                                  <Button 
+                                    variant="outline"
+                                    onClick={() => setEducationDialogOpen(prev => ({ ...prev, [field.gid]: false }))}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    variant="default" 
+                                    className="cursor-pointer"
+                                    onClick={async () => {
+                                      const currentUrl = educationDocumentUrls[field.gid] || entry.Image
+                                      if (currentUrl) {
+                                        await handleEducationDocumentUpload(index, field.gid, currentUrl)
+                                      }
+                                    }}
+                                    disabled={!educationDocumentUrls[field.gid] && !entry.Image}
+                                  >
+                                    Save Document
+                                  </Button>
+                                </div>
                               </div>
                             </DialogContent>
                           </Dialog>
