@@ -643,8 +643,8 @@ export default function AddEventPage() {
   }, [documentData, searchParams])
 
 
-  // Helper function to upload document to S3
-  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+  // Helper function to upload document to S3 (wrapper for single-document uploads)
+  const handleDocumentUpload = async (documentUrl: string | undefined): Promise<string> => {
     if (!documentUrl) {
       return "http://localhost:3000/assets/demo_document.pdf"
     }
@@ -657,24 +657,16 @@ export default function AddEventPage() {
           throw new Error("Invalid file name")
         }
 
-        const s3Response = await fetch("/api/shared/s3", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName }),
-        })
-
-        if (!s3Response.ok) {
-          const s3Error = await s3Response.json()
-          throw new Error(s3Error.error || "Failed to upload document to S3")
-        }
-
-        const s3Data = await s3Response.json()
-        const s3Url = s3Data.url
-
-        // Delete local file after successful S3 upload
-        await fetch("/api/shared/local-document-upload", {
-          method: "DELETE",
-        })
+        const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+        
+        const tempRecordId = Date.now()
+        
+        const s3Url = await uploadDocumentToS3(
+          documentUrl,
+          user?.role_id||0,
+          tempRecordId,
+          "talks"
+        )
 
         return s3Url
       } catch (docError: any) {
@@ -705,7 +697,7 @@ export default function AddEventPage() {
 
     try {
       // Handle document upload to S3
-      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+      const docUrl = await handleDocumentUpload(data.supporting_doc)
 
       const payload = {
         name: data.name,
@@ -749,7 +741,7 @@ export default function AddEventPage() {
 
     try {
       // Handle document upload to S3
-      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+      const docUrl = await handleDocumentUpload(data.supporting_doc)
 
       const payload = {
         name: data.name,
@@ -791,7 +783,7 @@ export default function AddEventPage() {
 
     try {
       // Handle document upload to S3
-      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+      const docUrl = await handleDocumentUpload(data.supporting_doc)
 
       const payload = {
         name: data.name,
@@ -833,7 +825,7 @@ export default function AddEventPage() {
 
     try {
       // Handle document upload to S3
-      const docUrl = await uploadDocumentToS3(data.supporting_doc)
+      const docUrl = await handleDocumentUpload(data.supporting_doc)
 
       const payload = {
         name: data.name,
@@ -878,7 +870,7 @@ export default function AddEventPage() {
 
     try {
       // Handle document upload to S3 (talks uses Image field)
-      const docUrl = await uploadDocumentToS3(data.supporting_doc || data.Image)
+      const docUrl = await handleDocumentUpload(data.supporting_doc || data.Image)
 
       const payload = {
         name: data.name,

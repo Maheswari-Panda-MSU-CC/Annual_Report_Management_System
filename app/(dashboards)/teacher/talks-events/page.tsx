@@ -151,7 +151,6 @@ export default function TalksEventsPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isExtracting, setIsExtracting] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
@@ -378,9 +377,6 @@ export default function TalksEventsPage() {
     window.history.pushState({}, "", url.toString())
   }
 
-  const handleFileSelect = useCallback((files: FileList | null) => {
-    setSelectedFiles(files)
-  }, [])
 
   const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string) => {
     setDeleteConfirm({ sectionId, itemId, itemName })
@@ -795,8 +791,8 @@ export default function TalksEventsPage() {
     setIsEditDialogOpen(open)
   }
 
-  // Helper function to upload document to S3
-  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+  // Helper function to upload document to S3 (wrapper for single-document uploads)
+  const handleDocumentUpload = async (documentUrl: string | undefined): Promise<string> => {
     if (!documentUrl) {
       return "http://localhost:3000/assets/demo_document.pdf"
     }
@@ -804,29 +800,16 @@ export default function TalksEventsPage() {
     // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
     if (documentUrl.startsWith("/uploaded-document/")) {
       try {
-        const fileName = documentUrl.split("/").pop()
-        if (!fileName) {
-          throw new Error("Invalid file name")
-        }
-
-        const s3Response = await fetch("/api/shared/s3", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName }),
-        })
-
-        if (!s3Response.ok) {
-          const s3Error = await s3Response.json()
-          throw new Error(s3Error.error || "Failed to upload document to S3")
-        }
-
-        const s3Data = await s3Response.json()
-        const s3Url = s3Data.url
-
-        // Delete local file after successful S3 upload
-        await fetch("/api/shared/local-document-upload", {
-          method: "DELETE",
-        })
+        const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+        
+        const tempRecordId = Date.now()
+        
+        const s3Url = await uploadDocumentToS3(
+          documentUrl,
+          user?.role_id||0,
+          tempRecordId,
+          "talks"
+        )
 
         return s3Url
       } catch (docError: any) {
@@ -858,8 +841,8 @@ export default function TalksEventsPage() {
       // Prepare data and get appropriate mutation based on section
       if (editingItem.sectionId === "refresher") {
         updateMutation = refresherMutations.updateMutation
-        // Handle document upload to S3
-        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
+        // Handle document upload to S3 using the wrapper function
+        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           refresher_type: formValues.refresher_type,
@@ -873,7 +856,7 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "academic-programs") {
         updateMutation = academicProgramMutations.updateMutation
-        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
+        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           programme: formValues.programme,
@@ -885,7 +868,7 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "academic-bodies") {
         updateMutation = academicBodiesMutations.updateMutation
-        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
+        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           acad_body: formValues.acad_body,
@@ -897,7 +880,7 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "committees") {
         updateMutation = committeeMutations.updateMutation
-        const docUrl = await uploadDocumentToS3(formValues.supporting_doc)
+        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           committee_name: formValues.committee_name,
@@ -912,7 +895,7 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "talks") {
         updateMutation = talksMutations.updateMutation
-        const docUrl = await uploadDocumentToS3(formValues.Image || formValues.supporting_doc)
+        const docUrl = await handleDocumentUpload(formValues.Image || formValues.supporting_doc)
         updateData = {
           name: formValues.name,
           programme: formValues.programme,
@@ -966,29 +949,16 @@ export default function TalksEventsPage() {
       const localUrl = localData.url
 
       // Step 2: Upload to S3
-      const fileName = localUrl.split("/").pop()
-      if (!fileName) {
-        throw new Error("Invalid file name")
-      }
-
-      const s3Response = await fetch("/api/shared/s3", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName }),
-      })
-
-      if (!s3Response.ok) {
-        const s3Error = await s3Response.json()
-        throw new Error(s3Error.error || "Failed to upload document to S3")
-      }
-
-      const s3Data = await s3Response.json()
-      const s3Url = s3Data.url
-
-      // Step 3: Delete local file after successful S3 upload
-      await fetch("/api/shared/local-document-upload", {
-        method: "DELETE",
-      })
+      const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+      
+      const tempRecordId = Date.now()
+      
+      const s3Url = await uploadDocumentToS3(
+        localUrl,
+        user?.role_id||0,
+        tempRecordId,
+        "talks"
+      )
 
       return s3Url
     } catch (error: any) {
@@ -1164,8 +1134,6 @@ export default function TalksEventsPage() {
     section: any,
     handleEdit: (sectionId: string, item: any) => void,
     handleDelete: (sectionId: string, itemId: number, itemName: string) => void,
-    handleFileSelect: (files: FileList | null) => void,
-    handleFileUpload: (sectionId: string, itemId: number) => Promise<void>
   ): ColumnDef<any>[] => {
     const columns: ColumnDef<any>[] = []
 
@@ -1328,7 +1296,7 @@ export default function TalksEventsPage() {
         const item = row.original
         return (
           <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4" onClick={(e) => e.stopPropagation()}>
-            {item.supportingDocument && item.supportingDocument.length > 0 ? (
+            {item.supportingDocument && item.supportingDocument.length > 0 && (
               <>
                 <Dialog>
                   <DialogTrigger asChild>
@@ -1357,27 +1325,6 @@ export default function TalksEventsPage() {
                   file
                 </Badge>
               </>
-            ) : (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm" title="Upload Document" className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3" onClick={(e) => e.stopPropagation()}>
-                    <Upload className="h-3 w-3 sm:h-4 sm:w-4" />
-                    <span className="hidden sm:inline ml-1">Upload</span>
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-[95vw] sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Upload Supporting Documents</DialogTitle>
-                  </DialogHeader>
-                  <FileUpload onFileSelect={handleFileSelect} />
-                  <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4">
-                    <Button variant="outline" className="w-full sm:w-auto">Cancel</Button>
-                    <Button onClick={() => handleFileUpload(section.id, item.id)} className="w-full sm:w-auto">
-                      Upload Files
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
             )}
           </div>
         )
@@ -1423,8 +1370,6 @@ export default function TalksEventsPage() {
         section,
         handleEdit,
         handleDeleteClick,
-        handleFileSelect,
-        handleFileUpload
       )
     })
     return columnsMap
@@ -1438,8 +1383,6 @@ export default function TalksEventsPage() {
     talksParticipantTypeOptions,
     handleEdit,
     handleDeleteClick,
-    handleFileSelect,
-    handleFileUpload
   ])
   // Clear fields handler for DocumentUpload
   const handleClearFields = () => {
@@ -1465,10 +1408,6 @@ export default function TalksEventsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={() => {}}
             isEdit={isEdit}
             editData={currentData}
             refresherTypeOptions={refresherTypeOptions}
@@ -1483,10 +1422,7 @@ export default function TalksEventsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={() => {}}
+           
             isEdit={isEdit}
             editData={currentData}
             academicProgrammeOptions={academicProgrammeOptions}
@@ -1503,10 +1439,7 @@ export default function TalksEventsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={() => {}}
+           
             isEdit={isEdit}
             editData={currentData}
             reportYearsOptions={reportYearsOptions}
@@ -1521,10 +1454,7 @@ export default function TalksEventsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={() => {}}
+           
             isEdit={isEdit}
             editData={currentData}
             committeeLevelOptions={committeeLevelOptions}
@@ -1540,10 +1470,7 @@ export default function TalksEventsPage() {
             form={form}
             onSubmit={handleSaveEdit}
             isSubmitting={isSubmitting}
-            isExtracting={isExtracting}
-            selectedFiles={selectedFiles}
-            handleFileSelect={handleFileSelect}
-            handleExtractInfo={() => {}}
+          
             isEdit={isEdit}
             editData={currentData}
             talksProgrammeTypeOptions={talksProgrammeTypeOptions}
@@ -1556,19 +1483,7 @@ export default function TalksEventsPage() {
       default:
         return (
           <div className="grid gap-4">
-            <div>
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                placeholder="Enter name"
-                value={formData.name || ""}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label>Supporting Document (PDF or Image Only)</Label>
-              <FileUpload onFileSelect={handleFileSelect} acceptedTypes=".pdf,.jpg,.jpeg,.png" />
-            </div>
+           default div content
           </div>
         )
     }

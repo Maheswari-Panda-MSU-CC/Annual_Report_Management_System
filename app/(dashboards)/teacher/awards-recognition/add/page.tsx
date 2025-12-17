@@ -277,7 +277,7 @@ export default function AddAwardsPage() {
 
 
   // Helper function to upload document to S3 (matches research module pattern)
-  const uploadDocumentToS3 = async (documentUrl: string | undefined): Promise<string> => {
+  const handleDocumentUpload = async (documentUrl: string | undefined): Promise<string> => {
     if (!documentUrl) {
       return "http://localhost:3000/assets/demo_document.pdf"
     }
@@ -291,29 +291,16 @@ export default function AddAwardsPage() {
         throw new Error("Invalid file name")
       }
 
-      // Upload to S3 using the file in /public/uploaded-document/
-      const s3Response = await fetch("/api/shared/s3", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fileName: fileName,
-        }),
-      })
-
-      if (!s3Response.ok) {
-        const s3Error = await s3Response.json()
-        throw new Error(s3Error.error || "Failed to upload document to S3")
-      }
-
-      const s3Data = await s3Response.json()
-      const s3Url = s3Data.url // Use S3 URL for database storage
-
-      // Delete local file after successful S3 upload
-      await fetch("/api/shared/local-document-upload", {
-        method: "DELETE",
-      })
+      const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+      
+      const tempRecordId = Date.now()
+      
+      const s3Url = await uploadDocumentToS3(
+        documentUrl,
+        user?.role_id || 0,
+        tempRecordId,
+        "award"
+      )
 
       return s3Url
     }
@@ -339,7 +326,7 @@ export default function AddAwardsPage() {
       
       if (docUrl && docUrl.startsWith("/uploaded-document/")) {
         try {
-          docUrl = await uploadDocumentToS3(docUrl)
+          docUrl = await handleDocumentUpload(docUrl)
         } catch (docError: any) {
           console.error("Document upload error:", docError)
           toast({
@@ -390,7 +377,7 @@ export default function AddAwardsPage() {
       
       if (docUrl && docUrl.startsWith("/uploaded-document/")) {
         try {
-          docUrl = await uploadDocumentToS3(docUrl)
+          docUrl = await handleDocumentUpload(docUrl)
         } catch (docError: any) {
           console.error("Document upload error:", docError)
           toast({
@@ -443,7 +430,7 @@ export default function AddAwardsPage() {
       
       if (docUrl && docUrl.startsWith("/uploaded-document/")) {
         try {
-          docUrl = await uploadDocumentToS3(docUrl)
+          docUrl = await handleDocumentUpload(docUrl)
         } catch (docError: any) {
           console.error("Document upload error:", docError)
           toast({

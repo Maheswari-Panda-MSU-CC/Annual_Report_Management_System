@@ -389,11 +389,12 @@
 
 "use client"
 
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Download, ExternalLink, FileText, ImageIcon, File } from "lucide-react"
-import { getDocumentDisplayUrl } from "@/lib/document-url-utils"
+import { Download, ExternalLink, FileText, ImageIcon, File, Loader2 } from "lucide-react"
+import { getDocumentDisplayUrlAsync, isS3VirtualPath } from "@/lib/document-url-utils"
 
 interface DocumentViewerProps {
   documentUrl: string
@@ -408,8 +409,41 @@ export function DocumentViewer({
   documentType = "pdf",
   className = "",
 }: DocumentViewerProps) {
-  // Convert local document URLs to API routes for production compatibility
-  const displayUrl = getDocumentDisplayUrl(documentUrl) || documentUrl
+  const [displayUrl, setDisplayUrl] = useState<string | undefined>(undefined)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  
+  useEffect(() => {
+    const loadUrl = async () => {
+      setLoading(true)
+      setError(null)
+      
+      try {
+        const url = await getDocumentDisplayUrlAsync(documentUrl)
+        
+        if (!url) {
+          setError('Unable to load document')
+          setLoading(false)
+          return
+        }
+        
+        setDisplayUrl(url)
+        setLoading(false)
+      } catch (err: any) {
+        console.error('Error loading document URL:', err)
+        setError(err.message || 'Failed to load document')
+        setLoading(false)
+      }
+    }
+    
+    loadUrl()
+    
+    // Refresh presigned URLs every 50 minutes (they expire after 1 hour)
+    if (isS3VirtualPath(documentUrl)) {
+      const refreshInterval = setInterval(loadUrl, 50 * 60 * 1000)
+      return () => clearInterval(refreshInterval)
+    }
+  }, [documentUrl])
 
   const getFileIcon = () => {
     switch (documentType.toLowerCase()) {
@@ -426,6 +460,7 @@ export function DocumentViewer({
   }
 
   const handleDownload = () => {
+    if (!displayUrl) return
     const link = document.createElement("a")
     link.href = displayUrl
     link.download = documentName
@@ -437,7 +472,34 @@ export function DocumentViewer({
   }
 
   const handleViewInNewTab = () => {
+    if (!displayUrl) return
     window.open(displayUrl, "_blank", "noopener,noreferrer")
+  }
+  
+  if (loading) {
+    return (
+      <Card className={className}>
+        <CardContent className="flex items-center justify-center h-[500px]">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-600" />
+            <p className="text-gray-600">Loading document...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+  
+  if (error || !displayUrl) {
+    return (
+      <Card className={className}>
+        <CardContent className="flex items-center justify-center h-[500px]">
+          <div className="text-center">
+            <FileText className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+            <p className="text-gray-600 mb-4">{error || 'Document not available'}</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
@@ -492,6 +554,9 @@ export function DocumentViewer({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         <p><strong>File:</strong> {documentName}</p>
         <p><strong>Type:</strong> {documentType.toUpperCase()}</p>
+        {isS3VirtualPath(documentUrl) && (
+          <p><strong>Storage:</strong> S3</p>
+        )}
       </div>
     </div>
   </CardContent>

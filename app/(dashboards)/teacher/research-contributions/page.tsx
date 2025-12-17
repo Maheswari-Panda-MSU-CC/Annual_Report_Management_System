@@ -1004,29 +1004,17 @@ export default function ResearchContributionsPage() {
           const fileName = documentUrl.split("/").pop()
           
           if (fileName) {
-            // Upload to S3 using the file in /public/uploaded-document/
-            const s3Response = await fetch("/api/shared/s3", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: fileName,
-              }),
-            })
-
-            if (!s3Response.ok) {
-              const s3Error = await s3Response.json()
-              throw new Error(s3Error.error || "Failed to upload document to S3")
-            }
-
-            const s3Data = await s3Response.json()
-            docUrl = s3Data.url // Use S3 URL for database storage
-
-            // Delete local file after successful S3 upload
-            await fetch("/api/shared/local-document-upload", {
-              method: "DELETE",
-            })
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            // For inline edits, use existing item ID if available
+            const recordId = editingItem?.id || Date.now()
+            
+            docUrl = await uploadDocumentToS3(
+              documentUrl,
+              user?.role_id||0,
+              recordId,
+              editingItem?.category || "research_contributions"
+            )
           }
         } catch (docError: any) {
           console.error("Document upload error:", docError)

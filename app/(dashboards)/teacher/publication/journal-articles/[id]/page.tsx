@@ -129,12 +129,8 @@ export default function JournalArticleDetailPage() {
     )
   }
 
-  const documentUrl = article.Image 
-    ? (article.Image.startsWith('http') 
-        ? article.Image 
-        : `/api/s3/download?path=${encodeURIComponent(article.Image)}&userId=${user?.role_id || 0}`)
-    : null
-
+  const documentUrl = article.Image || null
+  
   return (
     <div className="flex h-full bg-gray-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />

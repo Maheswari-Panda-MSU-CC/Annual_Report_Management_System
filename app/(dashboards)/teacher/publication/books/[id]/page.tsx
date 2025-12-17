@@ -88,22 +88,6 @@ export default function BookDetailPage() {
     }
   }
 
-  const handleDownloadDocument = () => {
-    if (book?.Image) {
-      const documentUrl = book.Image.startsWith('http') 
-        ? book.Image 
-        : `/api/s3/download?path=${encodeURIComponent(book.Image)}&userId=${user?.role_id || 0}`
-      
-      const link = document.createElement("a")
-      link.href = documentUrl
-      link.download = `${book.title}.pdf`
-      link.target = "_blank"
-      link.rel = "noopener noreferrer"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    }
-  }
 
   if (loading) {
     return (
@@ -153,11 +137,7 @@ export default function BookDetailPage() {
   const bookTypeName = bookTypeOptions.find((t) => t.id === book.book_type)?.name || "Unknown"
   const authorTypeName = journalAuthorTypeOptions.find((a) => a.id === book.author_type)?.name || "Unknown"
 
-  const documentUrl = book.Image 
-    ? (book.Image.startsWith('http') 
-        ? book.Image 
-        : `/api/s3/download?path=${encodeURIComponent(book.Image)}&userId=${user?.role_id || 0}`)
-    : null
+  const documentUrl = book.Image || null
 
   return (
     <div className="flex h-full bg-gray-50">

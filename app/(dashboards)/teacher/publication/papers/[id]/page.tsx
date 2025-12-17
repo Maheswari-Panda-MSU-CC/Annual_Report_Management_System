@@ -113,11 +113,7 @@ export default function PaperDetailPage() {
     )
   }
 
-  const documentUrl = paper.Image 
-    ? (paper.Image.startsWith('http') 
-        ? paper.Image 
-        : `/api/s3/download?path=${encodeURIComponent(paper.Image)}&userId=${user?.role_id || 0}`)
-    : null
+  const documentUrl = paper.Image || null
 
   return (
     <div className="flex h-full bg-gray-50">
