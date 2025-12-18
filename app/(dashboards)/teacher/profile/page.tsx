@@ -160,6 +160,7 @@ export default function ProfilePage() {
   const [isEditingPersonal, setIsEditingPersonal] = useState(false) // Only for personal details
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [pendingProfileImageFile, setPendingProfileImageFile] = useState<File | null>(null) // Store file for S3 upload on save
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [facultyData, setFacultyData] = useState<Faculty | null>(null);
   const [departmentData, setDepartmentData] = useState<Department | null>(null);
@@ -255,11 +256,48 @@ export default function ProfilePage() {
   
   // Ensure all hooks are called before any conditional logic or early returns
 
+  // Fetch profile image URL from API
+  const fetchProfileImageUrl = async (imagePath: string | null | undefined) => {
+    if (!imagePath) {
+      setProfileImage(null)
+      return
+    }
+
+    try {
+      const response = await fetch("/api/teacher/profile/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: imagePath }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.url) {
+          setProfileImage(data.url)
+        } else {
+          setProfileImage(null)
+        }
+      } else {
+        setProfileImage(null)
+      }
+    } catch (error) {
+      console.error("Error fetching profile image URL:", error)
+      setProfileImage(null)
+    }
+  }
+
   // Initialize forms when data is loaded
   useEffect(() => {
     if (profileData) {
       const data: TeacherData = profileData as any
       setTeacherInfo(data.teacherInfo)
+      
+      // Fetch profile image URL if ProfileImage exists
+      if (data.teacherInfo?.ProfileImage) {
+        fetchProfileImageUrl(data.teacherInfo.ProfileImage)
+      } else {
+        setProfileImage(null)
+      }
       
       // Initialize react-hook-form arrays
       const normalizedExperiences = (data.teacherExperience || []).map((exp: any) => ({
@@ -536,34 +574,88 @@ export default function ProfilePage() {
     const file = event.target.files?.[0]
     if (!file) return
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      alert("Please select a valid image file")
+    // Validate file type - only JPG/JPEG
+    if (file.type !== "image/jpeg" && file.type !== "image/jpg") {
+      toast({
+        title: "Invalid File Type",
+        description: "Only JPG or JPEG images are allowed",
+        variant: "destructive"
+      })
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Image size should be less than 5MB")
+    // Validate file size (max 1MB)
+    if (file.size > 1 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Image size must be less than 1MB",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!user?.email) {
+      toast({
+        title: "Error",
+        description: "User email not found. Please refresh the page.",
+        variant: "destructive"
+      })
       return
     }
 
     setIsUploadingImage(true)
 
     try {
-      // Create preview URL
-      const imageUrl = URL.createObjectURL(file)
-      setProfileImage(imageUrl)
+      // Create preview URL for immediate display
+      const previewUrl = URL.createObjectURL(file)
+      setProfileImage(previewUrl)
 
-      // To integrate with S3 later, use the helper below.
-      // await uploadProfileImageToS3(file)
+      // Store file for S3 upload on save button click
+      setPendingProfileImageFile(file)
 
-      console.log("Image uploaded:", file.name)
-    } catch (error) {
+      // Upload image to server temporarily (local storage, not S3 yet)
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("email", user.email) // Use actual email from auth
+      formData.append("uploadToS3", "false") // Don't upload to S3 yet
+
+      const uploadResponse = await fetch("/api/teacher/profile/image", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json()
+        throw new Error(errorData.error || "Failed to upload image")
+      }
+
+      const uploadResult = await uploadResponse.json()
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || "Upload failed")
+      }
+
+      toast({
+        title: "Image Selected",
+        description: "Image ready. Click 'Save Changes' to upload to S3 and update profile.",
+      })
+    } catch (error: any) {
       console.error("Error uploading image:", error)
-      alert("Failed to upload image. Please try again.")
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload image. Please try again.",
+        variant: "destructive"
+      })
+      // Reset preview on error
+      setProfileImage(null)
+      setPendingProfileImageFile(null)
     } finally {
       setIsUploadingImage(false)
+      // Reset file input
+      const fileInput = document.getElementById("profile-image-input") as HTMLInputElement
+      if (fileInput) {
+        fileInput.value = ""
+      }
     }
   }
 
@@ -572,27 +664,6 @@ export default function ProfilePage() {
     fileInput?.click()
   }
 
-  // Upload to S3 via backend helper (scaffold; not active by default)
-  const uploadProfileImageToS3 = async (file: File) => {
-    const form = new FormData();
-    form.append('file', file);
-    try {
-      const uploadRes = await fetch('/api/s3/upload', { method: 'POST', body: form });
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      const { url } = await uploadRes.json();
-      if (teacherInfo) {
-        const updated = { ...teacherInfo, ProfileImage: url };
-        setTeacherInfo(updated);
-        await fetch('/api/teacher/profile', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updated),
-        });
-      }
-    } catch (err) {
-      console.error('S3 upload failed', err);
-    }
-  }
 
   // const handleSavePersonal = () => {
   //   // Build ICT_Details string from selections
@@ -705,6 +776,60 @@ export default function ProfilePage() {
         ProfileImage: teacherInfo?.ProfileImage || null,
       } as TeacherInfo;
 
+      // If there's a pending profile image, upload it to S3 first
+      if (pendingProfileImageFile && user?.email) {
+        try {
+          const formData = new FormData()
+          formData.append("file", pendingProfileImageFile)
+          formData.append("email", user.email)
+          formData.append("uploadToS3", "true") // Upload to S3
+
+          const uploadResponse = await fetch("/api/teacher/profile/image", {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json()
+            throw new Error(errorData.error || "Failed to upload image to S3")
+          }
+
+          const uploadResult = await uploadResponse.json()
+
+          if (!uploadResult.success) {
+            throw new Error(uploadResult.error || "S3 upload failed")
+          }
+
+          // Update payload with S3 path
+          payload.ProfileImage = uploadResult.path
+
+          // Clear pending file
+          setPendingProfileImageFile(null)
+
+          // Fetch the full URL for the image
+          const urlResponse = await fetch("/api/teacher/profile/image", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: uploadResult.path }),
+          })
+
+          if (urlResponse.ok) {
+            const urlData = await urlResponse.json()
+            if (urlData.success && urlData.url) {
+              setProfileImage(urlData.url)
+            }
+          }
+        } catch (imageError: any) {
+          console.error("Error uploading profile image to S3:", imageError)
+          toast({
+            title: "Image Upload Warning",
+            description: imageError.message || "Failed to upload image to S3. Profile will be saved without image update.",
+            variant: "destructive"
+          })
+          // Continue with profile save even if image upload fails
+        }
+      }
+
       const response = await fetch("/api/teacher/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -736,6 +861,12 @@ export default function ProfilePage() {
         
         // Update local state
         setTeacherInfo(payload);
+        
+        // Clear pending image file if save was successful
+        if (pendingProfileImageFile) {
+          setPendingProfileImageFile(null)
+        }
+        
         toast({ 
           title: "Profile Updated", 
           description: result.message || "Your information has been saved successfully." 
@@ -773,26 +904,139 @@ export default function ProfilePage() {
         return
       }
 
-      // Validate only this row
-      const isValid = await experienceForm.trigger(`experiences.${index}`)
-      if (!isValid) {
+      // Validate all fields in this row individually to get specific error messages
+      const fieldsToValidate = [
+        `experiences.${index}.Employeer`,
+        `experiences.${index}.desig`,
+        `experiences.${index}.Start_Date`,
+        `experiences.${index}.End_Date`,
+        `experiences.${index}.Nature`,
+        `experiences.${index}.UG_PG`,
+      ]
+
+      const validationResults = await Promise.all(
+        fieldsToValidate.map(field => experienceForm.trigger(field as any))
+      )
+
+      // Check if all validations passed
+      const allValid = validationResults.every(result => result === true)
+
+      if (!allValid) {
         // Get specific field errors
-        const errors = experienceForm.formState.errors.experiences?.[index]
-        const errorMessages = Object.entries(errors || {}).map(([field, error]: [string, any]) => {
-          return `${field}: ${error?.message || 'Invalid value'}`
-        })
-        
+        const errors = experienceForm.formState.errors
+        const fieldErrors: string[] = []
+
+        const employerError = errors.experiences?.[index]?.Employeer?.message
+        if (employerError) fieldErrors.push(`Employer: ${employerError}`)
+
+        const designationError = errors.experiences?.[index]?.desig?.message
+        if (designationError) fieldErrors.push(`Designation: ${designationError}`)
+
+        const startDateError = errors.experiences?.[index]?.Start_Date?.message
+        if (startDateError) fieldErrors.push(`Start Date: ${startDateError}`)
+
+        const endDateError = errors.experiences?.[index]?.End_Date?.message
+        if (endDateError) fieldErrors.push(`End Date: ${endDateError}`)
+
+        const natureError = errors.experiences?.[index]?.Nature?.message
+        if (natureError) fieldErrors.push(`Nature of Job: ${natureError}`)
+
+        const teachingTypeError = errors.experiences?.[index]?.UG_PG?.message
+        if (teachingTypeError) fieldErrors.push(`Type of Teaching: ${teachingTypeError}`)
+
+        // Show specific validation errors
+        if (fieldErrors.length > 0) {
+          toast({ 
+            title: "Validation Failed", 
+            description: fieldErrors.join('. '), 
+            variant: "destructive" 
+          })
+        } else {
+          toast({ 
+            title: "Validation Failed", 
+            description: "Please fill all required fields correctly.", 
+            variant: "destructive" 
+          })
+        }
+        return
+      }
+
+      // Additional manual validation for date logic
+      const entry = experienceForm.getValues(`experiences.${index}`)
+      const currenteValue = entry.currente === true || (typeof entry.currente === 'number' && entry.currente === 1)
+      
+      // Validate dates
+      if (!entry.Start_Date || entry.Start_Date.trim() === '') {
         toast({ 
           title: "Validation Failed", 
-          description: errorMessages.length > 0 
-            ? `${errorMessages.join(', ')}` 
-            : "Please fill all required fields.", 
+          description: "Start Date is required.", 
           variant: "destructive" 
         })
         return
       }
 
-      const entry = experienceForm.getValues(`experiences.${index}`)
+      const startDate = new Date(entry.Start_Date)
+      const today = new Date()
+      today.setHours(23, 59, 59, 999)
+
+      if (isNaN(startDate.getTime())) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Please enter a valid start date.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (startDate > today) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Start date cannot be in the future.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      // Validate end date if not currently employed
+      if (!currenteValue) {
+        if (!entry.End_Date || entry.End_Date.trim() === '') {
+          toast({ 
+            title: "Validation Failed", 
+            description: "End Date is required if not currently employed.", 
+            variant: "destructive" 
+          })
+          return
+        }
+
+        const endDate = new Date(entry.End_Date)
+        if (isNaN(endDate.getTime())) {
+          toast({ 
+            title: "Validation Failed", 
+            description: "Please enter a valid end date.", 
+            variant: "destructive" 
+          })
+          return
+        }
+
+        if (endDate > today) {
+          toast({ 
+            title: "Validation Failed", 
+            description: "End date cannot be in the future if not currently employed.", 
+            variant: "destructive" 
+          })
+          return
+        }
+
+        if (endDate < startDate) {
+          toast({ 
+            title: "Validation Failed", 
+            description: "End date must be after start date.", 
+            variant: "destructive" 
+          })
+          return
+        }
+      }
+
       const isNewEntry = !entry.Id || entry.Id > 2147483647
 
       // Convert boolean currente to 0/1 for database
@@ -855,14 +1099,124 @@ export default function ProfilePage() {
         return
       }
 
-      // Validate only this row
-      const isValid = await postDocForm.trigger(`researches.${index}`)
-      if (!isValid) {
-        toast({ title: "Validation Failed", description: "Please fill all required fields.", variant: "destructive" })
+      // Validate all fields in this row individually to get specific error messages
+      const fieldsToValidate = [
+        `researches.${index}.Institute`,
+        `researches.${index}.Start_Date`,
+        `researches.${index}.End_Date`,
+      ]
+
+      const validationResults = await Promise.all(
+        fieldsToValidate.map(field => postDocForm.trigger(field as any))
+      )
+
+      // Check if all validations passed
+      const allValid = validationResults.every(result => result === true)
+
+      if (!allValid) {
+        // Get specific field errors
+        const errors = postDocForm.formState.errors
+        const fieldErrors: string[] = []
+
+        const instituteError = errors.researches?.[index]?.Institute?.message
+        if (instituteError) fieldErrors.push(`Institute: ${instituteError}`)
+
+        const startDateError = errors.researches?.[index]?.Start_Date?.message
+        if (startDateError) fieldErrors.push(`Start Date: ${startDateError}`)
+
+        const endDateError = errors.researches?.[index]?.End_Date?.message
+        if (endDateError) fieldErrors.push(`End Date: ${endDateError}`)
+
+        // Show specific validation errors
+        if (fieldErrors.length > 0) {
+          toast({ 
+            title: "Validation Failed", 
+            description: fieldErrors.join('. '), 
+            variant: "destructive" 
+          })
+        } else {
+          toast({ 
+            title: "Validation Failed", 
+            description: "Please fill all required fields correctly.", 
+            variant: "destructive" 
+          })
+        }
         return
       }
 
+      // Additional manual validation for date logic
       const entry = postDocForm.getValues(`researches.${index}`)
+      
+      // Validate dates are not empty
+      if (!entry.Start_Date || entry.Start_Date.trim() === '') {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Start Date is required.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (!entry.End_Date || entry.End_Date.trim() === '') {
+        toast({ 
+          title: "Validation Failed", 
+          description: "End Date is required.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      // Validate date ranges
+      const startDate = new Date(entry.Start_Date)
+      const endDate = new Date(entry.End_Date)
+      const today = new Date()
+      today.setHours(23, 59, 59, 999)
+
+      if (isNaN(startDate.getTime())) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Please enter a valid start date.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (isNaN(endDate.getTime())) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Please enter a valid end date.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (startDate > today) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Start date cannot be in the future.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (endDate > today) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "End date cannot be in the future.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (endDate < startDate) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "End date must be after start date.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
       const isNewEntry = !entry.Id || entry.Id > 2147483647
 
       const res = await fetch('/api/teacher/profile/phd-research', {
@@ -919,14 +1273,121 @@ export default function ProfilePage() {
         return
       }
 
-      // Validate only this row
-      const isValid = await educationForm.trigger(`educations.${index}`)
-      if (!isValid) {
-        toast({ title: "Validation Failed", description: "Please fill all required fields.", variant: "destructive" })
+      // Validate all fields in this row individually to get specific error messages
+      const fieldsToValidate = [
+        `educations.${index}.degree_type`,
+        `educations.${index}.university_name`,
+        `educations.${index}.year_of_passing`,
+      ]
+
+      const validationResults = await Promise.all(
+        fieldsToValidate.map(field => educationForm.trigger(field as any))
+      )
+
+      // Check if all validations passed
+      const allValid = validationResults.every(result => result === true)
+
+      if (!allValid) {
+        // Get specific field errors
+        const errors = educationForm.formState.errors
+        const fieldErrors: string[] = []
+
+        const degreeTypeError = errors.educations?.[index]?.degree_type?.message
+        if (degreeTypeError) fieldErrors.push(`Degree Type: ${degreeTypeError}`)
+
+        const universityError = errors.educations?.[index]?.university_name?.message
+        if (universityError) fieldErrors.push(`University: ${universityError}`)
+
+        const stateError = errors.educations?.[index]?.state?.message
+        if (stateError) fieldErrors.push(`State: ${stateError}`)
+
+        const yearError = errors.educations?.[index]?.year_of_passing?.message
+        if (yearError) fieldErrors.push(`Year of Passing: ${yearError}`)
+
+        const specializationError = errors.educations?.[index]?.subject?.message
+        if (specializationError) fieldErrors.push(`Specialization: ${specializationError}`)
+
+        const qsRankingError = errors.educations?.[index]?.QS_Ranking?.message
+        if (qsRankingError) fieldErrors.push(`QS Ranking: ${qsRankingError}`)
+
+        // Show specific validation errors
+        if (fieldErrors.length > 0) {
+          toast({ 
+            title: "Validation Failed", 
+            description: fieldErrors.join('. '), 
+            variant: "destructive" 
+          })
+        } else {
+          toast({ 
+            title: "Validation Failed", 
+            description: "Please fill all required fields correctly.", 
+            variant: "destructive" 
+          })
+        }
         return
       }
 
+      // Additional manual validation for year
       const entry = educationForm.getValues(`educations.${index}`)
+      
+      if (!entry.degree_type || entry.degree_type === 0) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Degree Type is required.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (!entry.university_name || entry.university_name.trim() === '') {
+        toast({ 
+          title: "Validation Failed", 
+          description: "University name is required.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      if (!entry.year_of_passing || entry.year_of_passing.toString().trim() === '') {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Year of passing is required.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      // Validate year format and range
+      let yearStr = '';
+      if (typeof entry.year_of_passing === 'string' && entry.year_of_passing.includes('-')) {
+        const date = new Date(entry.year_of_passing);
+        if (!isNaN(date.getTime())) {
+          yearStr = date.getFullYear().toString();
+        }
+      } else {
+        yearStr = String(entry.year_of_passing).trim().replace(/\D/g, '').slice(0, 4);
+      }
+
+      if (yearStr.length !== 4) {
+        toast({ 
+          title: "Validation Failed", 
+          description: "Year must be 4 digits.", 
+          variant: "destructive" 
+        })
+        return
+      }
+
+      const year = parseInt(yearStr);
+      const currentYear = new Date().getFullYear();
+      if (isNaN(year) || year < 1950 || year > currentYear) {
+        toast({ 
+          title: "Validation Failed", 
+          description: `Year must be between 1950 and ${currentYear}.`, 
+          variant: "destructive" 
+        })
+        return
+      }
+
       const isNewEntry = !entry.gid || entry.gid > 2147483647
 
       const res = await fetch('/api/teacher/profile/graduation', {
@@ -1301,11 +1762,15 @@ export default function ProfilePage() {
 
                 <div className="relative">
                   <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 sm:border-4 border-white shadow-lg">
-                    {teacherInfo?.ProfileImage ? (
+                    {profileImage ? (
                       <img
-                        src={teacherInfo?.ProfileImage || "/placeholder.svg"}
+                        src={profileImage}
                         alt="Profile"
                         className="w-full h-full object-cover"
+                        onError={() => {
+                          // Fallback to placeholder if image fails to load
+                          setProfileImage(null)
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
@@ -1330,7 +1795,7 @@ export default function ProfilePage() {
                       <input
                         id="profile-image-input"
                         type="file"
-                        accept="image/*"
+                        accept="image/jpeg,image/jpg"
                         onChange={handleImageUpload}
                         className="hidden"
                       />
@@ -1345,163 +1810,196 @@ export default function ProfilePage() {
                 {isEditingPersonal && (
                   <div className="text-center">
                     <p className="text-xs text-gray-500 mb-2">Click the camera icon to upload a profile picture</p>
-                    <p className="text-xs text-gray-400">Supported: JPG, PNG, GIF (Max 5MB)</p>
+                    <p className="text-xs text-gray-400">Supported: JPG, JPEG (Max 1MB)</p>
                   </div>
                 )}
               </div>
               {/* Basic Information */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 w-full">
-                <div className="space-y-2">
-                  <Label htmlFor="salutation" className="text-[11px] sm:text-xs">Salutation</Label>
-                  <Controller
-                    control={control}
-                    name="Abbri"
-                    render={({ field }) => (
-                      <Select
-                        value={field.value}
-                        onValueChange={(v: any) => field.onChange(v)}
-                      >
-                        <SelectTrigger className={`h-8 text-xs ${!isEditingPersonal ? "pointer-events-none" : ""}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Dr.">Dr.</SelectItem>
-                          <SelectItem value="Prof.">Prof.</SelectItem>
-                          <SelectItem value="Mr.">Mr.</SelectItem>
-                          <SelectItem value="Ms.">Ms.</SelectItem>
-                          <SelectItem value="Mrs.">Mrs.</SelectItem>
-                          <SelectItem value="Shri.">Shri.</SelectItem>
-                          <SelectItem value="Er.">Er.</SelectItem>
-                        </SelectContent>
-                      </Select>
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Basic Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
+                  <div className="space-y-2">
+                    <Label htmlFor="salutation" className="text-[11px] sm:text-xs font-medium">
+                      Salutation <span className="text-red-500">*</span>
+                    </Label>
+                    <Controller
+                      control={control}
+                      name="Abbri"
+                      rules={{
+                        required: isEditingPersonal ? "Salutation is required" : false
+                      }}
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Select
+                            value={field.value}
+                            onValueChange={(v: any) => field.onChange(v)}
+                          >
+                            <SelectTrigger className={`h-9 text-xs ${!isEditingPersonal ? "pointer-events-none" : ""} ${error ? 'border-red-500' : ''}`}>
+                              <SelectValue placeholder="Select salutation" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Dr.">Dr.</SelectItem>
+                              <SelectItem value="Prof.">Prof.</SelectItem>
+                              <SelectItem value="Mr.">Mr.</SelectItem>
+                              <SelectItem value="Ms.">Ms.</SelectItem>
+                              <SelectItem value="Mrs.">Mrs.</SelectItem>
+                              <SelectItem value="Shri.">Shri.</SelectItem>
+                              <SelectItem value="Er.">Er.</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName" className="text-[11px] sm:text-xs font-medium">
+                      First Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input 
+                      id="firstName" 
+                      className={`h-9 text-xs ${errors.fname ? 'border-red-500' : ''}`}
+                      {...register('fname', {
+                        required: isEditingPersonal ? "First name is required" : false,
+                        minLength: {
+                          value: 3,
+                          message: "First name must be at least 3 characters"
+                        },
+                        pattern: {
+                          value: /^[A-Za-z\s'-]+$/,
+                          message: "First name should only contain letters, spaces, hyphens, or apostrophes"
+                        }
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                    />
+                    {errors.fname && isEditingPersonal && touchedFields.fname && (
+                      <p className="text-xs text-red-500 mt-1">{errors.fname.message as string}</p>
                     )}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="firstName" className="text-[11px] sm:text-xs">First Name</Label>
-                  <Input 
-                    id="firstName" 
-                    className="h-8 text-xs"
-                    {...register('fname', {
-                      required: isEditingPersonal ? "First name is required" : false,
-                      minLength: {
-                        value: 3,
-                        message: "First name must be at least 3 characters"
-                      },
-                      pattern: {
-                        value: /^[A-Za-z\s'-]+$/,
-                        message: "First name should only contain letters, spaces, hyphens, or apostrophes"
-                      }
-                    })} 
-                    readOnly={!isEditingPersonal} 
-                  />
-                  {errors.fname && isEditingPersonal && touchedFields.fname && (
-                    <p className="text-sm text-red-500">{errors.fname.message as string}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="middleName" className="text-[11px] sm:text-xs">Middle Name</Label>
-                  <Input 
-                    id="middleName" 
-                    className="h-8 text-xs"
-                    {...register('mname', {
-                      validate: (value) => {
-                        if (!value || value.trim() === '') return true; // Optional field
-                        if (value.length < 3) {
-                          return "Middle name must be at least 3 characters if provided";
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="middleName" className="text-[11px] sm:text-xs font-medium">Middle Name</Label>
+                    <Input 
+                      id="middleName" 
+                      className={`h-9 text-xs ${errors.mname ? 'border-red-500' : ''}`}
+                      {...register('mname', {
+                        validate: (value) => {
+                          if (!value || value.trim() === '') return true; // Optional field
+                          if (value.length < 3) {
+                            return "Middle name must be at least 3 characters if provided";
+                          }
+                          if (!/^[A-Za-z\s'-]+$/.test(value)) {
+                            return "Middle name should only contain letters, spaces, hyphens, or apostrophes";
+                          }
+                          return true;
                         }
-                        if (!/^[A-Za-z\s'-]+$/.test(value)) {
-                          return "Middle name should only contain letters, spaces, hyphens, or apostrophes";
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                    />
+                    {errors.mname && isEditingPersonal && touchedFields.mname && (
+                      <p className="text-xs text-red-500 mt-1">{errors.mname.message as string}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName" className="text-[11px] sm:text-xs font-medium">
+                      Last Name <span className="text-red-500">*</span>
+                    </Label>
+                    <Input 
+                      id="lastName" 
+                      className={`h-9 text-xs ${errors.lname ? 'border-red-500' : ''}`}
+                      {...register('lname', {
+                        required: isEditingPersonal ? "Last name is required" : false,
+                        minLength: {
+                          value: 3,
+                          message: "Last name must be at least 3 characters"
+                        },
+                        pattern: {
+                          value: /^[A-Za-z\s'-]+$/,
+                          message: "Last name should only contain letters, spaces, hyphens, or apostrophes"
                         }
-                        return true;
-                      }
-                    })} 
-                    readOnly={!isEditingPersonal} 
-                  />
-                  {errors.mname && isEditingPersonal && touchedFields.mname && (
-                    <p className="text-sm text-red-500">{errors.mname.message as string}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="lastName" className="text-[11px] sm:text-xs">Last Name</Label>
-                  <Input 
-                    id="lastName" 
-                    className="h-8 text-xs"
-                    {...register('lname', {
-                      required: isEditingPersonal ? "Last name is required" : false,
-                      minLength: {
-                        value: 3,
-                        message: "Last name must be at least 3 characters"
-                      },
-                      pattern: {
-                        value: /^[A-Za-z\s'-]+$/,
-                        message: "Last name should only contain letters, spaces, hyphens, or apostrophes"
-                      }
-                    })} 
-                    readOnly={!isEditingPersonal} 
-                  />
-                  {errors.lname && isEditingPersonal && touchedFields.lname && (
-                    <p className="text-sm text-red-500">{errors.lname.message as string}</p>
-                  )}
+                      })} 
+                      readOnly={!isEditingPersonal} 
+                    />
+                    {errors.lname && isEditingPersonal && touchedFields.lname && (
+                      <p className="text-xs text-red-500 mt-1">{errors.lname.message as string}</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Contact Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 w-full">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-[11px] sm:text-xs">Email</Label>
-                  <Input id="email" type="email" {...register('email_id')} readOnly className="h-8 text-xs" />
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Contact Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-[11px] sm:text-xs font-medium">
+                      Email <span className="text-red-500">*</span>
+                    </Label>
+                    <Input 
+                      id="email" 
+                      type="email" 
+                      {...register('email_id')} 
+                      readOnly 
+                      className="h-9 text-xs bg-gray-50" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-[11px] sm:text-xs font-medium">
+                      Phone Number <span className="text-red-500">*</span>
+                    </Label>
+                    <Controller
+                      control={control}
+                      name="phone_no"
+                      rules={{
+                        required: isEditingPersonal ? "Phone number is required" : false,
+                        pattern: {
+                          value: /^[0-9]{10}$/,
+                          message: "Phone number must contain exactly 10 digits"
+                        },
+                        minLength: {
+                          value: 10,
+                          message: "Phone number must be exactly 10 digits"
+                        },
+                        maxLength: {
+                          value: 10,
+                          message: "Phone number must be exactly 10 digits"
+                        }
+                      }}
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Input
+                            id="phone"
+                            type="tel"
+                            {...field}
+                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            onChange={(e) => {
+                              // Only allow digits and limit to 10
+                              const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              field.onChange(value);
+                            }}
+                            readOnly={!isEditingPersonal}
+                            placeholder="Enter 10 digit phone number"
+                            maxLength={10}
+                          />
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
+                      )}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="text-[11px] sm:text-xs">Phone Number</Label>
-                  <Controller
-                    control={control}
-                    name="phone_no"
-                    rules={{
-                      required: isEditingPersonal ? "Phone number is required" : false,
-                      pattern: {
-                        value: /^[0-9]{10}$/,
-                        message: "Phone number must contain exactly 10 digits"
-                      },
-                      minLength: {
-                        value: 10,
-                        message: "Phone number must be exactly 10 digits"
-                      },
-                      maxLength: {
-                        value: 10,
-                        message: "Phone number must be exactly 10 digits"
-                      }
-                    }}
-                    render={({ field }) => (
-                        <Input
-                          id="phone"
-                          type="tel"
-                          {...field}
-                          className="h-8 text-xs"
-                          onChange={(e) => {
-                            // Only allow digits and limit to 10
-                            const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                            field.onChange(value);
-                          }}
-                          readOnly={!isEditingPersonal}
-                          placeholder="Enter 10 digit phone number"
-                          maxLength={10}
-                        />
-                    )}
-                  />
-                  {errors.phone_no && isEditingPersonal && touchedFields.phone_no && (
-                    <p className="text-sm text-red-500">{errors.phone_no.message as string}</p>
-                  )}
-                </div>
-
               </div>
 
               {/* Additional Personal Information */}
-              <div className="space-y-4">
-                <h4 className="text-xs sm:text-sm font-medium">Additional Information</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 w-full">
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Additional Information</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                    <Label htmlFor="dateOfBirth" className="text-[11px] sm:text-xs font-medium">
+                      Date of Birth <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="DOB"
@@ -1533,23 +2031,27 @@ export default function ProfilePage() {
                           return true;
                         }
                       }}
-                      render={({ field }) => (
-                        <Input
-                          id="dateOfBirth"
-                          type="date"
-                          {...field}
-                          max={new Date().toISOString().split('T')[0]}
-                          readOnly={!isEditingPersonal}
-                          className="h-8 text-xs"
-                        />
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Input
+                            id="dateOfBirth"
+                            type="date"
+                            {...field}
+                            max={new Date().toISOString().split('T')[0]}
+                            readOnly={!isEditingPersonal}
+                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                          />
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
                       )}
                     />
-                    {errors.DOB && isEditingPersonal && touchedFields.DOB && (
-                      <p className="text-sm text-red-500">{errors.DOB.message as string}</p>
-                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="dateOfJoining">Date of Joining</Label>
+                    <Label htmlFor="dateOfJoining" className="text-[11px] sm:text-xs font-medium">
+                      Date of Joining <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="recruit_date"
@@ -1577,23 +2079,27 @@ export default function ProfilePage() {
                           return true;
                         }
                       }}
-                      render={({ field }) => (
-                        <Input
-                          id="dateOfJoining"
-                          type="date"
-                          {...field}
-                          max={new Date().toISOString().split('T')[0]}
-                          readOnly={!isEditingPersonal}
-                          className="h-8 text-xs"
-                        />
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Input
+                            id="dateOfJoining"
+                            type="date"
+                            {...field}
+                            max={new Date().toISOString().split('T')[0]}
+                            readOnly={!isEditingPersonal}
+                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                          />
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
                       )}
                     />
-                    {errors.recruit_date && isEditingPersonal && touchedFields.recruit_date && (
-                      <p className="text-sm text-red-500">{errors.recruit_date.message as string}</p>
-                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="panNo">PAN Number</Label>
+                    <Label htmlFor="panNo" className="text-[11px] sm:text-xs font-medium">
+                      PAN Number <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="PAN_No"
@@ -1614,24 +2120,26 @@ export default function ProfilePage() {
                           return true;
                         }
                       }}
-                      render={({ field }) => (
-                        <Input
-                          id="panNo"
-                          {...field}
-                          onChange={(e) => {
-                            const upperValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-                            field.onChange(upperValue);
-                          }}
-                          readOnly={!isEditingPersonal}
-                          placeholder="ABCDE1234F"
-                          maxLength={10}
-                          className="h-8 text-xs"
-                        />
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Input
+                            id="panNo"
+                            {...field}
+                            onChange={(e) => {
+                              const upperValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                              field.onChange(upperValue);
+                            }}
+                            readOnly={!isEditingPersonal}
+                            placeholder="ABCDE1234F"
+                            maxLength={10}
+                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                          />
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
                       )}
                     />
-                    {errors.PAN_No && isEditingPersonal && touchedFields.PAN_No && (
-                      <p className="text-sm text-red-500">{errors.PAN_No.message as string}</p>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1660,14 +2168,14 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter H-Index"
-                      className="h-8 text-xs"
+                      className={`h-9 text-xs ${errors.H_INDEX ? 'border-red-500' : ''}`}
                     />
                     {errors.H_INDEX && isEditingPersonal && touchedFields.H_INDEX && (
-                      <p className="text-sm text-red-500">{errors.H_INDEX.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.H_INDEX.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="i10Index">i10-Index</Label>
+                    <Label htmlFor="i10Index" className="text-[11px] sm:text-xs font-medium">i10-Index</Label>
                       <Input 
                       id="i10Index" 
                       type="number" 
@@ -1686,14 +2194,14 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter i10-Index"
-                      className="h-8 text-xs"
+                      className={`h-9 text-xs ${errors.i10_INDEX ? 'border-red-500' : ''}`}
                     />
                     {errors.i10_INDEX && isEditingPersonal && touchedFields.i10_INDEX && (
-                      <p className="text-sm text-red-500">{errors.i10_INDEX.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.i10_INDEX.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="citations">Citations</Label>
+                    <Label htmlFor="citations" className="text-[11px] sm:text-xs font-medium">Citations</Label>
                       <Input 
                       id="citations" 
                       type="number" 
@@ -1712,14 +2220,14 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter total citations"
-                      className="h-8 text-xs"
+                      className={`h-9 text-xs ${errors.CITIATIONS ? 'border-red-500' : ''}`}
                     />
                     {errors.CITIATIONS && isEditingPersonal && touchedFields.CITIATIONS && (
-                      <p className="text-sm text-red-500">{errors.CITIATIONS.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.CITIATIONS.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="orcidId">ORCHID ID</Label>
+                    <Label htmlFor="orcidId" className="text-[11px] sm:text-xs font-medium">ORCHID ID</Label>
                       <Input 
                       id="orcidId" 
                       {...register('ORCHID_ID', {
@@ -1731,14 +2239,14 @@ export default function ProfilePage() {
                       readOnly={!isEditingPersonal} 
                       placeholder="0000-0000-0000-0000"
                       maxLength={19}
-                      className="h-8 text-xs"
+                      className={`h-9 text-xs ${errors.ORCHID_ID ? 'border-red-500' : ''}`}
                     />
                     {errors.ORCHID_ID && isEditingPersonal && touchedFields.ORCHID_ID && (
-                      <p className="text-sm text-red-500">{errors.ORCHID_ID.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.ORCHID_ID.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="researcherId">Researcher ID</Label>
+                    <Label htmlFor="researcherId" className="text-[11px] sm:text-xs font-medium">Researcher ID</Label>
                       <Input 
                       id="researcherId" 
                       {...register('RESEARCHER_ID', {
@@ -1762,21 +2270,23 @@ export default function ProfilePage() {
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter Researcher ID"
                       maxLength={100}
-                      className="h-8 text-xs"
+                      className={`h-9 text-xs ${errors.RESEARCHER_ID ? 'border-red-500' : ''}`}
                     />
                     {errors.RESEARCHER_ID && isEditingPersonal && touchedFields.RESEARCHER_ID && (
-                      <p className="text-sm text-red-500">{errors.RESEARCHER_ID.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.RESEARCHER_ID.message as string}</p>
                     )}
                   </div>
                 </div>
               </div>
 
               {/* Teaching Status */}
-              <div className="space-y-4">
-                <h3 className="text-sm sm:text-base font-semibold">Teaching Status</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 w-full">
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Teaching Status</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="teachingStatus">Teaching Status</Label>
+                    <Label htmlFor="teachingStatus" className="text-[11px] sm:text-xs font-medium">
+                      Teaching Status <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="perma_or_tenure"
@@ -1803,11 +2313,13 @@ export default function ProfilePage() {
               </div>
 
               {/* Academic Information */}
-              <div className="space-y-4">
-                <h3 className="text-sm sm:text-base font-semibold">Academic Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 w-full">
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Academic Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="designation">Designation</Label>
+                    <Label htmlFor="designation" className="text-[11px] sm:text-xs font-medium">
+                      Designation <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name={watch('perma_or_tenure') === false ? 'desig_perma' : 'desig_tenure'}
@@ -1843,7 +2355,9 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="faculty">Faculty</Label>
+                    <Label htmlFor="faculty" className="text-[11px] sm:text-xs font-medium">
+                      Faculty <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="faculty"
@@ -1878,9 +2392,11 @@ export default function ProfilePage() {
                     )}
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-4 w-full">
+                <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
+                    <Label htmlFor="department" className="text-[11px] sm:text-xs font-medium">
+                      Department <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="deptid"
@@ -1920,12 +2436,14 @@ export default function ProfilePage() {
               </div>
 
               {/* Qualification Information */}
-              <div className="space-y-4">
-                <h3 className="text-sm sm:text-base font-semibold">Qualification Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Qualification Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 w-full">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Qualified NET Exam</Label>
+                      <Label className="text-[11px] sm:text-xs font-medium">
+                        Qualified NET Exam <span className="text-red-500">*</span>
+                      </Label>
                       <RadioGroup
                         value={watch('NET') ? "yes" : "no"}
                         onValueChange={(value: any) => setValue('NET', value === 'yes')}
@@ -1944,7 +2462,9 @@ export default function ProfilePage() {
                     {watch('NET') && (
                       <>
                         <div className="space-y-2">
-                          <Label htmlFor="netYear">NET Qualified Year</Label>
+                          <Label htmlFor="netYear" className="text-[11px] sm:text-xs font-medium">
+                            NET Qualified Year <span className="text-red-500">*</span>
+                          </Label>
                           <Controller
                             control={control}
                             name="NET_year"
@@ -1968,24 +2488,26 @@ export default function ProfilePage() {
                                 return true;
                               }
                             }}
-                            render={({ field }) => (
-                              <Input
-                                id="netYear"
-                                {...field}
-                                onChange={(e) => {
-                                  const year = e.target.value.replace(/\D/g, '').slice(0, 4);
-                                  field.onChange(year);
-                                }}
-                                readOnly={!isEditingPersonal}
-                                placeholder="YYYY (e.g., 2018)"
-                                maxLength={4}
-                                className="h-8 text-xs"
-                              />
+                            render={({ field, fieldState: { error } }) => (
+                              <div>
+                                <Input
+                                  id="netYear"
+                                  {...field}
+                                  onChange={(e) => {
+                                    const year = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                    field.onChange(year);
+                                  }}
+                                  readOnly={!isEditingPersonal}
+                                  placeholder="YYYY (e.g., 2018)"
+                                  maxLength={4}
+                                  className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                                />
+                                {error && isEditingPersonal && (
+                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                                )}
+                              </div>
                             )}
                           />
-                          {errors.NET_year && isEditingPersonal && touchedFields.NET_year && (
-                            <p className="text-sm text-red-500">{errors.NET_year.message as string}</p>
-                          )}
                         </div>
 
                       </>
@@ -1994,7 +2516,9 @@ export default function ProfilePage() {
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Qualified GATE Exam</Label>
+                      <Label className="text-[11px] sm:text-xs font-medium">
+                        Qualified GATE Exam <span className="text-red-500">*</span>
+                      </Label>
                       <RadioGroup
                         value={watch('GATE') ? "yes" : "no"}
                         onValueChange={(value: any) => setValue('GATE', value === 'yes')}
@@ -2037,24 +2561,26 @@ export default function ProfilePage() {
                                 return true;
                               }
                             }}
-                            render={({ field }) => (
-                              <Input
-                                id="gateYear"
-                                {...field}
-                                onChange={(e) => {
-                                  const year = e.target.value.replace(/\D/g, '').slice(0, 4);
-                                  field.onChange(year);
-                                }}
-                                readOnly={!isEditingPersonal}
-                                placeholder="YYYY (e.g., 2018)"
-                                maxLength={4}
-                                className="h-8 text-xs"
-                              />
+                            render={({ field, fieldState: { error } }) => (
+                              <div>
+                                <Input
+                                  id="gateYear"
+                                  {...field}
+                                  onChange={(e) => {
+                                    const year = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                    field.onChange(year);
+                                  }}
+                                  readOnly={!isEditingPersonal}
+                                  placeholder="YYYY (e.g., 2018)"
+                                  maxLength={4}
+                                  className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                                />
+                                {error && isEditingPersonal && (
+                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                                )}
+                              </div>
                             )}
                           />
-                          {errors.GATE_year && isEditingPersonal && touchedFields.GATE_year && (
-                            <p className="text-sm text-red-500">{errors.GATE_year.message as string}</p>
-                          )}
                         </div>
 
                       </>
@@ -2064,10 +2590,12 @@ export default function ProfilePage() {
               </div>
 
               {/* Registration Information */}
-              <div className="space-y-4">
-                <h3 className="text-sm sm:text-base font-semibold">Registration Information</h3>
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Registration Information</h4>
                 <div className="space-y-2">
-                  <Label>Registered Phd Guide at MSU</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium">
+                    Registered Phd Guide at MSU <span className="text-red-500">*</span>
+                  </Label>
                   <RadioGroup
                     value={watch('PHDGuide') ? "yes" : "no"}
                     onValueChange={(value: any) => setValue('PHDGuide', value === 'yes')}
@@ -2085,7 +2613,9 @@ export default function ProfilePage() {
                 </div>
                 {watch('PHDGuide') && (
                   <div className="space-y-2">
-                    <Label htmlFor="registrationYear">Year of Registration</Label>
+                    <Label htmlFor="registrationYear" className="text-[11px] sm:text-xs font-medium">
+                      Year of Registration <span className="text-red-500">*</span>
+                    </Label>
                     <Controller
                       control={control}
                       name="Guide_year"
@@ -2109,33 +2639,35 @@ export default function ProfilePage() {
                           return true;
                         }
                       }}
-                      render={({ field }) => (
-                        <Input
-                          id="registrationYear"
-                          {...field}
-                          onChange={(e) => {
-                            const year = e.target.value.replace(/\D/g, '').slice(0, 4);
-                            field.onChange(year);
-                          }}
-                          readOnly={!isEditingPersonal}
-                          placeholder="YYYY (e.g., 2015)"
-                          maxLength={4}
-                          className="h-8 text-xs"
-                        />
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Input
+                            id="registrationYear"
+                            {...field}
+                            onChange={(e) => {
+                              const year = e.target.value.replace(/\D/g, '').slice(0, 4);
+                              field.onChange(year);
+                            }}
+                            readOnly={!isEditingPersonal}
+                            placeholder="YYYY (e.g., 2015)"
+                            maxLength={4}
+                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                          />
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
                       )}
                     />
-                    {errors.Guide_year && isEditingPersonal && touchedFields.Guide_year && (
-                      <p className="text-sm text-red-500">{errors.Guide_year.message as string}</p>
-                    )}
                   </div>
                 )}
               </div>
 
               {/* ICT in Teaching */}
-              <div className="space-y-4">
-                <h3 className="text-sm sm:text-base font-semibold">Use of ICT in Teaching</h3>
+              <div className="space-y-3 sm:space-y-4">
+                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Use of ICT in Teaching</h4>
                 <div className="space-y-4">
-                  <Label>Technologies Used for Teaching (Select all that apply)</Label>
+                  <Label className="text-[11px] sm:text-xs font-medium">Technologies Used for Teaching (Select all that apply)</Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
                     <div className="flex items-center space-x-2">
                       <input
@@ -2212,7 +2744,9 @@ export default function ProfilePage() {
                   </div>
                   {editingData.ictOthers && (
                     <div className="space-y-2">
-                      <Label htmlFor="otherIctTools">If Others, please specify:</Label>
+                      <Label htmlFor="otherIctTools" className="text-[11px] sm:text-xs font-medium">
+                        If Others, please specify: <span className="text-red-500">*</span>
+                      </Label>
                       <Controller
                         control={control}
                         name="ictOthersSpecify"
@@ -2227,25 +2761,27 @@ export default function ProfilePage() {
                             message: "Specification must be less than 200 characters"
                           }
                         }}
-                        render={({ field }) => (
-                          <Input
-                            id="otherIctTools"
-                            value={editingData.ictOthersSpecify}
-                            onChange={(e) => {
-                              const value = e.target.value.slice(0, 200);
-                              setEditingData(prev => ({ ...prev, ictOthersSpecify: value }));
-                              field.onChange(value);
-                            }}
-                            placeholder="Please specify other ICT tools used..."
-                            readOnly={!isEditingPersonal}
-                            maxLength={200}
-                            className="max-w-md h-8 text-xs"
-                          />
+                        render={({ field, fieldState: { error } }) => (
+                          <div>
+                            <Input
+                              id="otherIctTools"
+                              value={editingData.ictOthersSpecify}
+                              onChange={(e) => {
+                                const value = e.target.value.slice(0, 200);
+                                setEditingData(prev => ({ ...prev, ictOthersSpecify: value }));
+                                field.onChange(value);
+                              }}
+                              placeholder="Please specify other ICT tools used..."
+                              readOnly={!isEditingPersonal}
+                              maxLength={200}
+                              className={`max-w-md h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            />
+                            {error && isEditingPersonal && (
+                              <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                            )}
+                          </div>
                         )}
                       />
-                      {errors.ictOthersSpecify && isEditingPersonal && touchedFields.ictOthersSpecify && (
-                        <p className="text-sm text-red-500">{errors.ictOthersSpecify.message as string}</p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -2280,13 +2816,13 @@ export default function ProfilePage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Employer</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Currently Employed?</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Designation</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Joining</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Relieving</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Nature of Job</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[130px]">Type of Teaching</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Employer <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Currently Employed? <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Designation <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Joining <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Relieving <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Nature of Job <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[130px]">Type of Teaching <span className="text-red-500">*</span></TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2323,12 +2859,17 @@ export default function ProfilePage() {
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2387,12 +2928,17 @@ export default function ProfilePage() {
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2400,16 +2946,49 @@ export default function ProfilePage() {
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Start_Date`}
-                          rules={{ required: rowEditing ? "Start date is required" : false }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              type="date"
-                              value={formatDateForInput(formField.value)}
-                              onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
-                              readOnly={!rowEditing}
-                            />
+                          rules={{
+                            required: rowEditing ? "Start date is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Start date is required";
+                                }
+                                const startDate = new Date(value);
+                                if (isNaN(startDate.getTime())) {
+                                  return "Please enter a valid start date";
+                                }
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                if (startDate > today) {
+                                  return "Start date cannot be in the future";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                type="date"
+                                value={formatDateForInput(formField.value)}
+                                onChange={(e) => {
+                                  formField.onChange(e.target.value)
+                                  // Trigger end date validation when start date changes
+                                  if (rowEditing) {
+                                    setTimeout(() => {
+                                      experienceForm.trigger(`experiences.${index}.End_Date`)
+                                    }, 100)
+                                  }
+                                }}
+                                className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                                max={new Date().toISOString().split('T')[0]}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2418,54 +2997,64 @@ export default function ProfilePage() {
                           control={experienceForm.control}
                           name={`experiences.${index}.End_Date`}
                           rules={{
+                            required: rowEditing ? "End date is required" : false,
                             validate: (value) => {
                               if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "End date is required";
+                                }
+                                
+                                const endDate = new Date(value);
+                                if (isNaN(endDate.getTime())) {
+                                  return "Please enter a valid end date";
+                                }
+                                
                                 // Handle database values: 0/1 or boolean
                                 const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
-                                const currenteValue = currenteRaw === true ? true : false
+                                const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
                                 const startDate = experienceForm.watch(`experiences.${index}.Start_Date`)
                                 
-                                if (!currenteValue && (!value || (typeof value === 'string' && value.trim() === ''))) {
-                                  return "End date is required if not currently employed";
-                                }
-                                if (startDate && value && (typeof value !== 'string' || value.trim() !== '')) {
-                                  const start = new Date(startDate);
-                                  const end = new Date(value);
-                                  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-                                    return "Please enter valid dates";
-                                  }
-                                  if (end < start) {
-                                    return "End date must be after start date";
-                                  }
-                                  if (!currenteValue && end > new Date()) {
+                                // End date cannot be in the future if not currently employed
+                                if (!currenteValue) {
+                                  const today = new Date();
+                                  today.setHours(23, 59, 59, 999);
+                                  if (endDate > today) {
                                     return "End date cannot be in the future if not currently employed";
                                   }
                                 }
-                                if (currenteValue && value && (typeof value !== 'string' || value.trim() !== '')) {
-                                  const end = new Date(value);
-                                  if (isNaN(end.getTime())) {
-                                    return "Please enter a valid date";
+                                
+                                // End date must be after start date
+                                if (startDate) {
+                                  const start = new Date(startDate);
+                                  if (!isNaN(start.getTime())) {
+                                    if (endDate < start) {
+                                      return "End date must be after start date";
+                                    }
                                   }
-                                 
                                 }
                               }
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => {
+                          render={({ field: formField, fieldState: { error } }) => {
                             // Handle database values: 0/1 or boolean
                             const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
                             const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
                             return (
-                              <Input
-                                {...formField}
-                                type="date"
-                                value={formatDateForInput(formField.value)}
-                                onChange={(e) => formField.onChange(e.target.value)}
-                                max={currenteValue ? undefined : new Date().toISOString().split('T')[0]}
-                                className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
-                                readOnly={!rowEditing || currenteValue}
-                              />
+                              <div>
+                                <Input
+                                  {...formField}
+                                  type="date"
+                                  value={formatDateForInput(formField.value)}
+                                  onChange={(e) => formField.onChange(e.target.value)}
+                                  max={currenteValue ? undefined : new Date().toISOString().split('T')[0]}
+                                  className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
+                                  readOnly={!rowEditing || currenteValue}
+                                />
+                                {error && rowEditing && (
+                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                                )}
+                              </div>
                             )
                           }}
                         />
@@ -2474,25 +3063,40 @@ export default function ProfilePage() {
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Nature`}
-                          rules={{ required: rowEditing ? "Nature of job is required" : false }}
-                          render={({ field: formField }) => (
-                            <Select
-                              value={formField.value || ""}
-                              onValueChange={formField.onChange}
-                              disabled={!rowEditing}
-                            >
-                              <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Teaching">Teaching</SelectItem>
-                                <SelectItem value="Administration">Administration</SelectItem>
-                                <SelectItem value="Industrial Work">Industrial Work</SelectItem>
-                                <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
-                                <SelectItem value="Research">Research</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          rules={{
+                            required: rowEditing ? "Nature of job is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Nature of job is required";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Select
+                                value={formField.value || ""}
+                                onValueChange={formField.onChange}
+                                disabled={!rowEditing}
+                              >
+                                <SelectTrigger className={`w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default ${error ? 'border-red-500' : ''}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Teaching">Teaching</SelectItem>
+                                  <SelectItem value="Administration">Administration</SelectItem>
+                                  <SelectItem value="Industrial Work">Industrial Work</SelectItem>
+                                  <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
+                                  <SelectItem value="Research">Research</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2500,26 +3104,42 @@ export default function ProfilePage() {
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.UG_PG`}
-                          rules={{ required: rowEditing ? "Teaching type is required" : false }}
-                          render={({ field: formField }) => (
-                            <Select
-                              value={formField.value || ""}
-                              onValueChange={formField.onChange}
-                              disabled={!rowEditing}
-                            >
-                              <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="UG">UG</SelectItem>
-                                <SelectItem value="PG">PG</SelectItem>
-                                <SelectItem value="UG & PG">UG & PG</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                              </SelectContent>
-                            </Select>
+                          rules={{
+                            required: rowEditing ? "Teaching type is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Teaching type is required";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Select
+                                value={formField.value || ""}
+                                onValueChange={formField.onChange}
+                                disabled={!rowEditing}
+                              >
+                                <SelectTrigger className={`w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default ${error ? 'border-red-500' : ''}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="UG">UG</SelectItem>
+                                  <SelectItem value="PG">PG</SelectItem>
+                                  <SelectItem value="UG & PG">UG & PG</SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
+                   
                       <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
@@ -2600,9 +3220,9 @@ export default function ProfilePage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Institute / Industry</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Start Date</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">End Date</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Institute / Industry <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Start Date <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">End Date <span className="text-red-500">*</span></TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Sponsored By</TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">QS / THE World University Ranking</TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Supporting Document</TableHead>
@@ -2629,14 +3249,30 @@ export default function ProfilePage() {
                             maxLength: {
                               value: 200,
                               message: "Institute name must be less than 200 characters"
+                            },
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Institute is required";
+                                }
+                                if (value.trim().length < 2) {
+                                  return "Institute name must be at least 2 characters";
+                                }
+                              }
+                              return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2644,16 +3280,49 @@ export default function ProfilePage() {
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.Start_Date`}
-                          rules={{ required: rowEditing ? "Start date is required" : false }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              type="date"
-                              value={formatDateForInput(formField.value)}
-                              onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full h-8 text-xs"
-                              readOnly={!rowEditing}
-                            />
+                          rules={{
+                            required: rowEditing ? "Start date is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Start date is required";
+                                }
+                                const startDate = new Date(value);
+                                if (isNaN(startDate.getTime())) {
+                                  return "Please enter a valid start date";
+                                }
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                if (startDate > today) {
+                                  return "Start date cannot be in the future";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                type="date"
+                                value={formatDateForInput(formField.value)}
+                                onChange={(e) => {
+                                  formField.onChange(e.target.value)
+                                  // Trigger end date validation when start date changes
+                                  if (rowEditing) {
+                                    setTimeout(() => {
+                                      postDocForm.trigger(`researches.${index}.End_Date`)
+                                    }, 100)
+                                  }
+                                }}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                                max={new Date().toISOString().split('T')[0]}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2668,30 +3337,45 @@ export default function ProfilePage() {
                                 if (!value || (typeof value === 'string' && value.trim() === '')) {
                                   return "End date is required";
                                 }
+                                const endDate = new Date(value);
+                                if (isNaN(endDate.getTime())) {
+                                  return "Please enter a valid end date";
+                                }
+                                // End date must not be in the future
+                                const today = new Date();
+                                today.setHours(23, 59, 59, 999); // End of today
+                                if (endDate > today) {
+                                  return "End date cannot be in the future";
+                                }
+                                // End date must be after start date
                                 const startDate = entry.Start_Date;
-                                if (startDate && value) {
+                                if (startDate) {
                                   const start = new Date(startDate);
-                                  const end = new Date(value);
-                                  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-                                    return "Please enter valid dates";
-                                  }
-                                  if (end < start) {
-                                    return "End date must be after start date";
+                                  if (!isNaN(start.getTime())) {
+                                    if (endDate < start) {
+                                      return "End date must be after start date";
+                                    }
                                   }
                                 }
                               }
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              type="date"
-                              value={formatDateForInput(formField.value)}
-                              onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full h-8 text-xs"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                type="date"
+                                value={formatDateForInput(formField.value)}
+                                onChange={(e) => formField.onChange(e.target.value)}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                                max={new Date().toISOString().split('T')[0]}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2918,12 +3602,12 @@ export default function ProfilePage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Degree Type</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">University</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[120px]">State</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Year of Passing</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Specialization</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">QS Ranking</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Degree Type <span className="text-red-500">*</span></TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">University <span className="text-red-500">*</span></TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[120px]">State <span className="text-red-500">*</span></TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Year of Passing <span className="text-red-500">*</span></TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Specialization <span className="text-red-500">*</span></TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">QS Ranking <span className="text-red-500">*</span></TableHead>
                   <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Image</TableHead>
                   <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
                 </TableRow>
@@ -2940,20 +3624,35 @@ export default function ProfilePage() {
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.degree_type`}
-                          rules={{ required: rowEditing ? "Degree type is required" : false }}
-                          render={({ field: formField }) => (
-                            <SearchableSelect
-                              options={degreeTypeOptions.map((degreeType) => ({
-                                value: degreeType.id,
-                                label: degreeType.name,
-                              }))}
-                              value={formField.value}
-                              onValueChange={(value: string | number) => formField.onChange(Number(value))}
-                              placeholder="Select degree type"
-                              disabled={!rowEditing}
-                              emptyMessage="No degree type found."
-                              className="w-full"
-                            />
+                          rules={{
+                            required: rowEditing ? "Degree type is required" : false,
+                            validate: (value) => {
+                              if (rowEditing) {
+                                if (!value || value === 0) {
+                                  return "Degree type is required";
+                                }
+                              }
+                              return true;
+                            }
+                          }}
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <SearchableSelect
+                                options={degreeTypeOptions.map((degreeType) => ({
+                                  value: degreeType.id,
+                                  label: degreeType.name,
+                                }))}
+                                value={formField.value}
+                                onValueChange={(value: string | number) => formField.onChange(Number(value))}
+                                placeholder="Select degree type"
+                                disabled={!rowEditing}
+                                emptyMessage="No degree type found."
+                                className={`w-full ${error ? 'border-red-500' : ''}`}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2984,12 +3683,17 @@ export default function ProfilePage() {
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -2998,14 +3702,18 @@ export default function ProfilePage() {
                           control={educationForm.control}
                           name={`educations.${index}.state`}
                           rules={{
+                            required: rowEditing ? "State is required" : false,
                             maxLength: {
                               value: 50,
                               message: "State must be less than 50 characters"
                             },
                             validate: (value) => {
-                              if (value && typeof value === 'string' && value.trim() !== '') {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "State is required";
+                                }
                                 if (value.trim().length < 2) {
-                                  return "If provided, must be at least 2 characters";
+                                  return "State must be at least 2 characters";
                                 }
                                 if (!/^[A-Za-z\s]+$/.test(value)) {
                                   return "State should only contain letters and spaces";
@@ -3014,13 +3722,18 @@ export default function ProfilePage() {
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs"
-                              placeholder="Enter state"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                placeholder="Enter state"
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -3057,7 +3770,7 @@ export default function ProfilePage() {
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => {
+                          render={({ field: formField, fieldState: { error } }) => {
                             // Extract year value: handle both date format (YYYY-MM-DD) and plain year strings
                             let yearValue = ""
                             if (formField.value) {
@@ -3079,38 +3792,43 @@ export default function ProfilePage() {
                             }
                             
                             return (
-                              <Input
-                                type="text"
-                                value={yearValue}
-                                onChange={(e) => {
-                                  const inputValue = e.target.value
-                                  const year = inputValue.replace(/\D/g, "").slice(0, 4);
-                                  
-                                  // If user entered 4 digits, convert to date format
-                                  if (year.length === 4) {
-                                    formField.onChange(`${year}-01-01`);
-                                  } else if (year.length > 0) {
-                                    // Store partial year as plain string for editing
-                                    formField.onChange(year);
-                                  } else {
-                                    // Empty input
-                                    formField.onChange("");
-                                  }
-                                }}
-                                onBlur={(e) => {
-                                  // On blur, if we have a valid 4-digit year, ensure it's in date format
-                                  const year = e.target.value.replace(/\D/g, "").slice(0, 4);
-                                  if (year.length === 4) {
-                                    formField.onChange(`${year}-01-01`);
-                                  }
-                                  formField.onBlur();
-                                }}
-                                name={formField.name}
-                                ref={formField.ref}
-                                className="w-full h-8 text-xs"
-                                placeholder="YYYY"
-                                readOnly={!rowEditing}
-                              />
+                              <div>
+                                <Input
+                                  type="text"
+                                  value={yearValue}
+                                  onChange={(e) => {
+                                    const inputValue = e.target.value
+                                    const year = inputValue.replace(/\D/g, "").slice(0, 4);
+                                    
+                                    // If user entered 4 digits, convert to date format
+                                    if (year.length === 4) {
+                                      formField.onChange(`${year}-01-01`);
+                                    } else if (year.length > 0) {
+                                      // Store partial year as plain string for editing
+                                      formField.onChange(year);
+                                    } else {
+                                      // Empty input
+                                      formField.onChange("");
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    // On blur, if we have a valid 4-digit year, ensure it's in date format
+                                    const year = e.target.value.replace(/\D/g, "").slice(0, 4);
+                                    if (year.length === 4) {
+                                      formField.onChange(`${year}-01-01`);
+                                    }
+                                    formField.onBlur();
+                                  }}
+                                  name={formField.name}
+                                  ref={formField.ref}
+                                  className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                  placeholder="YYYY"
+                                  readOnly={!rowEditing}
+                                />
+                                {error && rowEditing && (
+                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                                )}
+                              </div>
                             )
                           }}
                         />
@@ -3121,26 +3839,35 @@ export default function ProfilePage() {
                           control={educationForm.control}
                           name={`educations.${index}.subject`}
                           rules={{
+                            required: rowEditing ? "Specialization is required" : false,
                             maxLength: {
                               value: 200,
                               message: "Specialization must be less than 200 characters"
                             },
                             validate: (value) => {
-                              if (value && typeof value === 'string' && value.trim() !== '') {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "Specialization is required";
+                                }
                                 if (value.trim().length < 2) {
-                                  return "If provided, must be at least 2 characters";
+                                  return "Specialization must be at least 2 characters";
                                 }
                               }
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              value={formField.value || ""}
-                              className="w-full h-8 text-xs"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                value={formField.value || ""}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
@@ -3150,12 +3877,16 @@ export default function ProfilePage() {
                           control={educationForm.control}
                           name={`educations.${index}.QS_Ranking`}
                           rules={{
+                            required: rowEditing ? "QS Ranking is required" : false,
                             maxLength: {
                               value: 50,
                               message: "QS Ranking must be less than 50 characters"
                             },
                             validate: (value) => {
-                              if (value && typeof value === 'string' && value.trim() !== '') {
+                              if (rowEditing) {
+                                if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                  return "QS Ranking is required";
+                                }
                                 if (!/^[A-Za-z0-9\s:.-]+$/.test(value)) {
                                   return "QS Ranking contains invalid characters";
                                 }
@@ -3163,14 +3894,19 @@ export default function ProfilePage() {
                               return true;
                             }
                           }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              value={formField.value || ""}
-                              className="w-full h-8 text-xs"
-                              placeholder="QS Ranking"
-                              readOnly={!rowEditing}
-                            />
+                          render={({ field: formField, fieldState: { error } }) => (
+                            <div>
+                              <Input
+                                {...formField}
+                                value={formField.value || ""}
+                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
+                                placeholder="e.g., QS Ranking: 172"
+                                readOnly={!rowEditing}
+                              />
+                              {error && rowEditing && (
+                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                              )}
+                            </div>
                           )}
                         />
                       </TableCell>
