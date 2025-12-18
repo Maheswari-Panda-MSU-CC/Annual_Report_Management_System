@@ -504,7 +504,7 @@ export default function EditBookPage() {
               category="Books/Papers"
               subCategory="Books/Books Chapter(s) Published"
               onChange={handleDocumentChange}
-              allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+              allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
               isEditMode={true}
               onClearFields={() => {
@@ -512,7 +512,7 @@ export default function EditBookPage() {
                 setAutoFilledFields(new Set())
               }}
             />
-            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, PNG - max 1MB)</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload new document to replace existing (PDF, JPG, JPEG - max 1MB)</p>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 sm:space-y-6">

@@ -12,6 +12,14 @@ import { validatePdfPageCount } from "@/lib/pdf-validation-utils"
 import { useDocumentAnalysis } from "@/contexts/document-analysis-context"
 import { getDocumentDisplayUrl } from "@/lib/document-url-utils"
 import { useConfirmationDialog } from "@/hooks/use-confirmation-dialog"
+import {
+  ALLOWED_DOCUMENT_EXTENSIONS,
+  MAX_DOCUMENT_FILE_SIZE,
+  ALLOWED_FILE_TYPES_DISPLAY,
+  INVALID_FILE_TYPE_ERROR,
+  isAllowedFileExtension,
+  getDocumentMimeType,
+} from "@/lib/document-upload-constants"
 
 interface DocumentUploadProps {
   documentUrl?: string
@@ -41,8 +49,8 @@ export function DocumentUpload({
   onChange,
   onFileSelect, // New prop
   onExtract,
-  allowedFileTypes = ["pdf", "jpg", "jpeg", "png"],
-  maxFileSize = 1 * 1024 * 1024, // 1MB default
+  allowedFileTypes = ALLOWED_DOCUMENT_EXTENSIONS as any,
+  maxFileSize = MAX_DOCUMENT_FILE_SIZE,
   predictedCategory,
   predictedSubCategory,
   extractedFields: initialExtractedFields,
@@ -75,17 +83,9 @@ export function DocumentUpload({
     return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "pdf"
   }
 
-  // Get MIME type from file extension
+  // Get MIME type from file extension (using centralized function)
   const getMimeType = (extension: string): string => {
-    const mimeTypes: Record<string, string> = {
-      pdf: "application/pdf",
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      doc: "application/msword",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    }
-    return mimeTypes[extension] || "application/pdf"
+    return getDocumentMimeType(`file.${extension}`)
   }
 
   // Handle Smart Document Analyzer redirect props
@@ -113,10 +113,9 @@ export function DocumentUpload({
   const validateFile = async (file: File): Promise<string | null> => {
     const fileExtension = getFileExtension(file.name)
     
-    // Only allow jpg, png, pdf
-    const allowedExtensions = ["pdf", "jpg", "jpeg", "png"]
-    if (!allowedExtensions.includes(fileExtension)) {
-      return `Invalid file type. Only JPG, PNG, and PDF (1 page) files are allowed.`
+    // Use centralized validation
+    if (!isAllowedFileExtension(fileExtension)) {
+      return INVALID_FILE_TYPE_ERROR
     }
 
     // Check file size (1MB max)
@@ -174,7 +173,7 @@ export function DocumentUpload({
       }
     }
 
-    // Images (jpg, jpeg, png) don't need PDF validation - they pass through here
+    // Images (jpg, jpeg) don't need PDF validation - they pass through here
     // PDFs that passed validation also pass through here
     return null // Success for images and validated PDFs
   }
@@ -342,7 +341,7 @@ export function DocumentUpload({
             const maxSizeMB = (maxFileSize / 1024 / 1024).toFixed(0)
             errorMessage = `File size exceeds ${maxSizeMB}MB limit. Maximum allowed size is ${maxSizeMB}MB.`
           } else if (error.code === "file-invalid-type") {
-            errorMessage = `Invalid file type. Only ${allowedFileTypes.map((t) => t.toUpperCase()).join(", ")} files are allowed.`
+            errorMessage = INVALID_FILE_TYPE_ERROR
           } else if (error.code === "too-many-files") {
             errorMessage = "Only one file is allowed."
           } else {
@@ -364,14 +363,13 @@ export function DocumentUpload({
     [disabled, maxFileSize, allowedFileTypes, onError]
   )
 
-  // Configure dropzone - only allow jpg, png, pdf
+  // Configure dropzone - only allow jpg, jpeg, pdf (using centralized constants)
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     onDropRejected, // NEW: Handle rejected files
     accept: {
       "application/pdf": [".pdf"],
       "image/jpeg": [".jpg", ".jpeg"],
-      "image/png": [".png"],
     },
     maxSize: maxFileSize,
     multiple: false,
@@ -751,7 +749,7 @@ export function DocumentUpload({
                       Drag and drop a file here, or click to select
                     </p>
                     <p className="text-sm text-gray-500">
-                      Supported formats: {allowedFileTypes.map((t) => t.toUpperCase()).join(", ")} (max{" "}
+                      Supported formats: {ALLOWED_FILE_TYPES_DISPLAY} (max{" "}
                       {(maxFileSize / 1024 / 1024).toFixed(0)}MB)
                     </p>
                   </div>

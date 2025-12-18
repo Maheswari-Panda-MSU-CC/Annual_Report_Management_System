@@ -222,7 +222,7 @@ if (isS3Configured()) {
 
 1. **Never commit `.env.local`** - Add to `.gitignore`
 2. **Use presigned URLs** - Don't make bucket public
-3. **Validate file types** - Already implemented (PDF, JPG, PNG only)
+3. **Validate file types** - Already implemented (PDF, JPG, JPEG only)
 4. **Limit file sizes** - Already implemented (1MB max)
 5. **Rotate AWS keys** - Periodically update credentials
 

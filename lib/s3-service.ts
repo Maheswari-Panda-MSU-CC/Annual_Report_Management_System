@@ -149,7 +149,7 @@ export function validateVirtualPath(virtualPath: string): boolean {
   }
 
   // Basic pattern validation
-  const validPattern = /^upload\/[a-zA-Z0-9_\-\s]+\/[a-zA-Z0-9_\-\.@%]+\.(pdf|jpg|jpeg|png)$/i;
+  const validPattern = /^upload\/[a-zA-Z0-9_\-\s]+\/[a-zA-Z0-9_\-\.@%]+\.(pdf|jpg|jpeg)$/i;
   return validPattern.test(virtualPath);
 }
 
@@ -322,7 +322,6 @@ function getMimeType(extension: string): string {
     pdf: 'application/pdf',
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
-    png: 'image/png',
   };
 
   return mimeTypes[extension.toLowerCase()] || 'application/octet-stream';

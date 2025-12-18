@@ -120,14 +120,14 @@ interface FileUploadProps {
   multiple?: boolean
 }
 
-function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg,.png", multiple = true }: FileUploadProps) {
+function FileUpload({ onFileSelect, acceptedTypes = ".pdf,.jpg,.jpeg", multiple = true }: FileUploadProps) {
   return (
     <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
       <Upload className="mx-auto h-12 w-12 text-gray-400" />
       <div className="mt-4">
         <label htmlFor="file-upload" className="cursor-pointer">
           <span className="mt-2 block text-sm font-medium text-gray-900">Upload files or drag and drop</span>
-          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, PNG up to 10MB each</span>
+          <span className="mt-1 block text-xs text-gray-500">PDF, JPG, JPEG up to 10MB each</span>
         </label>
         <input
           id="file-upload"
@@ -802,12 +802,12 @@ export default function TalksEventsPage() {
       try {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
-        const tempRecordId = Date.now()
+        const recordId = editingItem.id
         
         const s3Url = await uploadDocumentToS3(
           documentUrl,
           user?.role_id||0,
-          tempRecordId,
+          recordId,
           "talks"
         )
 

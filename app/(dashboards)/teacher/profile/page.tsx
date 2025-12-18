@@ -17,6 +17,7 @@ import { useAuth } from "@/app/api/auth/auth-provider"
 import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText, Eye } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
+import { DocumentViewer } from "@/components/document-viewer"
 import { TeacherInfo, ExperienceEntry, PostDocEntry, EducationEntry, TeacherData, Faculty, Department, Designation, FacultyOption, DepartmentOption, DesignationOption, DegreeTypeOption } from "@/types/interfaces"
 import { useDropDowns } from "@/hooks/use-dropdowns"
 import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
@@ -174,6 +175,9 @@ export default function ProfilePage() {
   // Dialog open state for document upload/view
   const [phdDialogOpen, setPhdDialogOpen] = useState<Record<number, boolean>>({});
   const [educationDialogOpen, setEducationDialogOpen] = useState<Record<number, boolean>>({});
+  // Dialog open state for document viewing (read-only)
+  const [phdViewDialogOpen, setPhdViewDialogOpen] = useState<Record<number, boolean>>({});
+  const [educationViewDialogOpen, setEducationViewDialogOpen] = useState<Record<number, boolean>>({});
 
 
   const { facultyOptions, departmentOptions, degreeTypeOptions, permanentDesignationOptions, temporaryDesignationOptions, fetchFaculties, fetchDepartments, fetchDegreeTypes, fetchParmanentDesignations, fetchTemporaryDesignations } = useDropDowns()
@@ -970,8 +974,8 @@ export default function ProfilePage() {
     }
   }
 
-  // Handle document upload for PhD Research
-  const handlePhdDocumentUpload = async (index: number, id: number, documentUrl: string) => {
+  // Handle document update for PhD Research (document-only update)
+  const handlePhdDocumentUpdate = async (index: number, id: number, documentUrl: string) => {
     if (!documentUrl) {
       toast({
         title: "Error",
@@ -1023,19 +1027,25 @@ export default function ProfilePage() {
         }
       }
 
-      const entry = postDocForm.getValues(`researches.${index}`)
-      
-      const res = await fetch('/api/teacher/profile/phd-research', {
+      // Call document-only update endpoint
+      const res = await fetch(`/api/teacher/profile/phd-research/${id}/document`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           teacherId, 
-          research: { ...entry, doc: s3Url } 
+          doc: s3Url 
         }),
       })
 
       if (!res.ok) {
-        throw new Error('Failed to save document')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update document')
+      }
+
+      const result = await res.json()
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update document')
       }
 
       await invalidateProfile()
@@ -1046,18 +1056,34 @@ export default function ProfilePage() {
       })
       // Close the dialog after successful save
       setPhdDialogOpen(prev => ({ ...prev, [id]: false }))
+      
+      // Refresh form data to reflect the updated document
+      if (teacherId) {
+        setTimeout(async () => {
+          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+          if (refreshRes.ok) {
+            const refreshData: TeacherData = await refreshRes.json()
+            postDocForm.reset({ researches: refreshData.postDoctoralExp || [] })
+          }
+        }, 100)
+      }
+      
       toast({ 
         title: "Success", 
-        description: "Document uploaded successfully." 
+        description: "Document updated successfully." 
       })
     } catch (e: any) {
-      console.error('Upload error:', e)
-      toast({ title: "Upload Failed", description: e.message || "Could not upload document.", variant: "destructive" })
+      console.error('Document update error:', e)
+      toast({ 
+        title: "Update Failed", 
+        description: e.message || "Could not update document.", 
+        variant: "destructive" 
+      })
     }
   }
 
-  // Handle document upload for Education
-  const handleEducationDocumentUpload = async (index: number, id: number, documentUrl: string) => {
+  // Handle document update for Education (document-only update)
+  const handleEducationDocumentUpdate = async (index: number, id: number, documentUrl: string) => {
     if (!documentUrl) {
       toast({
         title: "Error",
@@ -1109,19 +1135,25 @@ export default function ProfilePage() {
         }
       }
 
-      const entry = educationForm.getValues(`educations.${index}`)
-      
-      const res = await fetch('/api/teacher/profile/graduation', {
+      // Call document-only update endpoint
+      const res = await fetch(`/api/teacher/profile/graduation/${id}/document`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           teacherId, 
-          education: { ...entry, Image: s3Url } 
+          Image: s3Url 
         }),
       })
 
       if (!res.ok) {
-        throw new Error('Failed to save document')
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Failed to update document')
+      }
+
+      const result = await res.json()
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update document')
       }
 
       await invalidateProfile()
@@ -1132,13 +1164,29 @@ export default function ProfilePage() {
       })
       // Close the dialog after successful save
       setEducationDialogOpen(prev => ({ ...prev, [id]: false }))
+      
+      // Refresh form data to reflect the updated document
+      if (teacherId) {
+        setTimeout(async () => {
+          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+          if (refreshRes.ok) {
+            const refreshData: TeacherData = await refreshRes.json()
+            educationForm.reset({ educations: refreshData.graduationDetails || [] })
+          }
+        }, 100)
+      }
+      
       toast({ 
         title: "Success", 
-        description: "Document uploaded successfully." 
+        description: "Document updated successfully." 
       })
     } catch (e: any) {
-      console.error('Upload error:', e)
-      toast({ title: "Upload Failed", description: e.message || "Could not upload document.", variant: "destructive" })
+      console.error('Document update error:', e)
+      toast({ 
+        title: "Update Failed", 
+        description: e.message || "Could not update document.", 
+        variant: "destructive" 
+      })
     }
   }
 
@@ -2231,15 +2279,15 @@ export default function ProfilePage() {
                 <Table className="w-full table-auto text-xs sm:text-sm">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Sr No.</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Employer</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Currently Employed?</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Designation</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Date of Joining</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Date of Relieving</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Nature of Job</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Type of Teaching</TableHead>
-                      <TableHead className="p-1.5 sm:p-2 text-xs whitespace-nowrap">Actions</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Employer</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Currently Employed?</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Designation</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Joining</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Relieving</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Nature of Job</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[130px]">Type of Teaching</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
               <TableBody>
@@ -2248,8 +2296,8 @@ export default function ProfilePage() {
                   const rowEditing = experienceEditingIds.has(field.Id);
                   return (
                     <TableRow key={field.id}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell className="min-w-[220px]">
+                      <TableCell className="p-2 sm:p-3 text-center">{index + 1}</TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Employeer`}
@@ -2278,13 +2326,13 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="w-full min-w-0 h-8 text-xs"
+                              className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.currente`}
@@ -2305,7 +2353,7 @@ export default function ProfilePage() {
                                 }}
                                 disabled={!rowEditing}
                               >
-                                <SelectTrigger className={`w-full min-w-[60px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
+                                <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -2317,7 +2365,7 @@ export default function ProfilePage() {
                           }}
                         />
                       </TableCell>
-                      <TableCell className="min-w-[220px]">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.desig`}
@@ -2342,13 +2390,13 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="w-full min-w-0 h-8 text-xs"
+                              className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Start_Date`}
@@ -2359,13 +2407,13 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.End_Date`}
@@ -2415,15 +2463,14 @@ export default function ProfilePage() {
                                 value={formatDateForInput(formField.value)}
                                 onChange={(e) => formField.onChange(e.target.value)}
                                 max={currenteValue ? undefined : new Date().toISOString().split('T')[0]}
-                                className="w-full min-w-0"
-                                readOnly={!rowEditing}
-                                disabled={currenteValue || !rowEditing}
+                                className="w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default"
+                                readOnly={!rowEditing || currenteValue}
                               />
                             )
                           }}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.Nature`}
@@ -2434,7 +2481,7 @@ export default function ProfilePage() {
                               onValueChange={formField.onChange}
                               disabled={!rowEditing}
                             >
-                              <SelectTrigger className={`w-full min-w-[80px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
+                              <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -2449,7 +2496,7 @@ export default function ProfilePage() {
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={experienceForm.control}
                           name={`experiences.${index}.UG_PG`}
@@ -2460,7 +2507,7 @@ export default function ProfilePage() {
                               onValueChange={formField.onChange}
                               disabled={!rowEditing}
                             >
-                              <SelectTrigger className={`w-full min-w-[70px] max-w-full h-8 text-xs ${!rowEditing ? "pointer-events-none" : ""}`}>
+                              <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -2473,7 +2520,7 @@ export default function ProfilePage() {
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">
+                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
                             <>
@@ -2552,14 +2599,14 @@ export default function ProfilePage() {
                 <Table className="w-full table-auto">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Sr No.</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Institute / Industry</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Start Date</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">End Date</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Sponsored By</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">QS / THE World University Ranking</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Supporting Document</TableHead>
-                      <TableHead className="p-2 sm:p-4 whitespace-nowrap">Actions</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Institute / Industry</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Start Date</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">End Date</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Sponsored By</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">QS / THE World University Ranking</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Supporting Document</TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
               <TableBody>
@@ -2568,8 +2615,8 @@ export default function ProfilePage() {
                   const rowEditing = postDocEditingIds.has(field.Id);
                   return (
                     <TableRow key={field.id}>
-                      <TableCell className="p-1.5 sm:p-2 whitespace-nowrap text-xs">{index + 1}</TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3 text-center">{index + 1}</TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.Institute`}
@@ -2587,13 +2634,13 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="w-full min-w-0 h-8 text-xs"
+                              className="w-full h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.Start_Date`}
@@ -2604,13 +2651,13 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.End_Date`}
@@ -2642,13 +2689,13 @@ export default function ProfilePage() {
                               type="date"
                               value={formatDateForInput(formField.value)}
                               onChange={(e) => formField.onChange(e.target.value)}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.SponsoredBy`}
@@ -2669,14 +2716,14 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs"
                               placeholder="e.g., UGC, CSIR"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={postDocForm.control}
                           name={`researches.${index}.QS_THE`}
@@ -2697,71 +2744,104 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs"
                               placeholder="e.g., QS Ranking: 172"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
-                        <Dialog 
-                          open={phdDialogOpen[field.Id] || false}
-                          onOpenChange={(open) => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: open }))}
-                        >
-                          <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.doc ? "View/Update Document" : "Upload Document"}>
-                              {entry.doc ? <FileText className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                            <DialogHeader>
-                              <DialogTitle>{entry.doc ? "View/Update Supporting Document" : "Upload Supporting Document"}</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <DocumentUpload
-                                documentUrl={phdDocumentUrls[field.Id] || entry.doc}
-                                onChange={(url) => {
-                                  if (url) {
-                                    setPhdDocumentUrls(prev => ({ ...prev, [field.Id]: url }))
-                                  }
-                                }}
-                                onClear={() => {
-                                  setPhdDocumentUrls(prev => {
-                                    const newUrls = { ...prev }
-                                    delete newUrls[field.Id]
-                                    return newUrls
-                                  })
-                                }}
-                                hideExtractButton={true}
-                                isEditMode={!!entry.doc}
-                              />
-                              <div className="flex justify-end gap-2 pt-4 border-t">
-                                <Button 
-                                  variant="outline"
-                                  onClick={() => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: false }))}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button 
-                                  variant="default" 
-                                  className="cursor-pointer"
-                                  onClick={async () => {
-                                    const currentUrl = phdDocumentUrls[field.Id] || entry.doc
-                                    if (currentUrl) {
-                                      await handlePhdDocumentUpload(index, field.Id, currentUrl)
+                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
+                        {!rowEditing && entry.doc ? (
+                          // View mode: Show Eye icon to view document
+                          <Dialog 
+                            open={phdViewDialogOpen[field.Id] || false}
+                            onOpenChange={(open) => setPhdViewDialogOpen(prev => ({ ...prev, [field.Id]: open }))}
+                          >
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Document">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>View Supporting Document</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <DocumentViewer
+                                  documentUrl={entry.doc}
+                                  documentName="Supporting Document"
+                                  documentType={entry.doc.split('.').pop()?.toLowerCase() || 'pdf'}
+                                />
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        ) : rowEditing ? (
+                          // Edit mode: Show Upload icon if no document, FileText if document exists
+                          <Dialog 
+                            open={phdDialogOpen[field.Id] || false}
+                            onOpenChange={(open) => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: open }))}
+                          >
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.doc || phdDocumentUrls[field.Id] ? "Update Document" : "Upload Document"}>
+                                {entry.doc || phdDocumentUrls[field.Id] ? (
+                                  <FileText className="h-4 w-4" />
+                                ) : (
+                                  <Upload className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>{entry.doc || phdDocumentUrls[field.Id] ? "Update Supporting Document" : "Upload Supporting Document"}</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <DocumentUpload
+                                  documentUrl={phdDocumentUrls[field.Id] || entry.doc}
+                                  onChange={(url) => {
+                                    if (url) {
+                                      setPhdDocumentUrls(prev => ({ ...prev, [field.Id]: url }))
                                     }
                                   }}
-                                  disabled={!phdDocumentUrls[field.Id] && !entry.doc}
-                                >
-                                  Save Document
-                                </Button>
+                                  onClear={() => {
+                                    setPhdDocumentUrls(prev => {
+                                      const newUrls = { ...prev }
+                                      delete newUrls[field.Id]
+                                      return newUrls
+                                    })
+                                  }}
+                                  hideExtractButton={true}
+                                  isEditMode={!!entry.doc}
+                                />
+                                <div className="flex justify-end gap-2 pt-4 border-t">
+                                  <Button 
+                                    variant="outline"
+                                    onClick={() => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: false }))}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    variant="default" 
+                                    className="cursor-pointer"
+                                    onClick={async () => {
+                                      const currentUrl = phdDocumentUrls[field.Id] || entry.doc
+                                      if (currentUrl) {
+                                        await handlePhdDocumentUpdate(index, field.Id, currentUrl)
+                                      }
+                                    }}
+                                    disabled={!phdDocumentUrls[field.Id] && !entry.doc}
+                                  >
+                                    Save Document
+                                  </Button>
+                                </div>
                               </div>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                            </DialogContent>
+                          </Dialog>
+                        ) : (
+                          <span className="text-xs text-gray-400">No document</span>
+                        )}
                       </TableCell>
-                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">
+                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
                             <>
@@ -2834,18 +2914,18 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
-            <Table>
+            <Table className="w-full table-auto">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Sr No.</TableHead>
-                  <TableHead>Degree Type</TableHead>
-                  <TableHead>University</TableHead>
-                  <TableHead>State</TableHead>
-                  <TableHead>Year of Passing</TableHead>
-                  <TableHead>Specialization</TableHead>
-                  <TableHead>QS Ranking</TableHead>
-                  <TableHead>Image</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Degree Type</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">University</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[120px]">State</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Year of Passing</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Specialization</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">QS Ranking</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Image</TableHead>
+                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -2854,9 +2934,9 @@ export default function ProfilePage() {
                   const rowEditing = educationEditingIds.has(field.gid);
                   return (
                     <TableRow key={field.id}>
-                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">{index + 1}</TableCell>
+                      <TableCell className="p-2 sm:p-3 text-center">{index + 1}</TableCell>
 
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.degree_type`}
@@ -2872,13 +2952,13 @@ export default function ProfilePage() {
                               placeholder="Select degree type"
                               disabled={!rowEditing}
                               emptyMessage="No degree type found."
-                              className="w-full min-w-0"
+                              className="w-full"
                             />
                           )}
                         />
                       </TableCell>
 
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.university_name`}
@@ -2907,13 +2987,13 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className="w-full min-w-0 h-8 text-xs"
+                              className="w-full h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.state`}
@@ -2937,7 +3017,7 @@ export default function ProfilePage() {
                           render={({ field: formField }) => (
                             <Input
                               {...formField}
-                              className={`w-full min-w-0 ${!rowEditing ? "pointer-events-none bg-gray-100 text-gray-500" : ""}`}
+                              className="w-full h-8 text-xs"
                               placeholder="Enter state"
                               readOnly={!rowEditing}
                             />
@@ -2945,7 +3025,7 @@ export default function ProfilePage() {
                         />
                       </TableCell>
 
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.year_of_passing`}
@@ -3027,7 +3107,7 @@ export default function ProfilePage() {
                                 }}
                                 name={formField.name}
                                 ref={formField.ref}
-                                className="w-full min-w-0"
+                                className="w-full h-8 text-xs"
                                 placeholder="YYYY"
                                 readOnly={!rowEditing}
                               />
@@ -3036,7 +3116,7 @@ export default function ProfilePage() {
                         />
                       </TableCell>
 
-                      <TableCell className="p-1.5 sm:p-2 min-w-[220px]">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.subject`}
@@ -3058,14 +3138,14 @@ export default function ProfilePage() {
                             <Input
                               {...formField}
                               value={formField.value || ""}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
 
-                      <TableCell className="p-1.5 sm:p-2 min-w-0">
+                      <TableCell className="p-2 sm:p-3">
                         <Controller
                           control={educationForm.control}
                           name={`educations.${index}.QS_Ranking`}
@@ -3087,27 +3167,56 @@ export default function ProfilePage() {
                             <Input
                               {...formField}
                               value={formField.value || ""}
-                              className="w-full min-w-0"
+                              className="w-full h-8 text-xs"
                               placeholder="QS Ranking"
                               readOnly={!rowEditing}
                             />
                           )}
                         />
                       </TableCell>
-                      <TableCell className="p-1.5 sm:p-2 whitespace-nowrap">
-                        {entry.Image || rowEditing ? (
+                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
+                        {!rowEditing && entry.Image ? (
+                          // View mode: Show Eye icon to view document
+                          <Dialog 
+                            open={educationViewDialogOpen[field.gid] || false}
+                            onOpenChange={(open) => setEducationViewDialogOpen(prev => ({ ...prev, [field.gid]: open }))}
+                          >
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Document">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle>View Document</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <DocumentViewer
+                                  documentUrl={entry.Image}
+                                  documentName="Education Document"
+                                  documentType={entry.Image.split('.').pop()?.toLowerCase() || 'pdf'}
+                                />
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        ) : rowEditing ? (
+                          // Edit mode: Show Upload icon if no document, FileText if document exists
                           <Dialog 
                             open={educationDialogOpen[field.gid] || false}
                             onOpenChange={(open) => setEducationDialogOpen(prev => ({ ...prev, [field.gid]: open }))}
                           >
                             <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.Image ? "View/Update Document" : "Upload Document"}>
-                                {entry.Image ? <FileText className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.Image || educationDocumentUrls[field.gid] ? "Update Document" : "Upload Document"}>
+                                {entry.Image || educationDocumentUrls[field.gid] ? (
+                                  <FileText className="h-4 w-4" />
+                                ) : (
+                                  <Upload className="h-4 w-4" />
+                                )}
                               </Button>
                             </DialogTrigger>
                             <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
                               <DialogHeader>
-                                <DialogTitle>{entry.Image ? "View/Update Document" : "Upload Document"}</DialogTitle>
+                                <DialogTitle>{entry.Image || educationDocumentUrls[field.gid] ? "Update Document" : "Upload Document"}</DialogTitle>
                               </DialogHeader>
                               <div className="space-y-4">
                                 <DocumentUpload
@@ -3140,7 +3249,7 @@ export default function ProfilePage() {
                                     onClick={async () => {
                                       const currentUrl = educationDocumentUrls[field.gid] || entry.Image
                                       if (currentUrl) {
-                                        await handleEducationDocumentUpload(index, field.gid, currentUrl)
+                                        await handleEducationDocumentUpdate(index, field.gid, currentUrl)
                                       }
                                     }}
                                     disabled={!educationDocumentUrls[field.gid] && !entry.Image}
@@ -3155,7 +3264,7 @@ export default function ProfilePage() {
                           <span className="text-xs text-gray-400">No document</span>
                         )}
                       </TableCell>
-                      <TableCell className="p-2 sm:p-4 whitespace-nowrap">
+                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
                         <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
                           {!rowEditing ? (
                             <>

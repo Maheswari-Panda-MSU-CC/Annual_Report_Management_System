@@ -391,14 +391,14 @@ export default function AddConferencePaperPage() {
               subCategory="Papers Presented"
               onChange={handleDocumentChange}
               onExtract={handleExtractFields}
-              allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+              allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
               }}
             />
-            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload invitation letter/email/certificate (PDF, JPG, PNG - max 1MB)</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload invitation letter/email/certificate (PDF, JPG, JPEG - max 1MB)</p>
           </div>
 
           {/* Form Section */}

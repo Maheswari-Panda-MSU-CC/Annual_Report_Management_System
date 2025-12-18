@@ -734,7 +734,7 @@ export default function AddResearchPage() {
                       field.onChange(url)
                     }}
                     onExtract={handleExtractFields}
-                    allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+                    allowedFileTypes={["pdf", "jpg", "jpeg"]}
                     maxFileSize={1 * 1024 * 1024}
                     className="w-full"
                     onClearFields={() => {

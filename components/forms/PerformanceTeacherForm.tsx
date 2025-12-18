@@ -180,7 +180,7 @@ export function PerformanceTeacherForm({
             })
             // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
-          allowedFileTypes={["pdf", "jpg", "jpeg", "png", "bmp"]}
+          allowedFileTypes={["pdf", "jpg", "jpeg"]}
           maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}

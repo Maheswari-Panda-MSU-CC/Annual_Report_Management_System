@@ -103,7 +103,7 @@ export function RefresherOrientationForm({
             })
             // Don't call handleExtractInfo - it uses old API and causes false errors
           }}
-          allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+          allowedFileTypes={["pdf", "jpg", "jpeg"]}
           maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}

@@ -78,11 +78,13 @@ export async function POST(request: Request) {
     req.input('Image', sql.VarChar(1000), paper.Image || null)
     req.input('mode', sql.VarChar(500), paper.mode || null)
 
-    await req.execute('sp_InsertPaperPresented')
+    const result = await req.execute('sp_InsertPaperPresented')
+    const recordId = result.recordset[0].RecordId
 
     return NextResponse.json({
       success: true,
       message: 'Paper added successfully',
+      record_id: recordId,
     })
   } catch (err: any) {
     console.error('Error adding paper:', err)

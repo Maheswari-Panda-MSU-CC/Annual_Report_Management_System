@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readFile } from "fs/promises"
 import { join } from "path"
+import { getDocumentMimeType } from "@/lib/document-upload-constants"
 
 const UPLOAD_DIR = join(process.cwd(), "public", "uploaded-document")
 
@@ -31,15 +32,8 @@ export async function POST(request: NextRequest) {
       fileBuffer = await readFile(filePath)
       fileSize = fileBuffer.length
       
-      // Determine file type from extension
-      const extension = fileName.split(".").pop()?.toLowerCase()
-      const mimeTypes: Record<string, string> = {
-        pdf: "application/pdf",
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        png: "image/png",
-      }
-      fileType = mimeTypes[extension || ""] || "application/pdf"
+      // Determine file type from extension (using centralized function)
+      fileType = getDocumentMimeType(fileName)
     } catch (error: any) {
       return NextResponse.json(
         { success: false, error: `File not found: ${fileName}` },

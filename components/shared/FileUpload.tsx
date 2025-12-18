@@ -1,4 +1,5 @@
 import { Upload } from "lucide-react"
+import { ALLOWED_FILE_TYPES_DISPLAY } from "@/lib/document-upload-constants"
 
 interface FileUploadProps {
     onFileSelect: (files: FileList | null) => void
@@ -10,7 +11,7 @@ interface FileUploadProps {
 
 function FileUpload({ 
   onFileSelect, 
-  acceptedTypes = ".pdf,.jpg,.jpeg,.png", 
+  acceptedTypes = ".pdf,.jpg,.jpeg", 
   multiple = true,
   hideAfterUpload = false,
   isFileSelected = false
@@ -26,7 +27,7 @@ function FileUpload({
         <div className="mt-4">
           <label htmlFor="file-upload" className="cursor-pointer">
             <span className="mt-2 block text-sm font-medium text-gray-900">Upload files or drag and drop</span>
-            <span className="mt-1 block text-xs text-gray-500">PDF, JPG, PNG up to 1MB each</span>
+            <span className="mt-1 block text-xs text-gray-500">{ALLOWED_FILE_TYPES_DISPLAY} up to 1MB each</span>
           </label>
           <input
             id="file-upload"

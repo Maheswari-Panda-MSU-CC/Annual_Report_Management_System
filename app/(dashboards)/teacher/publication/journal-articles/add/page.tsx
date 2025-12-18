@@ -563,14 +563,14 @@ export default function AddJournalArticlePage() {
               subCategory="Published Articles/Papers in Journals/Edited Volumes"
               onChange={handleDocumentChange}
               onExtract={handleExtractFields}
-              allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+              allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
               }}
             />
-            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload article/journal/volume document (PDF, JPG, PNG - max 1MB)</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-2">Upload article/journal/volume document (PDF, JPG, JPEG - max 1MB)</p>
           </div>
 
           {/* Form Section */}

@@ -331,7 +331,7 @@ Response:
 1. **Never expose AWS credentials** - Keep them in `.env.local` only
 2. **Use presigned URLs** - Don't make S3 bucket public
 3. **Set appropriate expiry** - Default 1 hour for presigned URLs
-4. **Validate file types** - Only allow PDF, JPG, PNG (already implemented)
+4. **Validate file types** - Only allow PDF, JPG, JPEG (already implemented)
 5. **Limit file sizes** - Max 1MB per file (already implemented)
 6. **Enable S3 versioning** - Recover accidentally deleted files
 7. **Enable S3 logging** - Track access and modifications

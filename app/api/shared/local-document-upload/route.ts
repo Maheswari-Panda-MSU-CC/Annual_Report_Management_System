@@ -3,6 +3,13 @@ import { writeFile, unlink, readdir, readFile } from "fs/promises"
 import { join } from "path"
 import { existsSync, mkdirSync } from "fs"
 import { cookies } from "next/headers"
+import {
+  ALLOWED_DOCUMENT_MIME_TYPES,
+  MAX_DOCUMENT_FILE_SIZE,
+  INVALID_FILE_TYPE_ERROR,
+  isAllowedMimeType,
+  getDocumentMimeType,
+} from "@/lib/document-upload-constants"
 
 const UPLOAD_DIR = join(process.cwd(), "public", "uploaded-document")
 
@@ -11,16 +18,9 @@ if (!existsSync(UPLOAD_DIR)) {
   mkdirSync(UPLOAD_DIR, { recursive: true })
 }
 
-// Helper to get MIME type from file extension
+// Helper to get MIME type from file extension (using centralized function)
 function getMimeType(fileName: string): string {
-  const ext = fileName.split(".").pop()?.toLowerCase()
-  const mimeTypes: Record<string, string> = {
-    pdf: "application/pdf",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    png: "image/png",
-  }
-  return mimeTypes[ext || ""] || "application/octet-stream"
+  return getDocumentMimeType(fileName)
 }
 
 export async function POST(request: NextRequest) {
@@ -35,26 +35,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate file type - only jpg, png, pdf
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-    ]
-    
-    if (!allowedTypes.includes(file.type)) {
+    // Validate file type - only jpg, jpeg, pdf (using centralized constants)
+    if (!isAllowedMimeType(file.type)) {
       return NextResponse.json(
-        { success: false, error: "Invalid file type. Only JPG, PNG, and PDF (1 page) files are allowed." },
+        { success: false, error: INVALID_FILE_TYPE_ERROR },
         { status: 400 }
       )
     }
 
-    // Validate file size (1MB max)
-    const maxSize = 1 * 1024 * 1024 // 1MB
-    if (file.size > maxSize) {
+    // Validate file size (using centralized constant)
+    if (file.size > MAX_DOCUMENT_FILE_SIZE) {
+      const maxSizeMB = (MAX_DOCUMENT_FILE_SIZE / 1024 / 1024).toFixed(0)
       return NextResponse.json(
-        { success: false, error: "File size exceeds 1MB limit. Maximum allowed size is 1MB." },
+        { success: false, error: `File size exceeds ${maxSizeMB}MB limit. Maximum allowed size is ${maxSizeMB}MB.` },
         { status: 400 }
       )
     }

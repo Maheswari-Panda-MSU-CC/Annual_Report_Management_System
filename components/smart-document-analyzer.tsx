@@ -881,7 +881,7 @@ export function SmartDocumentAnalyzer() {
                 variant: "destructive",
               })
             }}
-            allowedFileTypes={["pdf", "jpg", "jpeg", "png"]}
+            allowedFileTypes={["pdf", "jpg", "jpeg"]}
             maxFileSize={1 * 1024 * 1024}
             className="w-full"
             hideExtractButton={true}
