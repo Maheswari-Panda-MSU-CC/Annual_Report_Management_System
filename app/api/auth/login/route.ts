@@ -88,6 +88,7 @@ export async function POST(request: Request) {
         role_id: user.Role_Id || null,
         faculty_id: user.Faculty_Id || null,
         dept_id: user.Dept_Id || null,
+        profilePicture: user.ProfileImage || null,
       },
     });
 

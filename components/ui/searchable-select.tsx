@@ -53,18 +53,18 @@ export function SearchableSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between", className)}
+          className={cn("w-full justify-between text-sm sm:text-md h-9 sm:h-10", className)}
           disabled={disabled}
         >
-          {selectedOption ? selectedOption.label : placeholder}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <span className="truncate text-left flex-1">{selectedOption ? selectedOption.label : placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 text-sm sm:text-sm" align="start">
         <Command shouldFilter>
-          <CommandInput placeholder="Search..." />
+          <CommandInput placeholder="Search..." className="text-sm sm:text-sm" />
           <CommandList>
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandEmpty className="text-sm sm:text-sm">{emptyMessage}</CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
@@ -74,14 +74,15 @@ export function SearchableSelect({
                     onValueChange(option.value)
                     setOpen(false)
                   }}
+                  className="text-sm sm:text-sm"
                 >
                   <Check
                     className={cn(
-                      "mr-2 h-4 w-4",
+                      "mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4",
                       String(value) === String(option.value) ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  {option.label}
+                  <span className="truncate">{option.label}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

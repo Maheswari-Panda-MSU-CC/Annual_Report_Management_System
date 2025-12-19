@@ -11,6 +11,8 @@ import {
   TableCell,
   BorderStyle,
   ShadingType,
+  ImageRun,
+  Media,
 } from "docx"
 import { type CVTemplate } from "./cv-template-styles"
 import type { CVData } from "@/types/cv-data"
@@ -1179,6 +1181,82 @@ function createWordSection(
   return sections
 }
 
+// Helper function to fetch and convert image to buffer using API endpoint
+async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer | null> {
+  try {
+    // Determine the fetch URL
+    let fetchUrl = imageUrl
+    
+    // If it's already a full HTTP URL (S3 or external), use it directly
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      // Check if it's an API endpoint
+      if (imageUrl.includes('/api/teacher/profile/image')) {
+        // API GET endpoint returns image directly, POST returns JSON with URL
+        // Check if it's a GET request (has ?path=)
+        if (imageUrl.includes('?path=') || imageUrl.includes('&path=')) {
+          // GET endpoint - returns image directly
+          fetchUrl = imageUrl
+        } else {
+          // POST endpoint - returns JSON, need to extract URL
+          // But we're using GET, so this shouldn't happen
+          fetchUrl = imageUrl
+        }
+      } else {
+        // Direct image URL (S3 or external)
+        fetchUrl = imageUrl
+      }
+    } else {
+      // Relative path - construct API endpoint URL for production builds
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL 
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
+      
+      // Use GET endpoint which returns image directly
+      fetchUrl = `${baseUrl}/api/teacher/profile/image?path=${encodeURIComponent(imageUrl)}`
+    }
+    
+    // Fetch the image (API GET endpoint returns image directly, not JSON)
+    const response = await fetch(fetchUrl, {
+      cache: 'no-store', // Ensure fresh image in production
+    })
+    
+    if (!response.ok) {
+      console.error(`Failed to fetch image: ${response.statusText}`)
+      return null
+    }
+    
+    // Check if response is an image
+    const contentType = response.headers.get('content-type')
+    if (contentType && contentType.startsWith('image/')) {
+      // Direct image response
+      const arrayBuffer = await response.arrayBuffer()
+      return Buffer.from(arrayBuffer)
+    }
+    
+    // If response is JSON (POST endpoint), extract URL
+    try {
+      const jsonData = await response.json()
+      if (jsonData.success && jsonData.url) {
+        // Fetch the actual image from the URL
+        const imageResponse = await fetch(jsonData.url, { cache: 'no-store' })
+        if (!imageResponse.ok) {
+          console.error(`Failed to fetch image from URL: ${imageResponse.statusText}`)
+          return null
+        }
+        const arrayBuffer = await imageResponse.arrayBuffer()
+        return Buffer.from(arrayBuffer)
+      }
+    } catch {
+      // Not JSON, already handled above
+    }
+    
+    console.error("Unexpected response format")
+    return null
+  } catch (error) {
+    console.error("Error fetching image:", error)
+    return null
+  }
+}
+
 // Generate complete Word document - Single Column Layout
 export async function generateWordDocument(
   cvData: CVData,
@@ -1199,6 +1277,13 @@ export async function generateWordDocument(
     : template === "classic"
     ? "fde68a"
     : "d1d5db"
+  
+  // Fetch profile image if available using API endpoint for production builds
+  let profileImageBuffer: Buffer | null = null
+  
+  if (cvData.personal.profileImage) {
+    profileImageBuffer = await fetchImageAsBuffer(cvData.personal.profileImage)
+  }
   
   // Personal Details Section with Profile Image
   if (selectedSections.includes("personal")) {
@@ -1337,16 +1422,27 @@ export async function generateWordDocument(
           // Right cell - Profile Image
           new TableCell({
             children: [
-    new Paragraph({
-      children: [
-        new TextRun({
-                    text: "[Profile Image]",
-                    italics: true,
-                    size: 16,
-                    color: "888888",
-        }),
-      ],
-      alignment: AlignmentType.CENTER,
+              new Paragraph({
+                children: profileImageBuffer
+                  ? [
+                      new ImageRun({
+                        data: profileImageBuffer,
+                        transformation: {
+                          width: 144,
+                          height: 144,
+                        },
+                        type: "jpg",
+                      }),
+                    ]
+                  : [
+                      new TextRun({
+                        text: cvData.personal.name ? cvData.personal.name.charAt(0).toUpperCase() : "?",
+                        bold: true,
+                        size: 72, // Large font for initial
+                        color: "6b7280",
+                      }),
+                    ],
+                alignment: AlignmentType.CENTER,
                 spacing: { after: 0 },
               }),
             ],
@@ -1357,7 +1453,7 @@ export async function generateWordDocument(
               color: "f9fafb",
               fill: "f9fafb",
             },
-        }),
+          }),
       ],
       }),
     ]
@@ -1770,7 +1866,7 @@ export async function generateWordDocument(
     }
   })
 
-  // Create the document
+  // Create the document with all content
   const doc = new Document({
     sections: [
       {

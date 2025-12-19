@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useForm, Controller, useFieldArray } from "react-hook-form"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -153,7 +153,7 @@ const initialEditingData: EditingData = {
 
 export default function ProfilePage() {
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const isAuthenticated = user !== null;
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
@@ -187,7 +187,7 @@ export default function ProfilePage() {
   const [editingData, setEditingData] = useState({ ...initialEditingData })
 
   // react-hook-form for Personal Details
-  const { control, register, reset, handleSubmit, getValues, watch, setValue, trigger, formState: { errors, touchedFields } } = useForm<any>({
+  const { control, register, reset, handleSubmit, getValues, watch, setValue, trigger, formState: { errors, touchedFields, isDirty: isPersonalDirty } } = useForm<any>({
     defaultValues: {},
     mode: 'onSubmit',
     reValidateMode: 'onChange',
@@ -203,6 +203,7 @@ export default function ProfilePage() {
     control: experienceForm.control,
     name: 'experiences',
   })
+  const { formState: { isDirty: isExperienceDirty } } = experienceForm
 
   // react-hook-form for Post-Doctoral Research
   const postDocForm = useForm<{ researches: PostDocEntry[] }>({
@@ -214,6 +215,7 @@ export default function ProfilePage() {
     control: postDocForm.control,
     name: 'researches',
   })
+  const { formState: { isDirty: isPostDocDirty } } = postDocForm
 
   // react-hook-form for Education Details
   const educationForm = useForm<{ educations: EducationEntry[] }>({
@@ -225,6 +227,20 @@ export default function ProfilePage() {
     control: educationForm.control,
     name: 'educations',
   })
+  const { formState: { isDirty: isEducationDirty } } = educationForm
+
+  // Keep original data for cancel/reset
+  const initialDataRef = useRef<{
+    teacherInfo: TeacherInfo | null
+    experiences: ExperienceEntry[]
+    researches: PostDocEntry[]
+    educations: EducationEntry[]
+    profileImagePath: string | null
+    facultyId: number | null
+    ictDetails: string
+    facultyData: Faculty | null
+    departmentData: Department | null
+  } | null>(null)
 
 
   // Fetch dropdown data
@@ -291,6 +307,18 @@ export default function ProfilePage() {
     if (profileData) {
       const data: TeacherData = profileData as any
       setTeacherInfo(data.teacherInfo)
+      // Store initial snapshot for resets
+      initialDataRef.current = {
+        teacherInfo: data.teacherInfo,
+        experiences: data.teacherExperience || [],
+        researches: data.postDoctoralExp || [],
+        educations: data.graduationDetails || [],
+        profileImagePath: data.teacherInfo?.ProfileImage || null,
+        facultyId: data.faculty?.Fid ?? null,
+        ictDetails: data.teacherInfo?.ICT_Details || '',
+        facultyData: data.faculty || null,
+        departmentData: data.department || null,
+      }
       
       // Fetch profile image URL if ProfileImage exists
       if (data.teacherInfo?.ProfileImage) {
@@ -603,59 +631,19 @@ export default function ProfilePage() {
       return
     }
 
-    setIsUploadingImage(true)
+    // Do NOT upload immediately. Only prepare preview and pending file.
+    setPendingProfileImageFile(file)
+    const previewUrl = URL.createObjectURL(file)
+    setProfileImage(previewUrl)
 
-    try {
-      // Create preview URL for immediate display
-      const previewUrl = URL.createObjectURL(file)
-      setProfileImage(previewUrl)
-
-      // Store file for S3 upload on save button click
-      setPendingProfileImageFile(file)
-
-      // Upload image to server temporarily (local storage, not S3 yet)
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("email", user.email) // Use actual email from auth
-      formData.append("uploadToS3", "false") // Don't upload to S3 yet
-
-      const uploadResponse = await fetch("/api/teacher/profile/image", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json()
-        throw new Error(errorData.error || "Failed to upload image")
-      }
-
-      const uploadResult = await uploadResponse.json()
-
-      if (!uploadResult.success) {
-        throw new Error(uploadResult.error || "Upload failed")
-      }
-
-      toast({
-        title: "Image Selected",
-        description: "Image ready. Click 'Save Changes' to upload to S3 and update profile.",
-      })
-    } catch (error: any) {
-      console.error("Error uploading image:", error)
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload image. Please try again.",
-        variant: "destructive"
-      })
-      // Reset preview on error
-      setProfileImage(null)
-      setPendingProfileImageFile(null)
-    } finally {
-      setIsUploadingImage(false)
-      // Reset file input
-      const fileInput = document.getElementById("profile-image-input") as HTMLInputElement
-      if (fileInput) {
-        fileInput.value = ""
-      }
+    toast({
+      title: "Image Selected",
+      description: "Image ready. Click 'Save Changes' to upload and update profile.",
+    })
+    // Reset file input
+    const fileInput = document.getElementById("profile-image-input") as HTMLInputElement
+    if (fileInput) {
+      fileInput.value = ""
     }
   }
 
@@ -779,10 +767,11 @@ export default function ProfilePage() {
       // If there's a pending profile image, upload it to S3 first
       if (pendingProfileImageFile && user?.email) {
         try {
+          // Upload once (S3 if configured, otherwise local)
           const formData = new FormData()
           formData.append("file", pendingProfileImageFile)
           formData.append("email", user.email)
-          formData.append("uploadToS3", "true") // Upload to S3
+          formData.append("uploadToS3", "true") // Upload to S3 (falls back to local)
 
           const uploadResponse = await fetch("/api/teacher/profile/image", {
             method: "POST",
@@ -791,22 +780,22 @@ export default function ProfilePage() {
 
           if (!uploadResponse.ok) {
             const errorData = await uploadResponse.json()
-            throw new Error(errorData.error || "Failed to upload image to S3")
+            throw new Error(errorData.error || "Failed to upload image")
           }
 
           const uploadResult = await uploadResponse.json()
 
           if (!uploadResult.success) {
-            throw new Error(uploadResult.error || "S3 upload failed")
+            throw new Error(uploadResult.error || "Image upload failed")
           }
 
-          // Update payload with S3 path
+          // Update payload with final path
           payload.ProfileImage = uploadResult.path
 
           // Clear pending file
           setPendingProfileImageFile(null)
 
-          // Fetch the full URL for the image
+          // Fetch the full URL for immediate preview with cache-busting
           const urlResponse = await fetch("/api/teacher/profile/image", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -816,17 +805,18 @@ export default function ProfilePage() {
           if (urlResponse.ok) {
             const urlData = await urlResponse.json()
             if (urlData.success && urlData.url) {
-              setProfileImage(urlData.url)
+              const ts = urlData.timestamp || Date.now()
+              const sep = urlData.url.includes("?") ? "&" : "?"
+              setProfileImage(`${urlData.url}${sep}t=${ts}`)
             }
           }
         } catch (imageError: any) {
-          console.error("Error uploading profile image to S3:", imageError)
+          console.error("Error uploading profile image:", imageError)
           toast({
             title: "Image Upload Warning",
-            description: imageError.message || "Failed to upload image to S3. Profile will be saved without image update.",
+            description: imageError.message || "Failed to upload image. Profile will be saved without image update.",
             variant: "destructive"
           })
-          // Continue with profile save even if image upload fails
         }
       }
 
@@ -866,6 +856,106 @@ export default function ProfilePage() {
         if (pendingProfileImageFile) {
           setPendingProfileImageFile(null)
         }
+
+        // Sync AuthProvider with latest info (name, faculty, department, profile image path)
+        const authUpdates: any = {}
+
+        // Name update
+        const newName = payload.fname && payload.lname 
+          ? `${payload.fname}${payload.mname ? ` ${payload.mname}` : ''} ${payload.lname}`.trim()
+          : payload.fname || payload.lname || user?.name
+        if (newName && newName !== user?.name) {
+          authUpdates.name = newName
+        }
+
+        // Faculty / Department update - prioritize options lookup to get current values
+        const currentFacultyId = values.faculty || selectedFacultyId
+        const currentDeptId = payload.deptid
+        
+        // Find faculty name from options first (to get the current selected value)
+        let facultyName: string | undefined = undefined
+        if (currentFacultyId) {
+          const selectedFaculty = facultyOptions.find(f => f.Fid === currentFacultyId)
+          if (selectedFaculty) {
+            facultyName = selectedFaculty.Fname
+          }
+        }
+        // Fallback to state if not found in options
+        if (!facultyName) {
+          facultyName = facultyData?.Fname
+        }
+        
+        // Find department name from options first (to get the current selected value)
+        let departmentName: string | undefined = undefined
+        if (currentDeptId) {
+          const selectedDept = departmentOptions.find(d => d.Deptid === currentDeptId)
+          if (selectedDept) {
+            departmentName = selectedDept.name
+          }
+        }
+        // Fallback to state if not found in options
+        if (!departmentName) {
+          departmentName = departmentData?.name
+        }
+        
+        // Update auth context with faculty and department
+        if (facultyName && facultyName !== user?.faculty) {
+          authUpdates.faculty = facultyName
+        }
+        if (departmentName && departmentName !== user?.department) {
+          authUpdates.department = departmentName
+        }
+
+        // Profile image path update (always refresh preview and update auth context)
+        // Always update profilePicture in auth context when ProfileImage is present
+        // This ensures the header component detects the change and refreshes the image
+        let profileImageUpdated = false
+        if (payload.ProfileImage) {
+          // Always update auth context with new profile image path
+          // Even if path is the same, the image content might have changed
+          authUpdates.profilePicture = payload.ProfileImage
+          profileImageUpdated = true
+          
+          // Fetch display URL (local or S3) for immediate preview with cache-busting
+          try {
+            const refreshResponse = await fetch("/api/teacher/profile/image", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: payload.ProfileImage }),
+              cache: "no-store",
+              credentials: "include",
+            })
+
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json()
+              if (refreshData.success && refreshData.url) {
+                const ts = refreshData.timestamp || Date.now()
+                const sep = refreshData.url.includes("?") ? "&" : "?"
+                setProfileImage(`${refreshData.url}${sep}t=${ts}`)
+              }
+            }
+          } catch (refreshError) {
+            console.error("Error refreshing profile image URL:", refreshError)
+          }
+        }
+
+        if (Object.keys(authUpdates).length > 0) {
+          updateUser(authUpdates)
+          
+          // Dispatch custom event to notify header component to refresh profile image
+          // Do this after updateUser to ensure state is updated
+          // Use setTimeout to ensure the update has propagated
+          if (profileImageUpdated && typeof window !== "undefined") {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent("profileImageUpdated", {
+                detail: { 
+                  profilePicture: authUpdates.profilePicture,
+                  timestamp: Date.now()
+                }
+              }))
+            }, 100) // Small delay to ensure AuthContext has updated
+          }
+        }
         
         toast({ 
           title: "Profile Updated", 
@@ -893,6 +983,72 @@ export default function ProfilePage() {
 
   const handleCancelPersonal = () => {
     setIsEditingPersonal(false)
+    if (!initialDataRef.current) return
+    const init = initialDataRef.current
+
+    // Reset personal form
+    reset({
+      Abbri: init.teacherInfo?.Abbri || '',
+      fname: init.teacherInfo?.fname || '',
+      mname: init.teacherInfo?.mname || '',
+      lname: init.teacherInfo?.lname || '',
+      email_id: init.teacherInfo?.email_id || '',
+      phone_no: init.teacherInfo?.phone_no || '',
+      DOB: formatDateForInput(init.teacherInfo?.DOB),
+      recruit_date: formatDateForInput(init.teacherInfo?.recruit_date),
+      PAN_No: init.teacherInfo?.PAN_No || '',
+      perma_or_tenure: init.teacherInfo?.perma_or_tenure ?? false,
+      desig_perma: init.teacherInfo?.desig_perma ?? undefined,
+      desig_tenure: init.teacherInfo?.desig_tenure ?? undefined,
+      faculty: init.facultyId ?? undefined,
+      deptid: init.teacherInfo?.deptid ?? undefined,
+      NET: init.teacherInfo?.NET || false,
+      NET_year: init.teacherInfo?.NET_year || '',
+      GATE: init.teacherInfo?.GATE || false,
+      GATE_year: init.teacherInfo?.GATE_year || '',
+      PHDGuide: init.teacherInfo?.PHDGuide || false,
+      Guide_year: init.teacherInfo?.Guide_year || '',
+      H_INDEX: init.teacherInfo?.H_INDEX || '',
+      i10_INDEX: init.teacherInfo?.i10_INDEX || '',
+      CITIATIONS: init.teacherInfo?.CITIATIONS || '',
+      ORCHID_ID: init.teacherInfo?.ORCHID_ID || '',
+      RESEARCHER_ID: init.teacherInfo?.RESEARCHER_ID || '',
+    })
+
+    // Reset faculty/department selections and data snapshots
+    setSelectedFacultyId(init.facultyId)
+    setFacultyData(init.facultyData)
+    setDepartmentData(init.departmentData)
+
+    // Reset arrays and editing markers
+    experienceForm.reset({ experiences: init.experiences || [] })
+    postDocForm.reset({ researches: init.researches || [] })
+    educationForm.reset({ educations: init.educations || [] })
+    setExperienceEditingIds(new Set())
+    setPostDocEditingIds(new Set())
+    setEducationEditingIds(new Set())
+
+    // Reset ICT editing data from ictDetails
+    const details = (init.ictDetails || '').split(',').map(s => s.trim()).filter(Boolean)
+    const othersEntry = details.find(d => d.toLowerCase().startsWith('others'))
+    setEditingData(prev => ({
+      ...prev,
+      ictSmartBoard: details.includes(ICT_LABELS.smartBoard),
+      ictPowerPoint: details.includes(ICT_LABELS.powerPoint),
+      ictTools: details.includes(ICT_LABELS.ictTools),
+      ictELearningTools: details.includes(ICT_LABELS.eLearningTools),
+      ictOnlineCourse: details.includes(ICT_LABELS.onlineCourse),
+      ictOthers: Boolean(othersEntry),
+      ictOthersSpecify: othersEntry?.split(':')?.[1]?.trim() || '',
+    }))
+
+    // Reset image and pending file
+    setPendingProfileImageFile(null)
+    if (init.profileImagePath) {
+      fetchProfileImageUrl(init.profileImagePath)
+    } else {
+      setProfileImage(null)
+    }
   }
 
   // Save single experience row
@@ -1819,7 +1975,7 @@ export default function ProfilePage() {
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Basic Information</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="salutation" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="salutation" className="text-sm font-medium">
                       Salutation <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -1833,8 +1989,9 @@ export default function ProfilePage() {
                           <Select
                             value={field.value}
                             onValueChange={(v: any) => field.onChange(v)}
+                            disabled={!isEditingPersonal}
                           >
-                            <SelectTrigger className={`h-9 text-xs ${!isEditingPersonal ? "pointer-events-none" : ""} ${error ? 'border-red-500' : ''}`}>
+                            <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""} ${error ? 'border-red-500' : ''}`}>
                               <SelectValue placeholder="Select salutation" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1855,12 +2012,12 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="firstName" className="text-sm font-medium">
                       First Name <span className="text-red-500">*</span>
                     </Label>
                     <Input 
                       id="firstName" 
-                      className={`h-9 text-xs ${errors.fname ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.fname ? 'border-red-500' : ''}`}
                       {...register('fname', {
                         required: isEditingPersonal ? "First name is required" : false,
                         minLength: {
@@ -1879,10 +2036,10 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="middleName" className="text-[11px] sm:text-xs font-medium">Middle Name</Label>
+                    <Label htmlFor="middleName" className="text-sm font-medium">Middle Name</Label>
                     <Input 
                       id="middleName" 
-                      className={`h-9 text-xs ${errors.mname ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.mname ? 'border-red-500' : ''}`}
                       {...register('mname', {
                         validate: (value) => {
                           if (!value || value.trim() === '') return true; // Optional field
@@ -1902,12 +2059,12 @@ export default function ProfilePage() {
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="lastName" className="text-sm font-medium">
                       Last Name <span className="text-red-500">*</span>
                     </Label>
                     <Input 
                       id="lastName" 
-                      className={`h-9 text-xs ${errors.lname ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.lname ? 'border-red-500' : ''}`}
                       {...register('lname', {
                         required: isEditingPersonal ? "Last name is required" : false,
                         minLength: {
@@ -1933,7 +2090,7 @@ export default function ProfilePage() {
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Contact Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="email" className="text-sm font-medium">
                       Email <span className="text-red-500">*</span>
                     </Label>
                     <Input 
@@ -1941,11 +2098,11 @@ export default function ProfilePage() {
                       type="email" 
                       {...register('email_id')} 
                       readOnly 
-                      className="h-9 text-xs bg-gray-50" 
+                      className="h-10 text-base bg-[#f9fafb] text-foreground cursor-default" 
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="phone" className="text-sm font-medium">
                       Phone Number <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -1972,7 +2129,7 @@ export default function ProfilePage() {
                             id="phone"
                             type="tel"
                             {...field}
-                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                             onChange={(e) => {
                               // Only allow digits and limit to 10
                               const value = e.target.value.replace(/\D/g, '').slice(0, 10);
@@ -1997,7 +2154,7 @@ export default function ProfilePage() {
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Additional Information</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="dateOfBirth" className="text-sm font-medium">
                       Date of Birth <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2039,7 +2196,7 @@ export default function ProfilePage() {
                             {...field}
                             max={new Date().toISOString().split('T')[0]}
                             readOnly={!isEditingPersonal}
-                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                           />
                           {error && isEditingPersonal && (
                             <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -2049,7 +2206,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="dateOfJoining" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="dateOfJoining" className="text-sm font-medium">
                       Date of Joining <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2087,7 +2244,7 @@ export default function ProfilePage() {
                             {...field}
                             max={new Date().toISOString().split('T')[0]}
                             readOnly={!isEditingPersonal}
-                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                           />
                           {error && isEditingPersonal && (
                             <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -2097,7 +2254,7 @@ export default function ProfilePage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="panNo" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="panNo" className="text-sm font-medium">
                       PAN Number <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2132,7 +2289,7 @@ export default function ProfilePage() {
                             readOnly={!isEditingPersonal}
                             placeholder="ABCDE1234F"
                             maxLength={10}
-                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                           />
                           {error && isEditingPersonal && (
                             <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -2149,7 +2306,7 @@ export default function ProfilePage() {
                 <h4 className="text-xs sm:text-sm font-medium">Research Metrics</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="hIndex">H-Index</Label>
+                    <Label htmlFor="hIndex" className="text-sm font-medium">H-Index</Label>
                       <Input 
                       id="hIndex" 
                       type="number" 
@@ -2168,14 +2325,14 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter H-Index"
-                      className={`h-9 text-xs ${errors.H_INDEX ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.H_INDEX ? 'border-red-500' : ''}`}
                     />
                     {errors.H_INDEX && isEditingPersonal && touchedFields.H_INDEX && (
                       <p className="text-xs text-red-500 mt-1">{errors.H_INDEX.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="i10Index" className="text-[11px] sm:text-xs font-medium">i10-Index</Label>
+                    <Label htmlFor="i10Index" className="text-sm font-medium">i10-Index</Label>
                       <Input 
                       id="i10Index" 
                       type="number" 
@@ -2194,14 +2351,14 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter i10-Index"
-                      className={`h-9 text-xs ${errors.i10_INDEX ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.i10_INDEX ? 'border-red-500' : ''}`}
                     />
                     {errors.i10_INDEX && isEditingPersonal && touchedFields.i10_INDEX && (
                       <p className="text-xs text-red-500 mt-1">{errors.i10_INDEX.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="citations" className="text-[11px] sm:text-xs font-medium">Citations</Label>
+                    <Label htmlFor="citations" className="text-sm font-medium">Citations</Label>
                       <Input 
                       id="citations" 
                       type="number" 
@@ -2220,14 +2377,14 @@ export default function ProfilePage() {
                       })} 
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter total citations"
-                      className={`h-9 text-xs ${errors.CITIATIONS ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.CITIATIONS ? 'border-red-500' : ''}`}
                     />
                     {errors.CITIATIONS && isEditingPersonal && touchedFields.CITIATIONS && (
                       <p className="text-xs text-red-500 mt-1">{errors.CITIATIONS.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="orcidId" className="text-[11px] sm:text-xs font-medium">ORCHID ID</Label>
+                    <Label htmlFor="orcidId" className="text-sm font-medium">ORCHID ID</Label>
                       <Input 
                       id="orcidId" 
                       {...register('ORCHID_ID', {
@@ -2239,14 +2396,14 @@ export default function ProfilePage() {
                       readOnly={!isEditingPersonal} 
                       placeholder="0000-0000-0000-0000"
                       maxLength={19}
-                      className={`h-9 text-xs ${errors.ORCHID_ID ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.ORCHID_ID ? 'border-red-500' : ''}`}
                     />
                     {errors.ORCHID_ID && isEditingPersonal && touchedFields.ORCHID_ID && (
                       <p className="text-xs text-red-500 mt-1">{errors.ORCHID_ID.message as string}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="researcherId" className="text-[11px] sm:text-xs font-medium">Researcher ID</Label>
+                    <Label htmlFor="researcherId" className="text-sm font-medium">Researcher ID</Label>
                       <Input 
                       id="researcherId" 
                       {...register('RESEARCHER_ID', {
@@ -2270,7 +2427,7 @@ export default function ProfilePage() {
                       readOnly={!isEditingPersonal} 
                       placeholder="Enter Researcher ID"
                       maxLength={100}
-                      className={`h-9 text-xs ${errors.RESEARCHER_ID ? 'border-red-500' : ''}`}
+                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.RESEARCHER_ID ? 'border-red-500' : ''}`}
                     />
                     {errors.RESEARCHER_ID && isEditingPersonal && touchedFields.RESEARCHER_ID && (
                       <p className="text-xs text-red-500 mt-1">{errors.RESEARCHER_ID.message as string}</p>
@@ -2284,7 +2441,7 @@ export default function ProfilePage() {
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Teaching Status</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="teachingStatus" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="teachingStatus" className="text-sm font-medium">
                       Teaching Status <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2297,8 +2454,9 @@ export default function ProfilePage() {
                             const isPermanent = value === "Permanent";
                             field.onChange(isPermanent ? false : true);
                           }}
+                          disabled={!isEditingPersonal}
                         >
-                          <SelectTrigger className={`h-8 text-xs ${!isEditingPersonal ? "pointer-events-none" : ""}`}>
+                          <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""}`}>
                             <SelectValue placeholder="Select teaching status" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2317,7 +2475,7 @@ export default function ProfilePage() {
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Academic Information</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="designation" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="designation" className="text-sm font-medium">
                       Designation <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2341,21 +2499,21 @@ export default function ProfilePage() {
                             placeholder="Select designation"
                             disabled={!isEditingPersonal}
                             emptyMessage="No designation found."
-                            className="w-full min-w-0 h-8 text-xs"
+                            className={`w-full min-w-0 ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
                           />
                         )
                       }}
                     />
                     {errors.desig_perma && isEditingPersonal && touchedFields.desig_perma && (
-                      <p className="text-sm text-red-500">{errors.desig_perma.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.desig_perma.message as string}</p>
                     )}
                     {errors.desig_tenure && isEditingPersonal && touchedFields.desig_tenure && (
-                      <p className="text-sm text-red-500">{errors.desig_tenure.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.desig_tenure.message as string}</p>
                     )}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="faculty" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="faculty" className="text-sm font-medium">
                       Faculty <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2383,18 +2541,18 @@ export default function ProfilePage() {
                           placeholder="Select faculty"
                           disabled={!isEditingPersonal}
                           emptyMessage="No faculty found."
-                          className="w-full min-w-0"
+                          className={`w-full min-w-0 ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
                         />
                       )}
                     />
                     {errors.faculty && isEditingPersonal && touchedFields.faculty && (
-                      <p className="text-sm text-red-500">{errors.faculty.message as string}</p>
+                      <p className="text-xs text-red-500 mt-1">{errors.faculty.message as string}</p>
                     )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
-                    <Label htmlFor="department" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="department" className="text-sm font-medium">
                       Department <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2426,7 +2584,7 @@ export default function ProfilePage() {
                             placeholder="Select department"
                             disabled={!isEditingPersonal || !facultyValue}
                             emptyMessage={!facultyValue ? "Please select a faculty first" : "No department found."}
-                            className="w-full min-w-0"
+                            className={`w-full min-w-0 ${!isEditingPersonal || !facultyValue ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
                           />
                         );
                       }}
@@ -2441,7 +2599,7 @@ export default function ProfilePage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 w-full">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-[11px] sm:text-xs font-medium">
+                      <Label className="text-sm font-medium">
                         Qualified NET Exam <span className="text-red-500">*</span>
                       </Label>
                       <RadioGroup
@@ -2451,18 +2609,18 @@ export default function ProfilePage() {
                       >
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="yes" id="net-yes" />
-                          <Label htmlFor="net-yes">Yes</Label>
+                          <Label htmlFor="net-yes" className="text-sm">Yes</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="no" id="net-no" />
-                          <Label htmlFor="net-no">No</Label>
+                          <Label htmlFor="net-no" className="text-sm">No</Label>
                         </div>
                       </RadioGroup>
                     </div>
                     {watch('NET') && (
                       <>
                         <div className="space-y-2">
-                          <Label htmlFor="netYear" className="text-[11px] sm:text-xs font-medium">
+                          <Label htmlFor="netYear" className="text-sm font-medium">
                             NET Qualified Year <span className="text-red-500">*</span>
                           </Label>
                           <Controller
@@ -2500,7 +2658,7 @@ export default function ProfilePage() {
                                   readOnly={!isEditingPersonal}
                                   placeholder="YYYY (e.g., 2018)"
                                   maxLength={4}
-                                  className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                                  className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                                 />
                                 {error && isEditingPersonal && (
                                   <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -2516,7 +2674,7 @@ export default function ProfilePage() {
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-[11px] sm:text-xs font-medium">
+                      <Label className="text-sm font-medium">
                         Qualified GATE Exam <span className="text-red-500">*</span>
                       </Label>
                       <RadioGroup
@@ -2526,18 +2684,18 @@ export default function ProfilePage() {
                       >
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="yes" id="gate-yes" />
-                          <Label htmlFor="gate-yes">Yes</Label>
+                          <Label htmlFor="gate-yes" className="text-sm">Yes</Label>
                         </div>
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="no" id="gate-no" />
-                          <Label htmlFor="gate-no">No</Label>
+                          <Label htmlFor="gate-no" className="text-sm">No</Label>
                         </div>
                       </RadioGroup>
                     </div>
                     {watch('GATE') && (
                       <>
                         <div className="space-y-2">
-                          <Label htmlFor="gateYear">GATE Qualified Year</Label>
+                          <Label htmlFor="gateYear" className="text-sm font-medium">GATE Qualified Year</Label>
                           <Controller
                             control={control}
                             name="GATE_year"
@@ -2573,7 +2731,7 @@ export default function ProfilePage() {
                                   readOnly={!isEditingPersonal}
                                   placeholder="YYYY (e.g., 2018)"
                                   maxLength={4}
-                                  className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                                  className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                                 />
                                 {error && isEditingPersonal && (
                                   <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -2593,7 +2751,7 @@ export default function ProfilePage() {
               <div className="space-y-3 sm:space-y-4">
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Registration Information</h4>
                 <div className="space-y-2">
-                  <Label className="text-[11px] sm:text-xs font-medium">
+                  <Label className="text-sm font-medium">
                     Registered Phd Guide at MSU <span className="text-red-500">*</span>
                   </Label>
                   <RadioGroup
@@ -2603,17 +2761,17 @@ export default function ProfilePage() {
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="yes" id="guide-yes" />
-                      <Label htmlFor="guide-yes">Yes</Label>
+                      <Label htmlFor="guide-yes" className="text-sm">Yes</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="no" id="guide-no" />
-                      <Label htmlFor="guide-no">No</Label>
+                      <Label htmlFor="guide-no" className="text-sm">No</Label>
                     </div>
                   </RadioGroup>
                 </div>
                 {watch('PHDGuide') && (
                   <div className="space-y-2">
-                    <Label htmlFor="registrationYear" className="text-[11px] sm:text-xs font-medium">
+                    <Label htmlFor="registrationYear" className="text-sm font-medium">
                       Year of Registration <span className="text-red-500">*</span>
                     </Label>
                     <Controller
@@ -2651,7 +2809,7 @@ export default function ProfilePage() {
                             readOnly={!isEditingPersonal}
                             placeholder="YYYY (e.g., 2015)"
                             maxLength={4}
-                            className={`h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                           />
                           {error && isEditingPersonal && (
                             <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -2744,7 +2902,7 @@ export default function ProfilePage() {
                   </div>
                   {editingData.ictOthers && (
                     <div className="space-y-2">
-                      <Label htmlFor="otherIctTools" className="text-[11px] sm:text-xs font-medium">
+                      <Label htmlFor="otherIctTools" className="text-sm font-medium">
                         If Others, please specify: <span className="text-red-500">*</span>
                       </Label>
                       <Controller
@@ -2774,7 +2932,7 @@ export default function ProfilePage() {
                               placeholder="Please specify other ICT tools used..."
                               readOnly={!isEditingPersonal}
                               maxLength={200}
-                              className={`max-w-md h-9 text-xs ${error ? 'border-red-500' : ''}`}
+                              className={`max-w-md h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                             />
                             {error && isEditingPersonal && (
                               <p className="text-xs text-red-500 mt-1">{error.message}</p>

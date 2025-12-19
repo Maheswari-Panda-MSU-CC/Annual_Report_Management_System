@@ -1,6 +1,11 @@
 import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import type { CVData, PersonalInfo } from "@/types/cv-data"
+import { isS3Configured, getSignedUrl } from "@/lib/s3-service"
+import { join } from "path"
+import { existsSync } from "fs"
+
+const PROFILE_IMAGE_DIR = join(process.cwd(), "public", "profile-images")
 
 /**
  * Fetches CV data from database using sp_GetTeacherCVData stored procedure
@@ -97,6 +102,29 @@ export async function fetchCVDataFromDB(
   // Build PersonalInfo from basic data
   // Note: The SP returns basic info with fields: Tid, fname, mname, lname, email_id, phone_no,
   // DOB, ORCHID_ID, DesignationName, DepartmentName, FacultyName, ProfileImage, etc.
+  // Resolve profile image URL (local first, then S3)
+  let profileImageUrl: string | null = null
+  if (basicInfo.ProfileImage) {
+    try {
+      const fileName = basicInfo.ProfileImage.split("/").pop()
+      if (fileName && !fileName.includes("..") && !fileName.includes("/") && !fileName.includes("\\")) {
+        const localPath = join(PROFILE_IMAGE_DIR, fileName)
+        if (existsSync(localPath)) {
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL 
+            || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
+          profileImageUrl = `${baseUrl}/api/teacher/profile/image?path=${encodeURIComponent(basicInfo.ProfileImage)}`
+        } else if (isS3Configured() && basicInfo.ProfileImage.startsWith("upload/")) {
+          const signed = await getSignedUrl(basicInfo.ProfileImage)
+          if (signed.success && signed.url) {
+            profileImageUrl = signed.url
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error resolving profile image for CV:", err)
+    }
+  }
+
   const personal: PersonalInfo = {
     name: (basicInfo.Abbri ? `${basicInfo.Abbri} ` : '') + [basicInfo.fname, basicInfo.mname, basicInfo.lname].filter(Boolean).join(' '),
     designation: basicInfo.DesignationName || '',
@@ -120,7 +148,7 @@ export async function fetchCVDataFromDB(
         })()
       : '',
     orcid: basicInfo.ORCHID_ID || '',
-    profileImage: basicInfo.ProfileImage || null,
+    profileImage: profileImageUrl,
   }
 
   // Map recordsets to CVData sections

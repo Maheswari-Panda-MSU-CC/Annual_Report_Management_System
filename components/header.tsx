@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useAuth } from "../app/api/auth/auth-provider"
 import { Button } from "@/components/ui/button"
+import { useEffect, useState } from "react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +26,128 @@ interface HeaderProps {
 export function Header({ onMobileMenuToggle }: HeaderProps) {
   const { user, logout } = useAuth()
   const router = useRouter()
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0) // Force refresh trigger
+
+  // Fetch profile image for teachers when profilePicture path changes
+  useEffect(() => {
+    const fetchProfileImage = async () => {
+      if (user?.user_type !== 4 || !user?.profilePicture) {
+        setProfileImageUrl(null)
+        return
+      }
+
+      try {
+        // Use cache-busting timestamp to ensure fresh image
+        // Add a unique timestamp to force refresh even if path is the same
+        const timestamp = Date.now()
+        
+        // First, get the image URL from API (POST endpoint returns JSON with URL)
+        const response = await fetch("/api/teacher/profile/image", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: user.profilePicture }),
+          cache: "no-store",
+          credentials: "include", // Include cookies for production
+        })
+
+        if (!response.ok) {
+          console.error(`Failed to fetch image URL: ${response.status} ${response.statusText}`)
+          setProfileImageUrl(null)
+          return
+        }
+
+        const data = await response.json()
+        if (data.success && data.url) {
+          const imgTimestamp = data.timestamp || timestamp
+          let finalUrl = data.url
+          
+          // Handle both absolute URLs (S3) and relative URLs (local)
+          try {
+            // If it's already an absolute URL (starts with http), use it directly
+            if (data.url.startsWith("http://") || data.url.startsWith("https://")) {
+              const urlObj = new URL(data.url)
+              // Add both timestamp from API and current timestamp for maximum cache busting
+              urlObj.searchParams.set("t", imgTimestamp.toString())
+              urlObj.searchParams.set("_", timestamp.toString()) // Additional cache buster
+              urlObj.searchParams.set("r", refreshTrigger.toString()) // Refresh trigger for force refresh
+              finalUrl = urlObj.toString()
+            } else {
+              // Relative URL - construct full URL
+              const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+              const urlObj = new URL(data.url, baseUrl)
+              urlObj.searchParams.set("t", imgTimestamp.toString())
+              urlObj.searchParams.set("_", timestamp.toString()) // Additional cache buster
+              urlObj.searchParams.set("r", refreshTrigger.toString()) // Refresh trigger for force refresh
+              finalUrl = urlObj.toString()
+            }
+          } catch (urlError) {
+            // Fallback: simple string concatenation
+            const separator = data.url.includes("?") ? "&" : "?"
+            finalUrl = `${data.url}${separator}t=${imgTimestamp}&_=${timestamp}&r=${refreshTrigger}`
+          }
+          
+          setProfileImageUrl(finalUrl)
+        } else {
+          // If POST returns image directly (shouldn't happen, but handle it)
+          const contentType = response.headers.get("content-type")
+          if (contentType && contentType.startsWith("image/")) {
+            // Response is image directly, create blob URL
+            const blob = await response.blob()
+            const blobUrl = URL.createObjectURL(blob)
+            setProfileImageUrl(blobUrl)
+          } else {
+            setProfileImageUrl(null)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching profile image:", error)
+        setProfileImageUrl(null)
+      }
+    }
+
+    fetchProfileImage()
+  }, [user?.profilePicture, user?.user_type, refreshTrigger])
+
+  // Listen for custom event to force refresh profile image
+  // This is triggered when profile is updated from the profile page
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const handleProfileImageUpdate = () => {
+      // Force refresh by incrementing trigger and clearing current image
+      setProfileImageUrl(null) // Clear current image first to show loading state
+      setRefreshTrigger(prev => prev + 1) // This will trigger the useEffect above to fetch new image
+    }
+
+    window.addEventListener("profileImageUpdated" as any, handleProfileImageUpdate as EventListener)
+    return () => {
+      window.removeEventListener("profileImageUpdated" as any, handleProfileImageUpdate as EventListener)
+    }
+  }, [])
+
+  // Listen for localStorage changes to detect profilePicture updates from other tabs/windows
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "user" && e.newValue) {
+        try {
+          const updatedUser = JSON.parse(e.newValue)
+          // If profilePicture changed, trigger a refresh
+          if (updatedUser.profilePicture && updatedUser.profilePicture !== user?.profilePicture) {
+            setRefreshTrigger(prev => prev + 1)
+            setProfileImageUrl(null) // Clear current image to force reload
+          }
+        } catch (error) {
+          console.error("Error parsing user from storage:", error)
+        }
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [user?.profilePicture])
 
   const getInitials = (name: string) => {
     return name
@@ -238,8 +361,8 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10 rounded-full p-0 flex-shrink-0">
                 <Avatar className="h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10">
-                  {user?.profilePicture ? (
-                    <AvatarImage src={user.profilePicture || "/placeholder.svg"} alt={user?.name || "User"} />
+                  {profileImageUrl ? (
+                    <AvatarImage src={profileImageUrl} alt={user?.name || "User"} />
                   ) : (
                     <AvatarFallback className="bg-blue-500 text-white text-[10px] sm:text-xs">
                       {user ? getInitials(user.email) : <User className="h-3 w-3 sm:h-4 sm:w-4" />}
