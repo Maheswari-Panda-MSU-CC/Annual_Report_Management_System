@@ -60,11 +60,16 @@ export default function AddResearchPage() {
     setValue,
     watch,
     reset,
+    trigger,
     formState: { errors },
   } = form
 
   // Watch grant_sealed to enable/disable grant_year
   const grantSealed = watch("grant_sealed")
+  
+  // Watch grant amounts for cross-validation
+  const grantSanctioned = watch("grant_sanctioned")
+  const grantReceived = watch("grant_received")
 
   // Track auto-filled fields for highlighting
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
@@ -627,6 +632,16 @@ export default function AddResearchPage() {
       return
     }
 
+    // Validate that Grant Sanctioned is not less than Grant Received
+    if (grantReceived > grantSanctioned) {
+      toast({
+        title: "Validation Error",
+        description: "Grant Received cannot be greater than Grant Sanctioned",
+        variant: "destructive",
+      })
+      return
+    }
+
     if (!duration || duration <= 0) {
       toast({
         title: "Validation Error",
@@ -992,7 +1007,15 @@ export default function AddResearchPage() {
                     name="grant_sanctioned"
                     rules={{ 
                       required: "Grant Sanctioned is required",
-                      min: { value: 0, message: "Grant Sanctioned must be a positive number" }
+                      min: { value: 0, message: "Grant Sanctioned must be a positive number" },
+                      validate: (value) => {
+                        const sanctioned = parseFloat(String(value || 0))
+                        const received = parseFloat(String(grantReceived || 0))
+                        if (received > 0 && sanctioned < received) {
+                          return "Grant Sanctioned cannot be less than Grant Received"
+                        }
+                        return true
+                      }
                     }}
                     render={({ field }) => (
                       <Input
@@ -1009,6 +1032,8 @@ export default function AddResearchPage() {
                         onChange={(e) => {
                           field.onChange(e)
                           clearAutoFillHighlight("grant_sanctioned")
+                          // Trigger validation for grant_received when grant_sanctioned changes
+                          setTimeout(() => trigger("grant_received"), 0)
                         }}
                       />
                     )}
@@ -1026,7 +1051,15 @@ export default function AddResearchPage() {
                     name="grant_received"
                     rules={{ 
                       required: "Grant Received is required",
-                      min: { value: 0, message: "Grant Received must be a positive number" }
+                      min: { value: 0, message: "Grant Received must be a positive number" },
+                      validate: (value) => {
+                        const received = parseFloat(String(value || 0))
+                        const sanctioned = parseFloat(String(grantSanctioned || 0))
+                        if (sanctioned > 0 && received > sanctioned) {
+                          return "Grant Received cannot be greater than Grant Sanctioned"
+                        }
+                        return true
+                      }
                     }}
                     render={({ field }) => (
                       <Input
@@ -1043,6 +1076,8 @@ export default function AddResearchPage() {
                         onChange={(e) => {
                           field.onChange(e)
                           clearAutoFillHighlight("grant_received")
+                          // Trigger validation for grant_sanctioned when grant_received changes
+                          setTimeout(() => trigger("grant_sanctioned"), 0)
                         }}
                       />
                     )}
