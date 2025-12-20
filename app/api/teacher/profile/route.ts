@@ -1,17 +1,30 @@
 import { connectToDatabase } from '@/lib/db';
 import { cachedJsonResponse } from '@/lib/api-cache';
 import sql from 'mssql';
+import { NextRequest } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 
 // #region Profile Data get
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const { searchParams } = new URL(request.url);
     const teacherId = parseInt(searchParams.get('teacherId') || '', 10);
 
-    if (isNaN(teacherId) || teacherId===0) {
+    if (isNaN(teacherId) || teacherId === 0) {
       return new Response(JSON.stringify({ error: 'Invalid or missing teacherId' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (user.role_id !== teacherId) {
+      return new Response(JSON.stringify({ error: 'Forbidden - User ID mismatch' }), {
+        status: 403,
         headers: { 'Content-Type': 'application/json' },
       });
     }
@@ -52,8 +65,12 @@ export async function GET(request: Request) {
 
 //#region - Update Profile Data
  
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
   try {
+    const authResult = await authenticateRequest(req);
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const data = await req.json();
     
     // Basic validation
@@ -62,6 +79,13 @@ export async function PUT(req: Request) {
         success: false, 
         error: "Teacher ID is required and must be valid" 
       }, { status: 400 });
+    }
+
+    if (user.role_id !== data.Tid) {
+      return Response.json({ 
+        success: false, 
+        error: "Forbidden - User ID mismatch" 
+      }, { status: 403 });
     }
 
     // Validate required fields

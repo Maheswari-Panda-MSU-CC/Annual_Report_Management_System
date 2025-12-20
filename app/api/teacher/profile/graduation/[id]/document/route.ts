@@ -1,15 +1,21 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import sql from "mssql"
 import { connectToDatabase } from "@/lib/db"
+import { authenticateRequest } from "@/lib/api-auth"
 
 // Update only the Image field for Graduation/Education entry
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
-    const { teacherId, Image } = body
+    const { Image } = body
+    const teacherId = user.role_id
 
     const gid = parseInt(params.id, 10)
 

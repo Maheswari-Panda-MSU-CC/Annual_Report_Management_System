@@ -1,13 +1,27 @@
 import { connectToDatabase } from '@/lib/db'
 import { cachedJsonResponse } from '@/lib/api-cache'
 import sql from 'mssql'
+import { NextRequest, NextResponse } from 'next/server'
+import { authenticateRequest } from '@/lib/api-auth'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const teacherId = parseInt(searchParams.get('teacherId') || '', 10)
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (isNaN(teacherId)) {
+    const { searchParams } = new URL(request.url)
+    const queryTeacherId = searchParams.get('teacherId')
+    if (queryTeacherId && parseInt(queryTeacherId, 10) !== user.role_id) {
+      return NextResponse.json(
+        { error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    const teacherId = user.role_id
+
+    if (!teacherId) {
       return new Response(JSON.stringify({ error: 'Invalid or missing teacherId' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -35,14 +49,27 @@ export async function GET(request: Request) {
 }
 
 // Add new research project
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
-    const { teacherId, project } = body
+    const { teacherId: bodyTeacherId, project } = body
+
+    const teacherId = user.role_id
 
     if (!teacherId || !project) {
       return new Response(JSON.stringify({ success: false, error: 'teacherId and project are required' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return new Response(JSON.stringify({ success: false, error: 'Forbidden - User ID mismatch' }), {
+        status: 403,
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -91,14 +118,27 @@ export async function POST(request: Request) {
 }
 
 // Update existing research project
-export async function PATCH(request: Request) {
+export async function PATCH(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
-    const { teacherId, projectId, project } = body
+    const { teacherId: bodyTeacherId, projectId, project } = body
+
+    const teacherId = user.role_id
 
     if (!teacherId || !projectId || !project) {
       return new Response(JSON.stringify({ success: false, error: 'teacherId, projectId, and project are required' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return new Response(JSON.stringify({ success: false, error: 'Forbidden - User ID mismatch' }), {
+        status: 403,
         headers: { 'Content-Type': 'application/json' },
       })
     }

@@ -190,9 +190,9 @@ export default function EditResearchPage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Title - replace if exists in extraction
+      // Title - replace if exists in extraction and is non-empty
       if (fields.title !== undefined) {
-        const titleValue = fields.title ? String(fields.title) : ""
+        const titleValue = fields.title ? String(fields.title).trim() : ""
         setValue("title", titleValue)
         if (titleValue) {
           filledFieldNames.push("title")
@@ -209,7 +209,8 @@ export default function EditResearchPage() {
         if (fields.grant_sanctioned) {
           const grantValue = parseCurrencyAmount(fields.grant_sanctioned)
           setValue("grant_sanctioned", grantValue)
-          if (grantValue) {
+          // Only track if we successfully parsed a valid number
+          if (grantValue && !isNaN(parseFloat(grantValue)) && parseFloat(grantValue) > 0) {
             filledFieldNames.push("grant_sanctioned")
           }
         } else {
@@ -222,7 +223,8 @@ export default function EditResearchPage() {
         if (fields.grant_received) {
           const grantValue = parseCurrencyAmount(fields.grant_received)
           setValue("grant_received", grantValue)
-          if (grantValue) {
+          // Only track if we successfully parsed a valid number
+          if (grantValue && !isNaN(parseFloat(grantValue)) && parseFloat(grantValue) > 0) {
             filledFieldNames.push("grant_received")
           }
         } else {
@@ -264,12 +266,29 @@ export default function EditResearchPage() {
         setDropdownValue("status", fields.status, projectStatusOptions, filledFieldNames)
       }
       
-      // Start Date - replace if exists in extraction
+      // Start Date - replace if exists in extraction and is valid
       if (fields.start_date !== undefined) {
         const dateValue = fields.start_date ? String(fields.start_date) : ""
-        setValue("start_date", dateValue)
         if (dateValue) {
-          filledFieldNames.push("start_date")
+          // Validate date format and ensure it's not in the future
+          try {
+            const parsedDate = new Date(dateValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            // Only track if date is valid and not in the future
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("start_date", dateValue)
+              filledFieldNames.push("start_date")
+            } else {
+              // Set empty if invalid or future date
+              setValue("start_date", "")
+            }
+          } catch {
+            // Set empty if parsing fails
+            setValue("start_date", "")
+          }
+        } else {
+          setValue("start_date", "")
         }
       }
       
@@ -278,12 +297,24 @@ export default function EditResearchPage() {
         setDropdownValue("proj_level", fields.proj_level, projectLevelOptions, filledFieldNames)
       }
       
-      // Grant Year - replace if exists in extraction
+      // Grant Year - replace if exists in extraction and is valid
       if (fields.grant_year !== undefined) {
-        const yearValue = fields.grant_year ? String(fields.grant_year) : ""
-        setValue("grant_year", yearValue)
+        const yearValue = fields.grant_year ? String(fields.grant_year).trim() : ""
         if (yearValue) {
-          filledFieldNames.push("grant_year")
+          // Validate it's exactly 4 digits and within valid range
+          if (/^\d{4}$/.test(yearValue)) {
+            const yearNum = parseInt(yearValue)
+            if (yearNum >= 2000 && yearNum <= 2100) {
+              setValue("grant_year", yearValue)
+              filledFieldNames.push("grant_year")
+            } else {
+              setValue("grant_year", "")
+            }
+          } else {
+            setValue("grant_year", "")
+          }
+        } else {
+          setValue("grant_year", "")
         }
       }
       
@@ -426,13 +457,20 @@ export default function EditResearchPage() {
   const handleExtractedFields = useCallback((fields: Record<string, any>) => {
     let fieldsPopulated = 0
 
+    // Track which fields were auto-filled (only fields that were successfully set)
+    const filledFieldNames: string[] = []
+
     // REPLACE all fields - set values even if they're empty/null in extracted data
     // This ensures existing data is replaced with new extracted data
     
     // Title - replace if exists in extraction, otherwise keep existing
     if (fields.title !== undefined) {
-      setValue("title", fields.title || "")
-      if (fields.title) fieldsPopulated++
+      const titleValue = fields.title ? String(fields.title).trim() : ""
+      setValue("title", titleValue)
+      if (titleValue) {
+        fieldsPopulated++
+        filledFieldNames.push("title")
+      }
     }
     
     // Funding Agency - replace if exists in extraction
@@ -445,6 +483,7 @@ export default function EditResearchPage() {
         if (matchingAgency) {
           setValue("funding_agency", matchingAgency.id)
           fieldsPopulated++
+          filledFieldNames.push("funding_agency")
         } else {
           setValue("funding_agency", null)
         }
@@ -455,14 +494,34 @@ export default function EditResearchPage() {
     
     // Grant Sanctioned - replace if exists in extraction
     if (fields.totalGrantSanctioned !== undefined) {
-      setValue("grant_sanctioned", fields.totalGrantSanctioned ? fields.totalGrantSanctioned.toString() : "")
-      if (fields.totalGrantSanctioned) fieldsPopulated++
+      const grantValue = fields.totalGrantSanctioned
+      if (grantValue) {
+        const cleanedValue = parseCurrencyAmount(grantValue)
+        setValue("grant_sanctioned", cleanedValue)
+        // Only track if we successfully parsed a valid number
+        if (cleanedValue && !isNaN(parseFloat(cleanedValue)) && parseFloat(cleanedValue) > 0) {
+          fieldsPopulated++
+          filledFieldNames.push("grant_sanctioned")
+        }
+      } else {
+        setValue("grant_sanctioned", "")
+      }
     }
     
     // Grant Received - replace if exists in extraction
     if (fields.totalGrantReceived !== undefined) {
-      setValue("grant_received", fields.totalGrantReceived ? fields.totalGrantReceived.toString() : "")
-      if (fields.totalGrantReceived) fieldsPopulated++
+      const grantValue = fields.totalGrantReceived
+      if (grantValue) {
+        const cleanedValue = parseCurrencyAmount(grantValue)
+        setValue("grant_received", cleanedValue)
+        // Only track if we successfully parsed a valid number
+        if (cleanedValue && !isNaN(parseFloat(cleanedValue)) && parseFloat(cleanedValue) > 0) {
+          fieldsPopulated++
+          filledFieldNames.push("grant_received")
+        }
+      } else {
+        setValue("grant_received", "")
+      }
     }
     
     // Project Nature - replace if exists in extraction
@@ -481,6 +540,7 @@ export default function EditResearchPage() {
         if (matchingLevel) {
           setValue("proj_level", matchingLevel.id)
           fieldsPopulated++
+          filledFieldNames.push("proj_level")
         } else {
           setValue("proj_level", null)
         }
@@ -505,6 +565,7 @@ export default function EditResearchPage() {
         if (matchingStatus) {
           setValue("status", matchingStatus.id)
           fieldsPopulated++
+          filledFieldNames.push("status")
         } else {
           setValue("status", null)
         }
@@ -513,10 +574,29 @@ export default function EditResearchPage() {
       }
     }
     
-    // Start Date - replace if exists in extraction
+    // Start Date - replace if exists in extraction and is valid
     if (fields.startDate !== undefined) {
-      setValue("start_date", fields.startDate || "")
-      if (fields.startDate) fieldsPopulated++
+      const dateValue = fields.startDate
+      if (dateValue) {
+        // Validate date format and ensure it's not in the future
+        try {
+          const parsedDate = new Date(dateValue)
+          const today = new Date()
+          today.setHours(23, 59, 59, 999)
+          // Only track if date is valid and not in the future
+          if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+            setValue("start_date", dateValue)
+            fieldsPopulated++
+            filledFieldNames.push("start_date")
+          } else {
+            setValue("start_date", "")
+          }
+        } catch {
+          setValue("start_date", "")
+        }
+      } else {
+        setValue("start_date", "")
+      }
     }
     
     // Seed Grant - replace if exists in extraction
@@ -525,11 +605,31 @@ export default function EditResearchPage() {
       if (fields.seedGrant) fieldsPopulated++
     }
     
-    // Seed Grant Year - replace if exists in extraction
+    // Seed Grant Year - replace if exists in extraction and is valid
     if (fields.seedGrantYear !== undefined) {
-      setValue("grant_year", fields.seedGrantYear ? fields.seedGrantYear.toString() : "")
-      if (fields.seedGrantYear) fieldsPopulated++
+      const yearValue = fields.seedGrantYear
+      if (yearValue) {
+        const yearStr = String(yearValue).trim()
+        // Validate it's exactly 4 digits and within valid range
+        if (/^\d{4}$/.test(yearStr)) {
+          const yearNum = parseInt(yearStr)
+          if (yearNum >= 2000 && yearNum <= 2100) {
+            setValue("grant_year", yearStr)
+            fieldsPopulated++
+            filledFieldNames.push("grant_year")
+          } else {
+            setValue("grant_year", "")
+          }
+        } else {
+          setValue("grant_year", "")
+        }
+      } else {
+        setValue("grant_year", "")
+      }
     }
+
+    // Update auto-filled fields tracking
+    setAutoFilledFields(new Set(filledFieldNames))
 
     if (fieldsPopulated > 0) {
       toast({
@@ -542,7 +642,7 @@ export default function EditResearchPage() {
         description: "Data fields have been updated (some fields may be empty)",
       })
     }
-  }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions])
+  }, [setValue, toast, fundingAgencyOptions, projectLevelOptions, projectStatusOptions, parseCurrencyAmount, setAutoFilledFields])
 
   const onSubmit = async (data: ResearchProjectFormData) => {
     const projectId = params.id as string
@@ -881,12 +981,25 @@ export default function EditResearchPage() {
                   <Controller
                     control={control}
                     name="start_date"
-                    rules={{ required: "Start date is required" }}
+                    rules={{ 
+                      required: "Start date is required",
+                      validate: (value) => {
+                        if (!value) return "Start date is required"
+                        const selectedDate = new Date(value)
+                        const today = new Date()
+                        today.setHours(23, 59, 59, 999)
+                        if (selectedDate > today) {
+                          return "Start date cannot be in the future"
+                        }
+                        return true
+                      }
+                    }}
                     render={({ field }) => (
                       <Input 
                         {...field} 
                         id="start_date" 
                         type="date"
+                        max={new Date().toISOString().split("T")[0]}
                         className={cn(
                           isAutoFilled("start_date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}

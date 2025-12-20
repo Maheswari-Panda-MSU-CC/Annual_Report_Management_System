@@ -1,19 +1,33 @@
 import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
+import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 
 // Add new Education/Graduation entry (single row)
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { teacherId, education } = body as { teacherId: number; education: any };
+    const authResult = await authenticateRequest(req)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (!teacherId || !education) {
-      return new Response(JSON.stringify({ success: false, error: 'teacherId and education are required' }), { status: 400 });
+    const body = await req.json();
+    const { teacherId: bodyTeacherId, education } = body as { teacherId: number; education: any };
+
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json({ success: false, error: 'Invalid teacherId' }, { status: 400 })
+    }
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return NextResponse.json({ success: false, error: 'Forbidden - User ID mismatch' }, { status: 403 })
+    }
+
+    if (!education) {
+      return NextResponse.json({ success: false, error: 'education is required' }, { status: 400 });
     }
 
     // Validate required fields
     if (!education.degree_type || !education.university_name || !education.year_of_passing) {
-      return new Response(JSON.stringify({ success: false, error: 'degree_type, university_name, and year_of_passing are required' }), { status: 400 });
+      return NextResponse.json({ success: false, error: 'degree_type, university_name, and year_of_passing are required' }, { status: 400 });
     }
 
     const pool = await connectToDatabase();
@@ -30,26 +44,38 @@ export async function POST(req: Request) {
 
     const result = await request.execute('sp_Insert_Grad_Details'); // TODO: update to actual stored procedure name
 
-    return Response.json({ success: true, message: 'Education details added successfully', data: result });
+    return NextResponse.json({ success: true, message: 'Education details added successfully', data: result });
   } catch (error) {
     console.error('Education POST error:', error);
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 
 // Update single Education/Graduation entry by gid (for row-level updates)
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { teacherId, education } = body as { teacherId: number; education: any };
+    const authResult = await authenticateRequest(req)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (!teacherId || !education || !education.gid) {
-      return new Response(JSON.stringify({ success: false, error: 'teacherId, education, and education.gid are required' }), { status: 400 });
+    const body = await req.json();
+    const { teacherId: bodyTeacherId, education } = body as { teacherId: number; education: any };
+
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json({ success: false, error: 'Invalid teacherId' }, { status: 400 })
+    }
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return NextResponse.json({ success: false, error: 'Forbidden - User ID mismatch' }, { status: 403 })
+    }
+
+    if (!education || !education.gid) {
+      return NextResponse.json({ success: false, error: 'education and education.gid are required' }, { status: 400 });
     }
 
     // Validate required fields
     if (!education.degree_type || !education.university_name || !education.year_of_passing) {
-      return new Response(JSON.stringify({ success: false, error: 'degree_type, university_name, and year_of_passing are required' }), { status: 400 });
+      return NextResponse.json({ success: false, error: 'degree_type, university_name, and year_of_passing are required' }, { status: 400 });
     }
 
     const pool = await connectToDatabase();
@@ -67,22 +93,34 @@ export async function PATCH(req: Request) {
 
     await request.execute('sp_Update_Grad_Details');
 
-    return Response.json({ success: true, message: 'Education details updated successfully' });
+    return NextResponse.json({ success: true, message: 'Education details updated successfully' });
   } catch (error) {
     console.error('Education PATCH error:', error);
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 
 // Delete one Education row by gid
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
+    const authResult = await authenticateRequest(req)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(req.url);
-    const teacherId = parseInt(searchParams.get('teacherId') || '0', 10);
+    const teacherIdParam = parseInt(searchParams.get('teacherId') || '0', 10);
     const gid = parseInt(searchParams.get('gid') || '0', 10);
 
-    if (!teacherId || !gid) {
-      return new Response(JSON.stringify({ success: false, error: 'teacherId and gid are required' }), { status: 400 });
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json({ success: false, error: 'Invalid teacherId' }, { status: 400 })
+    }
+    if (teacherIdParam && teacherIdParam !== teacherId) {
+      return NextResponse.json({ success: false, error: 'Forbidden - User ID mismatch' }, { status: 403 })
+    }
+
+    if (!gid) {
+      return NextResponse.json({ success: false, error: 'gid is required' }, { status: 400 });
     }
 
     const pool = await connectToDatabase();
@@ -92,10 +130,10 @@ export async function DELETE(req: Request) {
     // TODO: update to actual stored procedure name
     await request.execute('sp_Delete_Grad_Details');
 
-    return Response.json({ success: true });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Education DELETE error:', error);
-    return Response.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
   }
 }
 

@@ -1182,7 +1182,7 @@ function createWordSection(
 }
 
 // Helper function to fetch and convert image to buffer using API endpoint
-async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer | null> {
+async function fetchImageAsBuffer(imageUrl: string, sessionCookie?: string): Promise<Buffer | null> {
   try {
     // Determine the fetch URL
     let fetchUrl = imageUrl
@@ -1214,9 +1214,19 @@ async function fetchImageAsBuffer(imageUrl: string): Promise<Buffer | null> {
       fetchUrl = `${baseUrl}/api/teacher/profile/image?path=${encodeURIComponent(imageUrl)}`
     }
     
+    // Prepare headers with session cookie for authenticated requests
+    const headers: HeadersInit = {
+      'Cache-Control': 'no-store', // Ensure fresh image in production
+    }
+    
+    // Add session cookie if provided and if fetching from API endpoint
+    if (sessionCookie && fetchUrl.includes('/api/teacher/profile/image')) {
+      headers['Cookie'] = `session=${sessionCookie}`
+    }
+    
     // Fetch the image (API GET endpoint returns image directly, not JSON)
     const response = await fetch(fetchUrl, {
-      cache: 'no-store', // Ensure fresh image in production
+      headers,
     })
     
     if (!response.ok) {
@@ -1262,6 +1272,7 @@ export async function generateWordDocument(
   cvData: CVData,
   template: CVTemplate,
   selectedSections: string[],
+  sessionCookie?: string,
 ): Promise<Buffer> {
   if (!cvData.personal) {
     throw new Error("Personal information is required")
@@ -1282,7 +1293,7 @@ export async function generateWordDocument(
   let profileImageBuffer: Buffer | null = null
   
   if (cvData.personal.profileImage) {
-    profileImageBuffer = await fetchImageAsBuffer(cvData.personal.profileImage)
+    profileImageBuffer = await fetchImageAsBuffer(cvData.personal.profileImage, sessionCookie)
   }
   
   // Personal Details Section with Profile Image

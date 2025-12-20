@@ -1,7 +1,5 @@
 "use client"
 
-import { useEffect, useRef } from "react"
-import { usePathname } from "next/navigation"
 import { UseFormReturn } from "react-hook-form"
 import { useNavigationGuardDialog } from "@/hooks/use-navigation-guard-dialog"
 

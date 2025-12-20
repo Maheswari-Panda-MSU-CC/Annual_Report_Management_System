@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { teacherQueryKeys } from "./use-teacher-data"
 import { useToast } from "@/components/ui/use-toast"
+import { createAbortController } from "@/lib/request-controller"
 
 type SectionId = "refresher" | "academic-programs" | "academic-bodies" | "committees" | "talks"
 
@@ -72,39 +73,34 @@ const getRequestBodyKey = (sectionId: SectionId): string => {
 }
 
 // Get update request body for a section
-const getUpdateRequestBody = (sectionId: SectionId, id: number, teacherId: number, data: any) => {
+const getUpdateRequestBody = (sectionId: SectionId, id: number, data: any) => {
   if (sectionId === "refresher") {
     return {
       refresherDetailId: id,
-      teacherId,
       refresherDetail: data,
     }
   } else if (sectionId === "academic-programs") {
     return {
       academicContriId: id,
-      teacherId,
       academicContri: data,
     }
   } else if (sectionId === "academic-bodies") {
     return {
       partiAcadsId: id,
-      teacherId,
       partiAcads: data,
     }
   } else if (sectionId === "committees") {
     return {
       partiCommiId: id,
-      teacherId,
       partiCommi: data,
     }
   } else if (sectionId === "talks") {
     return {
       teacherTalkId: id,
-      teacherId,
       teacherTalk: data,
     }
   }
-  return { teacherId, data }
+  return { data }
 }
 
 /**
@@ -112,28 +108,49 @@ const getUpdateRequestBody = (sectionId: SectionId, id: number, teacherId: numbe
  */
 export function useTalksEventsMutations(sectionId: SectionId) {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { toast } = useToast()
   const teacherId: number = user?.role_id
     ? parseInt(user.role_id.toString())
     : parseInt(user?.id?.toString() || "0")
+
+  const handleUnauthorized = (error: Error) => {
+    const message = error?.message || ""
+    if (message.includes("Unauthorized") || message.includes("401")) {
+      toast({
+        title: "Session Expired",
+        description: "Your session has expired. Please login again.",
+        variant: "destructive",
+        duration: 5000,
+      })
+      logout?.()
+      return true
+    }
+    return false
+  }
 
   const queryKey = getQueryKey(teacherId, sectionId)
   const requestBodyKey = getRequestBodyKey(sectionId)
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
+      const { controller, unregister } = createAbortController()
       const endpoint = API_ENDPOINTS[sectionId]
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherId, [requestBodyKey]: data }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || `Failed to create ${sectionId} record`)
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [requestBodyKey]: data }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || `Failed to create ${sectionId} record`)
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onSuccess: (_, variables) => {
       // Invalidate queries to refetch data
@@ -151,6 +168,7 @@ export function useTalksEventsMutations(sectionId: SectionId) {
       })
     },
     onError: (error: Error) => {
+      if (handleUnauthorized(error)) return
       toast({
         title: "Error",
         description: error.message || `Failed to add ${sectionId}. Please try again.`,
@@ -162,18 +180,24 @@ export function useTalksEventsMutations(sectionId: SectionId) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const { controller, unregister } = createAbortController()
       const endpoint = API_ENDPOINTS[sectionId]
-      const requestBody = getUpdateRequestBody(sectionId, id, teacherId, data)
-      const res = await fetch(endpoint, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || `Failed to update ${sectionId} record`)
+      const requestBody = getUpdateRequestBody(sectionId, id, data)
+      try {
+        const res = await fetch(endpoint, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || `Failed to update ${sectionId} record`)
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async ({ id, data }) => {
       // Cancel outgoing refetches
@@ -205,6 +229,7 @@ export function useTalksEventsMutations(sectionId: SectionId) {
       return { previousData }
     },
     onError: (err, variables, context) => {
+      if (handleUnauthorized(err)) return
       // Rollback on error
       if (context?.previousData) {
         queryClient.setQueryData(queryKey, context.previousData)
@@ -235,15 +260,21 @@ export function useTalksEventsMutations(sectionId: SectionId) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
+      const { controller, unregister } = createAbortController()
       const config = DELETE_CONFIG[sectionId]
-      const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || `Failed to delete ${sectionId} record`)
+      try {
+        const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
+          method: "DELETE",
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || `Failed to delete ${sectionId} record`)
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async (id) => {
       // Cancel outgoing refetches
@@ -273,6 +304,7 @@ export function useTalksEventsMutations(sectionId: SectionId) {
       return { previousData }
     },
     onError: (err, id, context) => {
+      if (handleUnauthorized(err)) return
       // Rollback on error
       if (context?.previousData) {
         queryClient.setQueryData(queryKey, context.previousData)

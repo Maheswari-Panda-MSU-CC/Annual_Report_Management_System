@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { generateWordDocument } from "@/app/api/teacher/cv-generation/cv-word-generator"
 import { generateCVPDF } from "@/app/api/teacher/cv-generation/cv-pdf-puppeteer"
 import { type CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-styles"
 import { fetchCVDataFromDB } from "@/app/api/teacher/cv-generation/fetch-cv-data"
 import { cachedJsonResponse } from '@/lib/api-cache'
+import { authenticateRequest } from '@/lib/api-auth'
 
 interface CVGenerationRequest {
   teacherId: number
@@ -21,8 +22,12 @@ interface CVGenerationRequest {
  * - teacherId: Teacher ID (required)
  * - sections: Comma-separated list of section IDs to include (optional, defaults to all)
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const teacherId = parseInt(searchParams.get('teacherId') || '', 10)
     const sectionsParam = searchParams.get('sections') || ''
@@ -31,6 +36,13 @@ export async function GET(request: Request) {
       return NextResponse.json(
         { error: 'Invalid or missing teacherId' },
         { status: 400 }
+      )
+    }
+
+    if (user.role_id !== teacherId) {
+      return NextResponse.json(
+        { error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
       )
     }
 
@@ -60,11 +72,16 @@ export async function GET(request: Request) {
 }
 
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body: CVGenerationRequest = await request.json()
 
-    const { teacherId, template, format, selectedSections } = body
+    const { template, format, selectedSections } = body
+    const teacherId = user.role_id
 
     // Validate input
     if (!teacherId || teacherId === 0) {
@@ -106,9 +123,12 @@ export async function POST(request: Request) {
       )
     }
 
+    // Extract session cookie for image fetching
+    const sessionCookie = request.cookies.get('session')?.value || ''
+
     // Generate document
     if (format === "word") {
-      const buffer = await generateWordDocument(cvData, template, selectedSections)
+      const buffer = await generateWordDocument(cvData, template, selectedSections, sessionCookie)
 
       return new NextResponse(buffer as any, {
         headers: {
@@ -118,7 +138,7 @@ export async function POST(request: Request) {
         },
       })
     } else {
-      const pdfBuffer = await generateCVPDF(cvData, template, selectedSections)
+      const pdfBuffer = await generateCVPDF(cvData, template, selectedSections, sessionCookie)
 
       return new NextResponse(pdfBuffer as unknown as BodyInit, {
         headers: {

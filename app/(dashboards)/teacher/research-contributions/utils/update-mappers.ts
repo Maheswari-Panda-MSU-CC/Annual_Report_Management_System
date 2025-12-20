@@ -157,54 +157,44 @@ export const createUpdateMapper = (
 }
 
 export const UPDATE_REQUEST_BODIES = {
-  patents: (id: number, teacherId: number, data: any) => ({
+  patents: (id: number, data: any) => ({
     patentId: id,
-    teacherId,
     patent: data,
   }),
-  policy: (id: number, teacherId: number, data: any) => ({
+  policy: (id: number, data: any) => ({
     policyId: id,
-    teacherId,
     policy: data,
   }),
-  econtent: (id: number, teacherId: number, data: any) => ({
+  econtent: (id: number, data: any) => ({
     eContentId: id,
-    teacherId,
     eContent: data,
   }),
-  consultancy: (id: number, teacherId: number, data: any) => ({
+  consultancy: (id: number, data: any) => ({
     consultancyId: id,
-    teacherId,
     consultancy: data,
   }),
-  collaborations: (id: number, teacherId: number, data: any) => ({
+  collaborations: (id: number, data: any) => ({
     collaborationId: id,
-    teacherId,
     collaboration: data,
   }),
-  visits: (id: number, teacherId: number, data: any) => ({
+  visits: (id: number, data: any) => ({
     visitId: id,
-    teacherId,
     visit: data,
   }),
-  financial: (id: number, teacherId: number, data: any) => ({
+  financial: (id: number, data: any) => ({
     financialSupportId: id,
-    teacherId,
     financialSupport: data,
   }),
-  jrfSrf: (id: number, teacherId: number, data: any) => ({
+  jrfSrf: (id: number, data: any) => ({
     jrfSrfId: id,
-    teacherId,
     jrfSrf: data,
   }),
-  phd: (id: number, teacherId: number, data: any) => ({
+  phd: (id: number, data: any) => ({
     phdStudentId: id,
-    teacherId,
     phdStudent: data,
   }),
-  copyrights: (id: number, teacherId: number, data: any) => ({
+  copyrights: (id: number, data: any) => ({
     copyrightId: id,
-    teacherId,
     copyright: data,
   }),
 } as const

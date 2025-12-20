@@ -2978,7 +2978,7 @@ export default function ProfilePage() {
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Currently Employed? <span className="text-red-500">*</span></TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Designation <span className="text-red-500">*</span></TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Joining <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Relieving <span className="text-red-500">*</span></TableHead>
+                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Relieving</TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Nature of Job <span className="text-red-500">*</span></TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[130px]">Type of Teaching <span className="text-red-500">*</span></TableHead>
                       <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
@@ -3045,6 +3045,10 @@ export default function ProfilePage() {
                                   // Convert to boolean for form (will be converted to 0/1 on save)
                                   const boolValue = value === "yes"
                                   formField.onChange(boolValue)
+                                  // Clear End_Date if currently employed is Yes
+                                  if (boolValue) {
+                                    experienceForm.setValue(`experiences.${index}.End_Date`, "")
+                                  }
                                   // Only trigger validation on End_Date field, not all fields
                                   setTimeout(() => {
                                     experienceForm.trigger(`experiences.${index}.End_Date`, { shouldFocus: false })
@@ -3155,42 +3159,47 @@ export default function ProfilePage() {
                           control={experienceForm.control}
                           name={`experiences.${index}.End_Date`}
                           rules={{
-                            required: rowEditing ? "End date is required" : false,
                             validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "End date is required";
-                                }
-                                
-                                const endDate = new Date(value);
-                                if (isNaN(endDate.getTime())) {
-                                  return "Please enter a valid end date";
-                                }
-                                
-                                // Handle database values: 0/1 or boolean
-                                const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
-                                const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
-                                const startDate = experienceForm.watch(`experiences.${index}.Start_Date`)
-                                
-                                // End date cannot be in the future if not currently employed
-                                if (!currenteValue) {
-                                  const today = new Date();
-                                  today.setHours(23, 59, 59, 999);
-                                  if (endDate > today) {
-                                    return "End date cannot be in the future if not currently employed";
-                                  }
-                                }
-                                
-                                // End date must be after start date
-                                if (startDate) {
-                                  const start = new Date(startDate);
-                                  if (!isNaN(start.getTime())) {
-                                    if (endDate < start) {
-                                      return "End date must be after start date";
-                                    }
+                              if (!rowEditing) return true;
+                              
+                              // Handle database values: 0/1 or boolean
+                              const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
+                              const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
+                              
+                              // If currently employed is YES, allow empty (no validation)
+                              if (currenteValue) {
+                                return true;
+                              }
+                              
+                              // Only validate if currently employed is NO
+                              if (!value || (typeof value === 'string' && value.trim() === '')) {
+                                return "End date is required when currently employed is No";
+                              }
+                              
+                              const endDate = new Date(value);
+                              if (isNaN(endDate.getTime())) {
+                                return "Please enter a valid end date";
+                              }
+                              
+                              const startDate = experienceForm.watch(`experiences.${index}.Start_Date`)
+                              
+                              // End date cannot be in the future if not currently employed
+                              const today = new Date();
+                              today.setHours(23, 59, 59, 999);
+                              if (endDate > today) {
+                                return "End date cannot be in the future if not currently employed";
+                              }
+                              
+                              // End date must be after start date
+                              if (startDate) {
+                                const start = new Date(startDate);
+                                if (!isNaN(start.getTime())) {
+                                  if (endDate < start) {
+                                    return "End date must be after start date";
                                   }
                                 }
                               }
+                              
                               return true;
                             }
                           }}

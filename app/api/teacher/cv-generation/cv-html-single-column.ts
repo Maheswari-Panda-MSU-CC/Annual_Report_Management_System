@@ -45,7 +45,7 @@ function showValue(value: string | number | null | undefined): string {
 }
 
 // Generate personal details section with profile image
-function generatePersonalSection(cvData: CVData, template: CVTemplate): string {
+async function generatePersonalSection(cvData: CVData, template: CVTemplate, sessionCookie?: string): Promise<string> {
   if (!cvData.personal) return ''
   
   const personal = cvData.personal
@@ -58,10 +58,63 @@ function generatePersonalSection(cvData: CVData, template: CVTemplate): string {
     process.env.NEXT_PUBLIC_BASE_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
   
-  // Profile image
-  const profileImageUrl = personal.profileImage 
-    ? (personal.profileImage.startsWith('http') ? personal.profileImage : `${baseUrl}${personal.profileImage}`)
-    : null
+  // Profile image - convert to base64 for PDF generation if it's an API endpoint
+  let profileImageUrl: string | null = null
+  if (personal.profileImage) {
+    if (personal.profileImage.startsWith('http://') || personal.profileImage.startsWith('https://')) {
+      // If it's an API endpoint and we have a session cookie, convert to base64 for PDF
+      if (sessionCookie && personal.profileImage.includes('/api/teacher/profile/image')) {
+        try {
+          const response = await fetch(personal.profileImage, {
+            headers: {
+              'Cookie': `session=${sessionCookie}`
+            }
+          })
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer()
+            const base64 = Buffer.from(arrayBuffer).toString('base64')
+            const contentType = response.headers.get('content-type') || 'image/jpeg'
+            profileImageUrl = `data:${contentType};base64,${base64}`
+          } else {
+            profileImageUrl = null
+          }
+        } catch (error) {
+          console.error('Error converting image to base64:', error)
+          profileImageUrl = null
+        }
+      } else {
+        // S3 or external URL - use directly
+        profileImageUrl = personal.profileImage
+      }
+    } else {
+      // Relative path - construct API endpoint URL
+      const apiUrl = `${baseUrl}/api/teacher/profile/image?path=${encodeURIComponent(personal.profileImage)}`
+      if (sessionCookie) {
+        // Convert to base64 for PDF generation
+        try {
+          const response = await fetch(apiUrl, {
+            headers: {
+              'Cookie': `session=${sessionCookie}`
+            }
+          })
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer()
+            const base64 = Buffer.from(arrayBuffer).toString('base64')
+            const contentType = response.headers.get('content-type') || 'image/jpeg'
+            profileImageUrl = `data:${contentType};base64,${base64}`
+          } else {
+            profileImageUrl = null
+          }
+        } catch (error) {
+          console.error('Error converting image to base64:', error)
+          profileImageUrl = null
+        }
+      } else {
+        // No cookie - use API URL (for preview)
+        profileImageUrl = apiUrl
+      }
+    }
+  }
   
   const sectionTitleColor = isProfessional ? '#1e3a8a' : isAcademic ? '#1e3a8a' : isClassic ? '#92400e' : '#374151'
   const borderColor = isProfessional ? '#1e3a8a' : isAcademic ? '#1e3a8a' : isClassic ? '#92400e' : '#374151'
@@ -194,11 +247,12 @@ function generateTableSection(
 }
 
 // Generate complete single-column HTML document for CV
-export function generateCVHTMLSingleColumn(
+export async function generateCVHTMLSingleColumn(
   cvData: CVData,
   template: CVTemplate,
   selectedSections: string[],
-): string {
+  sessionCookie?: string,
+): Promise<string> {
   if (!cvData.personal) {
     throw new Error('Personal information is required')
   }
@@ -219,7 +273,7 @@ export function generateCVHTMLSingleColumn(
   
   // Personal Section
   if (selectedSections.includes('personal')) {
-    sectionsHTML += generatePersonalSection(cvData, template)
+    sectionsHTML += await generatePersonalSection(cvData, template, sessionCookie)
   }
   
   // Education

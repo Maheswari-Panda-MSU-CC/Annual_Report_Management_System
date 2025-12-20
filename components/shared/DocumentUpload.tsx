@@ -20,6 +20,7 @@ import {
   isAllowedFileExtension,
   getDocumentMimeType,
 } from "@/lib/document-upload-constants"
+import { createAbortController } from "@/lib/request-controller"
 
 interface DocumentUploadProps {
   documentUrl?: string
@@ -73,6 +74,7 @@ export function DocumentUpload({
   const [documentName, setDocumentName] = useState<string>("document")
   // Store the actual File object for API calls (not just URL)
   const fileRef = useRef<File | null>(null)
+  const extractControllerRef = useRef<{ controller: AbortController; unregister: () => void } | null>(null)
   // Access document analysis context to store extracted data
   const { setDocumentData, clearDocumentData } = useDocumentAnalysis()
   const { confirm, DialogComponent: ClearDocumentDialog } = useConfirmationDialog()
@@ -108,6 +110,17 @@ export function DocumentUpload({
       onExtract(initialExtractedFields)
     }
   }, [initialExtractedFields, onExtract])
+
+  // Cleanup on unmount - abort any in-flight extraction
+  useEffect(() => {
+    return () => {
+      if (extractControllerRef.current) {
+        extractControllerRef.current.controller.abort("component-unmount")
+        extractControllerRef.current.unregister()
+        extractControllerRef.current = null
+      }
+    }
+  }, [])
 
   // Validate file
   const validateFile = async (file: File): Promise<string | null> => {
@@ -395,6 +408,8 @@ export function DocumentUpload({
       setError(null)
 
       try {
+        const { controller, unregister } = createAbortController()
+        extractControllerRef.current = { controller, unregister }
         // Use API route for local documents to ensure proper access
         // This fixes the issue when navigating from dashboard where documentUrl
         // is a local path like /uploaded-document/file.pdf
@@ -407,7 +422,7 @@ export function DocumentUpload({
           hasUploadedFile: !!uploadedFile,
         })
         
-        const response = await fetch(fetchUrl)
+        const response = await fetch(fetchUrl, { signal: extractControllerRef.current.controller.signal })
         if (response.ok) {
           const blob = await response.blob()
           const urlParts = currentDocumentUrl.split("/")
@@ -443,6 +458,11 @@ export function DocumentUpload({
         setError("Could not access the document file. Please re-upload the document.")
         setIsExtracting(false)
         return
+      } finally {
+        if (extractControllerRef.current) {
+          extractControllerRef.current.unregister()
+          extractControllerRef.current = null
+        }
       }
     }
 
@@ -457,6 +477,9 @@ export function DocumentUpload({
 
     setIsExtracting(true)
     setError(null)
+
+    const { controller, unregister } = createAbortController()
+    extractControllerRef.current = { controller, unregister }
 
     try {
       // Use reverse mapping to get standard category and subcategory from form type
@@ -484,6 +507,7 @@ export function DocumentUpload({
       const response = await fetch("/api/llm/categorize-document", {
         method: "POST",
         body: formData, // Don't set Content-Type header - browser will set it with boundary
+        signal: controller.signal,
       })
 
       if (!response.ok) {
@@ -569,6 +593,10 @@ export function DocumentUpload({
       }
     } finally {
       setIsExtracting(false)
+      if (extractControllerRef.current) {
+        extractControllerRef.current.unregister()
+        extractControllerRef.current = null
+      }
     }
   }
 

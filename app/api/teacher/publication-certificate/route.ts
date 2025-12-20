@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import puppeteer from 'puppeteer'
+import { authenticateRequest } from '@/lib/api-auth'
 
 interface JournalArticle {
   id: number
@@ -451,6 +452,9 @@ function escapeHtml(text: string): string {
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+
     const body = await request.json()
     const { teacherInfo, selectedArticles, selectedPapers, userName } = body
 

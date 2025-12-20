@@ -1,16 +1,28 @@
 import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { authenticateRequest } from '@/lib/api-auth'
 
 // GET - Fetch all academic research visits for a teacher
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const teacherId = parseInt(searchParams.get('teacherId') || '', 10)
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (isNaN(teacherId)) {
+    const { searchParams } = new URL(request.url)
+    const queryTeacherId = searchParams.get('teacherId')
+    if (queryTeacherId && parseInt(queryTeacherId, 10) !== user.role_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid or missing teacherId' },
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid teacherId' },
         { status: 400 }
       )
     }
@@ -37,14 +49,33 @@ export async function GET(request: Request) {
 }
 
 // POST - Insert new academic research visit
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { teacherId, visit } = body
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (!teacherId || !visit) {
+    const body = await request.json()
+    const { teacherId: bodyTeacherId, visit } = body
+
+    const teacherId = user.role_id
+    if (!teacherId) {
       return NextResponse.json(
-        { success: false, error: 'teacherId and visit are required' },
+        { success: false, error: 'Invalid teacherId' },
+        { status: 400 }
+      )
+    }
+
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    if (!visit) {
+      return NextResponse.json(
+        { success: false, error: 'Visit data is required' },
         { status: 400 }
       )
     }
@@ -81,14 +112,33 @@ export async function POST(request: Request) {
 }
 
 // PUT - Update existing academic research visit
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { visitId, teacherId, visit } = body
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (!visitId || !teacherId || !visit) {
+    const body = await request.json()
+    const { visitId, teacherId: bodyTeacherId, visit } = body
+
+    const teacherId = user.role_id
+    if (!teacherId) {
       return NextResponse.json(
-        { success: false, error: 'visitId, teacherId, and visit are required' },
+        { success: false, error: 'Invalid teacherId' },
+        { status: 400 }
+      )
+    }
+
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    if (!visitId || !visit) {
+      return NextResponse.json(
+        { success: false, error: 'visitId and visit are required' },
         { status: 400 }
       )
     }
@@ -126,8 +176,20 @@ export async function PUT(request: Request) {
 }
 
 // DELETE - Delete academic research visit
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid teacherId' },
+        { status: 400 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const visitId = parseInt(searchParams.get('visitId') || '', 10)
 

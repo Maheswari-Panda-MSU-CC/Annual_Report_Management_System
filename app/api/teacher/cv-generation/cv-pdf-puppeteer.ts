@@ -11,13 +11,15 @@ export async function generateCVPDF(
   cvData: CVData,
   template: CVTemplate,
   selectedSections: string[],
+  sessionCookie?: string,
 ): Promise<Buffer> {
   if (!cvData.personal) {
     throw new Error('Personal information is required')
   }
 
   // Generate single-column HTML matching the preview exactly
-  const html = generateCVHTMLSingleColumn(cvData, template, selectedSections)
+  // Pass session cookie to handle authenticated image URLs
+  const html = await generateCVHTMLSingleColumn(cvData, template, selectedSections, sessionCookie)
 
   // Launch Puppeteer
   const browser = await puppeteer.launch({

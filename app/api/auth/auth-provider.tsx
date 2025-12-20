@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { abortAllControllers } from "@/lib/request-controller"
 
 export type UserRole = "university_admin" | "faculty_dean" | "department_head" | "teacher"
 
@@ -170,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fetch("/api/auth/login", { method: "DELETE", cache: "no-store", credentials: "include" })
       .catch(() => {})
       .finally(() => {
+        abortAllControllers("logout")
         setUser(null)
         localStorage.removeItem("user")
         sessionStorage.clear()

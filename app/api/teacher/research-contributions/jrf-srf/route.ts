@@ -1,16 +1,28 @@
 import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { authenticateRequest } from '@/lib/api-auth'
 
 // GET - Fetch all JRF/SRF records for a teacher
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const teacherId = parseInt(searchParams.get('teacherId') || '', 10)
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (isNaN(teacherId)) {
+    const { searchParams } = new URL(request.url)
+    const queryTeacherId = searchParams.get('teacherId')
+    if (queryTeacherId && parseInt(queryTeacherId, 10) !== user.role_id) {
       return NextResponse.json(
-        { success: false, error: 'Invalid or missing teacherId' },
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid teacherId' },
         { status: 400 }
       )
     }
@@ -37,14 +49,33 @@ export async function GET(request: Request) {
 }
 
 // POST - Insert new JRF/SRF record
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { teacherId, jrfSrf } = body
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (!teacherId || !jrfSrf) {
+    const body = await request.json()
+    const { teacherId: bodyTeacherId, jrfSrf } = body
+
+    const teacherId = user.role_id
+    if (!teacherId) {
       return NextResponse.json(
-        { success: false, error: 'teacherId and jrfSrf are required' },
+        { success: false, error: 'Invalid teacherId' },
+        { status: 400 }
+      )
+    }
+
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    if (!jrfSrf) {
+      return NextResponse.json(
+        { success: false, error: 'JRF/SRF data is required' },
         { status: 400 }
       )
     }
@@ -81,14 +112,33 @@ export async function POST(request: Request) {
 }
 
 // PUT - Update existing JRF/SRF record
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { jrfSrfId, teacherId, jrfSrf } = body
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
 
-    if (!jrfSrfId || !teacherId || !jrfSrf) {
+    const body = await request.json()
+    const { jrfSrfId, teacherId: bodyTeacherId, jrfSrf } = body
+
+    const teacherId = user.role_id
+    if (!teacherId) {
       return NextResponse.json(
-        { success: false, error: 'jrfSrfId, teacherId, and jrfSrf are required' },
+        { success: false, error: 'Invalid teacherId' },
+        { status: 400 }
+      )
+    }
+
+    if (bodyTeacherId && bodyTeacherId !== teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
+      )
+    }
+
+    if (!jrfSrfId || !jrfSrf) {
+      return NextResponse.json(
+        { success: false, error: 'jrfSrfId and jrfSrf are required' },
         { status: 400 }
       )
     }
@@ -126,8 +176,20 @@ export async function PUT(request: Request) {
 }
 
 // DELETE - Delete JRF/SRF record
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
+    const teacherId = user.role_id
+    if (!teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid teacherId' },
+        { status: 400 }
+      )
+    }
+
     const { searchParams } = new URL(request.url)
     const jrfSrfId = parseInt(searchParams.get('jrfSrfId') || '', 10)
 

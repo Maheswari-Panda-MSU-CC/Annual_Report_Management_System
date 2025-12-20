@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from "fs"
 import { join } from "path"
 import { isS3Configured, uploadToS3, getSignedUrl } from "@/lib/s3-service"
 import type { FilePatternMetadata } from "@/lib/s3-service"
+import { authenticateRequest } from "@/lib/api-auth"
 
 const MAX_PROFILE_IMAGE_SIZE = 1 * 1024 * 1024 // 1MB
 const ALLOWED_PROFILE_IMAGE_TYPES = ["image/jpeg", "image/jpg"]
@@ -33,6 +34,9 @@ function buildApiUrl(request: NextRequest, imagePath: string) {
 
 export async function GET(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+
     const { searchParams } = new URL(request.url)
     const imagePath = searchParams.get("path")
     const fileName = getFileNameFromPath(imagePath)
@@ -75,6 +79,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+
     const contentType = request.headers.get("content-type") || ""
 
     // JSON body: get URL for existing path

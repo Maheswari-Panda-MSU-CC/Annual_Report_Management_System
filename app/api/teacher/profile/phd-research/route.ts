@@ -1,11 +1,18 @@
 import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
+import { NextRequest } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 
 // Add new Post-Doctoral Research entry (single row)
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    const authResult = await authenticateRequest(req);
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const body = await req.json();
-    const { teacherId, research } = body as { teacherId: number; research: any };
+    const { research } = body as { research: any };
+    const teacherId = user.role_id;
 
     if (!teacherId || !research) {
       return new Response(JSON.stringify({ success: false, error: 'teacherId and research are required' }), { status: 400 });
@@ -37,10 +44,15 @@ export async function POST(req: Request) {
 }
 
 // Update single Post-Doctoral Research entry by Id (for row-level updates)
-export async function PATCH(req: Request) {
+export async function PATCH(req: NextRequest) {
   try {
+    const authResult = await authenticateRequest(req);
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const body = await req.json();
-    const { teacherId, research } = body as { teacherId: number; research: any };
+    const { research } = body as { research: any };
+    const teacherId = user.role_id;
 
     if (!teacherId || !research || !research.Id) {
       return new Response(JSON.stringify({ success: false, error: 'teacherId, research, and research.Id are required' }), { status: 400 });
@@ -73,10 +85,14 @@ export async function PATCH(req: Request) {
 }
 
 // Delete one research row by Id
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
+    const authResult = await authenticateRequest(req);
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const { searchParams } = new URL(req.url);
-    const teacherId = parseInt(searchParams.get('teacherId') || '0', 10);
+    const teacherId = user.role_id;
     const id = parseInt(searchParams.get('id') || '0', 10);
 
     if (!teacherId || !id) {

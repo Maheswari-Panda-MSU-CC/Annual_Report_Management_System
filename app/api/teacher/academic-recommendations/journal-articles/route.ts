@@ -1,10 +1,15 @@
 import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { authenticateRequest } from '@/lib/api-auth'
 
 // GET - Fetch all journal articles for a teacher
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const { searchParams } = new URL(request.url)
     const teacherId = parseInt(searchParams.get('teacherId') || '', 10)
 
@@ -12,6 +17,13 @@ export async function GET(request: Request) {
       return NextResponse.json(
         { success: false, error: 'Invalid or missing teacherId' },
         { status: 400 }
+      )
+    }
+
+    if (user.role_id !== teacherId) {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden - User ID mismatch' },
+        { status: 403 }
       )
     }
 
@@ -37,10 +49,15 @@ export async function GET(request: Request) {
 }
 
 // POST - Insert new journal article
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
-    const { teacherId, journal } = body
+    const { journal } = body
+    const teacherId = user.role_id
 
     if (!teacherId || !journal) {
       return NextResponse.json(
@@ -94,10 +111,15 @@ export async function POST(request: Request) {
 }
 
 // PUT - Update existing journal article
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     const body = await request.json()
-    const { journalId, teacherId, journal } = body
+    const { journalId, journal } = body
+    const teacherId = user.role_id
 
     if (!journalId || !teacherId || !journal) {
       return NextResponse.json(
@@ -152,8 +174,11 @@ export async function PUT(request: Request) {
 }
 
 // DELETE - Delete journal article
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+
     const { searchParams } = new URL(request.url)
     const journalId = parseInt(searchParams.get('journalId') || '', 10)
 

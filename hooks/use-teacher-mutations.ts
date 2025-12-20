@@ -2,28 +2,50 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/app/api/auth/auth-provider"
 import { teacherQueryKeys } from "./use-teacher-data"
 import { useToast } from "@/components/ui/use-toast"
+import { createAbortController } from "@/lib/request-controller"
 
 // ==================== JOURNAL MUTATIONS ====================
 export function useJournalMutations() {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { toast } = useToast()
   const teacherId: number = user?.role_id 
     ? parseInt(user.role_id.toString()) 
     : parseInt(user?.id?.toString() || '0')
 
+  const handleUnauthorized = (error: Error) => {
+    const message = error?.message || ""
+    if (message.includes("Unauthorized") || message.includes("401")) {
+      toast({
+        title: "Session Expired",
+        description: "Your session has expired. Please login again.",
+        variant: "destructive",
+        duration: 5000,
+      })
+      logout?.()
+      return true
+    }
+    return false
+  }
+
   const createJournal = useMutation({
     mutationFn: async (journalData: any) => {
-      const res = await fetch("/api/teacher/publication/journals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherId, journal: journalData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to create journal article")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/publication/journals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ journal: journalData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to create journal article")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onSuccess: () => {
       // Invalidate all publication queries - triggers automatic refetch
@@ -41,6 +63,7 @@ export function useJournalMutations() {
       })
     },
     onError: (error: Error) => {
+      if (handleUnauthorized(error)) return
       toast({ 
         title: "Error", 
         description: error.message || "Failed to add journal article. Please try again.",
@@ -52,16 +75,22 @@ export function useJournalMutations() {
 
   const updateJournal = useMutation({
     mutationFn: async ({ journalId, journalData }: { journalId: number; journalData: any }) => {
-      const res = await fetch("/api/teacher/publication/journals", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ journalId, teacherId, journal: journalData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to update journal article")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/publication/journals", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ journalId, journal: journalData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to update journal article")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     // Optimistic update for immediate UI feedback
     onMutate: async ({ journalId, journalData }) => {
@@ -92,6 +121,7 @@ export function useJournalMutations() {
       return { previousJournals }
     },
     onError: (err, variables, context) => {
+      if (handleUnauthorized(err)) return
       // Rollback on error
       if (context?.previousJournals) {
         queryClient.setQueryData(
@@ -130,14 +160,20 @@ export function useJournalMutations() {
 
   const deleteJournal = useMutation({
     mutationFn: async (journalId: number) => {
-      const res = await fetch(`/api/teacher/publication/journals?journalId=${journalId}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to delete journal article")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch(`/api/teacher/publication/journals?journalId=${journalId}`, {
+          method: "DELETE",
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to delete journal article")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     // Optimistic update
     onMutate: async (journalId) => {
@@ -163,6 +199,7 @@ export function useJournalMutations() {
       return { previousJournals }
     },
     onError: (err, journalId, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousJournals) {
         queryClient.setQueryData(
           teacherQueryKeys.publications.journals(teacherId),
@@ -198,24 +235,45 @@ export function useJournalMutations() {
 // ==================== BOOK MUTATIONS ====================
 export function useBookMutations() {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { toast } = useToast()
   const teacherId: number = user?.role_id 
     ? parseInt(user.role_id.toString()) 
     : parseInt(user?.id?.toString() || '0')
 
+  const handleUnauthorized = (error: Error) => {
+    const message = error?.message || ""
+    if (message.includes("Unauthorized") || message.includes("401")) {
+      toast({
+        title: "Session Expired",
+        description: "Your session has expired. Please login again.",
+        variant: "destructive",
+        duration: 5000,
+      })
+      logout?.()
+      return true
+    }
+    return false
+  }
+
   const createBook = useMutation({
     mutationFn: async (bookData: any) => {
-      const res = await fetch("/api/teacher/publication/books", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherId, book: bookData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to create book")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/publication/books", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ book: bookData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to create book")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
@@ -232,6 +290,7 @@ export function useBookMutations() {
       })
     },
     onError: (error: Error) => {
+      if (handleUnauthorized(error)) return
       toast({ 
         title: "Error", 
         description: error.message || "Failed to add book. Please try again.",
@@ -243,16 +302,22 @@ export function useBookMutations() {
 
   const updateBook = useMutation({
     mutationFn: async ({ bookId, bookData }: { bookId: number; bookData: any }) => {
-      const res = await fetch("/api/teacher/publication/books", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookId, teacherId, book: bookData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to update book")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/publication/books", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookId, book: bookData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to update book")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async ({ bookId, bookData }) => {
       await queryClient.cancelQueries({ 
@@ -279,6 +344,7 @@ export function useBookMutations() {
       return { previousBooks }
     },
     onError: (err, variables, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousBooks) {
         queryClient.setQueryData(
           teacherQueryKeys.publications.books(teacherId),
@@ -313,14 +379,20 @@ export function useBookMutations() {
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: number) => {
-      const res = await fetch(`/api/teacher/publication/books?bookId=${bookId}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to delete book")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch(`/api/teacher/publication/books?bookId=${bookId}`, {
+          method: "DELETE",
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to delete book")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async (bookId) => {
       await queryClient.cancelQueries({ 
@@ -345,6 +417,7 @@ export function useBookMutations() {
       return { previousBooks }
     },
     onError: (err, bookId, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousBooks) {
         queryClient.setQueryData(
           teacherQueryKeys.publications.books(teacherId),
@@ -380,24 +453,45 @@ export function useBookMutations() {
 // ==================== PAPER MUTATIONS ====================
 export function usePaperMutations() {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { toast } = useToast()
   const teacherId: number = user?.role_id 
     ? parseInt(user.role_id.toString()) 
     : parseInt(user?.id?.toString() || '0')
 
+  const handleUnauthorized = (error: Error) => {
+    const message = error?.message || ""
+    if (message.includes("Unauthorized") || message.includes("401")) {
+      toast({
+        title: "Session Expired",
+        description: "Your session has expired. Please login again.",
+        variant: "destructive",
+        duration: 5000,
+      })
+      logout?.()
+      return true
+    }
+    return false
+  }
+
   const createPaper = useMutation({
     mutationFn: async (paperData: any) => {
-      const res = await fetch("/api/teacher/publication/papers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherId, paper: paperData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to create paper")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/publication/papers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paper: paperData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to create paper")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
@@ -414,6 +508,7 @@ export function usePaperMutations() {
       })
     },
     onError: (error: Error) => {
+      if (handleUnauthorized(error)) return
       toast({ 
         title: "Error", 
         description: error.message || "Failed to add paper. Please try again.",
@@ -425,16 +520,22 @@ export function usePaperMutations() {
 
   const updatePaper = useMutation({
     mutationFn: async ({ paperId, paperData }: { paperId: number; paperData: any }) => {
-      const res = await fetch("/api/teacher/publication/papers", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paperId, teacherId, paper: paperData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to update paper")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/publication/papers", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paperId, paper: paperData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to update paper")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async ({ paperId, paperData }) => {
       await queryClient.cancelQueries({ 
@@ -461,6 +562,7 @@ export function usePaperMutations() {
       return { previousPapers }
     },
     onError: (err, variables, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousPapers) {
         queryClient.setQueryData(
           teacherQueryKeys.publications.papers(teacherId),
@@ -495,14 +597,20 @@ export function usePaperMutations() {
 
   const deletePaper = useMutation({
     mutationFn: async (paperId: number) => {
-      const res = await fetch(`/api/teacher/publication/papers?paperId=${paperId}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to delete paper")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch(`/api/teacher/publication/papers?paperId=${paperId}`, {
+          method: "DELETE",
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to delete paper")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async (paperId) => {
       await queryClient.cancelQueries({ 
@@ -527,6 +635,7 @@ export function usePaperMutations() {
       return { previousPapers }
     },
     onError: (err, paperId, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousPapers) {
         queryClient.setQueryData(
           teacherQueryKeys.publications.papers(teacherId),
@@ -562,24 +671,45 @@ export function usePaperMutations() {
 // ==================== RESEARCH MUTATIONS ====================
 export function useResearchMutations() {
   const queryClient = useQueryClient()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const { toast } = useToast()
   const teacherId: number = user?.role_id 
     ? parseInt(user.role_id.toString()) 
     : parseInt(user?.id?.toString() || '0')
 
+  const handleUnauthorized = (error: Error) => {
+    const message = error?.message || ""
+    if (message.includes("Unauthorized") || message.includes("401")) {
+      toast({
+        title: "Session Expired",
+        description: "Your session has expired. Please login again.",
+        variant: "destructive",
+        duration: 5000,
+      })
+      logout?.()
+      return true
+    }
+    return false
+  }
+
   const createResearch = useMutation({
     mutationFn: async (projectData: any) => {
-      const res = await fetch("/api/teacher/research", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ teacherId, project: projectData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to create research project")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/research", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ project: projectData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to create research project")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ 
@@ -596,6 +726,7 @@ export function useResearchMutations() {
       })
     },
     onError: (error: Error) => {
+      if (handleUnauthorized(error)) return
       toast({ 
         title: "Error", 
         description: error.message || "Failed to add research project. Please try again.",
@@ -607,16 +738,22 @@ export function useResearchMutations() {
 
   const updateResearch = useMutation({
     mutationFn: async ({ projectId, projectData }: { projectId: number; projectData: any }) => {
-      const res = await fetch("/api/teacher/research", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, teacherId, project: projectData }),
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to update research project")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch("/api/teacher/research", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId, project: projectData }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to update research project")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async ({ projectId, projectData }) => {
       await queryClient.cancelQueries({ 
@@ -643,6 +780,7 @@ export function useResearchMutations() {
       return { previousProjects }
     },
     onError: (err, variables, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousProjects) {
         queryClient.setQueryData(
           teacherQueryKeys.research(teacherId),
@@ -678,14 +816,20 @@ export function useResearchMutations() {
 
   const deleteResearch = useMutation({
     mutationFn: async (projectId: number) => {
-      const res = await fetch(`/api/teacher/research?projectId=${projectId}`, {
-        method: "DELETE",
-      })
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || "Failed to delete research project")
+      const { controller, unregister } = createAbortController()
+      try {
+        const res = await fetch(`/api/teacher/research?projectId=${projectId}`, {
+          method: "DELETE",
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const error = await res.json()
+          throw new Error(error.error || "Failed to delete research project")
+        }
+        return res.json()
+      } finally {
+        unregister()
       }
-      return res.json()
     },
     onMutate: async (projectId) => {
       await queryClient.cancelQueries({ 
@@ -710,6 +854,7 @@ export function useResearchMutations() {
       return { previousProjects }
     },
     onError: (err, projectId, context) => {
+      if (handleUnauthorized(err)) return
       if (context?.previousProjects) {
         queryClient.setQueryData(
           teacherQueryKeys.research(teacherId),

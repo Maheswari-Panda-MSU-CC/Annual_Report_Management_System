@@ -1,15 +1,28 @@
 import { connectToDatabase } from '@/lib/db';
 import { cachedJsonResponse } from '@/lib/api-cache';
 import sql from 'mssql';
+import { NextRequest } from 'next/server';
+import { authenticateRequest } from '@/lib/api-auth';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request);
+    if (authResult.error) return authResult.error;
+    const { user } = authResult;
+
     const { searchParams } = new URL(request.url);
     const teacherId = parseInt(searchParams.get('teacherId') || '', 10);
 
     if (isNaN(teacherId)) {
       return new Response(JSON.stringify({ error: 'Invalid or missing teacherId' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (user.role_id !== teacherId) {
+      return new Response(JSON.stringify({ error: 'Forbidden - User ID mismatch' }), {
+        status: 403,
         headers: { 'Content-Type': 'application/json' },
       });
     }
