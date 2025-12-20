@@ -221,12 +221,29 @@ export function PatentForm({
                         <Input 
                             id="date" 
                             type="date" 
+                            max={new Date().toISOString().split('T')[0]}
                             className={cn(
                                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
                             )}
                             {...register("date", { 
                                 required: "Date is required",
+                                validate: (v) => {
+                                    if (!v || v.trim() === "") {
+                                        return "Date is required"
+                                    }
+                                    const selectedDate = new Date(v)
+                                    const today = new Date()
+                                    today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                                    if (selectedDate > today) {
+                                        return "Date cannot be in the future"
+                                    }
+                                    // Check if date is valid
+                                    if (isNaN(selectedDate.getTime())) {
+                                        return "Please enter a valid date"
+                                    }
+                                    return true
+                                },
                                 onChange: () => onFieldChange?.("date")
                             })} 
                         />
@@ -234,7 +251,7 @@ export function PatentForm({
                     </div>
 
                     <div>
-                        <Label htmlFor="Tech_Licence" className="text-sm sm:text-base">Transfer of Technology with Licence</Label>
+                        <Label htmlFor="Tech_Licence" className="text-sm sm:text-base">Transfer of Technology with Licence *</Label>
                         <Input 
                             id="Tech_Licence" 
                             placeholder="Enter technology licence details" 
@@ -243,9 +260,13 @@ export function PatentForm({
                                 isAutoFilled?.("Tech_Licence") && "bg-blue-50 border-blue-200"
                             )}
                             {...register("Tech_Licence", {
+                                required: "Transfer of Technology with Licence is required",
+                                minLength: { value: 2, message: "Technology licence details must be at least 2 characters" },
+                                maxLength: { value: 500, message: "Technology licence details must not exceed 500 characters" },
                                 onChange: () => onFieldChange?.("Tech_Licence")
                             })} 
                         />
+                        {errors.Tech_Licence && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.Tech_Licence.message?.toString()}</p>}
                     </div>
                 </div>
 
@@ -269,7 +290,7 @@ export function PatentForm({
                     </div>
 
                     <div>
-                        <Label htmlFor="PatentApplicationNo" className="text-sm sm:text-base">Patent Application/Publication/Grant No.</Label>
+                        <Label htmlFor="PatentApplicationNo" className="text-sm sm:text-base">Patent Application/Publication/Grant No. *</Label>
                         <Input 
                             id="PatentApplicationNo" 
                             placeholder="Enter patent number" 
@@ -278,9 +299,17 @@ export function PatentForm({
                                 isAutoFilled?.("PatentApplicationNo") && "bg-blue-50 border-blue-200"
                             )}
                             {...register("PatentApplicationNo", {
+                                required: "Patent Application/Publication/Grant No. is required",
+                                minLength: { value: 2, message: "Patent number must be at least 2 characters" },
+                                maxLength: { value: 50, message: "Patent number must not exceed 50 characters" },
+                                pattern: {
+                                    value: /^[a-zA-Z0-9\s\/\-\.]+$/,
+                                    message: "Patent number can only contain letters, numbers, spaces, slashes, hyphens, and periods"
+                                },
                                 onChange: () => onFieldChange?.("PatentApplicationNo")
                             })} 
                         />
+                        {errors.PatentApplicationNo && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.PatentApplicationNo.message?.toString()}</p>}
                     </div>
                 </div>
 

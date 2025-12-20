@@ -51,7 +51,7 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.section(teacherId, sectionId),
-        refetchType: 'active'
+        refetchType: 'all'
       })
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.all(teacherId)
@@ -125,7 +125,7 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.section(teacherId, sectionId),
-        refetchType: 'active'
+        refetchType: 'all'
       })
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.all(teacherId)
@@ -186,7 +186,7 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
     onSuccess: () => {
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.section(teacherId, sectionId),
-        refetchType: 'active'
+        refetchType: 'all'
       })
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.all(teacherId)
