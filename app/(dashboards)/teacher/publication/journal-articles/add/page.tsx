@@ -712,11 +712,21 @@ export default function AddJournalArticlePage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="issn">ISSN (Without -)</Label>
+                  <Label htmlFor="issn">ISSN (Without -) *</Label>
                   <Input 
                     id="issn" 
                     {...register("issn", {
-                      validate: (v) => !v || /^[0-9]{8}$/.test(v.replace(/-/g, '')) || "ISSN must be 8 digits"
+                      required: "ISSN is required",
+                      validate: (v) => {
+                        if (!v || v.trim() === "") {
+                          return "ISSN is required"
+                        }
+                        const cleaned = v.replace(/-/g, '')
+                        if (!/^[0-9]{8}$/.test(cleaned)) {
+                          return "ISSN must be 8 digits"
+                        }
+                        return true
+                      }
                     })} 
                     placeholder="Enter ISSN without dashes (8 digits)"
                     className={cn(
@@ -730,11 +740,21 @@ export default function AddJournalArticlePage() {
                   {errors.issn && <p className="text-sm text-red-500 mt-1">{errors.issn.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="isbn">ISBN (Without -)</Label>
+                  <Label htmlFor="isbn">ISBN (Without -) *</Label>
                   <Input 
                     id="isbn" 
                     {...register("isbn", {
-                      validate: (v) => !v || /^[0-9]{10}$/.test(v.replace(/-/g, '')) || /^[0-9]{13}$/.test(v.replace(/-/g, '')) || "ISBN must be 10 or 13 digits"
+                      required: "ISBN is required",
+                      validate: (v) => {
+                        if (!v || v.trim() === "") {
+                          return "ISBN is required"
+                        }
+                        const cleaned = v.replace(/-/g, '')
+                        if (!/^[0-9]{10}$/.test(cleaned) && !/^[0-9]{13}$/.test(cleaned)) {
+                          return "ISBN must be 10 or 13 digits"
+                        }
+                        return true
+                      }
                     })} 
                     placeholder="Enter ISBN without dashes (10 or 13 digits)"
                     className={cn(
@@ -772,15 +792,24 @@ export default function AddJournalArticlePage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 <div>
-                  <Label htmlFor="volume_num">Volume No.</Label>
+                  <Label htmlFor="volume_num">Volume No. *</Label>
                   <Input
                     id="volume_num"
                     type="number"
                     {...register("volume_num", { 
                       valueAsNumber: true,
+                      required: "Volume number is required",
                       min: { value: 1, message: "Volume number must be at least 1" },
                       max: { value: 10000, message: "Volume number cannot exceed 10000" },
-                      validate: (v) => v === null || v === undefined || (v > 0 && Number.isInteger(v)) || "Must be a positive integer"
+                      validate: (v) => {
+                        if (v === null || v === undefined) {
+                          return "Volume number is required"
+                        }
+                        if (!(v > 0 && Number.isInteger(v))) {
+                          return "Must be a positive integer"
+                        }
+                        return true
+                      }
                     })}
                     placeholder="Volume number"
                     className={cn(
@@ -794,11 +823,20 @@ export default function AddJournalArticlePage() {
                   {errors.volume_num && <p className="text-sm text-red-500 mt-1">{errors.volume_num.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="page_num">Page No. (Range)</Label>
+                  <Label htmlFor="page_num">Page No. (Range) *</Label>
                   <Input 
                     id="page_num" 
                     {...register("page_num", {
-                      validate: (v) => !v || /^[0-9]+(-[0-9]+)?$/.test(v) || "Page number must be a number or range (e.g., 123 or 123-135)"
+                      required: "Page number is required",
+                      validate: (v) => {
+                        if (!v || v.trim() === "") {
+                          return "Page number is required"
+                        }
+                        if (!/^[0-9]+(-[0-9]+)?$/.test(v)) {
+                          return "Page number must be a number or range (e.g., 123 or 123-135)"
+                        }
+                        return true
+                      }
                     })} 
                     placeholder="e.g., 123-135"
                     className={cn(
@@ -812,12 +850,29 @@ export default function AddJournalArticlePage() {
                   {errors.page_num && <p className="text-sm text-red-500 mt-1">{errors.page_num.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="month_year">Date</Label>
+                  <Label htmlFor="month_year">Date *</Label>
                   <Input 
                     id="month_year" 
                     type="date" 
+                    max={new Date().toISOString().split('T')[0]}
                     {...register("month_year", {
-                      validate: (v) => !v || new Date(v) <= new Date() || "Date cannot be in the future"
+                      required: "Date is required",
+                      validate: (v) => {
+                        if (!v || v.trim() === "") {
+                          return "Date is required"
+                        }
+                        const selectedDate = new Date(v)
+                        const today = new Date()
+                        today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                        if (selectedDate > today) {
+                          return "Date cannot be in the future"
+                        }
+                        // Check if date is valid
+                        if (isNaN(selectedDate.getTime())) {
+                          return "Please enter a valid date"
+                        }
+                        return true
+                      }
                     })}
                     className={cn(
                       isAutoFilled("month_year") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -938,11 +993,20 @@ export default function AddJournalArticlePage() {
               </div>
 
               <div>
-                <Label htmlFor="DOI">DOI</Label>
+                <Label htmlFor="DOI">DOI *</Label>
                 <Input 
                   id="DOI" 
                   {...register("DOI", {
-                    validate: (v) => !v || /^10\.\d{4,}\/[-._;()\/:a-zA-Z0-9]+$/.test(v) || "Invalid DOI format. Must start with 10.xxxx/"
+                    required: "DOI is required",
+                    validate: (v) => {
+                      if (!v || v.trim() === "") {
+                        return "DOI is required"
+                      }
+                      if (!/^10\.\d{4,}\/[-._;()\/:a-zA-Z0-9]+$/.test(v)) {
+                        return "Invalid DOI format. Must start with 10.xxxx/"
+                      }
+                      return true
+                    }
                   })} 
                   placeholder="Enter DOI (e.g., 10.1000/xyz123)"
                   className={cn(

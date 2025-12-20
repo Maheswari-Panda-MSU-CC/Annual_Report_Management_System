@@ -84,6 +84,13 @@ export default function AddBookPage() {
   // Watch edited field for conditional validation
   const isEdited = watch("edited")
 
+  // Clear chap_count when edited is set to false
+  useEffect(() => {
+    if (!isEdited) {
+      setValue("chap_count", null, { shouldValidate: false })
+    }
+  }, [isEdited, setValue])
+
   // Track auto-filled fields for highlighting
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
 
@@ -558,24 +565,36 @@ export default function AddBookPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="isbn">ISBN (Without -)</Label>
+                  <Label htmlFor="isbn">ISBN (Without -) *</Label>
                   <Input 
                     id="isbn" 
                     {...register("isbn", {
-                      validate: (v) => !v || /^[0-9]{10}$/.test(v.replace(/-/g, '')) || /^[0-9]{13}$/.test(v.replace(/-/g, '')) || "ISBN must be 10 or 13 digits"
+                      required: "ISBN is required",
+                      validate: (v) => {
+                        if (!v || v.trim() === "") {
+                          return "ISBN is required"
+                        }
+                        const cleaned = v.replace(/-/g, '')
+                        if (!/^[0-9]{10}$/.test(cleaned) && !/^[0-9]{13}$/.test(cleaned)) {
+                          return "ISBN must be 10 or 13 digits"
+                        }
+                        return true
+                      }
                     })} 
                     placeholder="Enter ISBN without dashes (10 or 13 digits)"
                   />
                   {errors.isbn && <p className="text-sm text-red-500 mt-1">{errors.isbn.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="publisher_name">Publisher Name</Label>
+                  <Label htmlFor="publisher_name">Publisher Name *</Label>
                   <Input 
                     id="publisher_name" 
                     {...register("publisher_name", {
+                      required: "Publisher name is required",
+                      minLength: { value: 2, message: "Publisher name must be at least 2 characters" },
                       maxLength: { value: 300, message: "Publisher name must not exceed 300 characters" },
                       pattern: {
-                        value: /^[a-zA-Z0-9\s,\.&'-]*$/,
+                        value: /^[a-zA-Z0-9\s,\.&'-]+$/,
                         message: "Publisher name contains invalid characters"
                       }
                     })} 
@@ -599,24 +618,43 @@ export default function AddBookPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="submit_date">Publishing Date</Label>
+                  <Label htmlFor="submit_date">Publishing Date *</Label>
                   <Input 
                     id="submit_date" 
                     type="date" 
+                    max={new Date().toISOString().split('T')[0]}
                     {...register("submit_date", {
-                      validate: (v) => !v || new Date(v) <= new Date() || "Date cannot be in the future"
+                      required: "Publishing date is required",
+                      validate: (v) => {
+                        if (!v || v.trim() === "") {
+                          return "Publishing date is required"
+                        }
+                        const selectedDate = new Date(v)
+                        const today = new Date()
+                        today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                        if (selectedDate > today) {
+                          return "Publishing date cannot be in the future"
+                        }
+                        // Check if date is valid
+                        if (isNaN(selectedDate.getTime())) {
+                          return "Please enter a valid date"
+                        }
+                        return true
+                      }
                     })} 
                   />
                   {errors.submit_date && <p className="text-sm text-red-500 mt-1">{errors.submit_date.message}</p>}
                 </div>
                 <div>
-                  <Label htmlFor="place">Publishing Place</Label>
+                  <Label htmlFor="place">Publishing Place *</Label>
                   <Input 
                     id="place" 
                     {...register("place", {
+                      required: "Publishing place is required",
+                      minLength: { value: 2, message: "Publishing place must be at least 2 characters" },
                       maxLength: { value: 200, message: "Place must not exceed 200 characters" },
                       pattern: {
-                        value: /^[a-zA-Z\s,\.-]*$/,
+                        value: /^[a-zA-Z\s,\.-]+$/,
                         message: "Place contains invalid characters"
                       }
                     })} 
@@ -736,42 +774,36 @@ export default function AddBookPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                <div>
-                  <Label htmlFor="chap_count">
-                    Chapter Count {isEdited ? "*" : ""}
-                  </Label>
-                  <Input
-                    id="chap_count"
-                    type="number"
-                    {...register("chap_count", { 
-                      valueAsNumber: true,
-                      required: isEdited ? "Chapter count is required when book is edited" : false,
-                      min: { value: 1, message: "Chapter count must be at least 1" },
-                      max: { value: 1000, message: "Chapter count cannot exceed 1000" },
-                      validate: (v) => {
-                        if (isEdited) {
+              {isEdited && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                  <div>
+                    <Label htmlFor="chap_count">
+                      Chapter Count *
+                    </Label>
+                    <Input
+                      id="chap_count"
+                      type="number"
+                      {...register("chap_count", { 
+                        valueAsNumber: true,
+                        required: "Chapter count is required when book is edited",
+                        min: { value: 1, message: "Chapter count must be at least 1" },
+                        max: { value: 1000, message: "Chapter count cannot exceed 1000" },
+                        validate: (v) => {
                           if (v === null || v === undefined) {
                             return "Chapter count is required when book is edited"
                           }
                           if (!Number.isInteger(v) || v <= 0) {
                             return "Must be a positive integer"
                           }
+                          return true
                         }
-                        if (v !== null && v !== undefined) {
-                          if (!Number.isInteger(v) || v <= 0) {
-                            return "Must be a positive integer"
-                          }
-                        }
-                        return true
-                      }
-                    })}
-                    placeholder="Number of chapters"
-                  />
-                  {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
+                      })}
+                      placeholder="Number of chapters"
+                    />
+                    {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
+                  </div>
                 </div>
-
-              </div>
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Button type="submit" disabled={createBook.isPending} className="w-full sm:w-auto">

@@ -481,12 +481,21 @@ export default function EditPaperPage() {
                 {errors.level && <p className="text-sm text-red-500 mt-1">{errors.level.message}</p>}
               </div>
               <div>
-                <Label htmlFor="mode">Mode of Participation</Label>
+                <Label htmlFor="mode">Mode of Participation *</Label>
                 <Controller
                   name="mode"
                   control={control}
                   rules={{
-                    validate: (v) => !v || ["Physical", "Virtual", "Hybrid"].includes(v) || "Mode must be Physical, Virtual, or Hybrid"
+                    required: "Mode of participation is required",
+                    validate: (v) => {
+                      if (!v || v.trim() === "") {
+                        return "Mode of participation is required"
+                      }
+                      if (!["Physical", "Virtual", "Hybrid"].includes(v)) {
+                        return "Mode must be Physical, Virtual, or Hybrid"
+                      }
+                      return true
+                    }
                   }}
                   render={({ field }) => (
                     <Select 
@@ -514,10 +523,12 @@ export default function EditPaperPage() {
             </div>
 
             <div>
-              <Label htmlFor="theme">Theme Of Conference/Seminar/Symposia</Label>
+              <Label htmlFor="theme">Theme Of Conference/Seminar/Symposia *</Label>
               <Input 
                 id="theme" 
                 {...register("theme", {
+                  required: "Theme is required",
+                  minLength: { value: 3, message: "Theme must be at least 3 characters" },
                   maxLength: { value: 500, message: "Theme must not exceed 500 characters" }
                 })} 
                 placeholder="Enter conference theme"
@@ -555,13 +566,15 @@ export default function EditPaperPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <Label htmlFor="organising_body">Organizing Body</Label>
+                <Label htmlFor="organising_body">Organizing Body *</Label>
                 <Input 
                   id="organising_body" 
                   {...register("organising_body", {
+                    required: "Organizing body is required",
+                    minLength: { value: 2, message: "Organizing body must be at least 2 characters" },
                     maxLength: { value: 300, message: "Organizing body must not exceed 300 characters" },
                     pattern: {
-                      value: /^[a-zA-Z0-9\s,\.&'-]*$/,
+                      value: /^[a-zA-Z0-9\s,\.&'-]+$/,
                       message: "Organizing body contains invalid characters"
                     }
                   })} 
@@ -577,13 +590,15 @@ export default function EditPaperPage() {
                 {errors.organising_body && <p className="text-sm text-red-500 mt-1">{errors.organising_body.message}</p>}
               </div>
               <div>
-                <Label htmlFor="place">Place</Label>
+                <Label htmlFor="place">Place *</Label>
                 <Input 
                   id="place" 
                   {...register("place", {
+                    required: "Place is required",
+                    minLength: { value: 2, message: "Place must be at least 2 characters" },
                     maxLength: { value: 200, message: "Place must not exceed 200 characters" },
                     pattern: {
-                      value: /^[a-zA-Z\s,\.-]*$/,
+                      value: /^[a-zA-Z\s,\.-]+$/,
                       message: "Place contains invalid characters"
                     }
                   })} 
@@ -601,12 +616,29 @@ export default function EditPaperPage() {
             </div>
 
             <div>
-              <Label htmlFor="date">Date of Presentation/Seminar</Label>
+              <Label htmlFor="date">Date of Presentation/Seminar *</Label>
               <Input 
                 id="date" 
                 type="date" 
+                max={new Date().toISOString().split('T')[0]}
                 {...register("date", {
-                  validate: (v) => !v || new Date(v) <= new Date() || "Date cannot be in the future"
+                  required: "Date is required",
+                  validate: (v) => {
+                    if (!v || v.trim() === "") {
+                      return "Date is required"
+                    }
+                    const selectedDate = new Date(v)
+                    const today = new Date()
+                    today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                    if (selectedDate > today) {
+                      return "Date cannot be in the future"
+                    }
+                    // Check if date is valid
+                    if (isNaN(selectedDate.getTime())) {
+                      return "Please enter a valid date"
+                    }
+                    return true
+                  }
                 })}
                 className={cn(
                   isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
