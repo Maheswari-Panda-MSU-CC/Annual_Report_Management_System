@@ -45,6 +45,7 @@ export function PhdGuidanceForm({
     register,
     handleSubmit,
     setValue,
+    watch,
     control,
     formState: { errors },
   } = form
@@ -111,13 +112,126 @@ export function PhdGuidanceForm({
     }
   }, [isEdit, editData, setValue])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.regNo) setValue("regNo", fields.regNo)
-    if (fields.nameOfStudent) setValue("nameOfStudent", fields.nameOfStudent)
-    if (fields.dateOfRegistration) setValue("dateOfRegistration", fields.dateOfRegistration)
-    if (fields.topic) setValue("topic", fields.topic)
-    if (fields.status) setValue("status", fields.status)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Registration Number - validate non-empty string
+    if (fields.regNo) {
+      const regValue = String(fields.regNo).trim()
+      if (regValue.length > 0) {
+        setValue("regNo", regValue)
+        filledFieldNames.push("regNo")
+        onFieldChange?.("regNo")
+      }
+    }
+    
+    // Name of Student - validate non-empty string
+    if (fields.nameOfStudent) {
+      const nameValue = String(fields.nameOfStudent).trim()
+      if (nameValue.length > 0) {
+        setValue("nameOfStudent", nameValue)
+        filledFieldNames.push("nameOfStudent")
+        onFieldChange?.("nameOfStudent")
+      }
+    }
+    
+    // Date of Registration - validate date format and not in future
+    if (fields.dateOfRegistration) {
+      const dateValue = String(fields.dateOfRegistration).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("dateOfRegistration", dateValue)
+          filledFieldNames.push("dateOfRegistration")
+          onFieldChange?.("dateOfRegistration")
+        }
+      }
+    }
+    
+    // Topic - validate non-empty string
+    if (fields.topic) {
+      const topicValue = String(fields.topic).trim()
+      if (topicValue.length > 0) {
+        setValue("topic", topicValue)
+        filledFieldNames.push("topic")
+        onFieldChange?.("topic")
+      }
+    }
+    
+    // Status - validate dropdown
+    if (fields.status !== undefined && fields.status !== null) {
+      if (setDropdownValue("status", fields.status, phdGuidanceStatusOptions)) {
+        filledFieldNames.push("status")
+      }
+    }
+    
+    // Year of Completion - validate 4-digit number, not in future, and compare with registration date (optional field)
+    if (fields.yearOfCompletion !== undefined && fields.yearOfCompletion !== null) {
+      const yearString = String(fields.yearOfCompletion).trim()
+      // Check if it's exactly 4 digits
+      if (/^\d{4}$/.test(yearString)) {
+        const yearValue = Number(yearString)
+        const currentYear = new Date().getFullYear()
+        
+        // Check if year is valid and not in the future
+        if (!isNaN(yearValue) && yearValue >= 1900 && yearValue <= currentYear) {
+          // Check if registration date exists and compare years
+          const registrationDate = watch("dateOfRegistration")
+          let isValid = true
+          if (registrationDate) {
+            const regDate = new Date(registrationDate)
+            if (!isNaN(regDate.getTime())) {
+              const registrationYear = regDate.getFullYear()
+              if (yearValue < registrationYear) {
+                isValid = false // Year of completion cannot be before registration year
+              }
+            }
+          }
+          
+          if (isValid) {
+            setValue("yearOfCompletion", yearValue)
+            filledFieldNames.push("yearOfCompletion")
+            onFieldChange?.("yearOfCompletion")
+          }
+        }
+      }
+    }
   }
 
   return (
@@ -136,6 +250,7 @@ export function PhdGuidanceForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -148,6 +263,7 @@ export function PhdGuidanceForm({
             <Input
               id="regNo"
               placeholder="Enter registration number"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("regNo") && "bg-blue-50 border-blue-200"
@@ -165,6 +281,7 @@ export function PhdGuidanceForm({
             <Input
               id="nameOfStudent"
               placeholder="Enter student's name"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("nameOfStudent") && "bg-blue-50 border-blue-200"
@@ -184,20 +301,48 @@ export function PhdGuidanceForm({
             <Input
               id="dateOfRegistration"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("dateOfRegistration") && "bg-blue-50 border-blue-200"
               )}
-              max={new Date().toISOString().split('T')[0]}
               {...register("dateOfRegistration", { 
                 required: "Date of registration is required",
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Date of registration is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
                     return "Date cannot be in the future"
                   }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
+                  }
+                  
+                  // Check if year of completion (if entered) is not before registration year
+                  const yearOfCompletion = watch("yearOfCompletion")
+                  if (yearOfCompletion) {
+                    const completionYear = Number(yearOfCompletion)
+                    const registrationYear = selectedDate.getFullYear()
+                    if (!isNaN(completionYear) && completionYear < registrationYear) {
+                      return `Registration year (${registrationYear}) cannot be after completion year (${completionYear})`
+                    }
+                  }
+                  
                   return true
                 },
-                onChange: () => onFieldChange?.("dateOfRegistration")
+                onChange: () => {
+                  onFieldChange?.("dateOfRegistration")
+                  // Trigger validation for year of completion when registration date changes
+                  setTimeout(() => {
+                    form.trigger("yearOfCompletion")
+                  }, 0)
+                }
               })}
             />
             {errors.dateOfRegistration && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.dateOfRegistration.message?.toString()}</p>}
@@ -210,22 +355,62 @@ export function PhdGuidanceForm({
               type="number"
               placeholder="Enter year (e.g., 2024)"
               min="1900"
-              max={new Date().getFullYear() + 10}
+              max={new Date().getFullYear()}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("yearOfCompletion") && "bg-blue-50 border-blue-200"
               )}
               {...register("yearOfCompletion", {
                 validate: (value) => {
+                  // Field is optional, but if entered, must be valid
                   if (value) {
                     const year = Number(value)
-                    if (isNaN(year) || year < 1900 || year > new Date().getFullYear() + 10) {
+                    
+                    // Check if it's a valid number
+                    if (isNaN(year)) {
                       return "Please enter a valid year"
+                    }
+                    
+                    // Check if it's exactly 4 digits (between 1000-9999)
+                    const yearString = String(value).trim()
+                    if (yearString.length !== 4 || !/^\d{4}$/.test(yearString)) {
+                      return "Year must be exactly 4 digits"
+                    }
+                    
+                    const currentYear = new Date().getFullYear()
+                    
+                    // Check if year is not in the future
+                    if (year > currentYear) {
+                      return `Year of completion (${year}) cannot be in the future. Current year is ${currentYear}`
+                    }
+                    
+                    // Check if year is within valid range
+                    if (year < 1900 || year > currentYear) {
+                      return "Please enter a valid year (1900 to " + currentYear + ")"
+                    }
+                    
+                    // Check if year is not in the past compared to registration date
+                    const registrationDate = watch("dateOfRegistration")
+                    if (registrationDate) {
+                      const regDate = new Date(registrationDate)
+                      if (!isNaN(regDate.getTime())) {
+                        const registrationYear = regDate.getFullYear()
+                        if (year < registrationYear) {
+                          return `Year of completion (${year}) cannot be before the registration year (${registrationYear})`
+                        }
+                      }
                     }
                   }
                   return true
                 },
-                onChange: () => onFieldChange?.("yearOfCompletion")
+                onChange: () => {
+                  onFieldChange?.("yearOfCompletion")
+                  // Trigger validation for registration date when year changes
+                  setTimeout(() => {
+                    form.trigger("dateOfRegistration")
+                  }, 0)
+                }
               })}
             />
             {errors.yearOfCompletion && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.yearOfCompletion.message?.toString()}</p>}
@@ -238,6 +423,7 @@ export function PhdGuidanceForm({
             id="topic"
             placeholder="Enter research topic"
             rows={3}
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("topic") && "bg-blue-50 border-blue-200"
@@ -266,6 +452,7 @@ export function PhdGuidanceForm({
                 }}
                 placeholder="Select status"
                 emptyMessage="No status found"
+                disabled={isSubmitting}
                 className={isAutoFilled?.("status") ? "bg-blue-50 border-blue-200" : undefined}
               />
             )}
@@ -276,7 +463,7 @@ export function PhdGuidanceForm({
 
         {!isEdit && (
           <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=phd"))} className="w-full sm:w-auto text-xs sm:text-sm">
+            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=phd"))} disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">

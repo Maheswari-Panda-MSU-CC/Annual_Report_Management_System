@@ -114,13 +114,106 @@ export function JrfSrfForm({
     }
   }, [isEdit, editData, setValue])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.nameOfFellow) setValue("nameOfFellow", fields.nameOfFellow)
-    if (fields.type) setValue("type", fields.type)
-    if (fields.projectTitle) setValue("projectTitle", fields.projectTitle)
-    if (fields.duration) setValue("duration", fields.duration)
-    if (fields.monthlyStipend) setValue("monthlyStipend", fields.monthlyStipend)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Name of Fellow - validate non-empty string
+    if (fields.nameOfFellow) {
+      const nameValue = String(fields.nameOfFellow).trim()
+      if (nameValue.length > 0) {
+        setValue("nameOfFellow", nameValue)
+        filledFieldNames.push("nameOfFellow")
+        onFieldChange?.("nameOfFellow")
+      }
+    }
+    
+    // Type - validate dropdown
+    if (fields.type !== undefined && fields.type !== null) {
+      if (setDropdownValue("type", fields.type, jrfSrfTypeOptions)) {
+        filledFieldNames.push("type")
+      }
+    }
+    
+    // Project Title - validate non-empty string
+    if (fields.projectTitle) {
+      const titleValue = String(fields.projectTitle).trim()
+      if (titleValue.length > 0) {
+        setValue("projectTitle", titleValue)
+        filledFieldNames.push("projectTitle")
+        onFieldChange?.("projectTitle")
+      }
+    }
+    
+    // Duration - validate number >= 1
+    if (fields.duration !== undefined && fields.duration !== null) {
+      const durationValue = Number(fields.duration)
+      if (!isNaN(durationValue) && durationValue >= 1) {
+        setValue("duration", durationValue)
+        filledFieldNames.push("duration")
+        onFieldChange?.("duration")
+      }
+    }
+    
+    // Monthly Stipend - validate number >= 0
+    if (fields.monthlyStipend !== undefined && fields.monthlyStipend !== null) {
+      // Handle comma-separated numbers
+      const stipendValue = String(fields.monthlyStipend).replace(/,/g, '').trim()
+      const numValue = Number(stipendValue)
+      if (!isNaN(numValue) && numValue >= 0) {
+        setValue("monthlyStipend", numValue)
+        filledFieldNames.push("monthlyStipend")
+        onFieldChange?.("monthlyStipend")
+      }
+    }
+    
+    // Date - validate date format and not in future
+    if (fields.date) {
+      const dateValue = String(fields.date).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("date", dateValue)
+          filledFieldNames.push("date")
+          onFieldChange?.("date")
+        }
+      }
+    }
   }
 
   return (
@@ -142,6 +235,7 @@ export function JrfSrfForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -156,6 +250,7 @@ export function JrfSrfForm({
           <Input
             id="nameOfFellow"
             placeholder="Enter fellow name"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("nameOfFellow") && "bg-blue-50 border-blue-200"
@@ -189,6 +284,7 @@ export function JrfSrfForm({
                   }}
                   placeholder="Select type"
                   emptyMessage="No type found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("type") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -203,6 +299,7 @@ export function JrfSrfForm({
             <Input
               id="projectTitle"
               placeholder="Enter project title"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("projectTitle") && "bg-blue-50 border-blue-200"
@@ -228,6 +325,7 @@ export function JrfSrfForm({
               type="number"
               placeholder="Enter duration"
               min="1"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("duration") && "bg-blue-50 border-blue-200"
@@ -253,6 +351,7 @@ export function JrfSrfForm({
               placeholder="Enter stipend amount"
               min="0"
               step="0.01"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("monthlyStipend") && "bg-blue-50 border-blue-200"
@@ -280,15 +379,26 @@ export function JrfSrfForm({
             <Input
               id="date"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
               )}
-              max={new Date().toISOString().split('T')[0]}
               {...register("date", {
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
-                    return "Date cannot be in the future"
+                validate: (v) => {
+                  // Only validate if value is provided (field is optional)
+                  if (v && v.trim() !== "") {
+                    const selectedDate = new Date(v)
+                    const today = new Date()
+                    today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                    if (selectedDate > today) {
+                      return "Date cannot be in the future"
+                    }
+                    // Check if date is valid
+                    if (isNaN(selectedDate.getTime())) {
+                      return "Please enter a valid date"
+                    }
                   }
                   return true
                 },
@@ -311,6 +421,7 @@ export function JrfSrfForm({
               type="button"
               variant="outline"
               onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=jrfSrf"))}
+              disabled={isSubmitting}
               className="w-full sm:w-auto text-xs sm:text-sm"
             >
               Cancel

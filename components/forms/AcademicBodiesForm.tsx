@@ -98,6 +98,7 @@ export function AcademicBodiesForm({
                     className="w-full"
                     isEditMode={isEdit}
                     onClearFields={onClearFields}
+                    disabled={isSubmitting}
                 />
                 {/* Hidden input for form validation */}
                 <input
@@ -131,6 +132,7 @@ export function AcademicBodiesForm({
                             id="name" 
                             placeholder="Enter name"
                             maxLength={100}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -156,6 +158,7 @@ export function AcademicBodiesForm({
                             id="acad_body" 
                             placeholder="Enter academic body"
                             maxLength={500}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("acad_body") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -181,6 +184,7 @@ export function AcademicBodiesForm({
                             id="place" 
                             placeholder="Enter location"
                             maxLength={150}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -206,6 +210,7 @@ export function AcademicBodiesForm({
                             id="participated_as" 
                             placeholder="e.g., Member, Chairman, Secretary"
                             maxLength={100}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("participated_as") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -226,11 +231,12 @@ export function AcademicBodiesForm({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="submit_date">Submit Date *</Label>
+                        <Label htmlFor="submit_date">Participation Date *</Label>
                         <Input 
                             id="submit_date" 
                             type="date" 
                             max={new Date().toISOString().split('T')[0]}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("submit_date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -286,6 +292,7 @@ export function AcademicBodiesForm({
                                     }}
                                     placeholder="Select year"
                                     emptyMessage="No year found"
+                                    disabled={isSubmitting}
                                     className={isAutoFilled?.("year_name") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                                 />
                             )}
@@ -301,6 +308,7 @@ export function AcademicBodiesForm({
                             type="button"
                             variant="outline"
                             onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=academic-bodies"))}
+                            disabled={isSubmitting}
                         >
                             Cancel
                         </Button>

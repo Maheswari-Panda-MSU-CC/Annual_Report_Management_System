@@ -68,6 +68,7 @@ export function BooksForm({
               id="title"
               placeholder="Enter book title"
               maxLength={1000}
+              disabled={isSubmitting}
               {...register("title", {
                 required: "Title is required",
                 minLength: { value: 2, message: "Title must be at least 2 characters" },
@@ -90,6 +91,7 @@ export function BooksForm({
               id="authors"
               placeholder="Enter author names"
               maxLength={1000}
+              disabled={isSubmitting}
               {...register("authors", {
                 required: "Author(s) is required",
                 minLength: { value: 2, message: "Author(s) must be at least 2 characters" },
@@ -112,24 +114,27 @@ export function BooksForm({
             <Input
               id="isbn"
               placeholder="Enter ISBN without dashes"
-              maxLength={1000}
+              maxLength={17}
+              disabled={isSubmitting}
               {...register("isbn", {
                 required: "ISBN is required",
-                maxLength: { value: 1000, message: "ISBN must not exceed 1000 characters" },
+                maxLength: { value: 17, message: "ISBN must not exceed 17 characters" },
                 validate: {
                   noDashes: (value) => {
                     if (!value || typeof value !== 'string') return "ISBN is required"
                     const trimmed = value.trim()
                     if (trimmed.length === 0) return "ISBN is required"
-                    if (trimmed.includes("-")) {
+                    // Remove any dashes or spaces for validation
+                    const cleaned = trimmed.replace(/[-\s]/g, '')
+                    if (cleaned.includes("-")) {
                       return "ISBN should not contain dashes. Please remove all dashes."
                     }
-                    // ISBN-10: 10 digits, ISBN-13: 13 digits
+                    // ISBN-10: exactly 10 characters (9 digits + 1 digit or X)
+                    // ISBN-13: exactly 13 digits
                     const isbn10Pattern = /^[0-9]{9}[0-9Xx]$/
                     const isbn13Pattern = /^[0-9]{13}$/
-                    const cleaned = trimmed.replace(/[-\s]/g, '')
                     if (!isbn10Pattern.test(cleaned) && !isbn13Pattern.test(cleaned)) {
-                      return "ISBN must be 10 or 13 digits (without dashes)"
+                      return "ISBN must be exactly 10 characters (ISBN-10) or 13 digits (ISBN-13) without dashes"
                     }
                     return true
                   },
@@ -153,6 +158,7 @@ export function BooksForm({
               id="publisher_name"
               placeholder="Enter publisher name"
               maxLength={3000}
+              disabled={isSubmitting}
               {...register("publisher_name", {
                 required: "Publisher name is required",
                 minLength: { value: 2, message: "Publisher name must be at least 2 characters" },
@@ -198,6 +204,7 @@ export function BooksForm({
                   }}
                   placeholder="Select publishing level"
                   emptyMessage="No level found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -232,6 +239,7 @@ export function BooksForm({
                   }}
                   placeholder="Select book type"
                   emptyMessage="No book type found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -244,6 +252,7 @@ export function BooksForm({
               id="edition"
               placeholder="e.g., 3rd Edition"
               maxLength={10}
+              disabled={isSubmitting}
               {...register("edition", {
                 maxLength: { value: 10, message: "Edition must not exceed 10 characters" },
               })}
@@ -257,6 +266,7 @@ export function BooksForm({
               id="volume"
               placeholder="Enter volume"
               maxLength={10}
+              disabled={isSubmitting}
               {...register("volume", {
                 maxLength: { value: 10, message: "Volume must not exceed 10 characters" },
               })}
@@ -269,6 +279,7 @@ export function BooksForm({
             <Input
               id="publication_date"
               type="date"
+              disabled={isSubmitting}
               {...register("publication_date", {
                 required: "Publication date is required",
                 validate: (value) => {
@@ -299,6 +310,7 @@ export function BooksForm({
               id="ebook"
               placeholder="Enter ebook information"
               maxLength={1000}
+              disabled={isSubmitting}
               {...register("ebook", {
                 maxLength: { value: 1000, message: "EBook must not exceed 1000 characters" },
               })}
@@ -312,6 +324,7 @@ export function BooksForm({
               id="digital_media"
               placeholder="e.g., USB Drive, CD/DVD"
               maxLength={300}
+              disabled={isSubmitting}
               {...register("digital_media", {
                 maxLength: { value: 300, message: "Digital media must not exceed 300 characters" },
               })}
@@ -320,14 +333,26 @@ export function BooksForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="approx_price">Approx. Price</Label>
+            <Label htmlFor="approx_price">Approx. Price *</Label>
             <Input
               id="approx_price"
               type="number"
               step="0.001"
               placeholder="Enter approximate price"
+              disabled={isSubmitting}
               {...register("approx_price", {
+                required: "Approximate price is required",
                 min: { value: 0, message: "Price must be non-negative" },
+                validate: (value) => {
+                  if (value === null || value === undefined || value === '') {
+                    return "Approximate price is required"
+                  }
+                  const numValue = Number(value)
+                  if (isNaN(numValue) || numValue < 0) {
+                    return "Price must be non-negative"
+                  }
+                  return true
+                },
               })}
             />
             {errors.approx_price && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.approx_price.message?.toString()}</p>}
@@ -361,6 +386,7 @@ export function BooksForm({
                   }}
                   placeholder="Select currency"
                   emptyMessage="No currency found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -373,6 +399,7 @@ export function BooksForm({
               id="book_category"
               placeholder="Enter book category"
               maxLength={30}
+              disabled={isSubmitting}
               {...register("book_category", {
                 maxLength: { value: 30, message: "Book category must not exceed 30 characters" },
               })}
@@ -386,6 +413,7 @@ export function BooksForm({
               id="proposed_ay"
               placeholder="Enter proposed academic year"
               maxLength={20}
+              disabled={isSubmitting}
               {...register("proposed_ay", {
                 maxLength: { value: 20, message: "Proposed AY must not exceed 20 characters" },
               })}

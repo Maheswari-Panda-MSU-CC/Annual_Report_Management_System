@@ -77,60 +77,78 @@ export default function AddConferencePaperPage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Authors - replace if exists in extraction
+      // Authors - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.authors !== undefined) {
-        const authorsValue = fields.authors ? String(fields.authors) : ""
+        const authorsValue = fields.authors ? String(fields.authors).trim() : ""
         setValue("authors", authorsValue)
         if (authorsValue) filledFieldNames.push("authors")
       }
       
-      // Theme - replace if exists in extraction
+      // Theme - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.theme !== undefined) {
-        const themeValue = fields.theme ? String(fields.theme) : ""
+        const themeValue = fields.theme ? String(fields.theme).trim() : ""
         setValue("theme", themeValue)
         if (themeValue) filledFieldNames.push("theme")
       }
       
-      // Organising Body - replace if exists in extraction
+      // Organising Body - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.organising_body !== undefined) {
-        const organisingBodyValue = fields.organising_body ? String(fields.organising_body) : ""
+        const organisingBodyValue = fields.organising_body ? String(fields.organising_body).trim() : ""
         setValue("organising_body", organisingBodyValue)
         if (organisingBodyValue) filledFieldNames.push("organising_body")
       }
       
-      // Place - replace if exists in extraction
+      // Place - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.place !== undefined) {
-        const placeValue = fields.place ? String(fields.place) : ""
+        const placeValue = fields.place ? String(fields.place).trim() : ""
         setValue("place", placeValue)
         if (placeValue) filledFieldNames.push("place")
       }
       
-      // Date - replace if exists in extraction
+      // Date - replace if exists in extraction (only highlight if valid date)
       if (fields.date !== undefined) {
-        const dateValue = fields.date ? String(fields.date) : ""
-        setValue("date", dateValue)
-        if (dateValue) filledFieldNames.push("date")
+        const dateValue = fields.date ? String(fields.date).trim() : ""
+        if (dateValue) {
+          // Validate date format
+          try {
+            const parsedDate = new Date(dateValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("date", dateValue)
+              filledFieldNames.push("date")
+            } else {
+              setValue("date", "")
+            }
+          } catch {
+            setValue("date", "")
+          }
+        } else {
+          setValue("date", "")
+        }
       }
       
-      // Title of Paper - replace if exists in extraction
+      // Title of Paper - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.title_of_paper !== undefined) {
-        const titleOfPaperValue = fields.title_of_paper ? String(fields.title_of_paper) : ""
+        const titleOfPaperValue = fields.title_of_paper ? String(fields.title_of_paper).trim() : ""
         setValue("title_of_paper", titleOfPaperValue)
         if (titleOfPaperValue) filledFieldNames.push("title_of_paper")
       }
       
-      // Mode - replace if exists in extraction
+      // Mode - replace if exists in extraction (only highlight if valid mode)
       if (fields.mode !== undefined) {
-        const modeValue = fields.mode ? String(fields.mode) : ""
-        setValue("mode", modeValue)
-        if (modeValue) filledFieldNames.push("mode")
+        const modeValue = fields.mode ? String(fields.mode).trim() : ""
+        if (modeValue && ["Physical", "Virtual", "Hybrid"].includes(modeValue)) {
+          setValue("mode", modeValue)
+          filledFieldNames.push("mode")
+        } else {
+          setValue("mode", "")
+        }
       }
       
-      // Level - replace if exists in extraction
+      // Level - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.level !== undefined) {
-        const levelValue = fields.level !== null && fields.level !== undefined ? Number(fields.level) : null
-        setValue("level", levelValue)
-        if (levelValue !== null) filledFieldNames.push("level")
+        setDropdownValue("level", fields.level, resPubLevelOptions, filledFieldNames)
       }
       
       // Update the auto-filled fields set AFTER processing all fields
@@ -167,6 +185,36 @@ export default function AddConferencePaperPage() {
       return prev
     })
   }, [])
+
+  // Helper function to validate and set dropdown field value - only highlights if value was successfully set
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
 
   // Unsaved changes guard
   const { DialogComponent: NavigationDialog } = useUnsavedChangesGuard({
@@ -220,62 +268,93 @@ export default function AddConferencePaperPage() {
 
   // Handle extracted fields from DocumentUpload - REPLACE existing data with new extracted data
   const handleExtractFields = useCallback((extractedData: Record<string, any>) => {
-    let fieldsPopulated = 0
+    const filledFieldNames: string[] = []
 
-    // REPLACE all fields - set values even if they're empty/null in extracted data
-    // This ensures existing data is replaced with new extracted data
-    
-    // Authors - replace if exists in extraction
+    // Authors - replace if exists in extraction (only track if non-empty)
     if (extractedData.authors !== undefined) {
-      setValue("authors", extractedData.authors || "")
-      if (extractedData.authors) fieldsPopulated++
+      const authorsValue = extractedData.authors ? String(extractedData.authors).trim() : ""
+      setValue("authors", authorsValue)
+      if (authorsValue) filledFieldNames.push("authors")
     }
     
-    // Theme - replace if exists in extraction
+    // Theme - replace if exists in extraction (only track if non-empty)
     if (extractedData.theme !== undefined || extractedData.themeOfConference !== undefined) {
       const themeValue = extractedData.theme || extractedData.themeOfConference || ""
-      setValue("theme", themeValue)
-      if (themeValue) fieldsPopulated++
+      const themeValueTrimmed = themeValue ? String(themeValue).trim() : ""
+      setValue("theme", themeValueTrimmed)
+      if (themeValueTrimmed) filledFieldNames.push("theme")
     }
     
-    // Organising Body - replace if exists in extraction
+    // Organising Body - replace if exists in extraction (only track if non-empty)
     if (extractedData.organising_body !== undefined || extractedData.organizingBody !== undefined) {
       const orgBodyValue = extractedData.organising_body || extractedData.organizingBody || ""
-      setValue("organising_body", orgBodyValue)
-      if (orgBodyValue) fieldsPopulated++
+      const orgBodyValueTrimmed = orgBodyValue ? String(orgBodyValue).trim() : ""
+      setValue("organising_body", orgBodyValueTrimmed)
+      if (orgBodyValueTrimmed) filledFieldNames.push("organising_body")
     }
     
-    // Place - replace if exists in extraction
+    // Place - replace if exists in extraction (only track if non-empty)
     if (extractedData.place !== undefined) {
-      setValue("place", extractedData.place || "")
-      if (extractedData.place) fieldsPopulated++
+      const placeValue = extractedData.place ? String(extractedData.place).trim() : ""
+      setValue("place", placeValue)
+      if (placeValue) filledFieldNames.push("place")
     }
     
-    // Date - replace if exists in extraction
+    // Date - replace if exists in extraction (only track if valid date)
     if (extractedData.date !== undefined || extractedData.dateOfPresentation !== undefined) {
       const dateValue = extractedData.date || extractedData.dateOfPresentation || ""
-      setValue("date", dateValue)
-      if (dateValue) fieldsPopulated++
+      const dateValueTrimmed = dateValue ? String(dateValue).trim() : ""
+      if (dateValueTrimmed) {
+        try {
+          const parsedDate = new Date(dateValueTrimmed)
+          const today = new Date()
+          today.setHours(23, 59, 59, 999)
+          if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+            setValue("date", dateValueTrimmed)
+            filledFieldNames.push("date")
+          } else {
+            setValue("date", "")
+          }
+        } catch {
+          setValue("date", "")
+        }
+      } else {
+        setValue("date", "")
+      }
     }
     
-    // Title of Paper - replace if exists in extraction
+    // Title of Paper - replace if exists in extraction (only track if non-empty)
     if (extractedData.title_of_paper !== undefined || extractedData.titleOfPaper !== undefined) {
       const titleValue = extractedData.title_of_paper || extractedData.titleOfPaper || ""
-      setValue("title_of_paper", titleValue)
-      if (titleValue) fieldsPopulated++
+      const titleValueTrimmed = titleValue ? String(titleValue).trim() : ""
+      setValue("title_of_paper", titleValueTrimmed)
+      if (titleValueTrimmed) filledFieldNames.push("title_of_paper")
     }
     
-    // Mode - replace if exists in extraction
+    // Mode - replace if exists in extraction (only track if valid mode)
     if (extractedData.mode !== undefined || extractedData.modeOfParticipation !== undefined) {
       const modeValue = extractedData.mode || extractedData.modeOfParticipation || ""
-      setValue("mode", modeValue)
-      if (modeValue) fieldsPopulated++
+      const modeValueTrimmed = modeValue ? String(modeValue).trim() : ""
+      if (modeValueTrimmed && ["Physical", "Virtual", "Hybrid"].includes(modeValueTrimmed)) {
+        setValue("mode", modeValueTrimmed)
+        filledFieldNames.push("mode")
+      } else {
+        setValue("mode", "")
+      }
     }
 
-    if (fieldsPopulated > 0) {
+    // Level - replace if exists in extraction (only track if value matches dropdown)
+    if (extractedData.level !== undefined) {
+      setDropdownValue("level", extractedData.level, resPubLevelOptions, filledFieldNames)
+    }
+
+    // Update auto-filled fields set
+    setAutoFilledFields(new Set(filledFieldNames))
+
+    if (filledFieldNames.length > 0) {
       toast({
         title: "Information Extracted Successfully",
-        description: `${fieldsPopulated} fields replaced with new extracted data`,
+        description: `${filledFieldNames.length} fields successfully filled`,
       })
     } else {
       toast({
@@ -283,7 +362,7 @@ export default function AddConferencePaperPage() {
         description: "Data fields have been updated (some fields may be empty)",
       })
     }
-  }, [setValue, toast])
+  }, [setValue, toast, setDropdownValue, resPubLevelOptions])
 
   const onSubmit = async (data: PaperFormData) => {
     if (!user?.role_id) {
@@ -361,7 +440,7 @@ export default function AddConferencePaperPage() {
       {CancelDialog && <CancelDialog />}
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={createPaper.isPending} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -393,6 +472,7 @@ export default function AddConferencePaperPage() {
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
+              disabled={createPaper.isPending}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
@@ -419,6 +499,7 @@ export default function AddConferencePaperPage() {
                     }
                   })}
                   placeholder="Enter all authors"
+                  disabled={createPaper.isPending}
                   className={cn(
                     isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -453,6 +534,7 @@ export default function AddConferencePaperPage() {
                         }}
                         placeholder="Select presentation level"
                         emptyMessage="No level found"
+                        disabled={createPaper.isPending}
                         className={cn(
                           isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -485,6 +567,7 @@ export default function AddConferencePaperPage() {
                           field.onChange(val)
                           clearAutoFillHighlight("mode")
                         }}
+                        disabled={createPaper.isPending}
                       >
                         <SelectTrigger className={cn(
                           isAutoFilled("mode") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -513,6 +596,7 @@ export default function AddConferencePaperPage() {
                     maxLength: { value: 500, message: "Theme must not exceed 500 characters" }
                   })} 
                   placeholder="Enter conference theme"
+                  disabled={createPaper.isPending}
                   className={cn(
                     isAutoFilled("theme") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -534,6 +618,7 @@ export default function AddConferencePaperPage() {
                     maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                   })}
                   placeholder="Enter paper title"
+                  disabled={createPaper.isPending}
                   className={cn(
                     isAutoFilled("title_of_paper") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -560,6 +645,7 @@ export default function AddConferencePaperPage() {
                       }
                     })} 
                     placeholder="Enter organizing body"
+                    disabled={createPaper.isPending}
                     className={cn(
                       isAutoFilled("organising_body") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -584,6 +670,7 @@ export default function AddConferencePaperPage() {
                       }
                     })} 
                     placeholder="Enter place"
+                    disabled={createPaper.isPending}
                     className={cn(
                       isAutoFilled("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -621,6 +708,7 @@ export default function AddConferencePaperPage() {
                       return true
                     }
                   })}
+                  disabled={createPaper.isPending}
                   className={cn(
                     isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -643,7 +731,7 @@ export default function AddConferencePaperPage() {
                     "Save Paper Presentation"
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" onClick={handleCancel} disabled={createPaper.isPending} className="w-full sm:w-auto">
                   Cancel
                 </Button>
               </div>

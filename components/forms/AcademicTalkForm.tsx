@@ -107,6 +107,7 @@ export function AcademicTalkForm({
                     className="w-full"
                     isEditMode={isEdit}
                     onClearFields={onClearFields}
+                    disabled={isSubmitting}
                 />
                 {/* Hidden input for form validation */}
                 <input
@@ -159,6 +160,7 @@ export function AcademicTalkForm({
                             id="name" 
                             placeholder="Enter your name"
                             maxLength={1000}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -206,6 +208,7 @@ export function AcademicTalkForm({
                                     }}
                                     placeholder="Select programme type"
                                     emptyMessage="No programme type found"
+                                    disabled={isSubmitting}
                                     className={isAutoFilled?.("programme") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                                 />
                             )}
@@ -219,6 +222,7 @@ export function AcademicTalkForm({
                             id="place" 
                             placeholder="Enter place of talk"
                             maxLength={1000}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -244,6 +248,7 @@ export function AcademicTalkForm({
                             id="date" 
                             type="date" 
                             max={new Date().toISOString().split('T')[0]}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -277,6 +282,7 @@ export function AcademicTalkForm({
                             id="title" 
                             placeholder="Enter title"
                             maxLength={1000}
+                            disabled={isSubmitting}
                             className={cn(
                                 isAutoFilled?.("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                             )}
@@ -324,6 +330,7 @@ export function AcademicTalkForm({
                                     }}
                                     placeholder="Select role"
                                     emptyMessage="No role found"
+                                    disabled={isSubmitting}
                                     className={isAutoFilled?.("participated_as") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                                 />
                             )}
@@ -335,7 +342,7 @@ export function AcademicTalkForm({
 
                 {!isEdit && (
                     <div className="flex justify-end gap-4 mt-6">
-                        <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=academic-talks"))}>
+                        <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=academic-talks"))} disabled={isSubmitting}>
                             Cancel
                         </Button>
                         <Button type="submit" disabled={isSubmitting}>

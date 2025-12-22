@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/app/api/auth/auth-provider"
-import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText, Eye } from "lucide-react"
+import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText, Eye, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
 import { DocumentViewer } from "@/components/document-viewer"
@@ -161,6 +161,14 @@ export default function ProfilePage() {
   const [profileImage, setProfileImage] = useState<string | null>(null)
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [pendingProfileImageFile, setPendingProfileImageFile] = useState<File | null>(null) // Store file for S3 upload on save
+  // Loading states for save operations
+  const [isSavingPersonal, setIsSavingPersonal] = useState(false)
+  const [isSavingExperience, setSavingExperience] = useState<Record<number, boolean>>({})
+  const [isSavingPostDoc, setSavingPostDoc] = useState<Record<number, boolean>>({})
+  const [isSavingEducation, setSavingEducation] = useState<Record<number, boolean>>({})
+  const [isSavingPhdDocument, setSavingPhdDocument] = useState<Record<number, boolean>>({})
+  const [isSavingEducationDocument, setSavingEducationDocument] = useState<Record<number, boolean>>({})
+  const [isSavingAcademicYears, setIsSavingAcademicYears] = useState(false)
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [facultyData, setFacultyData] = useState<Faculty | null>(null);
   const [departmentData, setDepartmentData] = useState<Department | null>(null);
@@ -698,6 +706,7 @@ export default function ProfilePage() {
   );
 
   const onSubmitPersonal = async (data: any) => {
+    setIsSavingPersonal(true)
     try {
       // Use validated data from handleSubmit, but also get current form values for fields not in validation
       const values = { ...getValues(), ...data };
@@ -977,6 +986,8 @@ export default function ProfilePage() {
         description: errorMessage, 
         variant: "destructive" 
       });
+    } finally {
+      setIsSavingPersonal(false)
     }
   };
 
@@ -1053,6 +1064,7 @@ export default function ProfilePage() {
 
   // Save single experience row
   const handleSaveExperienceRow = async (index: number, id: number) => {
+    setSavingExperience(prev => ({ ...prev, [id]: true }))
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid;
       if (!teacherId) {
@@ -1243,11 +1255,18 @@ export default function ProfilePage() {
     } catch (e: any) {
       console.error('Save experience error:', e)
       toast({ title: "Save Failed", description: e.message || "Could not save experience.", variant: "destructive" })
+    } finally {
+      setSavingExperience(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
     }
   }
 
   // Save single post-doc row
   const handleSavePostDocRow = async (index: number, id: number) => {
+    setSavingPostDoc(prev => ({ ...prev, [id]: true }))
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid;
       if (!teacherId) {
@@ -1417,11 +1436,18 @@ export default function ProfilePage() {
     } catch (e: any) {
       console.error('Save post-doc error:', e)
       toast({ title: "Save Failed", description: e.message || "Could not save post-doc details.", variant: "destructive" })
+    } finally {
+      setSavingPostDoc(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
     }
   }
 
   // Save single education row
   const handleSaveEducationRow = async (index: number, id: number) => {
+    setSavingEducation(prev => ({ ...prev, [id]: true }))
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid;
       if (!teacherId) {
@@ -1588,6 +1614,12 @@ export default function ProfilePage() {
     } catch (e: any) {
       console.error('Save education error:', e)
       toast({ title: "Save Failed", description: e.message || "Could not save education details.", variant: "destructive" })
+    } finally {
+      setSavingEducation(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
     }
   }
 
@@ -1602,6 +1634,7 @@ export default function ProfilePage() {
       return
     }
 
+    setSavingPhdDocument(prev => ({ ...prev, [id]: true }))
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid
       if (!teacherId) {
@@ -1710,6 +1743,7 @@ export default function ProfilePage() {
       return
     }
 
+    setSavingEducationDocument(prev => ({ ...prev, [id]: true }))
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid
       if (!teacherId) {
@@ -1804,10 +1838,17 @@ export default function ProfilePage() {
         description: e.message || "Could not update document.", 
         variant: "destructive" 
       })
+    } finally {
+      setSavingEducationDocument(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
     }
   }
 
   const handleSaveAcademicYears = async () => {
+    setIsSavingAcademicYears(true)
     try {
       if (!teacherInfo) {
         toast({ title: "Error", description: "Teacher information not loaded.", variant: "destructive" });
@@ -1843,6 +1884,8 @@ export default function ProfilePage() {
       }
     } catch (error) {
       toast({ title: "Update Failed", description: "Network or server error while saving academic years.", variant: "destructive" });
+    } finally {
+      setIsSavingAcademicYears(false)
     }
   }
 
@@ -1891,14 +1934,25 @@ export default function ProfilePage() {
               </Button>
             ) : (
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button onClick={handlePersonalSubmit} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
-                  <Save className="h-4 w-4" />
-                  <span className="hidden sm:inline">Save Changes</span>
-                  <span className="sm:hidden">Save</span>
+                <Button onClick={handlePersonalSubmit} disabled={isSavingPersonal} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
+                  {isSavingPersonal ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="hidden sm:inline">Saving...</span>
+                      <span className="sm:hidden">Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      <span className="hidden sm:inline">Save Changes</span>
+                      <span className="sm:hidden">Save</span>
+                    </>
+                  )}
                 </Button>
                 <Button
                   variant="outline"
                   onClick={handleCancelPersonal}
+                  disabled={isSavingPersonal}
                   className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
                   size="sm"
                 >
@@ -1989,7 +2043,7 @@ export default function ProfilePage() {
                           <Select
                             value={field.value}
                             onValueChange={(v: any) => field.onChange(v)}
-                            disabled={!isEditingPersonal}
+                            disabled={!isEditingPersonal || isSavingPersonal}
                           >
                             <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""} ${error ? 'border-red-500' : ''}`}>
                               <SelectValue placeholder="Select salutation" />
@@ -2029,7 +2083,8 @@ export default function ProfilePage() {
                           message: "First name should only contain letters, spaces, hyphens, or apostrophes"
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                     />
                     {errors.fname && isEditingPersonal && touchedFields.fname && (
                       <p className="text-xs text-red-500 mt-1">{errors.fname.message as string}</p>
@@ -2052,7 +2107,8 @@ export default function ProfilePage() {
                           return true;
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                     />
                     {errors.mname && isEditingPersonal && touchedFields.mname && (
                       <p className="text-xs text-red-500 mt-1">{errors.mname.message as string}</p>
@@ -2076,7 +2132,8 @@ export default function ProfilePage() {
                           message: "Last name should only contain letters, spaces, hyphens, or apostrophes"
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                     />
                     {errors.lname && isEditingPersonal && touchedFields.lname && (
                       <p className="text-xs text-red-500 mt-1">{errors.lname.message as string}</p>
@@ -2135,7 +2192,8 @@ export default function ProfilePage() {
                               const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                               field.onChange(value);
                             }}
-                            readOnly={!isEditingPersonal}
+                            readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                             placeholder="Enter 10 digit phone number"
                             maxLength={10}
                           />
@@ -2195,7 +2253,8 @@ export default function ProfilePage() {
                             type="date"
                             {...field}
                             max={new Date().toISOString().split('T')[0]}
-                            readOnly={!isEditingPersonal}
+                            readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                             className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                           />
                           {error && isEditingPersonal && (
@@ -2243,7 +2302,8 @@ export default function ProfilePage() {
                             type="date"
                             {...field}
                             max={new Date().toISOString().split('T')[0]}
-                            readOnly={!isEditingPersonal}
+                            readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                             className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                           />
                           {error && isEditingPersonal && (
@@ -2286,7 +2346,8 @@ export default function ProfilePage() {
                               const upperValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
                               field.onChange(upperValue);
                             }}
-                            readOnly={!isEditingPersonal}
+                            readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                             placeholder="ABCDE1234F"
                             maxLength={10}
                             className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
@@ -2323,7 +2384,8 @@ export default function ProfilePage() {
                           return true;
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                       placeholder="Enter H-Index"
                       className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.H_INDEX ? 'border-red-500' : ''}`}
                     />
@@ -2349,7 +2411,8 @@ export default function ProfilePage() {
                           return true;
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                       placeholder="Enter i10-Index"
                       className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.i10_INDEX ? 'border-red-500' : ''}`}
                     />
@@ -2375,7 +2438,8 @@ export default function ProfilePage() {
                           return true;
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                       placeholder="Enter total citations"
                       className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.CITIATIONS ? 'border-red-500' : ''}`}
                     />
@@ -2393,7 +2457,8 @@ export default function ProfilePage() {
                           message: "Invalid ORCID ID format (e.g., 0000-0000-0000-0000)"
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                       placeholder="0000-0000-0000-0000"
                       maxLength={19}
                       className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.ORCHID_ID ? 'border-red-500' : ''}`}
@@ -2424,7 +2489,8 @@ export default function ProfilePage() {
                           return true;
                         }
                       })} 
-                      readOnly={!isEditingPersonal} 
+                      readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal} 
                       placeholder="Enter Researcher ID"
                       maxLength={100}
                       className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.RESEARCHER_ID ? 'border-red-500' : ''}`}
@@ -2454,7 +2520,7 @@ export default function ProfilePage() {
                             const isPermanent = value === "Permanent";
                             field.onChange(isPermanent ? false : true);
                           }}
-                          disabled={!isEditingPersonal}
+                          disabled={!isEditingPersonal || isSavingPersonal}
                         >
                           <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""}`}>
                             <SelectValue placeholder="Select teaching status" />
@@ -2497,7 +2563,7 @@ export default function ProfilePage() {
                             value={field.value}
                             onValueChange={(v: string | number) => field.onChange(Number(v))}
                             placeholder="Select designation"
-                            disabled={!isEditingPersonal}
+                            disabled={!isEditingPersonal || isSavingPersonal}
                             emptyMessage="No designation found."
                             className={`w-full min-w-0 ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
                           />
@@ -2539,7 +2605,7 @@ export default function ProfilePage() {
                             field.onChange(fidNum)
                           }}
                           placeholder="Select faculty"
-                          disabled={!isEditingPersonal}
+                          disabled={!isEditingPersonal || isSavingPersonal}
                           emptyMessage="No faculty found."
                           className={`w-full min-w-0 ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
                         />
@@ -2605,7 +2671,8 @@ export default function ProfilePage() {
                       <RadioGroup
                         value={watch('NET') ? "yes" : "no"}
                         onValueChange={(value: any) => setValue('NET', value === 'yes')}
-                        className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
+                        className={`flex gap-6 ${!isEditingPersonal || isSavingPersonal ? "pointer-events-none" : ""}`}
+                        disabled={isSavingPersonal}
                       >
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="yes" id="net-yes" />
@@ -2655,7 +2722,8 @@ export default function ProfilePage() {
                                     const year = e.target.value.replace(/\D/g, '').slice(0, 4);
                                     field.onChange(year);
                                   }}
-                                  readOnly={!isEditingPersonal}
+                                  readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                                   placeholder="YYYY (e.g., 2018)"
                                   maxLength={4}
                                   className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
@@ -2680,7 +2748,8 @@ export default function ProfilePage() {
                       <RadioGroup
                         value={watch('GATE') ? "yes" : "no"}
                         onValueChange={(value: any) => setValue('GATE', value === 'yes')}
-                        className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
+                        className={`flex gap-6 ${!isEditingPersonal || isSavingPersonal ? "pointer-events-none" : ""}`}
+                        disabled={isSavingPersonal}
                       >
                         <div className="flex items-center space-x-2">
                           <RadioGroupItem value="yes" id="gate-yes" />
@@ -2728,7 +2797,8 @@ export default function ProfilePage() {
                                     const year = e.target.value.replace(/\D/g, '').slice(0, 4);
                                     field.onChange(year);
                                   }}
-                                  readOnly={!isEditingPersonal}
+                                  readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                                   placeholder="YYYY (e.g., 2018)"
                                   maxLength={4}
                                   className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
@@ -2806,7 +2876,8 @@ export default function ProfilePage() {
                               const year = e.target.value.replace(/\D/g, '').slice(0, 4);
                               field.onChange(year);
                             }}
-                            readOnly={!isEditingPersonal}
+                            readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                             placeholder="YYYY (e.g., 2015)"
                             maxLength={4}
                             className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
@@ -2833,7 +2904,8 @@ export default function ProfilePage() {
                         id="smartBoard"
                         checked={editingData.ictSmartBoard}
                         onChange={(e: any) => handleCheckboxChange("ictSmartBoard", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
+                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
+                        disabled={isSavingPersonal}
                       />
                       <Label htmlFor="smartBoard" className="text-sm font-normal">
                         Smart Board
@@ -2845,7 +2917,8 @@ export default function ProfilePage() {
                         id="powerPoint"
                         checked={editingData.ictPowerPoint}
                         onChange={(e: any) => handleCheckboxChange("ictPowerPoint", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
+                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
+                        disabled={isSavingPersonal}
                       />
                       <Label htmlFor="powerPoint" className="text-sm font-normal">
                         PowerPoint Presentation
@@ -2857,7 +2930,8 @@ export default function ProfilePage() {
                         id="ictTools"
                         checked={editingData.ictTools}
                         onChange={(e: any) => handleCheckboxChange("ictTools", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
+                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
+                        disabled={isSavingPersonal}
                       />
                       <Label htmlFor="ictTools" className="text-sm font-normal">
                         ICT Tools
@@ -2869,7 +2943,8 @@ export default function ProfilePage() {
                         id="eLearningTools"
                         checked={editingData.ictELearningTools}
                         onChange={(e: any) => handleCheckboxChange("ictELearningTools", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
+                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
+                        disabled={isSavingPersonal}
                       />
                       <Label htmlFor="eLearningTools" className="text-sm font-normal">
                         E-Learning Tools
@@ -2881,7 +2956,8 @@ export default function ProfilePage() {
                         id="onlineCourse"
                         checked={editingData.ictOnlineCourse}
                         onChange={(e: any) => handleCheckboxChange("ictOnlineCourse", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
+                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
+                        disabled={isSavingPersonal}
                       />
                       <Label htmlFor="onlineCourse" className="text-sm font-normal">
                         Online Course
@@ -2893,7 +2969,8 @@ export default function ProfilePage() {
                         id="others"
                         checked={editingData.ictOthers}
                         onChange={(e) => handleCheckboxChange("ictOthers", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal ? 'pointer-events-none' : ''}`}
+                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
+                        disabled={isSavingPersonal}
                       />
                       <Label htmlFor="others" className="text-sm font-normal">
                         Others
@@ -2930,7 +3007,8 @@ export default function ProfilePage() {
                                 field.onChange(value);
                               }}
                               placeholder="Please specify other ICT tools used..."
-                              readOnly={!isEditingPersonal}
+                              readOnly={!isEditingPersonal || isSavingPersonal}
+                      disabled={isSavingPersonal}
                               maxLength={200}
                               className={`max-w-md h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
                             />
@@ -3022,7 +3100,8 @@ export default function ProfilePage() {
                               <Input
                                 {...formField}
                                 className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
+                                readOnly={!rowEditing || isSavingExperience[field.Id]}
+                                disabled={isSavingExperience[field.Id]}
                               />
                               {error && rowEditing && (
                                 <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -3054,7 +3133,7 @@ export default function ProfilePage() {
                                     experienceForm.trigger(`experiences.${index}.End_Date`, { shouldFocus: false })
                                   }, 0)
                                 }}
-                                disabled={!rowEditing}
+                                disabled={!rowEditing || isSavingExperience[field.Id]}
                               >
                                 <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
                                   <SelectValue />
@@ -3095,7 +3174,8 @@ export default function ProfilePage() {
                               <Input
                                 {...formField}
                                 className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
+                                readOnly={!rowEditing || isSavingExperience[field.Id]}
+                                disabled={isSavingExperience[field.Id]}
                               />
                               {error && rowEditing && (
                                 <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -3246,7 +3326,7 @@ export default function ProfilePage() {
                               <Select
                                 value={formField.value || ""}
                                 onValueChange={formField.onChange}
-                                disabled={!rowEditing}
+                                disabled={!rowEditing || isSavingExperience[field.Id]}
                               >
                                 <SelectTrigger className={`w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default ${error ? 'border-red-500' : ''}`}>
                                   <SelectValue />
@@ -3287,7 +3367,7 @@ export default function ProfilePage() {
                               <Select
                                 value={formField.value || ""}
                                 onValueChange={formField.onChange}
-                                disabled={!rowEditing}
+                                disabled={!rowEditing || isSavingExperience[field.Id]}
                               >
                                 <SelectTrigger className={`w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default ${error ? 'border-red-500' : ''}`}>
                                   <SelectValue />
@@ -3324,10 +3404,20 @@ export default function ProfilePage() {
                                 size="sm" 
                                 variant="default"
                                 onClick={() => handleSaveExperienceRow(index, field.Id)}
+                                disabled={isSavingExperience[field.Id]}
                                 className="flex items-center gap-1 h-7 text-xs px-2"
                               >
-                                <Save className="h-3 w-3" />
-                                <span className="hidden sm:inline">Save</span>
+                                {isSavingExperience[field.Id] ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span className="hidden sm:inline">Saving...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-3 w-3" />
+                                    <span className="hidden sm:inline">Save</span>
+                                  </>
+                                )}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -3344,6 +3434,7 @@ export default function ProfilePage() {
                                       })
                                   }
                                 }}
+                                disabled={isSavingExperience[field.Id]}
                                 className="flex items-center gap-1 h-7 text-xs px-2"
                               >
                                 <X className="h-3 w-3" />
@@ -3434,7 +3525,8 @@ export default function ProfilePage() {
                               <Input
                                 {...formField}
                                 className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
+                                readOnly={!rowEditing || isSavingPostDoc[field.Id]}
+                                disabled={isSavingPostDoc[field.Id]}
                               />
                               {error && rowEditing && (
                                 <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -3709,10 +3801,20 @@ export default function ProfilePage() {
                                 size="sm" 
                                 variant="default"
                                 onClick={() => handleSavePostDocRow(index, field.Id)}
+                                disabled={isSavingPostDoc[field.Id]}
                                 className="flex items-center gap-1"
                               >
-                                <Save className="h-4 w-4" />
-                                <span className="hidden sm:inline">Save</span>
+                                {isSavingPostDoc[field.Id] ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span className="hidden sm:inline">Saving...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Save</span>
+                                  </>
+                                )}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -3728,6 +3830,7 @@ export default function ProfilePage() {
                                       })
                                   }
                                 }}
+                                disabled={isSavingPostDoc[field.Id]}
                                 className="flex items-center gap-1"
                               >
                                 <X className="h-4 w-4" />
@@ -3812,7 +3915,7 @@ export default function ProfilePage() {
                                 value={formField.value}
                                 onValueChange={(value: string | number) => formField.onChange(Number(value))}
                                 placeholder="Select degree type"
-                                disabled={!rowEditing}
+                                disabled={!rowEditing || isSavingEducation[field.gid]}
                                 emptyMessage="No degree type found."
                                 className={`w-full ${error ? 'border-red-500' : ''}`}
                               />
@@ -3855,7 +3958,8 @@ export default function ProfilePage() {
                               <Input
                                 {...formField}
                                 className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
+                                readOnly={!rowEditing || isSavingEducation[field.gid]}
+                                disabled={isSavingEducation[field.gid]}
                               />
                               {error && rowEditing && (
                                 <p className="text-xs text-red-500 mt-1">{error.message}</p>
@@ -4184,10 +4288,20 @@ export default function ProfilePage() {
                                 size="sm" 
                                 variant="default"
                                 onClick={() => handleSaveEducationRow(index, field.gid)}
+                                disabled={isSavingEducation[field.gid]}
                                 className="flex items-center gap-1"
                               >
-                                <Save className="h-4 w-4" />
-                                <span className="hidden sm:inline">Save</span>
+                                {isSavingEducation[field.gid] ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span className="hidden sm:inline">Saving...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-4 w-4" />
+                                    <span className="hidden sm:inline">Save</span>
+                                  </>
+                                )}
                               </Button>
                               <Button 
                                 size="sm" 
@@ -4203,6 +4317,7 @@ export default function ProfilePage() {
                                       })
                                   }
                                 }}
+                                disabled={isSavingEducation[field.gid]}
                                 className="flex items-center gap-1"
                               >
                                 <X className="h-4 w-4" />
@@ -4237,10 +4352,20 @@ export default function ProfilePage() {
                 onClick={handleSaveAcademicYears}
                 size="sm"
                 variant="outline"
+                disabled={isSavingAcademicYears}
                 className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
               >
-                <Save className="h-4 w-4" />
-                Save
+                {isSavingAcademicYears ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    Save
+                  </>
+                )}
               </Button>
             </div>
           </div>
@@ -4258,6 +4383,7 @@ export default function ProfilePage() {
                       setTeacherInfo({ ...teacherInfo, NILL2016_17: e.target.checked });
                     }
                   }}
+                  disabled={isSavingAcademicYears}
                   className="rounded border-gray-300 text-red-600 focus:ring-red-500"
                 />
                 <Label htmlFor="ay2016-17" className="text-sm font-normal">

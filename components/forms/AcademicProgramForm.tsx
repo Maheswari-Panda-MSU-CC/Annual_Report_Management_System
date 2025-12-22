@@ -106,6 +106,7 @@ export function AcademicProgramForm({
           className="w-full"
           isEditMode={isEdit}
           onClearFields={onClearFields}
+          disabled={isSubmitting}
         />
         {/* Hidden input for form validation */}
         <input
@@ -142,6 +143,7 @@ export function AcademicProgramForm({
               id="name" 
               placeholder="Enter name" 
               maxLength={150}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -189,6 +191,7 @@ export function AcademicProgramForm({
                   }}
                   placeholder="Select programme type"
                   emptyMessage="No programme type found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("programme") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
@@ -202,6 +205,7 @@ export function AcademicProgramForm({
               id="place" 
               placeholder="Enter location" 
               maxLength={150}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -227,6 +231,7 @@ export function AcademicProgramForm({
               id="date" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -282,6 +287,7 @@ export function AcademicProgramForm({
                   }}
                   placeholder="Select year"
                   emptyMessage="No year found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("year_name") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
@@ -317,6 +323,7 @@ export function AcademicProgramForm({
                   }}
                   placeholder="Select role"
                   emptyMessage="No role found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("participated_as") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
@@ -328,7 +335,7 @@ export function AcademicProgramForm({
         {/* Buttons */}
         {!isEdit && (
           <div className="flex justify-end gap-4 mt-6">
-            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=academic-programs"))}>
+            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=academic-programs"))} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>

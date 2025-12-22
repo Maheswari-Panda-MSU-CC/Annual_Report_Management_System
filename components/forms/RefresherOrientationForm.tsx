@@ -79,6 +79,145 @@ export function RefresherOrientationForm({
     }
   }, [formData.startdate, form])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
+  // Handle extracted fields from DocumentUpload with proper validation
+  const handleExtractedFields = (fields: Record<string, any>) => {
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Name - validate non-empty string
+    if (fields.name) {
+      const nameValue = String(fields.name).trim()
+      if (nameValue.length >= 2) {
+        setValue("name", nameValue)
+        filledFieldNames.push("name")
+        onFieldChange?.("name")
+      }
+    }
+    
+    // Refresher Type - validate dropdown
+    if (fields.refresher_type || fields.course_type) {
+      const value = fields.refresher_type || fields.course_type
+      if (setDropdownValue("refresher_type", value, refresherTypeOptions)) {
+        filledFieldNames.push("refresher_type")
+      }
+    }
+    
+    // Start Date - validate date format and not in future
+    if (fields.start_date || fields.startdate) {
+      const dateValue = String(fields.start_date || fields.startdate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today && dateObj.getFullYear() >= 1900) {
+          setValue("startdate", dateValue)
+          filledFieldNames.push("startdate")
+          onFieldChange?.("startdate")
+        }
+      }
+    }
+    
+    // End Date - validate date format, not in future, and after start date
+    if (fields.end_date || fields.enddate) {
+      const dateValue = String(fields.end_date || fields.enddate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today && dateObj.getFullYear() >= 1900) {
+          // Check if start date exists and end date is after start date
+          const startDate = formData.startdate
+          let isValid = true
+          if (startDate) {
+            const start = new Date(startDate)
+            start.setHours(0, 0, 0, 0)
+            dateObj.setHours(0, 0, 0, 0)
+            if (dateObj < start) {
+              isValid = false
+            }
+          }
+          if (isValid) {
+            setValue("enddate", dateValue)
+            filledFieldNames.push("enddate")
+            onFieldChange?.("enddate")
+          }
+        }
+      }
+    }
+    
+    // University - validate non-empty string
+    if (fields.organizing_university || fields.university) {
+      const uniValue = String(fields.organizing_university || fields.university).trim()
+      if (uniValue.length >= 2) {
+        setValue("university", uniValue)
+        filledFieldNames.push("university")
+        onFieldChange?.("university")
+      }
+    }
+    
+    // Institute - validate non-empty string
+    if (fields.organizing_institute || fields.institute) {
+      const instValue = String(fields.organizing_institute || fields.institute).trim()
+      if (instValue.length >= 2) {
+        setValue("institute", instValue)
+        filledFieldNames.push("institute")
+        onFieldChange?.("institute")
+      }
+    }
+    
+    // Department - validate non-empty string
+    if (fields.organizing_department || fields.department) {
+      const deptValue = String(fields.organizing_department || fields.department).trim()
+      if (deptValue.length >= 2) {
+        setValue("department", deptValue)
+        filledFieldNames.push("department")
+        onFieldChange?.("department")
+      }
+    }
+    
+    // Centre - validate non-empty string (optional field)
+    if (fields.centre) {
+      const centreValue = String(fields.centre).trim()
+      if (centreValue.length >= 2) {
+        setValue("centre", centreValue)
+        filledFieldNames.push("centre")
+        onFieldChange?.("centre")
+      }
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       {/* Step 1: Upload */}
@@ -94,20 +233,13 @@ export function RefresherOrientationForm({
             setDocumentUrl(url)
             setValue("supporting_doc", url, { shouldValidate: true })
           }}
-          onExtract={(fields) => {
-            // DocumentUpload already handles extraction and stores data in context
-            // useAutoFillData hook will automatically fill the form
-            // We just need to set the extracted values directly here
-            Object.entries(fields).forEach(([key, value]) => {
-              setValue(key, value)
-            })
-            // Don't call handleExtractInfo - it uses old API and causes false errors
-          }}
+          onExtract={handleExtractedFields}
           allowedFileTypes={["pdf", "jpg", "jpeg"]}
           maxFileSize={1 * 1024 * 1024} // 1MB
           className="w-full"
           isEditMode={isEdit}
           onClearFields={onClearFields}
+          disabled={isSubmitting}
         />
         {/* Hidden input for form validation */}
         <input
@@ -144,6 +276,7 @@ export function RefresherOrientationForm({
               id="name" 
               placeholder="Enter course name"
               maxLength={500}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -193,6 +326,7 @@ export function RefresherOrientationForm({
                   }}
                   placeholder="Select course type"
                   emptyMessage="No course type found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("refresher_type") ? "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800" : undefined}
                 />
               )}
@@ -208,6 +342,7 @@ export function RefresherOrientationForm({
               id="startdate" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("startdate") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -243,6 +378,7 @@ export function RefresherOrientationForm({
               id="enddate" 
               type="date" 
               max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("enddate") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -291,6 +427,7 @@ export function RefresherOrientationForm({
               id="university" 
               placeholder="Enter university name"
               maxLength={200}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("university") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -318,6 +455,7 @@ export function RefresherOrientationForm({
               id="institute" 
               placeholder="Enter institute name"
               maxLength={200}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("institute") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -345,6 +483,7 @@ export function RefresherOrientationForm({
               id="department" 
               placeholder="Enter department name"
               maxLength={200}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("department") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -372,6 +511,7 @@ export function RefresherOrientationForm({
               id="centre" 
               placeholder="Enter centre name (optional)"
               maxLength={200}
+              disabled={isSubmitting}
               className={cn(
                 isAutoFilled?.("centre") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               )}
@@ -395,7 +535,7 @@ export function RefresherOrientationForm({
         {/* Submit Buttons */}
         {!isEdit && (
         <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-6">
-          <Button type="button" variant="outline" onClick={onCancel || (() => router.back())} className="w-full sm:w-auto">
+          <Button type="button" variant="outline" onClick={onCancel || (() => router.back())} disabled={isSubmitting} className="w-full sm:w-auto">
             Cancel
           </Button>
           <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">

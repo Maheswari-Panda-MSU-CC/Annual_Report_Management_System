@@ -108,14 +108,134 @@ export function EContentForm({
     }
   }, [isEdit, editData, setValue, form])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
+  // Helper function to validate quadrant (1-6)
+  const setQuadrantValue = (fieldName: string, value: any): boolean => {
+    if (value === undefined || value === null) return false
+    
+    const quadrantOptions = [
+      { id: 1, name: "1" },
+      { id: 2, name: "2" },
+      { id: 3, name: "3" },
+      { id: 4, name: "4" },
+      { id: 5, name: "5" },
+      { id: 6, name: "6" },
+    ]
+    
+    return setDropdownValue(fieldName, value, quadrantOptions)
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.title) setValue("title", fields.title)
-    if (fields.briefDetails) setValue("briefDetails", fields.briefDetails)
-    if (fields.quadrant) setValue("quadrant", fields.quadrant)
-    if (fields.publishingDate) setValue("publishingDate", fields.publishingDate)
-    if (fields.publishingAuthorities) setValue("publishingAuthorities", fields.publishingAuthorities)
-    if (fields.link) setValue("link", fields.link)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Title - validate non-empty string
+    if (fields.title) {
+      const titleValue = String(fields.title).trim()
+      if (titleValue.length > 0) {
+        setValue("title", titleValue)
+        filledFieldNames.push("title")
+        onFieldChange?.("title")
+      }
+    }
+    
+    // Brief Details - validate non-empty string
+    if (fields.briefDetails) {
+      const briefValue = String(fields.briefDetails).trim()
+      if (briefValue.length > 0) {
+        setValue("briefDetails", briefValue)
+        filledFieldNames.push("briefDetails")
+        onFieldChange?.("briefDetails")
+      }
+    }
+    
+    // Quadrant - validate dropdown (1-6)
+    if (fields.quadrant !== undefined && fields.quadrant !== null) {
+      if (setQuadrantValue("quadrant", fields.quadrant)) {
+        filledFieldNames.push("quadrant")
+      }
+    }
+    
+    // Publishing Date - validate date format and not in future
+    if (fields.publishingDate) {
+      const dateValue = String(fields.publishingDate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("publishingDate", dateValue)
+          filledFieldNames.push("publishingDate")
+          onFieldChange?.("publishingDate")
+        }
+      }
+    }
+    
+    // Publishing Authorities - validate non-empty string
+    if (fields.publishingAuthorities) {
+      const authValue = String(fields.publishingAuthorities).trim()
+      if (authValue.length > 0) {
+        setValue("publishingAuthorities", authValue)
+        filledFieldNames.push("publishingAuthorities")
+        onFieldChange?.("publishingAuthorities")
+      }
+    }
+    
+    // Link - validate non-empty string (optional field, but validate if provided)
+    if (fields.link) {
+      const linkValue = String(fields.link).trim()
+      if (linkValue.length > 0) {
+        setValue("link", linkValue)
+        filledFieldNames.push("link")
+        onFieldChange?.("link")
+      }
+    }
+    
+    // Type of E-Content Platform - validate dropdown
+    if (fields.type !== undefined && fields.type !== null) {
+      if (setDropdownValue("typeOfEContentPlatform", fields.type, eContentTypeOptions)) {
+        filledFieldNames.push("typeOfEContentPlatform")
+      }
+    }
+    
+    // Type of E-Content - validate dropdown
+    if (fields.typeEcontentValue !== undefined && fields.typeEcontentValue !== null) {
+      if (setDropdownValue("typeOfEContent", fields.typeEcontentValue, typeEcontentValueOptions)) {
+        filledFieldNames.push("typeOfEContent")
+      }
+    }
   }
 
   return (
@@ -134,6 +254,7 @@ export function EContentForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -145,6 +266,7 @@ export function EContentForm({
           <Input
             id="title"
             placeholder="Enter e-content title"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
@@ -177,6 +299,7 @@ export function EContentForm({
                   }}
                   placeholder="Select platform"
                   emptyMessage="No platform found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("typeOfEContentPlatform") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -207,6 +330,7 @@ export function EContentForm({
                   }}
                   placeholder="Select quadrant"
                   emptyMessage="No quadrant found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("quadrant") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -220,6 +344,7 @@ export function EContentForm({
           <Textarea
             id="briefDetails"
             placeholder="Enter brief details"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("briefDetails") && "bg-blue-50 border-blue-200"
@@ -238,12 +363,30 @@ export function EContentForm({
             <Input
               id="publishingDate"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("publishingDate") && "bg-blue-50 border-blue-200"
               )}
               {...register("publishingDate", { 
                 required: "Publishing date is required",
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Publishing date is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
+                    return "Publishing date cannot be in the future"
+                  }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
+                  }
+                  return true
+                },
                 onChange: () => onFieldChange?.("publishingDate")
               })}
             />
@@ -255,6 +398,7 @@ export function EContentForm({
             <Input
               id="publishingAuthorities"
               placeholder="Enter publishing authorities"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("publishingAuthorities") && "bg-blue-50 border-blue-200"
@@ -275,6 +419,7 @@ export function EContentForm({
               id="link"
               type="url"
               placeholder="Enter link"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("link") && "bg-blue-50 border-blue-200"
@@ -303,6 +448,7 @@ export function EContentForm({
                   }}
                   placeholder="Select type"
                   emptyMessage="No type found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("typeOfEContent") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -313,7 +459,7 @@ export function EContentForm({
 
        {!isEdit &&
          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-         <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=econtent"))} className="w-full sm:w-auto text-xs sm:text-sm">
+         <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=econtent"))} disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
            Cancel
          </Button>
          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">

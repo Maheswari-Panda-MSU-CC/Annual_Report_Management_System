@@ -148,7 +148,7 @@ export default function ResearchProjectsPage() {
                 </Button>
               ) : (
                 <>
-                  <Button variant="outline" size="sm" onClick={() => setIsEditingMetrics(false)}>
+                  <Button variant="outline" size="sm" onClick={() => setIsEditingMetrics(false)} disabled={isSaving}>
                     Cancel
                   </Button>
                   <Button size="sm" onClick={handleSaveMetrics} disabled={isSaving}>
@@ -182,7 +182,8 @@ export default function ResearchProjectsPage() {
                     type="number"
                     value={metrics.hIndex}
                     onChange={(e) => setMetrics({ ...metrics, hIndex: Number(e.target.value) })}
-                    className="flex-1 px-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    disabled={isSaving}
+                    className="flex-1 px-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="Enter H-Index"
                   />
                 ) : (
@@ -241,7 +242,8 @@ export default function ResearchProjectsPage() {
                     type="text"
                     value={metrics.orcidId}
                     onChange={(e) => setMetrics({ ...metrics, orcidId: e.target.value })}
-                    className="flex-1 px-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    disabled={isSaving}
+                    className="flex-1 px-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
                     placeholder="0000-0000-0000-0000"
                   />
                 ) : (

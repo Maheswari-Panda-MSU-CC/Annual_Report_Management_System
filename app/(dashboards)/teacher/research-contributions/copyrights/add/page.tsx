@@ -76,9 +76,18 @@ export default function AddCopyrightsPage() {
         setValue("referenceNo", String(fields.referenceNo || fields.Reference_No))
         filledFieldNames.push("referenceNo")
       }
+      // Publication Date - validate date format and not in future (now required)
       if (fields.publicationDate || fields.Publication_Date) {
-        setValue("publicationDate", String(fields.publicationDate || fields.Publication_Date))
-        filledFieldNames.push("publicationDate")
+        const dateValue = String(fields.publicationDate || fields.Publication_Date).trim()
+        if (dateValue.length > 0) {
+          const dateObj = new Date(dateValue)
+          const today = new Date()
+          today.setHours(23, 59, 59, 999)
+          if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+            setValue("publicationDate", dateValue)
+            filledFieldNames.push("publicationDate")
+          }
+        }
       }
       if (fields.link || fields.Link) {
         setValue("link", String(fields.link || fields.Link))

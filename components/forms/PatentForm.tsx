@@ -105,14 +105,111 @@ export function PatentForm({
         }
     }, [isEdit, editData, setValue, form]);
 
+    // Helper function to validate and set dropdown value
+    const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+        if (value === undefined || value === null) return false
+        
+        let validValue: number | null = null
+        
+        if (typeof value === 'number') {
+            if (options.some(opt => opt.id === value)) {
+                validValue = value
+            }
+        } else {
+            // Try to find matching option by name
+            const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+            if (option) {
+                validValue = option.id
+            } else {
+                // Try to convert to number and check
+                const numValue = Number(value)
+                if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+                    validValue = numValue
+                }
+            }
+        }
+        
+        if (validValue !== null) {
+            setValue(fieldName, validValue, { shouldValidate: true })
+            onFieldChange?.(fieldName)
+            return true
+        }
+        return false
+    }
+
     // Handle extracted fields from DocumentUpload
     const handleExtractedFields = (fields: Record<string, any>) => {
-        // Map extracted fields to form fields
-        if (fields.title) setValue("title", fields.title)
-        if (fields.level) setValue("level", fields.level)
-        if (fields.status) setValue("status", fields.status)
-        if (fields.date) setValue("date", fields.date)
-        if (fields.patentApplicationNo) setValue("PatentApplicationNo", fields.patentApplicationNo)
+        // Track which fields were successfully filled
+        const filledFieldNames: string[] = []
+        
+        // Title - validate non-empty string
+        if (fields.title) {
+            const titleValue = String(fields.title).trim()
+            if (titleValue.length > 0) {
+                setValue("title", titleValue)
+                filledFieldNames.push("title")
+                onFieldChange?.("title")
+            }
+        }
+        
+        // Level - validate dropdown
+        if (fields.level !== undefined && fields.level !== null) {
+            if (setDropdownValue("level", fields.level, resPubLevelOptions)) {
+                filledFieldNames.push("level")
+            }
+        }
+        
+        // Status - validate dropdown
+        if (fields.status !== undefined && fields.status !== null) {
+            if (setDropdownValue("status", fields.status, patentStatusOptions)) {
+                filledFieldNames.push("status")
+            }
+        }
+        
+        // Date - validate date format and not in future
+        if (fields.date) {
+            const dateValue = String(fields.date).trim()
+            if (dateValue.length > 0) {
+                const dateObj = new Date(dateValue)
+                const today = new Date()
+                today.setHours(23, 59, 59, 999)
+                if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+                    setValue("date", dateValue)
+                    filledFieldNames.push("date")
+                    onFieldChange?.("date")
+                }
+            }
+        }
+        
+        // Patent Application No - validate non-empty string
+        if (fields.patentApplicationNo) {
+            const patentNoValue = String(fields.patentApplicationNo).trim()
+            if (patentNoValue.length > 0) {
+                setValue("PatentApplicationNo", patentNoValue)
+                filledFieldNames.push("PatentApplicationNo")
+                onFieldChange?.("PatentApplicationNo")
+            }
+        }
+        
+        // Transfer of Technology - validate non-empty string
+        if (fields.transfer_of_technology) {
+            const techValue = String(fields.transfer_of_technology).trim()
+            if (techValue.length > 0) {
+                setValue("Tech_Licence", techValue)
+                filledFieldNames.push("Tech_Licence")
+                onFieldChange?.("Tech_Licence")
+            }
+        }
+        
+        // Earnings Generated - validate number
+        if (fields.earning_generated !== undefined && fields.earning_generated !== null) {
+            const earningValue = Number(fields.earning_generated)
+            if (!isNaN(earningValue) && earningValue >= 0) {
+                setValue("Earnings_Generate", earningValue)
+                filledFieldNames.push("Earnings_Generate")
+                onFieldChange?.("Earnings_Generate")
+            }
+        }
     }
 
     const onFormSubmit = handleSubmit(
@@ -137,6 +234,7 @@ export function PatentForm({
                     onClearFields={onClearFields}
                     isEditMode={isEdit}
                     className="w-full"
+                    disabled={isSubmitting}
                 />
             </div>
 
@@ -149,6 +247,7 @@ export function PatentForm({
                     <Input 
                         id="title" 
                         placeholder="Enter patent title" 
+                        disabled={isSubmitting}
                         className={cn(
                             "text-sm sm:text-base h-9 sm:h-10 mt-1",
                             isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
@@ -181,6 +280,7 @@ export function PatentForm({
                                     }}
                                     placeholder="Select level"
                                     emptyMessage="No level found"
+                                    disabled={isSubmitting}
                                     className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200" : undefined}
                                 />
                             )}
@@ -207,6 +307,7 @@ export function PatentForm({
                                     }}
                                     placeholder="Select status"
                                     emptyMessage="No status found"
+                                    disabled={isSubmitting}
                                     className={isAutoFilled?.("status") ? "bg-blue-50 border-blue-200" : undefined}
                                 />
                             )}
@@ -222,6 +323,7 @@ export function PatentForm({
                             id="date" 
                             type="date" 
                             max={new Date().toISOString().split('T')[0]}
+                            disabled={isSubmitting}
                             className={cn(
                                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
@@ -255,6 +357,7 @@ export function PatentForm({
                         <Input 
                             id="Tech_Licence" 
                             placeholder="Enter technology licence details" 
+                            disabled={isSubmitting}
                             className={cn(
                                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                                 isAutoFilled?.("Tech_Licence") && "bg-blue-50 border-blue-200"
@@ -277,6 +380,7 @@ export function PatentForm({
                             id="Earnings_Generate" 
                             type="number" 
                             placeholder="Enter amount" 
+                            disabled={isSubmitting}
                             className={cn(
                                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                                 isAutoFilled?.("Earnings_Generate") && "bg-blue-50 border-blue-200"
@@ -294,6 +398,7 @@ export function PatentForm({
                         <Input 
                             id="PatentApplicationNo" 
                             placeholder="Enter patent number" 
+                            disabled={isSubmitting}
                             className={cn(
                                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                                 isAutoFilled?.("PatentApplicationNo") && "bg-blue-50 border-blue-200"
@@ -316,7 +421,7 @@ export function PatentForm({
 
                 {!isEdit && (
                     <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-                        <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=patents"))} className="w-full sm:w-auto text-xs sm:text-sm">
+                        <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=patents"))} disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
                             Cancel
                         </Button>
                         <Button 

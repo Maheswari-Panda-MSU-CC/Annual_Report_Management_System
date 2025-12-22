@@ -68,6 +68,7 @@ export function TechReportsForm({
               id="title"
               placeholder="Enter report title"
               maxLength={200}
+              disabled={isSubmitting}
               {...register("title", {
                 required: "Title is required",
                 minLength: { value: 2, message: "Title must be at least 2 characters" },
@@ -90,6 +91,7 @@ export function TechReportsForm({
               id="subject"
               placeholder="Enter subject"
               maxLength={100}
+              disabled={isSubmitting}
               {...register("subject", {
                 required: "Subject is required",
                 minLength: { value: 2, message: "Subject must be at least 2 characters" },
@@ -113,6 +115,7 @@ export function TechReportsForm({
               id="publisher_name"
               placeholder="Enter publisher name"
               maxLength={200}
+              disabled={isSubmitting}
               {...register("publisher_name", {
                 required: "Publisher name is required",
                 minLength: { value: 2, message: "Publisher name must be at least 2 characters" },
@@ -135,6 +138,7 @@ export function TechReportsForm({
             <Input
               id="publication_date"
               type="date"
+              disabled={isSubmitting}
               {...register("publication_date", {
                 required: "Publication date is required",
                 validate: (value) => {
@@ -165,6 +169,7 @@ export function TechReportsForm({
               id="no_of_issue_per_year"
               type="number"
               placeholder="Enter number of issues per year"
+              disabled={isSubmitting}
               {...register("no_of_issue_per_year", {
                 required: "Number of issues per year is required",
                 min: { value: 1, message: "Number of issues must be at least 1" },
@@ -190,6 +195,7 @@ export function TechReportsForm({
               type="number"
               step="0.001"
               placeholder="Enter price"
+              disabled={isSubmitting}
               {...register("price", {
                 required: "Price is required",
                 min: { value: 0, message: "Price must be non-negative" },
@@ -236,6 +242,7 @@ export function TechReportsForm({
                   }}
                   placeholder="Select currency"
                   emptyMessage="No currency found"
+                  disabled={isSubmitting}
                 />
               )}
             />

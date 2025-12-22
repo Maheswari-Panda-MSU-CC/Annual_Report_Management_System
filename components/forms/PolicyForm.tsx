@@ -100,12 +100,84 @@ export default function PolicyForm({
     }
   }, [isEdit, editData, setValue, form, resPubLevelOptions])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.title) setValue("title", fields.title)
-    if (fields.level) setValue("level", fields.level)
-    if (fields.organisation) setValue("organisation", fields.organisation)
-    if (fields.date) setValue("date", fields.date)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Title - validate non-empty string
+    if (fields.title) {
+      const titleValue = String(fields.title).trim()
+      if (titleValue.length > 0) {
+        setValue("title", titleValue)
+        filledFieldNames.push("title")
+        onFieldChange?.("title")
+      }
+    }
+    
+    // Level - validate dropdown
+    if (fields.level !== undefined && fields.level !== null) {
+      if (setDropdownValue("level", fields.level, resPubLevelOptions)) {
+        filledFieldNames.push("level")
+      }
+    }
+    
+    // Organisation - validate non-empty string
+    if (fields.organisation) {
+      const orgValue = String(fields.organisation).trim()
+      if (orgValue.length > 0) {
+        setValue("organisation", orgValue)
+        filledFieldNames.push("organisation")
+        onFieldChange?.("organisation")
+      }
+    }
+    
+    // Date - validate date format and not in future
+    if (fields.date) {
+      const dateValue = String(fields.date).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("date", dateValue)
+          filledFieldNames.push("date")
+          onFieldChange?.("date")
+        }
+      }
+    }
   }
 
   return (
@@ -125,6 +197,7 @@ export default function PolicyForm({
                 onClearFields={onClearFields}
                 isEditMode={isEdit}
                 className="w-full"
+                disabled={isSubmitting}
               />
             </div>
       
@@ -135,6 +208,7 @@ export default function PolicyForm({
           <Input 
             id="title" 
             placeholder="Enter policy title" 
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
@@ -167,6 +241,7 @@ export default function PolicyForm({
                   }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -179,6 +254,7 @@ export default function PolicyForm({
             <Input 
               id="organisation" 
               placeholder="Enter organisation" 
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("organisation") && "bg-blue-50 border-blue-200"
@@ -197,12 +273,30 @@ export default function PolicyForm({
           <Input 
             id="date" 
             type="date" 
+            max={new Date().toISOString().split('T')[0]}
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
             )}
             {...register("date", { 
               required: "Date is required",
+              validate: (v) => {
+                if (!v || v.trim() === "") {
+                  return "Date is required"
+                }
+                const selectedDate = new Date(v)
+                const today = new Date()
+                today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                if (selectedDate > today) {
+                  return "Date cannot be in the future"
+                }
+                // Check if date is valid
+                if (isNaN(selectedDate.getTime())) {
+                  return "Please enter a valid date"
+                }
+                return true
+              },
               onChange: () => onFieldChange?.("date")
             })} 
           />

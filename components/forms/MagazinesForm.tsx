@@ -64,6 +64,7 @@ export function MagazinesForm({
               id="title"
               placeholder="Enter magazine title"
               maxLength={500}
+              disabled={isSubmitting}
               {...register("title", {
                 required: "Title is required",
                 minLength: { value: 2, message: "Title must be at least 2 characters" },
@@ -111,6 +112,7 @@ export function MagazinesForm({
                   }}
                   placeholder="Select mode"
                   emptyMessage="No mode found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -123,6 +125,7 @@ export function MagazinesForm({
               id="category"
               placeholder="Enter category"
               maxLength={50}
+              disabled={isSubmitting}
               {...register("category", {
                 required: "Category is required",
                 minLength: { value: 2, message: "Category must be at least 2 characters" },
@@ -146,6 +149,7 @@ export function MagazinesForm({
               id="publishing_agency"
               placeholder="Enter publishing agency"
               maxLength={500}
+              disabled={isSubmitting}
               {...register("publishing_agency", {
                 required: "Publishing agency is required",
                 minLength: { value: 2, message: "Publishing agency must be at least 2 characters" },
@@ -169,6 +173,7 @@ export function MagazinesForm({
               id="volume"
               placeholder="Enter volume"
               maxLength={10}
+              disabled={isSubmitting}
               {...register("volume", {
                 required: "Volume is required",
                 minLength: { value: 1, message: "Volume is required" },
@@ -190,6 +195,7 @@ export function MagazinesForm({
             <Input
               id="publication_date"
               type="date"
+              disabled={isSubmitting}
               {...register("publication_date", {
                 required: "Publication date is required",
                 validate: (value) => {
@@ -220,6 +226,7 @@ export function MagazinesForm({
               id="no_of_issue_per_yr"
               type="number"
               placeholder="Enter number of issues per year"
+              disabled={isSubmitting}
               {...register("no_of_issue_per_yr", {
                 required: "Number of issues per year is required",
                 min: { value: 1, message: "Number of issues must be at least 1" },
@@ -245,6 +252,7 @@ export function MagazinesForm({
               type="number"
               step="0.001"
               placeholder="Enter price"
+              disabled={isSubmitting}
               {...register("price", {
                 required: "Price is required",
                 min: { value: 0, message: "Price must be non-negative" },
@@ -291,6 +299,7 @@ export function MagazinesForm({
                   }}
                   placeholder="Select currency"
                   emptyMessage="No currency found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -307,6 +316,7 @@ export function MagazinesForm({
                     id="is_additional_attachment"
                     checked={field.value || false}
                     onCheckedChange={field.onChange}
+                    disabled={isSubmitting}
                   />
                 )}
               />
@@ -321,6 +331,7 @@ export function MagazinesForm({
                 id="additional_attachment"
                 placeholder="e.g., USB, CD/DVD"
                 maxLength={500}
+                disabled={isSubmitting}
                 {...register("additional_attachment", {
                   maxLength: { value: 500, message: "Additional attachment must not exceed 500 characters" },
                 })}

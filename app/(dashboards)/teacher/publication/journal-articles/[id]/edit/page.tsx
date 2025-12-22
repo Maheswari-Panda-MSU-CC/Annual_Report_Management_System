@@ -121,6 +121,36 @@ export default function EditJournalArticlePage() {
     })
   }, [])
 
+  // Helper function to validate and set dropdown field value - only highlights if value was successfully set
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
+
   // Use auto-fill hook for document analysis data - watches context changes
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -143,175 +173,172 @@ export default function EditJournalArticlePage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Authors - replace if exists in extraction
+      // Authors - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.authors !== undefined) {
-        const authorsValue = fields.authors ? String(fields.authors) : ""
+        const authorsValue = fields.authors ? String(fields.authors).trim() : ""
         setValue("authors", authorsValue)
         if (authorsValue) filledFieldNames.push("authors")
       }
       
-      // Author Num - replace if exists in extraction
+      // Author Num - replace if exists in extraction (only highlight if valid number)
       if (fields.author_num !== undefined) {
         const authorNumValue = fields.author_num !== null && fields.author_num !== undefined ? Number(fields.author_num) : null
         setValue("author_num", authorNumValue)
-        if (authorNumValue !== null) filledFieldNames.push("author_num")
+        if (authorNumValue !== null && !isNaN(authorNumValue) && authorNumValue > 0) {
+          filledFieldNames.push("author_num")
+        }
       }
       
-      // Title - replace if exists in extraction
+      // Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.title !== undefined) {
-        const titleValue = fields.title ? String(fields.title) : ""
+        const titleValue = fields.title ? String(fields.title).trim() : ""
         setValue("title", titleValue)
         if (titleValue) filledFieldNames.push("title")
       }
       
-      // ISBN - replace if exists in extraction
+      // ISBN - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.isbn !== undefined) {
-        const isbnValue = fields.isbn ? String(fields.isbn) : ""
+        const isbnValue = fields.isbn ? String(fields.isbn).trim() : ""
         setValue("isbn", isbnValue)
         if (isbnValue) filledFieldNames.push("isbn")
       }
       
-      // Journal Name - replace if exists in extraction
+      // Journal Name - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.journal_name !== undefined) {
-        const journalNameValue = fields.journal_name ? String(fields.journal_name) : ""
+        const journalNameValue = fields.journal_name ? String(fields.journal_name).trim() : ""
         setValue("journal_name", journalNameValue)
         if (journalNameValue) filledFieldNames.push("journal_name")
       }
       
-      // Volume Num - replace if exists in extraction
+      // Volume Num - replace if exists in extraction (only highlight if valid number)
       if (fields.volume_num !== undefined) {
         const volumeNumValue = fields.volume_num !== null && fields.volume_num !== undefined ? Number(fields.volume_num) : null
         setValue("volume_num", volumeNumValue)
-        if (volumeNumValue !== null) filledFieldNames.push("volume_num")
+        if (volumeNumValue !== null && !isNaN(volumeNumValue) && volumeNumValue > 0) {
+          filledFieldNames.push("volume_num")
+        }
       }
       
-      // Page Num - replace if exists in extraction
+      // Page Num - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.page_num !== undefined) {
-        const pageNumValue = fields.page_num ? String(fields.page_num) : ""
+        const pageNumValue = fields.page_num ? String(fields.page_num).trim() : ""
         setValue("page_num", pageNumValue)
         if (pageNumValue) filledFieldNames.push("page_num")
       }
       
-      // Month Year - replace if exists in extraction
+      // Month Year - replace if exists in extraction (only highlight if valid date)
       if (fields.month_year !== undefined) {
-        const monthYearValue = fields.month_year ? String(fields.month_year) : ""
-        setValue("month_year", monthYearValue)
-        if (monthYearValue) filledFieldNames.push("month_year")
+        const monthYearValue = fields.month_year ? String(fields.month_year).trim() : ""
+        if (monthYearValue) {
+          // Validate date format
+          try {
+            const parsedDate = new Date(monthYearValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("month_year", monthYearValue)
+              filledFieldNames.push("month_year")
+            } else {
+              setValue("month_year", "")
+            }
+          } catch {
+            setValue("month_year", "")
+          }
+        } else {
+          setValue("month_year", "")
+        }
       }
       
-      // Author Type - replace if exists in extraction
+      // Author Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.author_type !== undefined) {
-        if (fields.author_type !== null && fields.author_type !== undefined) {
-          const matchingAuthorType = journalAuthorTypeOptions.find(
-            (a) => a.id === Number(fields.author_type)
-          )
-          if (matchingAuthorType) {
-            setValue("author_type", matchingAuthorType.id)
-            filledFieldNames.push("author_type")
-          } else {
-            setValue("author_type", null)
-          }
-        } else {
-          setValue("author_type", null)
-        }
+        setDropdownValue("author_type", fields.author_type, journalAuthorTypeOptions, filledFieldNames)
       }
       
-      // Level - replace if exists in extraction
+      // Level - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.level !== undefined) {
-        if (fields.level !== null && fields.level !== undefined) {
-          const matchingLevel = resPubLevelOptions.find(
-            (l) => l.id === Number(fields.level)
-          )
-          if (matchingLevel) {
-            setValue("level", matchingLevel.id)
-            filledFieldNames.push("level")
-          } else {
-            setValue("level", null)
-          }
-        } else {
-          setValue("level", null)
-        }
+        setDropdownValue("level", fields.level, resPubLevelOptions, filledFieldNames)
       }
       
-      // Peer Reviewed - replace if exists in extraction
+      // Peer Reviewed - replace if exists in extraction (always track boolean fields)
       if (fields.peer_reviewed !== undefined) {
         setValue("peer_reviewed", Boolean(fields.peer_reviewed))
         filledFieldNames.push("peer_reviewed")
       }
       
-      // H Index - replace if exists in extraction
+      // H Index - replace if exists in extraction (only highlight if valid number)
       if (fields.h_index !== undefined) {
         const hIndexValue = fields.h_index !== null && fields.h_index !== undefined ? Number(fields.h_index) : null
         setValue("h_index", hIndexValue)
-        if (hIndexValue !== null) filledFieldNames.push("h_index")
+        if (hIndexValue !== null && !isNaN(hIndexValue) && hIndexValue >= 0) {
+          filledFieldNames.push("h_index")
+        }
       }
       
-      // Impact Factor - replace if exists in extraction
+      // Impact Factor - replace if exists in extraction (only highlight if valid number)
       if (fields.impact_factor !== undefined) {
         const impactFactorValue = fields.impact_factor !== null && fields.impact_factor !== undefined ? Number(fields.impact_factor) : null
         setValue("impact_factor", impactFactorValue)
-        if (impactFactorValue !== null) filledFieldNames.push("impact_factor")
+        if (impactFactorValue !== null && !isNaN(impactFactorValue) && impactFactorValue >= 0) {
+          filledFieldNames.push("impact_factor")
+        }
       }
       
-      // In Scopus - replace if exists in extraction
+      // In Scopus - replace if exists in extraction (always track boolean fields)
       if (fields.in_scopus !== undefined) {
         setValue("in_scopus", Boolean(fields.in_scopus))
         filledFieldNames.push("in_scopus")
       }
       
-      // In UGC - replace if exists in extraction
+      // In UGC - replace if exists in extraction (always track boolean fields)
       if (fields.in_ugc !== undefined) {
         setValue("in_ugc", Boolean(fields.in_ugc))
         filledFieldNames.push("in_ugc")
       }
       
-      // In Clarivate - replace if exists in extraction
+      // In Clarivate - replace if exists in extraction (always track boolean fields)
       if (fields.in_clarivate !== undefined) {
         setValue("in_clarivate", Boolean(fields.in_clarivate))
         filledFieldNames.push("in_clarivate")
       }
       
-      // In Old UGC List - replace if exists in extraction
+      // In Old UGC List - replace if exists in extraction (always track boolean fields)
       if (fields.in_oldUGCList !== undefined) {
         setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
         filledFieldNames.push("in_oldUGCList")
       }
       
-      // Paid - replace if exists in extraction
+      // Paid - replace if exists in extraction (always track boolean fields)
       if (fields.paid !== undefined) {
         setValue("paid", Boolean(fields.paid))
         filledFieldNames.push("paid")
       }
       
-      // ISSN - replace if exists in extraction
+      // ISSN - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.issn !== undefined) {
-        const issnValue = fields.issn ? String(fields.issn) : ""
+        const issnValue = fields.issn ? String(fields.issn).trim() : ""
         setValue("issn", issnValue)
         if (issnValue) filledFieldNames.push("issn")
       }
       
-      // Type - replace if exists in extraction
+      // Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.type !== undefined) {
-        if (fields.type !== null && fields.type !== undefined) {
-          const matchingType = journalEditedTypeOptions.find(
-            (t) => t.id === Number(fields.type)
-          )
-          if (matchingType) {
-            setValue("type", matchingType.id)
-            filledFieldNames.push("type")
-          } else {
-            setValue("type", null)
-          }
-        } else {
-          setValue("type", null)
-        }
+        setDropdownValue("type", fields.type, journalEditedTypeOptions, filledFieldNames)
       }
       
-      // DOI - replace if exists in extraction
+      // DOI - replace if exists in extraction (only highlight if non-empty and valid format)
       if (fields.DOI !== undefined) {
-        const doiValue = fields.DOI ? String(fields.DOI) : ""
-        setValue("DOI", doiValue)
-        if (doiValue) filledFieldNames.push("DOI")
+        const doiValue = fields.DOI ? String(fields.DOI).trim() : ""
+        if (doiValue) {
+          // Validate DOI format
+          if (/^10\.\d{4,}\/[-._;()\/:a-zA-Z0-9]+$/.test(doiValue)) {
+            setValue("DOI", doiValue)
+            filledFieldNames.push("DOI")
+          } else {
+            setValue("DOI", "")
+          }
+        } else {
+          setValue("DOI", "")
+        }
       }
       
       // Update the auto-filled fields set AFTER processing all fields
@@ -547,7 +574,7 @@ export default function EditJournalArticlePage() {
       {CancelDialog && <CancelDialog />}
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={updateJournal.isPending} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -594,6 +621,7 @@ export default function EditJournalArticlePage() {
                     }
                   })}
                   placeholder="Enter all authors"
+                  disabled={updateJournal.isPending}
                   className={cn(
                     isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -616,6 +644,7 @@ export default function EditJournalArticlePage() {
                     validate: (v) => v === null || v === undefined || (v > 0 && Number.isInteger(v)) || "Must be a positive integer"
                   })}
                   placeholder="Number of authors"
+                  disabled={updateJournal.isPending}
                 />
                 {errors.author_num && <p className="text-sm text-red-500 mt-1">{errors.author_num.message}</p>}
               </div>
@@ -644,6 +673,7 @@ export default function EditJournalArticlePage() {
                         }}
                         placeholder="Select author type"
                         emptyMessage="No author type found"
+                        disabled={updateJournal.isPending}
                         className={cn(
                           isAutoFilled("author_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -1070,7 +1100,7 @@ export default function EditJournalArticlePage() {
                   "Update Article/Paper"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={updateJournal.isPending} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>

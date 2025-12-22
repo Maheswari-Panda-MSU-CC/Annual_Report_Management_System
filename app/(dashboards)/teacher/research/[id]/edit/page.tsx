@@ -1225,7 +1225,7 @@ export default function EditResearchPage() {
                         min="2000"
                         max="2100"
                         maxLength={4}
-                        disabled={!grantSealed}
+                        disabled={!grantSealed || updateResearch.isPending}
                         className={cn(
                           !grantSealed && "bg-gray-100 cursor-not-allowed",
                           grantSealed && isAutoFilled("grant_year") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1245,7 +1245,7 @@ export default function EditResearchPage() {
 
               {/* Submit Button */}
               <div className="flex justify-end gap-4">
-                <Button type="button" variant="outline" onClick={handleCancel}>
+                <Button type="button" variant="outline" onClick={handleCancel} disabled={updateResearch.isPending}>
               Cancel
             </Button>
                 <Button type="submit" disabled={updateResearch.isPending}>

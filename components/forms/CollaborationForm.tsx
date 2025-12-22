@@ -158,13 +158,206 @@ export function CollaborationForm({
     }
   }, [isEdit, editData, setValue, collaborationsTypeOptions])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.category) setValue("category", fields.category)
-    if (fields.collaboratingInstitute) setValue("collaboratingInstitute", fields.collaboratingInstitute)
-    if (fields.collabName) setValue("collabName", fields.collabName)
-    if (fields.address) setValue("address", fields.address)
-    if (fields.details) setValue("details", fields.details)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Category - validate dropdown
+    if (fields.category !== undefined && fields.category !== null) {
+      if (setDropdownValue("category", fields.category, collaborationsTypeOptions)) {
+        filledFieldNames.push("category")
+      }
+    }
+    
+    // Collaborating Institute - validate non-empty string
+    if (fields.collaboratingInstitute) {
+      const instValue = String(fields.collaboratingInstitute).trim()
+      if (instValue.length > 0) {
+        setValue("collaboratingInstitute", instValue)
+        filledFieldNames.push("collaboratingInstitute")
+        onFieldChange?.("collaboratingInstitute")
+      }
+    } else if (fields.collaborating_inst) {
+      // Fallback if mapping didn't work
+      const instValue = String(fields.collaborating_inst).trim()
+      if (instValue.length > 0) {
+        setValue("collaboratingInstitute", instValue)
+        filledFieldNames.push("collaboratingInstitute")
+        onFieldChange?.("collaboratingInstitute")
+      }
+    }
+    
+    // Collaborator Name - validate non-empty string
+    if (fields.collabName) {
+      const nameValue = String(fields.collabName).trim()
+      if (nameValue.length > 0) {
+        setValue("collabName", nameValue)
+        filledFieldNames.push("collabName")
+        onFieldChange?.("collabName")
+      }
+    } else if (fields.collab_name) {
+      // Fallback if mapping didn't work
+      const nameValue = String(fields.collab_name).trim()
+      if (nameValue.length > 0) {
+        setValue("collabName", nameValue)
+        filledFieldNames.push("collabName")
+        onFieldChange?.("collabName")
+      }
+    }
+    
+    // Collaborator Rank - validate non-empty string
+    if (fields.collabRank) {
+      const rankValue = String(fields.collabRank).trim()
+      if (rankValue.length > 0) {
+        setValue("collabRank", rankValue)
+        filledFieldNames.push("collabRank")
+        onFieldChange?.("collabRank")
+      }
+    } else if (fields.qs_ranking) {
+      // Fallback if mapping didn't work
+      const rankValue = String(fields.qs_ranking).trim()
+      if (rankValue.length > 0) {
+        setValue("collabRank", rankValue)
+        filledFieldNames.push("collabRank")
+        onFieldChange?.("collabRank")
+      }
+    }
+    
+    // Address - validate non-empty string
+    if (fields.address) {
+      const addressValue = String(fields.address).trim()
+      if (addressValue.length > 0) {
+        setValue("address", addressValue)
+        filledFieldNames.push("address")
+        onFieldChange?.("address")
+      }
+    }
+    
+    // Details - validate non-empty string
+    if (fields.details) {
+      const detailsValue = String(fields.details).trim()
+      if (detailsValue.length > 0) {
+        setValue("details", detailsValue)
+        filledFieldNames.push("details")
+        onFieldChange?.("details")
+      }
+    }
+    
+    // Collaboration Outcome - validate dropdown
+    if (fields.collabOutcome !== undefined && fields.collabOutcome !== null) {
+      if (setDropdownValue("collabOutcome", fields.collabOutcome, collaborationsOutcomeOptions)) {
+        filledFieldNames.push("collabOutcome")
+      }
+    }
+    
+    // Status - validate status value (Active, Ongoing, Completed, Pending, Cancelled)
+    if (fields.status) {
+      const statusValue = String(fields.status).trim()
+      const validStatuses = ["Active", "Ongoing", "Completed", "Pending", "Cancelled"]
+      if (validStatuses.includes(statusValue)) {
+        setValue("status", statusValue)
+        filledFieldNames.push("status")
+        onFieldChange?.("status")
+      }
+    }
+    
+    // Starting Date - validate date format and not in future
+    if (fields.startingDate) {
+      const dateValue = String(fields.startingDate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("startingDate", dateValue)
+          filledFieldNames.push("startingDate")
+          onFieldChange?.("startingDate")
+        }
+      }
+    }
+    
+    // Duration - validate number (only if status is Completed)
+    if (fields.duration !== undefined && fields.duration !== null) {
+      const durationValue = Number(fields.duration)
+      if (!isNaN(durationValue) && durationValue >= 0) {
+        setValue("duration", durationValue)
+        filledFieldNames.push("duration")
+        onFieldChange?.("duration")
+      }
+    }
+    
+    // Level - validate dropdown
+    if (fields.level !== undefined && fields.level !== null) {
+      if (setDropdownValue("level", fields.level, collaborationsLevelOptions)) {
+        filledFieldNames.push("level")
+      }
+    }
+    
+    // Number of Beneficiary - validate number
+    if (fields.noOfBeneficiary !== undefined && fields.noOfBeneficiary !== null) {
+      const beneficiaryValue = Number(fields.noOfBeneficiary)
+      if (!isNaN(beneficiaryValue) && beneficiaryValue >= 0) {
+        setValue("noOfBeneficiary", beneficiaryValue)
+        filledFieldNames.push("noOfBeneficiary")
+        onFieldChange?.("noOfBeneficiary")
+      }
+    }
+    
+    // MOU Signed - validate boolean
+    if (fields.mouSigned !== undefined && fields.mouSigned !== null) {
+      const mouValue = fields.mouSigned === true || fields.mouSigned === "true" || String(fields.mouSigned).toLowerCase() === "yes"
+      setValue("mouSigned", mouValue)
+      filledFieldNames.push("mouSigned")
+      onFieldChange?.("mouSigned")
+    }
+    
+    // Signing Date - validate date format and not in future (only if MOU is signed)
+    if (fields.signingDate) {
+      const dateValue = String(fields.signingDate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("signingDate", dateValue)
+          filledFieldNames.push("signingDate")
+          onFieldChange?.("signingDate")
+        }
+      }
+    }
   }
 
   return (
@@ -183,6 +376,7 @@ export function CollaborationForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -206,6 +400,7 @@ export function CollaborationForm({
                   }}
                   placeholder="Select category"
                   emptyMessage="No category found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("category") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -218,6 +413,7 @@ export function CollaborationForm({
           <div>
             <Label className="text-sm sm:text-base">Collaborating Institute *</Label>
             <Input 
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("collaboratingInstitute") && "bg-blue-50 border-blue-200"
@@ -237,6 +433,7 @@ export function CollaborationForm({
           <div>
             <Label className="text-sm sm:text-base">Name of Collaboration *</Label>
             <Input 
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("collabName") && "bg-blue-50 border-blue-200"
@@ -253,6 +450,7 @@ export function CollaborationForm({
           <div>
             <Label className="text-sm sm:text-base">QS/THE Ranking *</Label>
             <Input 
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("collabRank") && "bg-blue-50 border-blue-200"
@@ -271,6 +469,7 @@ export function CollaborationForm({
         <div className="mt-4">
           <Label className="text-sm sm:text-base">Address *</Label>
           <Input 
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("address") && "bg-blue-50 border-blue-200"
@@ -289,6 +488,7 @@ export function CollaborationForm({
           <Label className="text-sm sm:text-base">Details *</Label>
           <Textarea 
             rows={3} 
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("details") && "bg-blue-50 border-blue-200"
@@ -319,6 +519,7 @@ export function CollaborationForm({
                 }}
                 placeholder="Select collaboration outcome"
                 emptyMessage="No outcome found"
+                disabled={isSubmitting}
                 className={isAutoFilled?.("collabOutcome") ? "bg-blue-50 border-blue-200" : undefined}
               />
             )}
@@ -350,6 +551,7 @@ export function CollaborationForm({
                       form.trigger("duration")
                     }, 0)
                   }}
+                  disabled={isSubmitting}
                 >
                   <SelectTrigger className={cn(
                     "text-sm sm:text-base h-9 sm:h-10 mt-1",
@@ -375,12 +577,30 @@ export function CollaborationForm({
             <Label className="text-sm sm:text-base">Starting Date *</Label>
             <Input 
               type="date" 
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("startingDate") && "bg-blue-50 border-blue-200"
               )}
               {...register("startingDate", {
                 required: "Starting date is required",
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Starting date is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
+                    return "Starting date cannot be in the future"
+                  }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
+                  }
+                  return true
+                },
                 onChange: () => onFieldChange?.("startingDate")
               })} 
             />
@@ -395,7 +615,7 @@ export function CollaborationForm({
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("duration") && "bg-blue-50 border-blue-200",
-                isDurationDisabled && "bg-gray-100 cursor-not-allowed"
+                (isDurationDisabled || isSubmitting) && "bg-gray-100 cursor-not-allowed"
               )}
               {...register("duration", { 
                 validate: (value) => {
@@ -410,7 +630,7 @@ export function CollaborationForm({
                 },
                 onChange: () => onFieldChange?.("duration")
               })} 
-              disabled={isDurationDisabled}
+              disabled={isDurationDisabled || isSubmitting}
             />
             {errors.duration && (
               <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.duration.message?.toString()}</p>
@@ -438,6 +658,7 @@ export function CollaborationForm({
                   }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("level") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -450,6 +671,7 @@ export function CollaborationForm({
             <Label className="text-sm sm:text-base">No. of Beneficiary *</Label>
             <Input 
               type="number" 
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("noOfBeneficiary") && "bg-blue-50 border-blue-200"
@@ -472,18 +694,32 @@ export function CollaborationForm({
             <Controller
               name="mouSigned"
               control={control}
-              rules={{ required: "MOU Signed status is required" }}
+              rules={{ 
+                validate: (value) => {
+                  // Accept both true and false, but reject undefined/null
+                  if (value === undefined || value === null) {
+                    return "MOU Signed status is required"
+                  }
+                  return true
+                }
+              }}
               render={({ field }) => (
                 <Select 
                   value={field.value !== undefined ? String(field.value) : ""} 
                   onValueChange={(val) => {
-                    field.onChange(val === "true")
+                    const boolValue = val === "true"
+                    field.onChange(boolValue)
                     onFieldChange?.("mouSigned")
                     // Clear signing date if MOU is not signed
-                    if (val === "false") {
-                      setValue("signingDate", null)
+                    if (!boolValue) {
+                      setValue("signingDate", null, { shouldValidate: true })
                     }
+                    // Trigger validation for signing date when MOU status changes
+                    setTimeout(() => {
+                      form.trigger("signingDate")
+                    }, 0)
                   }}
+                  disabled={isSubmitting}
                 >
                   <SelectTrigger className={cn(
                     "text-sm sm:text-base h-9 sm:h-10 mt-1",
@@ -503,19 +739,52 @@ export function CollaborationForm({
             )}
           </div>
           <div>
-            <Label className="text-sm sm:text-base">Signing Date</Label>
+            <Label className="text-sm sm:text-base">Signing Date{isSigningDateEnabled ? " *" : ""}</Label>
             <Input 
               type="date" 
+              max={new Date().toISOString().split('T')[0]}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("signingDate") && "bg-blue-50 border-blue-200",
-                !isSigningDateEnabled && "bg-gray-100 cursor-not-allowed"
+                (!isSigningDateEnabled || isSubmitting) && "bg-gray-100 cursor-not-allowed"
               )}
               {...register("signingDate", {
-                required: false,
+                validate: (v) => {
+                  const currentMouSigned = watch("mouSigned")
+                  
+                  // If MOU is signed (true), signing date is required
+                  if (currentMouSigned === true || currentMouSigned === "true") {
+                    if (!v || v.trim() === "") {
+                      return "Signing date is required when MOU is signed"
+                    }
+                    const selectedDate = new Date(v)
+                    const today = new Date()
+                    today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                    if (selectedDate > today) {
+                      return "Signing date cannot be in the future"
+                    }
+                    // Check if date is valid
+                    if (isNaN(selectedDate.getTime())) {
+                      return "Please enter a valid date"
+                    }
+                  }
+                  // If MOU is not signed (false), signing date is optional but validate if provided
+                  else if (v && v.trim() !== "") {
+                    const selectedDate = new Date(v)
+                    const today = new Date()
+                    today.setHours(23, 59, 59, 999)
+                    if (selectedDate > today) {
+                      return "Signing date cannot be in the future"
+                    }
+                    if (isNaN(selectedDate.getTime())) {
+                      return "Please enter a valid date"
+                    }
+                  }
+                  return true
+                },
                 onChange: () => onFieldChange?.("signingDate")
               })} 
-              disabled={!isSigningDateEnabled}
+              disabled={!isSigningDateEnabled || isSubmitting}
             />
             {errors.signingDate && (
               <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.signingDate.message?.toString()}</p>
@@ -530,7 +799,7 @@ export function CollaborationForm({
 
         {!isEdit && (
           <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=collaborations"))} className="w-full sm:w-auto text-xs sm:text-sm">
+            <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=collaborations"))} disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">

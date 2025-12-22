@@ -849,6 +849,7 @@ export default function AddResearchPage() {
                         {...field} 
                         id="title" 
                         placeholder="Enter project title" 
+                        disabled={createResearch.isPending}
                         className={cn(
                           "h-8 sm:h-10 text-xs sm:text-sm",
                           isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -885,6 +886,7 @@ export default function AddResearchPage() {
                         }}
                         placeholder="Select funding agency"
                         emptyMessage="No funding agency found"
+                        disabled={createResearch.isPending}
                         className={cn(
                           "h-8 sm:h-10 text-xs sm:text-sm",
                           isAutoFilled("funding_agency") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1223,7 +1225,7 @@ export default function AddResearchPage() {
                         min="2000"
                         max="2100"
                         maxLength={4}
-                        disabled={!grantSealed}
+                        disabled={!grantSealed || createResearch.isPending}
                         className={cn(
                           "h-8 sm:h-10 text-xs sm:text-sm",
                           !grantSealed && "bg-gray-100 cursor-not-allowed",
@@ -1244,7 +1246,7 @@ export default function AddResearchPage() {
 
               {/* Submit Button */}
               <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 pt-2 sm:pt-4">
-                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto" size="sm">
+                <Button type="button" variant="outline" onClick={handleCancel} disabled={createResearch.isPending} className="w-full sm:w-auto" size="sm">
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createResearch.isPending} className="w-full sm:w-auto" size="sm">

@@ -111,6 +111,36 @@ export default function AddBookPage() {
     })
   }, [])
 
+  // Helper function to validate and set dropdown field value - only highlights if value was successfully set
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
+
   // Use auto-fill hook for document analysis data
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -133,44 +163,60 @@ export default function AddBookPage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Authors - replace if exists in extraction
+      // Authors - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.authors !== undefined) {
-        const authorsValue = fields.authors ? String(fields.authors) : ""
+        const authorsValue = fields.authors ? String(fields.authors).trim() : ""
         setValue("authors", authorsValue)
         if (authorsValue) filledFieldNames.push("authors")
       }
       
-      // Title - replace if exists in extraction
+      // Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.title !== undefined) {
-        const titleValue = fields.title ? String(fields.title) : ""
+        const titleValue = fields.title ? String(fields.title).trim() : ""
         setValue("title", titleValue)
         if (titleValue) filledFieldNames.push("title")
       }
       
-      // ISBN - replace if exists in extraction
+      // ISBN - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.isbn !== undefined) {
-        const isbnValue = fields.isbn ? String(fields.isbn) : ""
+        const isbnValue = fields.isbn ? String(fields.isbn).trim() : ""
         setValue("isbn", isbnValue)
         if (isbnValue) filledFieldNames.push("isbn")
       }
       
-      // Publisher Name - replace if exists in extraction
+      // Publisher Name - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.publisher_name !== undefined) {
-        const publisherNameValue = fields.publisher_name ? String(fields.publisher_name) : ""
+        const publisherNameValue = fields.publisher_name ? String(fields.publisher_name).trim() : ""
         setValue("publisher_name", publisherNameValue)
         if (publisherNameValue) filledFieldNames.push("publisher_name")
       }
       
-      // Submit Date - replace if exists in extraction
+      // Submit Date - replace if exists in extraction (only highlight if valid date)
       if (fields.submit_date !== undefined) {
-        const submitDateValue = fields.submit_date ? String(fields.submit_date) : ""
-        setValue("submit_date", submitDateValue)
-        if (submitDateValue) filledFieldNames.push("submit_date")
+        const submitDateValue = fields.submit_date ? String(fields.submit_date).trim() : ""
+        if (submitDateValue) {
+          // Validate date format
+          try {
+            const parsedDate = new Date(submitDateValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("submit_date", submitDateValue)
+              filledFieldNames.push("submit_date")
+            } else {
+              setValue("submit_date", "")
+            }
+          } catch {
+            setValue("submit_date", "")
+          }
+        } else {
+          setValue("submit_date", "")
+        }
       }
       
-      // Place - replace if exists in extraction
+      // Place - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.place !== undefined) {
-        const placeValue = fields.place ? String(fields.place) : ""
+        const placeValue = fields.place ? String(fields.place).trim() : ""
         setValue("place", placeValue)
         if (placeValue) filledFieldNames.push("place")
       }
@@ -187,37 +233,33 @@ export default function AddBookPage() {
         filledFieldNames.push("edited")
       }
       
-      // Chapter Count - replace if exists in extraction
+      // Chapter Count - replace if exists in extraction (only highlight if valid number)
       if (fields.chap_count !== undefined) {
         const chapCountValue = fields.chap_count !== null && fields.chap_count !== undefined ? Number(fields.chap_count) : null
         setValue("chap_count", chapCountValue)
-        if (chapCountValue !== null) filledFieldNames.push("chap_count")
+        if (chapCountValue !== null && !isNaN(chapCountValue) && chapCountValue > 0) {
+          filledFieldNames.push("chap_count")
+        }
       }
       
-      // Publishing Level - replace if exists in extraction
+      // Publishing Level - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.publishing_level !== undefined) {
-        const publishingLevelValue = fields.publishing_level !== null && fields.publishing_level !== undefined ? Number(fields.publishing_level) : null
-        setValue("publishing_level", publishingLevelValue)
-        if (publishingLevelValue !== null) filledFieldNames.push("publishing_level")
+        setDropdownValue("publishing_level", fields.publishing_level, resPubLevelOptions, filledFieldNames)
       }
       
-      // Book Type - replace if exists in extraction
+      // Book Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.book_type !== undefined) {
-        const bookTypeValue = fields.book_type !== null && fields.book_type !== undefined ? Number(fields.book_type) : null
-        setValue("book_type", bookTypeValue)
-        if (bookTypeValue !== null) filledFieldNames.push("book_type")
+        setDropdownValue("book_type", fields.book_type, bookTypeOptions, filledFieldNames)
       }
       
-      // Author Type - replace if exists in extraction
+      // Author Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.author_type !== undefined) {
-        const authorTypeValue = fields.author_type !== null && fields.author_type !== undefined ? Number(fields.author_type) : null
-        setValue("author_type", authorTypeValue)
-        if (authorTypeValue !== null) filledFieldNames.push("author_type")
+        setDropdownValue("author_type", fields.author_type, journalAuthorTypeOptions, filledFieldNames)
       }
       
-      // Chapter/Article Title - replace if exists in extraction
+      // Chapter/Article Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.cha !== undefined) {
-        const chaValue = fields.cha ? String(fields.cha) : ""
+        const chaValue = fields.cha ? String(fields.cha).trim() : ""
         setValue("cha", chaValue)
         if (chaValue) filledFieldNames.push("cha")
       }
@@ -280,67 +322,107 @@ export default function AddBookPage() {
 
   // Handle extracted fields from DocumentUpload - REPLACE existing data with new extracted data
   const handleExtractFields = useCallback((extractedData: Record<string, any>) => {
-    let fieldsPopulated = 0
+    const filledFieldNames: string[] = []
 
-    // REPLACE all fields - set values even if they're empty/null in extracted data
-    // This ensures existing data is replaced with new extracted data
-    
-    // Authors - replace if exists in extraction
+    // Authors - replace if exists in extraction (only track if non-empty)
     if (extractedData.authors !== undefined) {
-      setValue("authors", extractedData.authors || "")
-      if (extractedData.authors) fieldsPopulated++
+      const authorsValue = extractedData.authors ? String(extractedData.authors).trim() : ""
+      setValue("authors", authorsValue)
+      if (authorsValue) filledFieldNames.push("authors")
     }
     
-    // Title - replace if exists in extraction
+    // Title - replace if exists in extraction (only track if non-empty)
     if (extractedData.title !== undefined) {
-      setValue("title", extractedData.title || "")
-      if (extractedData.title) fieldsPopulated++
+      const titleValue = extractedData.title ? String(extractedData.title).trim() : ""
+      setValue("title", titleValue)
+      if (titleValue) filledFieldNames.push("title")
     }
     
-    // ISBN - replace if exists in extraction
+    // ISBN - replace if exists in extraction (only track if non-empty)
     if (extractedData.isbn !== undefined) {
-      setValue("isbn", extractedData.isbn || "")
-      if (extractedData.isbn) fieldsPopulated++
+      const isbnValue = extractedData.isbn ? String(extractedData.isbn).trim() : ""
+      setValue("isbn", isbnValue)
+      if (isbnValue) filledFieldNames.push("isbn")
     }
     
-    // Publisher Name - replace if exists in extraction
+    // Publisher Name - replace if exists in extraction (only track if non-empty)
     if (extractedData.publisher_name !== undefined || extractedData.publisherName !== undefined) {
       const publisherName = extractedData.publisher_name || extractedData.publisherName || ""
-      setValue("publisher_name", publisherName)
-      if (publisherName) fieldsPopulated++
+      const publisherNameValue = publisherName ? String(publisherName).trim() : ""
+      setValue("publisher_name", publisherNameValue)
+      if (publisherNameValue) filledFieldNames.push("publisher_name")
     }
     
-    // Submit Date - replace if exists in extraction
+    // Submit Date - replace if exists in extraction (only track if valid date)
     if (extractedData.submit_date !== undefined || extractedData.publishingDate !== undefined) {
       const submitDate = extractedData.submit_date || extractedData.publishingDate || ""
-      setValue("submit_date", submitDate)
-      if (submitDate) fieldsPopulated++
+      const submitDateValue = submitDate ? String(submitDate).trim() : ""
+      if (submitDateValue) {
+        try {
+          const parsedDate = new Date(submitDateValue)
+          const today = new Date()
+          today.setHours(23, 59, 59, 999)
+          if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+            setValue("submit_date", submitDateValue)
+            filledFieldNames.push("submit_date")
+          } else {
+            setValue("submit_date", "")
+          }
+        } catch {
+          setValue("submit_date", "")
+        }
+      } else {
+        setValue("submit_date", "")
+      }
     }
     
-    // Place - replace if exists in extraction
+    // Place - replace if exists in extraction (only track if non-empty)
     if (extractedData.place !== undefined || extractedData.publishingPlace !== undefined) {
       const place = extractedData.place || extractedData.publishingPlace || ""
-      setValue("place", place)
-      if (place) fieldsPopulated++
+      const placeValue = place ? String(place).trim() : ""
+      setValue("place", placeValue)
+      if (placeValue) filledFieldNames.push("place")
     }
     
-    // Chapter Count - replace if exists in extraction
+    // Chapter Count - replace if exists in extraction (only track if valid number)
     if (extractedData.chap_count !== undefined || extractedData.chapterCount !== undefined) {
       const chapCount = extractedData.chap_count || extractedData.chapterCount
-      setValue("chap_count", chapCount ? parseInt(chapCount) || null : null)
-      if (chapCount) fieldsPopulated++
+      const chapCountValue = chapCount ? Number(chapCount) : null
+      setValue("chap_count", chapCountValue)
+      if (chapCountValue !== null && !isNaN(chapCountValue) && chapCountValue > 0) {
+        filledFieldNames.push("chap_count")
+      }
     }
     
-    // Chapter/Article Title - replace if exists in extraction
+    // Chapter/Article Title - replace if exists in extraction (only track if non-empty)
     if (extractedData.cha !== undefined) {
-      setValue("cha", extractedData.cha || "")
-      if (extractedData.cha) fieldsPopulated++
+      const chaValue = extractedData.cha ? String(extractedData.cha).trim() : ""
+      setValue("cha", chaValue)
+      if (chaValue) filledFieldNames.push("cha")
     }
 
-    if (fieldsPopulated > 0) {
+    // Publishing Level - replace if exists in extraction (only track if value matches dropdown)
+    if (extractedData.publishing_level !== undefined) {
+      setDropdownValue("publishing_level", extractedData.publishing_level, resPubLevelOptions, filledFieldNames)
+    }
+    
+    // Book Type - replace if exists in extraction (only track if value matches dropdown)
+    if (extractedData.book_type !== undefined) {
+      setDropdownValue("book_type", extractedData.book_type, bookTypeOptions, filledFieldNames)
+    }
+    
+    // Author Type - replace if exists in extraction (only track if value matches dropdown)
+    if (extractedData.author_type !== undefined) {
+      setDropdownValue("author_type", extractedData.author_type, journalAuthorTypeOptions, filledFieldNames)
+    }
+
+    // Update auto-filled fields set
+    setAutoFilledFields(new Set(filledFieldNames))
+
+    if (filledFieldNames.length > 0) {
       showToast({
         title: "Information Extracted Successfully",
-        description: `${fieldsPopulated} fields replaced with new extracted data`,
+        description: `${filledFieldNames.length} fields successfully filled`,
       })
     } else {
       showToast({
@@ -348,7 +430,7 @@ export default function AddBookPage() {
         description: "Data fields have been updated (some fields may be empty)",
       })
     }
-  }, [setValue, showToast])
+  }, [setValue, showToast, setDropdownValue, resPubLevelOptions, bookTypeOptions, journalAuthorTypeOptions])
 
   const onSubmit = async (data: BookFormData) => {
     if (!user?.role_id) {
@@ -439,7 +521,7 @@ export default function AddBookPage() {
       {CancelDialog && <CancelDialog />}
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={createBook.isPending} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -471,6 +553,7 @@ export default function AddBookPage() {
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
+              disabled={createBook.isPending}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
@@ -497,6 +580,7 @@ export default function AddBookPage() {
                     }
                   })}
                   placeholder="Enter all authors"
+                  disabled={createBook.isPending}
                   className={cn(
                     isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -532,6 +616,7 @@ export default function AddBookPage() {
                         }}
                         placeholder="Select author type"
                         emptyMessage="No author type found"
+                        disabled={createBook.isPending}
                         className={cn(
                           isAutoFilled("author_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -552,6 +637,7 @@ export default function AddBookPage() {
                     maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                   })}
                   placeholder="Enter book title"
+                  disabled={createBook.isPending}
                   className={cn(
                     isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -582,6 +668,7 @@ export default function AddBookPage() {
                       }
                     })} 
                     placeholder="Enter ISBN without dashes (10 or 13 digits)"
+                    disabled={createBook.isPending}
                   />
                   {errors.isbn && <p className="text-sm text-red-500 mt-1">{errors.isbn.message}</p>}
                 </div>
@@ -598,7 +685,8 @@ export default function AddBookPage() {
                         message: "Publisher name contains invalid characters"
                       }
                     })} 
-                    placeholder="Enter publisher name" 
+                    placeholder="Enter publisher name"
+                    disabled={createBook.isPending}
                   />
                   {errors.publisher_name && <p className="text-sm text-red-500 mt-1">{errors.publisher_name.message}</p>}
                 </div>
@@ -611,7 +699,8 @@ export default function AddBookPage() {
                   {...register("cha", {
                     maxLength: { value: 500, message: "Chapter title must not exceed 500 characters" }
                   })} 
-                  placeholder="Enter chapter/article title if applicable" 
+                  placeholder="Enter chapter/article title if applicable"
+                  disabled={createBook.isPending}
                 />
                 {errors.cha && <p className="text-sm text-red-500 mt-1">{errors.cha.message}</p>}
               </div>
@@ -641,7 +730,8 @@ export default function AddBookPage() {
                         }
                         return true
                       }
-                    })} 
+                    })}
+                    disabled={createBook.isPending}
                   />
                   {errors.submit_date && <p className="text-sm text-red-500 mt-1">{errors.submit_date.message}</p>}
                 </div>
@@ -658,7 +748,8 @@ export default function AddBookPage() {
                         message: "Place contains invalid characters"
                       }
                     })} 
-                    placeholder="Enter publishing place" 
+                    placeholder="Enter publishing place"
+                    disabled={createBook.isPending}
                   />
                   {errors.place && <p className="text-sm text-red-500 mt-1">{errors.place.message}</p>}
                 </div>
@@ -686,6 +777,7 @@ export default function AddBookPage() {
                         }}
                         placeholder="Select publishing level"
                         emptyMessage="No level found"
+                        disabled={createBook.isPending}
                         className={cn(
                           isAutoFilled("publishing_level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -719,6 +811,7 @@ export default function AddBookPage() {
                         }}
                         placeholder="Select book type"
                         emptyMessage="No book type found"
+                        disabled={createBook.isPending}
                         className={cn(
                           isAutoFilled("book_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -739,6 +832,7 @@ export default function AddBookPage() {
                       <Select
                         value={field.value ? "Yes" : "No"}
                         onValueChange={(val) => field.onChange(val === "Yes")}
+                        disabled={createBook.isPending}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select option" />
@@ -760,6 +854,7 @@ export default function AddBookPage() {
                       <Select
                         value={field.value ? "Yes" : "No"}
                         onValueChange={(val) => field.onChange(val === "Yes")}
+                        disabled={createBook.isPending}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select option" />
@@ -799,6 +894,7 @@ export default function AddBookPage() {
                         }
                       })}
                       placeholder="Number of chapters"
+                      disabled={createBook.isPending}
                     />
                     {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
                   </div>
@@ -816,7 +912,7 @@ export default function AddBookPage() {
                     "Save Book/Book Chapter"
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" onClick={handleCancel} disabled={createBook.isPending} className="w-full sm:w-auto">
                   Cancel
                 </Button>
               </div>

@@ -116,6 +116,36 @@ export default function EditBookPage() {
     })
   }, [])
 
+  // Helper function to validate and set dropdown field value - only highlights if value was successfully set
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
+
   // Use auto-fill hook for document analysis data - watches context changes
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -138,44 +168,60 @@ export default function EditBookPage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Authors - replace if exists in extraction
+      // Authors - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.authors !== undefined) {
-        const authorsValue = fields.authors ? String(fields.authors) : ""
+        const authorsValue = fields.authors ? String(fields.authors).trim() : ""
         setValue("authors", authorsValue)
         if (authorsValue) filledFieldNames.push("authors")
       }
       
-      // Title - replace if exists in extraction
+      // Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.title !== undefined) {
-        const titleValue = fields.title ? String(fields.title) : ""
+        const titleValue = fields.title ? String(fields.title).trim() : ""
         setValue("title", titleValue)
         if (titleValue) filledFieldNames.push("title")
       }
       
-      // ISBN - replace if exists in extraction
+      // ISBN - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.isbn !== undefined) {
-        const isbnValue = fields.isbn ? String(fields.isbn) : ""
+        const isbnValue = fields.isbn ? String(fields.isbn).trim() : ""
         setValue("isbn", isbnValue)
         if (isbnValue) filledFieldNames.push("isbn")
       }
       
-      // Publisher Name - replace if exists in extraction
+      // Publisher Name - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.publisher_name !== undefined) {
-        const publisherNameValue = fields.publisher_name ? String(fields.publisher_name) : ""
+        const publisherNameValue = fields.publisher_name ? String(fields.publisher_name).trim() : ""
         setValue("publisher_name", publisherNameValue)
         if (publisherNameValue) filledFieldNames.push("publisher_name")
       }
       
-      // Submit Date - replace if exists in extraction
+      // Submit Date - replace if exists in extraction (only highlight if valid date)
       if (fields.submit_date !== undefined) {
-        const submitDateValue = fields.submit_date ? String(fields.submit_date) : ""
-        setValue("submit_date", submitDateValue)
-        if (submitDateValue) filledFieldNames.push("submit_date")
+        const submitDateValue = fields.submit_date ? String(fields.submit_date).trim() : ""
+        if (submitDateValue) {
+          // Validate date format
+          try {
+            const parsedDate = new Date(submitDateValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("submit_date", submitDateValue)
+              filledFieldNames.push("submit_date")
+            } else {
+              setValue("submit_date", "")
+            }
+          } catch {
+            setValue("submit_date", "")
+          }
+        } else {
+          setValue("submit_date", "")
+        }
       }
       
-      // Place - replace if exists in extraction
+      // Place - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.place !== undefined) {
-        const placeValue = fields.place ? String(fields.place) : ""
+        const placeValue = fields.place ? String(fields.place).trim() : ""
         setValue("place", placeValue)
         if (placeValue) filledFieldNames.push("place")
       }
@@ -192,67 +238,33 @@ export default function EditBookPage() {
         filledFieldNames.push("edited")
       }
       
-      // Chapter Count - replace if exists in extraction
+      // Chapter Count - replace if exists in extraction (only highlight if valid number)
       if (fields.chap_count !== undefined) {
         const chapCountValue = fields.chap_count !== null && fields.chap_count !== undefined ? Number(fields.chap_count) : null
         setValue("chap_count", chapCountValue)
-        if (chapCountValue !== null) filledFieldNames.push("chap_count")
+        if (chapCountValue !== null && !isNaN(chapCountValue) && chapCountValue > 0) {
+          filledFieldNames.push("chap_count")
+        }
       }
       
-      // Publishing Level - replace if exists in extraction
+      // Publishing Level - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.publishing_level !== undefined) {
-        if (fields.publishing_level !== null && fields.publishing_level !== undefined) {
-          const matchingLevel = resPubLevelOptions.find(
-            (l) => l.id === Number(fields.publishing_level)
-          )
-          if (matchingLevel) {
-            setValue("publishing_level", matchingLevel.id)
-            filledFieldNames.push("publishing_level")
-          } else {
-            setValue("publishing_level", null)
-          }
-        } else {
-          setValue("publishing_level", null)
-        }
+        setDropdownValue("publishing_level", fields.publishing_level, resPubLevelOptions, filledFieldNames)
       }
       
-      // Book Type - replace if exists in extraction
+      // Book Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.book_type !== undefined) {
-        if (fields.book_type !== null && fields.book_type !== undefined) {
-          const matchingBookType = bookTypeOptions.find(
-            (b) => b.id === Number(fields.book_type)
-          )
-          if (matchingBookType) {
-            setValue("book_type", matchingBookType.id)
-            filledFieldNames.push("book_type")
-          } else {
-            setValue("book_type", null)
-          }
-        } else {
-          setValue("book_type", null)
-        }
+        setDropdownValue("book_type", fields.book_type, bookTypeOptions, filledFieldNames)
       }
       
-      // Author Type - replace if exists in extraction
+      // Author Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.author_type !== undefined) {
-        if (fields.author_type !== null && fields.author_type !== undefined) {
-          const matchingAuthorType = journalAuthorTypeOptions.find(
-            (a) => a.id === Number(fields.author_type)
-          )
-          if (matchingAuthorType) {
-            setValue("author_type", matchingAuthorType.id)
-            filledFieldNames.push("author_type")
-          } else {
-            setValue("author_type", null)
-          }
-        } else {
-          setValue("author_type", null)
-        }
+        setDropdownValue("author_type", fields.author_type, journalAuthorTypeOptions, filledFieldNames)
       }
       
-      // Chapter/Article Title - replace if exists in extraction
+      // Chapter/Article Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.cha !== undefined) {
-        const chaValue = fields.cha ? String(fields.cha) : ""
+        const chaValue = fields.cha ? String(fields.cha).trim() : ""
         setValue("cha", chaValue)
         if (chaValue) filledFieldNames.push("cha")
       }
@@ -483,7 +495,7 @@ export default function EditBookPage() {
       {CancelDialog && <CancelDialog />}
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={updateBook.isPending} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -514,6 +526,7 @@ export default function EditBookPage() {
               allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
               isEditMode={true}
+              disabled={updateBook.isPending}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
@@ -537,6 +550,7 @@ export default function EditBookPage() {
                   }
                 })}
                 placeholder="Enter all authors"
+                disabled={updateBook.isPending}
                 className={cn(
                   isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                 )}
@@ -570,6 +584,7 @@ export default function EditBookPage() {
                     }}
                     placeholder="Select author type"
                     emptyMessage="No author type found"
+                    disabled={updateBook.isPending}
                     className={cn(
                       isAutoFilled("author_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -590,6 +605,7 @@ export default function EditBookPage() {
                   maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                 })}
                 placeholder="Enter book title"
+                disabled={updateBook.isPending}
                 className={cn(
                   isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                 )}
@@ -620,6 +636,7 @@ export default function EditBookPage() {
                     }
                   })} 
                   placeholder="Enter ISBN without dashes (10 or 13 digits)"
+                  disabled={updateBook.isPending}
                 />
                 {errors.isbn && <p className="text-sm text-red-500 mt-1">{errors.isbn.message}</p>}
               </div>
@@ -636,7 +653,8 @@ export default function EditBookPage() {
                       message: "Publisher name contains invalid characters"
                     }
                   })} 
-                  placeholder="Enter publisher name" 
+                  placeholder="Enter publisher name"
+                  disabled={updateBook.isPending}
                 />
                 {errors.publisher_name && <p className="text-sm text-red-500 mt-1">{errors.publisher_name.message}</p>}
               </div>
@@ -649,7 +667,8 @@ export default function EditBookPage() {
                 {...register("cha", {
                   maxLength: { value: 500, message: "Chapter title must not exceed 500 characters" }
                 })} 
-                placeholder="Enter chapter/article title if applicable" 
+                placeholder="Enter chapter/article title if applicable"
+                disabled={updateBook.isPending}
               />
               {errors.cha && <p className="text-sm text-red-500 mt-1">{errors.cha.message}</p>}
             </div>
@@ -680,7 +699,8 @@ export default function EditBookPage() {
                       }
                       return true
                     }
-                  })} 
+                  })}
+                  disabled={updateBook.isPending}
                 />
                 {errors.submit_date && <p className="text-sm text-red-500 mt-1">{errors.submit_date.message}</p>}
               </div>
@@ -697,7 +717,8 @@ export default function EditBookPage() {
                       message: "Place contains invalid characters"
                     }
                   })} 
-                  placeholder="Enter publishing place" 
+                  placeholder="Enter publishing place"
+                  disabled={updateBook.isPending}
                 />
                 {errors.place && <p className="text-sm text-red-500 mt-1">{errors.place.message}</p>}
               </div>
@@ -724,6 +745,7 @@ export default function EditBookPage() {
                       }}
                       placeholder="Select publishing level"
                       emptyMessage="No level found"
+                      disabled={updateBook.isPending}
                       className={cn(
                         isAutoFilled("publishing_level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                       )}
@@ -756,6 +778,7 @@ export default function EditBookPage() {
                       }}
                       placeholder="Select book type"
                       emptyMessage="No book type found"
+                      disabled={updateBook.isPending}
                       className={cn(
                         isAutoFilled("book_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                       )}
@@ -776,6 +799,7 @@ export default function EditBookPage() {
                     <Select
                       value={field.value ? "Yes" : "No"}
                       onValueChange={(val) => field.onChange(val === "Yes")}
+                      disabled={updateBook.isPending}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select option" />
@@ -797,6 +821,7 @@ export default function EditBookPage() {
                     <Select
                       value={field.value ? "Yes" : "No"}
                       onValueChange={(val) => field.onChange(val === "Yes")}
+                      disabled={updateBook.isPending}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select option" />
@@ -836,6 +861,7 @@ export default function EditBookPage() {
                       }
                     })}
                     placeholder="Number of chapters"
+                    disabled={updateBook.isPending}
                   />
                   {errors.chap_count && <p className="text-sm text-red-500 mt-1">{errors.chap_count.message}</p>}
                 </div>
@@ -854,7 +880,7 @@ export default function EditBookPage() {
                   "Update Book/Book Chapter"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={updateBook.isPending} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>

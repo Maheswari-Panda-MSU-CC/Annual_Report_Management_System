@@ -106,13 +106,94 @@ export function AcademicVisitForm({
     }
   }, [isEdit, editData, setValue])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.instituteVisited) setValue("instituteVisited", fields.instituteVisited)
-    if (fields.durationOfVisit) setValue("durationOfVisit", fields.durationOfVisit)
-    if (fields.role) setValue("role", fields.role)
-    if (fields.date) setValue("date", fields.date)
-    if (fields.sponsoredBy) setValue("sponsoredBy", fields.sponsoredBy)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Institute Visited - validate non-empty string
+    if (fields.instituteVisited) {
+      const instValue = String(fields.instituteVisited).trim()
+      if (instValue.length > 0) {
+        setValue("instituteVisited", instValue)
+        filledFieldNames.push("instituteVisited")
+        onFieldChange?.("instituteVisited")
+      }
+    }
+    
+    // Duration of Visit - validate number >= 1
+    if (fields.durationOfVisit !== undefined && fields.durationOfVisit !== null) {
+      const durationValue = Number(fields.durationOfVisit)
+      if (!isNaN(durationValue) && durationValue >= 1) {
+        setValue("durationOfVisit", durationValue)
+        filledFieldNames.push("durationOfVisit")
+        onFieldChange?.("durationOfVisit")
+      }
+    }
+    
+    // Role - validate dropdown
+    if (fields.role !== undefined && fields.role !== null) {
+      if (setDropdownValue("role", fields.role, academicVisitRoleOptions)) {
+        filledFieldNames.push("role")
+      }
+    }
+    
+    // Date - validate date format and not in future
+    if (fields.date) {
+      const dateValue = String(fields.date).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("date", dateValue)
+          filledFieldNames.push("date")
+          onFieldChange?.("date")
+        }
+      }
+    }
+    
+    // Sponsored By - validate non-empty string
+    if (fields.sponsoredBy) {
+      const sponsoredValue = String(fields.sponsoredBy).trim()
+      if (sponsoredValue.length > 0) {
+        setValue("sponsoredBy", sponsoredValue)
+        filledFieldNames.push("sponsoredBy")
+        onFieldChange?.("sponsoredBy")
+      }
+    }
   }
 
   return (
@@ -132,6 +213,7 @@ export function AcademicVisitForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -144,6 +226,7 @@ export function AcademicVisitForm({
           <Input
             id="instituteVisited"
             placeholder="Enter institute/industry name"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("instituteVisited") && "bg-blue-50 border-blue-200"
@@ -164,6 +247,7 @@ export function AcademicVisitForm({
               type="number"
               placeholder="Enter duration"
               min="1"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("durationOfVisit") && "bg-blue-50 border-blue-200"
@@ -193,6 +277,7 @@ export function AcademicVisitForm({
                   }}
                   placeholder="Select role"
                   emptyMessage="No role found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("role") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -209,6 +294,7 @@ export function AcademicVisitForm({
             <Input
               id="sponsoredBy"
               placeholder="e.g., University, Government, Self-funded"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("sponsoredBy") && "bg-blue-50 border-blue-200"
@@ -224,16 +310,27 @@ export function AcademicVisitForm({
             <Input
               id="date"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
               )}
-              max={new Date().toISOString().split('T')[0]}
               {...register("date", { 
                 required: "Visit date is required",
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Visit date is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
                     return "Visit date cannot be in the future"
+                  }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
                   }
                   return true
                 },
@@ -250,6 +347,7 @@ export function AcademicVisitForm({
             id="remarks"
             placeholder="Outcomes, collaborations, etc."
             rows={4}
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("remarks") && "bg-blue-50 border-blue-200"
@@ -265,7 +363,7 @@ export function AcademicVisitForm({
         {
           !isEdit && (
             <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 mt-4 sm:mt-6 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=visits"))} className="w-full sm:w-auto text-xs sm:text-sm">Cancel</Button>
+              <Button type="button" variant="outline" onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=visits"))} disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">Cancel</Button>
               <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto text-xs sm:text-sm">
                 {isSubmitting ? "Submitting..." : (
                   <>

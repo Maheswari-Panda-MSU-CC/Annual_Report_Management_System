@@ -92,10 +92,58 @@ export function CopyrightForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.title) setValue("title", fields.title)
-    if (fields.referenceNo) setValue("referenceNo", fields.referenceNo)
-    if (fields.publicationDate) setValue("publicationDate", fields.publicationDate)
-    if (fields.link) setValue("link", fields.link)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Title - validate non-empty string
+    if (fields.title) {
+      const titleValue = String(fields.title).trim()
+      if (titleValue.length > 0) {
+        setValue("title", titleValue)
+        filledFieldNames.push("title")
+        onFieldChange?.("title")
+      }
+    }
+    
+    // Reference Number - validate non-empty string
+    if (fields.referenceNo) {
+      const refValue = String(fields.referenceNo).trim()
+      if (refValue.length > 0) {
+        setValue("referenceNo", refValue)
+        filledFieldNames.push("referenceNo")
+        onFieldChange?.("referenceNo")
+      }
+    }
+    
+    // Publication Date - validate date format and not in future
+    if (fields.publicationDate) {
+      const dateValue = String(fields.publicationDate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("publicationDate", dateValue)
+          filledFieldNames.push("publicationDate")
+          onFieldChange?.("publicationDate")
+        }
+      }
+    }
+    
+    // Link - validate URL format (optional field)
+    if (fields.link) {
+      const linkValue = String(fields.link).trim()
+      if (linkValue.length > 0) {
+        try {
+          new URL(linkValue)
+          setValue("link", linkValue)
+          filledFieldNames.push("link")
+          onFieldChange?.("link")
+        } catch {
+          // Invalid URL, don't set or highlight
+        }
+      }
+    }
   }
 
   return (
@@ -114,6 +162,7 @@ export function CopyrightForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -125,6 +174,7 @@ export function CopyrightForm({
           <Input
             id="title"
             placeholder="Enter copyright title"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
@@ -149,6 +199,7 @@ export function CopyrightForm({
             <Input
               id="referenceNo"
               placeholder="Enter reference number"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("referenceNo") && "bg-blue-50 border-blue-200"
@@ -168,19 +219,31 @@ export function CopyrightForm({
           </div>
 
           <div>
-            <Label htmlFor="publicationDate" className="text-sm sm:text-base">Publication Date</Label>
+            <Label htmlFor="publicationDate" className="text-sm sm:text-base">Publication Date *</Label>
             <Input
               id="publicationDate"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("publicationDate") && "bg-blue-50 border-blue-200"
               )}
-              max={new Date().toISOString().split('T')[0]}
               {...register("publicationDate", {
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
+                required: "Publication date is required",
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Publication date is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
                     return "Publication date cannot be in the future"
+                  }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
                   }
                   return true
                 },
@@ -199,6 +262,7 @@ export function CopyrightForm({
             id="link"
             type="url"
             placeholder="Enter registry link (optional)"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("link") && "bg-blue-50 border-blue-200"
@@ -230,6 +294,7 @@ export function CopyrightForm({
               type="button"
               variant="outline"
               onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=copyrights"))}
+              disabled={isSubmitting}
             >
               Cancel
             </Button>

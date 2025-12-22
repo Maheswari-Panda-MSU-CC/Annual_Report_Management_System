@@ -87,6 +87,7 @@ export function JournalArticlesForm({
               id="title"
               placeholder="Enter journal title"
               maxLength={1000}
+              disabled={isSubmitting}
               {...register("title", {
                 required: "Title is required",
                 minLength: { value: 2, message: "Title must be at least 2 characters" },
@@ -108,23 +109,39 @@ export function JournalArticlesForm({
             <Input
               id="issn"
               placeholder="Enter ISSN without dashes"
-              maxLength={100}
+              maxLength={8}
+              disabled={isSubmitting}
               {...register("issn", {
                 required: "ISSN is required",
-                maxLength: { value: 100, message: "ISSN must not exceed 100 characters" },
+                maxLength: { value: 8, message: "ISSN must be exactly 8 characters" },
                 validate: (value) => {
                   if (!value || typeof value !== 'string') return "ISSN is required"
                   const trimmed = value.trim()
                   if (trimmed.length === 0) return "ISSN is required"
-                  if (trimmed.length > 100) return "ISSN must not exceed 100 characters"
-                  // ISSN format: 8 digits (can be X at the end)
+                  // Remove any dashes or spaces for validation
+                  const cleaned = trimmed.replace(/[-\s]/g, '')
+                  if (cleaned.includes("-")) {
+                    return "ISSN should not contain dashes. Please remove all dashes."
+                  }
+                  // ISSN format: exactly 8 characters (7 digits + 1 digit or X)
                   const issnPattern = /^[0-9]{7}[0-9Xx]$/
-                  if (!issnPattern.test(trimmed.replace(/-/g, ''))) {
-                    return "ISSN must be 8 characters (7 digits followed by a digit or X)"
+                  if (!issnPattern.test(cleaned)) {
+                    return "ISSN must be exactly 8 characters (7 digits followed by a digit or X) without dashes"
+                  }
+                  if (cleaned.length !== 8) {
+                    return "ISSN must be exactly 8 characters"
                   }
                   return true
                 },
               })}
+              onChange={(e) => {
+                // Remove dashes on input
+                const value = e.target.value.replace(/-/g, "")
+                if (value !== e.target.value) {
+                  e.target.value = value
+                  form.setValue("issn", value, { shouldValidate: true })
+                }
+              }}
             />
             {errors.issn && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.issn.message?.toString()}</p>}
           </div>
@@ -134,23 +151,39 @@ export function JournalArticlesForm({
             <Input
               id="eISSN"
               placeholder="Enter E-ISSN without dashes"
-              maxLength={100}
+              maxLength={8}
+              disabled={isSubmitting}
               {...register("eISSN", {
                 required: "E-ISSN is required",
-                maxLength: { value: 100, message: "E-ISSN must not exceed 100 characters" },
+                maxLength: { value: 8, message: "E-ISSN must be exactly 8 characters" },
                 validate: (value) => {
                   if (!value || typeof value !== 'string') return "E-ISSN is required"
                   const trimmed = value.trim()
                   if (trimmed.length === 0) return "E-ISSN is required"
-                  if (trimmed.length > 100) return "E-ISSN must not exceed 100 characters"
-                  // E-ISSN format: 8 digits (can be X at the end)
+                  // Remove any dashes or spaces for validation
+                  const cleaned = trimmed.replace(/[-\s]/g, '')
+                  if (cleaned.includes("-")) {
+                    return "E-ISSN should not contain dashes. Please remove all dashes."
+                  }
+                  // E-ISSN format: exactly 8 characters (7 digits + 1 digit or X)
                   const eissnPattern = /^[0-9]{7}[0-9Xx]$/
-                  if (!eissnPattern.test(trimmed.replace(/-/g, ''))) {
-                    return "E-ISSN must be 8 characters (7 digits followed by a digit or X)"
+                  if (!eissnPattern.test(cleaned)) {
+                    return "E-ISSN must be exactly 8 characters (7 digits followed by a digit or X) without dashes"
+                  }
+                  if (cleaned.length !== 8) {
+                    return "E-ISSN must be exactly 8 characters"
                   }
                   return true
                 },
               })}
+              onChange={(e) => {
+                // Remove dashes on input
+                const value = e.target.value.replace(/-/g, "")
+                if (value !== e.target.value) {
+                  e.target.value = value
+                  form.setValue("eISSN", value, { shouldValidate: true })
+                }
+              }}
             />
             {errors.eISSN && <p className="text-xs sm:text-sm text-red-600 mt-1">{errors.eISSN.message?.toString()}</p>}
           </div>
@@ -161,6 +194,7 @@ export function JournalArticlesForm({
               id="volume_num"
               type="number"
               placeholder="Enter volume number"
+              disabled={isSubmitting}
               {...register("volume_num", {
                 required: "Volume number is required",
                 min: { value: 1, message: "Volume number must be at least 1" },
@@ -185,6 +219,7 @@ export function JournalArticlesForm({
               id="publisherName"
               placeholder="Enter publisher name"
               maxLength={1000}
+              disabled={isSubmitting}
               {...register("publisherName", {
                 required: "Publisher name is required",
                 minLength: { value: 2, message: "Publisher name must be at least 2 characters" },
@@ -245,6 +280,7 @@ export function JournalArticlesForm({
                     }}
                     placeholder="Select type"
                     emptyMessage="No type found"
+                    disabled={isSubmitting}
                   />
                 )
               }}
@@ -280,6 +316,7 @@ export function JournalArticlesForm({
                   }}
                   placeholder="Select level"
                   emptyMessage="No level found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -297,6 +334,7 @@ export function JournalArticlesForm({
                     id="peer_reviewed"
                     checked={field.value || false}
                     onCheckedChange={field.onChange}
+                    disabled={isSubmitting}
                   />
                   <Label htmlFor="peer_reviewed" className="font-normal">Yes</Label>
                 </div>
@@ -311,6 +349,7 @@ export function JournalArticlesForm({
               type="number"
               step="0.0001"
               placeholder="Enter H Index"
+              disabled={isSubmitting}
               {...register("h_index", {
                 required: "H Index is required",
                 min: { value: 0, message: "H Index must be non-negative" },
@@ -336,6 +375,7 @@ export function JournalArticlesForm({
               type="number"
               step="0.0001"
               placeholder="Enter impact factor"
+              disabled={isSubmitting}
               {...register("impact_factor", {
                 required: "Impact factor is required",
                 min: { value: 0, message: "Impact factor must be non-negative" },
@@ -359,6 +399,7 @@ export function JournalArticlesForm({
             <Input
               id="doi"
               placeholder="Enter DOI (e.g., 10.1234/example)"
+              disabled={isSubmitting}
               {...register("doi", {
                 required: "DOI is required",
                 validate: (value) => {
@@ -383,6 +424,7 @@ export function JournalArticlesForm({
               id="noofIssuePerYr"
               type="number"
               placeholder="Enter number of issues per year"
+              disabled={isSubmitting}
               {...register("noofIssuePerYr", {
                 required: "Number of issues per year is required",
                 min: { value: 1, message: "Number of issues must be at least 1" },
@@ -412,6 +454,7 @@ export function JournalArticlesForm({
               type="number"
               step="0.0001"
               placeholder="Enter price"
+              disabled={isSubmitting}
               {...register("price", {
                 required: "Price is required",
                 min: { value: 0, message: "Price must be non-negative" },
@@ -458,6 +501,7 @@ export function JournalArticlesForm({
                   }}
                   placeholder="Select currency"
                   emptyMessage="No currency found"
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -475,6 +519,7 @@ export function JournalArticlesForm({
                   id="in_scopus"
                   checked={field.value || false}
                   onCheckedChange={field.onChange}
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -490,6 +535,7 @@ export function JournalArticlesForm({
                   id="in_ugc"
                   checked={field.value || false}
                   onCheckedChange={field.onChange}
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -505,6 +551,7 @@ export function JournalArticlesForm({
                   id="in_clarivate"
                   checked={field.value || false}
                   onCheckedChange={field.onChange}
+                  disabled={isSubmitting}
                 />
               )}
             />
@@ -520,6 +567,7 @@ export function JournalArticlesForm({
                   id="in_oldUGCList"
                   checked={field.value || false}
                   onCheckedChange={field.onChange}
+                  disabled={isSubmitting}
                 />
               )}
             />

@@ -119,12 +119,25 @@ export default function AddPolicyPage() {
       }
       
       if (fields.organisation) {
-        setValue("organisation", String(fields.organisation))
-        filledFieldNames.push("organisation")
+        const orgValue = String(fields.organisation).trim()
+        if (orgValue.length > 0) {
+          setValue("organisation", orgValue)
+          filledFieldNames.push("organisation")
+        }
       }
+      
+      // Date - validate date format and not in future
       if (fields.date) {
-        setValue("date", String(fields.date))
-        filledFieldNames.push("date")
+        const dateValue = String(fields.date).trim()
+        if (dateValue.length > 0) {
+          const dateObj = new Date(dateValue)
+          const today = new Date()
+          today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+          if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+            setValue("date", dateValue)
+            filledFieldNames.push("date")
+          }
+        }
       }
       
       // Update auto-filled fields set (only fields that were actually set)

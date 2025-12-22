@@ -116,6 +116,36 @@ export default function AddJournalArticlePage() {
     })
   }, [])
 
+  // Helper function to validate and set dropdown field value - only highlights if value was successfully set
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
+
   // Use auto-fill hook for document analysis data
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -138,74 +168,90 @@ export default function AddJournalArticlePage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Authors - replace if exists in extraction
+      // Authors - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.authors !== undefined) {
-        const authorsValue = fields.authors ? String(fields.authors) : ""
+        const authorsValue = fields.authors ? String(fields.authors).trim() : ""
         setValue("authors", authorsValue)
         if (authorsValue) filledFieldNames.push("authors")
       }
       
-      // Author Num - replace if exists in extraction
+      // Author Num - replace if exists in extraction (only highlight if valid number)
       if (fields.author_num !== undefined) {
         const authorNumValue = fields.author_num !== null && fields.author_num !== undefined ? Number(fields.author_num) : null
         setValue("author_num", authorNumValue)
-        if (authorNumValue !== null) filledFieldNames.push("author_num")
+        if (authorNumValue !== null && !isNaN(authorNumValue) && authorNumValue > 0) {
+          filledFieldNames.push("author_num")
+        }
       }
       
-      // Title - replace if exists in extraction
+      // Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.title !== undefined) {
-        const titleValue = fields.title ? String(fields.title) : ""
+        const titleValue = fields.title ? String(fields.title).trim() : ""
         setValue("title", titleValue)
         if (titleValue) filledFieldNames.push("title")
       }
       
-      // ISBN - replace if exists in extraction
+      // ISBN - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.isbn !== undefined) {
-        const isbnValue = fields.isbn ? String(fields.isbn) : ""
+        const isbnValue = fields.isbn ? String(fields.isbn).trim() : ""
         setValue("isbn", isbnValue)
         if (isbnValue) filledFieldNames.push("isbn")
       }
       
-      // Journal Name - replace if exists in extraction
+      // Journal Name - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.journal_name !== undefined) {
-        const journalNameValue = fields.journal_name ? String(fields.journal_name) : ""
+        const journalNameValue = fields.journal_name ? String(fields.journal_name).trim() : ""
         setValue("journal_name", journalNameValue)
         if (journalNameValue) filledFieldNames.push("journal_name")
       }
       
-      // Volume Num - replace if exists in extraction
+      // Volume Num - replace if exists in extraction (only highlight if valid number)
       if (fields.volume_num !== undefined) {
         const volumeNumValue = fields.volume_num !== null && fields.volume_num !== undefined ? Number(fields.volume_num) : null
         setValue("volume_num", volumeNumValue)
-        if (volumeNumValue !== null) filledFieldNames.push("volume_num")
+        if (volumeNumValue !== null && !isNaN(volumeNumValue) && volumeNumValue > 0) {
+          filledFieldNames.push("volume_num")
+        }
       }
       
-      // Page Num - replace if exists in extraction
+      // Page Num - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.page_num !== undefined) {
-        const pageNumValue = fields.page_num ? String(fields.page_num) : ""
+        const pageNumValue = fields.page_num ? String(fields.page_num).trim() : ""
         setValue("page_num", pageNumValue)
         if (pageNumValue) filledFieldNames.push("page_num")
       }
       
-      // Month Year - replace if exists in extraction
+      // Month Year - replace if exists in extraction (only highlight if valid date)
       if (fields.month_year !== undefined) {
-        const monthYearValue = fields.month_year ? String(fields.month_year) : ""
-        setValue("month_year", monthYearValue)
-        if (monthYearValue) filledFieldNames.push("month_year")
+        const monthYearValue = fields.month_year ? String(fields.month_year).trim() : ""
+        if (monthYearValue) {
+          // Validate date format
+          try {
+            const parsedDate = new Date(monthYearValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("month_year", monthYearValue)
+              filledFieldNames.push("month_year")
+            } else {
+              setValue("month_year", "")
+            }
+          } catch {
+            setValue("month_year", "")
+          }
+        } else {
+          setValue("month_year", "")
+        }
       }
       
-      // Author Type - replace if exists in extraction
+      // Author Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.author_type !== undefined) {
-        const authorTypeValue = fields.author_type !== null && fields.author_type !== undefined ? Number(fields.author_type) : null
-        setValue("author_type", authorTypeValue)
-        if (authorTypeValue !== null) filledFieldNames.push("author_type")
+        setDropdownValue("author_type", fields.author_type, journalAuthorTypeOptions, filledFieldNames)
       }
       
-      // Level - replace if exists in extraction
+      // Level - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.level !== undefined) {
-        const levelValue = fields.level !== null && fields.level !== undefined ? Number(fields.level) : null
-        setValue("level", levelValue)
-        if (levelValue !== null) filledFieldNames.push("level")
+        setDropdownValue("level", fields.level, resPubLevelOptions, filledFieldNames)
       }
       
       // Peer Reviewed - replace if exists in extraction
@@ -214,69 +260,80 @@ export default function AddJournalArticlePage() {
         filledFieldNames.push("peer_reviewed")
       }
       
-      // H Index - replace if exists in extraction
+      // H Index - replace if exists in extraction (only highlight if valid number)
       if (fields.h_index !== undefined) {
         const hIndexValue = fields.h_index !== null && fields.h_index !== undefined ? Number(fields.h_index) : null
         setValue("h_index", hIndexValue)
-        if (hIndexValue !== null) filledFieldNames.push("h_index")
+        if (hIndexValue !== null && !isNaN(hIndexValue) && hIndexValue >= 0) {
+          filledFieldNames.push("h_index")
+        }
       }
       
-      // Impact Factor - replace if exists in extraction
+      // Impact Factor - replace if exists in extraction (only highlight if valid number)
       if (fields.impact_factor !== undefined) {
         const impactFactorValue = fields.impact_factor !== null && fields.impact_factor !== undefined ? Number(fields.impact_factor) : null
         setValue("impact_factor", impactFactorValue)
-        if (impactFactorValue !== null) filledFieldNames.push("impact_factor")
+        if (impactFactorValue !== null && !isNaN(impactFactorValue) && impactFactorValue >= 0) {
+          filledFieldNames.push("impact_factor")
+        }
       }
       
-      // In Scopus - replace if exists in extraction
+      // In Scopus - replace if exists in extraction (always track boolean fields)
       if (fields.in_scopus !== undefined) {
         setValue("in_scopus", Boolean(fields.in_scopus))
         filledFieldNames.push("in_scopus")
       }
       
-      // In UGC - replace if exists in extraction
+      // In UGC - replace if exists in extraction (always track boolean fields)
       if (fields.in_ugc !== undefined) {
         setValue("in_ugc", Boolean(fields.in_ugc))
         filledFieldNames.push("in_ugc")
       }
       
-      // In Clarivate - replace if exists in extraction
+      // In Clarivate - replace if exists in extraction (always track boolean fields)
       if (fields.in_clarivate !== undefined) {
         setValue("in_clarivate", Boolean(fields.in_clarivate))
         filledFieldNames.push("in_clarivate")
       }
       
-      // In Old UGC List - replace if exists in extraction
+      // In Old UGC List - replace if exists in extraction (always track boolean fields)
       if (fields.in_oldUGCList !== undefined) {
         setValue("in_oldUGCList", Boolean(fields.in_oldUGCList))
         filledFieldNames.push("in_oldUGCList")
       }
       
-      // Paid - replace if exists in extraction
+      // Paid - replace if exists in extraction (always track boolean fields)
       if (fields.paid !== undefined) {
         setValue("paid", Boolean(fields.paid))
         filledFieldNames.push("paid")
       }
       
-      // ISSN - replace if exists in extraction
+      // ISSN - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.issn !== undefined) {
-        const issnValue = fields.issn ? String(fields.issn) : ""
+        const issnValue = fields.issn ? String(fields.issn).trim() : ""
         setValue("issn", issnValue)
         if (issnValue) filledFieldNames.push("issn")
       }
       
-      // Type - replace if exists in extraction
+      // Type - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.type !== undefined) {
-        const typeValue = fields.type !== null && fields.type !== undefined ? Number(fields.type) : null
-        setValue("type", typeValue)
-        if (typeValue !== null) filledFieldNames.push("type")
+        setDropdownValue("type", fields.type, journalEditedTypeOptions, filledFieldNames)
       }
       
-      // DOI - replace if exists in extraction
+      // DOI - replace if exists in extraction (only highlight if non-empty and valid format)
       if (fields.DOI !== undefined) {
-        const doiValue = fields.DOI ? String(fields.DOI) : ""
-        setValue("DOI", doiValue)
-        if (doiValue) filledFieldNames.push("DOI")
+        const doiValue = fields.DOI ? String(fields.DOI).trim() : ""
+        if (doiValue) {
+          // Validate DOI format
+          if (/^10\.\d{4,}\/[-._;()\/:a-zA-Z0-9]+$/.test(doiValue)) {
+            setValue("DOI", doiValue)
+            filledFieldNames.push("DOI")
+          } else {
+            setValue("DOI", "")
+          }
+        } else {
+          setValue("DOI", "")
+        }
       }
       
       // Update the auto-filled fields set AFTER processing all fields
@@ -533,7 +590,7 @@ export default function AddJournalArticlePage() {
       {CancelDialog && <CancelDialog />}
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={createJournal.isPending} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -565,6 +622,7 @@ export default function AddJournalArticlePage() {
               onExtract={handleExtractFields}
               allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
+              disabled={createJournal.isPending}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
@@ -592,6 +650,7 @@ export default function AddJournalArticlePage() {
                       }
                     })}
                     placeholder="Enter all authors"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -614,6 +673,7 @@ export default function AddJournalArticlePage() {
                       validate: (v) => v === null || v === undefined || (v > 0 && Number.isInteger(v)) || "Must be a positive integer"
                     })}
                     placeholder="Number of authors"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("author_num") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -649,6 +709,7 @@ export default function AddJournalArticlePage() {
                         }}
                         placeholder="Select author type"
                         emptyMessage="No author type found"
+                        disabled={createJournal.isPending}
                         className={cn(
                           isAutoFilled("author_type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -679,6 +740,7 @@ export default function AddJournalArticlePage() {
                         }}
                         placeholder="Select type"
                         emptyMessage="No type found"
+                        disabled={createJournal.isPending}
                         className={cn(
                           isAutoFilled("type") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -699,6 +761,7 @@ export default function AddJournalArticlePage() {
                     maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                   })}
                   placeholder="Enter article/journal/volume title"
+                  disabled={createJournal.isPending}
                   className={cn(
                     isAutoFilled("title") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -729,6 +792,7 @@ export default function AddJournalArticlePage() {
                       }
                     })} 
                     placeholder="Enter ISSN without dashes (8 digits)"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("issn") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -757,6 +821,7 @@ export default function AddJournalArticlePage() {
                       }
                     })} 
                     placeholder="Enter ISBN without dashes (10 or 13 digits)"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("isbn") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -779,6 +844,7 @@ export default function AddJournalArticlePage() {
                     maxLength: { value: 500, message: "Journal name must not exceed 500 characters" }
                   })}
                   placeholder="Enter journal or article or edited volume name"
+                  disabled={createJournal.isPending}
                   className={cn(
                     isAutoFilled("journal_name") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -812,6 +878,7 @@ export default function AddJournalArticlePage() {
                       }
                     })}
                     placeholder="Volume number"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("volume_num") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -839,6 +906,7 @@ export default function AddJournalArticlePage() {
                       }
                     })} 
                     placeholder="e.g., 123-135"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("page_num") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -874,6 +942,7 @@ export default function AddJournalArticlePage() {
                         return true
                       }
                     })}
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("month_year") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -909,6 +978,7 @@ export default function AddJournalArticlePage() {
                         }}
                         placeholder="Select level"
                         emptyMessage="No level found"
+                        disabled={createJournal.isPending}
                         className={cn(
                           isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                         )}
@@ -929,6 +999,7 @@ export default function AddJournalArticlePage() {
                           field.onChange(val === "Yes")
                           clearAutoFillHighlight("peer_reviewed")
                         }}
+                        disabled={createJournal.isPending}
                       >
                         <SelectTrigger className={cn(
                           isAutoFilled("peer_reviewed") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -958,6 +1029,7 @@ export default function AddJournalArticlePage() {
                       max: { value: 1000, message: "H Index cannot exceed 1000" }
                     })}
                     placeholder="H Index value"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("h_index") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -980,6 +1052,7 @@ export default function AddJournalArticlePage() {
                       max: { value: 1000, message: "Impact Factor cannot exceed 1000" }
                     })}
                     placeholder="Impact Factor value"
+                    disabled={createJournal.isPending}
                     className={cn(
                       isAutoFilled("impact_factor") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                     )}
@@ -1009,6 +1082,7 @@ export default function AddJournalArticlePage() {
                     }
                   })} 
                   placeholder="Enter DOI (e.g., 10.1000/xyz123)"
+                  disabled={createJournal.isPending}
                   className={cn(
                     isAutoFilled("DOI") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -1033,6 +1107,7 @@ export default function AddJournalArticlePage() {
                           field.onChange(val === "Yes")
                           clearAutoFillHighlight("in_scopus")
                         }}
+                        disabled={createJournal.isPending}
                       >
                         <SelectTrigger className={cn(
                           isAutoFilled("in_scopus") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1059,6 +1134,7 @@ export default function AddJournalArticlePage() {
                           field.onChange(val === "Yes")
                           clearAutoFillHighlight("in_ugc")
                         }}
+                        disabled={createJournal.isPending}
                       >
                         <SelectTrigger className={cn(
                           isAutoFilled("in_ugc") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1088,6 +1164,7 @@ export default function AddJournalArticlePage() {
                           field.onChange(val === "Yes")
                           clearAutoFillHighlight("in_clarivate")
                         }}
+                        disabled={createJournal.isPending}
                       >
                         <SelectTrigger className={cn(
                           isAutoFilled("in_clarivate") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1114,6 +1191,7 @@ export default function AddJournalArticlePage() {
                           field.onChange(val === "Yes")
                           clearAutoFillHighlight("in_oldUGCList")
                         }}
+                        disabled={createJournal.isPending}
                       >
                         <SelectTrigger className={cn(
                           isAutoFilled("in_oldUGCList") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1142,6 +1220,7 @@ export default function AddJournalArticlePage() {
                         field.onChange(val === "Yes")
                         clearAutoFillHighlight("paid")
                       }}
+                      disabled={createJournal.isPending}
                     >
                       <SelectTrigger className={cn(
                         isAutoFilled("paid") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -1168,7 +1247,7 @@ export default function AddJournalArticlePage() {
                     "Save"
                   )}
                 </Button>
-                <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+                <Button type="button" variant="outline" onClick={handleCancel} disabled={createJournal.isPending} className="w-full sm:w-auto">
                   Cancel
                 </Button>
               </div>

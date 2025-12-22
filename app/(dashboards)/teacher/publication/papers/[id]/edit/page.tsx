@@ -91,6 +91,36 @@ export default function EditPaperPage() {
     })
   }, [])
 
+  // Helper function to validate and set dropdown field value - only highlights if value was successfully set
+  const setDropdownValue = useCallback((
+    fieldName: string,
+    value: any,
+    options: Array<{ id: number; name: string }>,
+    filledFieldNames: string[]
+  ): number | null => {
+    if (value === null || value === undefined) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    const numValue = Number(value)
+    if (isNaN(numValue)) {
+      setValue(fieldName as any, null)
+      return null
+    }
+    
+    // Verify the value exists in options
+    const existsInOptions = options.some(opt => opt.id === numValue)
+    if (existsInOptions) {
+      setValue(fieldName as any, numValue)
+      filledFieldNames.push(fieldName)
+      return numValue
+    }
+    
+    setValue(fieldName as any, null)
+    return null
+  }, [setValue])
+
   // Use auto-fill hook for document analysis data - watches context changes
   const { 
     documentUrl: autoFillDocumentUrl, 
@@ -111,70 +141,78 @@ export default function EditPaperPage() {
       // REPLACE all form fields with extracted data (even if they already have values)
       // This ensures new extraction replaces existing data
       
-      // Authors - replace if exists in extraction
+      // Authors - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.authors !== undefined) {
-        const authorsValue = fields.authors ? String(fields.authors) : ""
+        const authorsValue = fields.authors ? String(fields.authors).trim() : ""
         setValue("authors", authorsValue)
         if (authorsValue) filledFieldNames.push("authors")
       }
       
-      // Theme - replace if exists in extraction
+      // Theme - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.theme !== undefined) {
-        const themeValue = fields.theme ? String(fields.theme) : ""
+        const themeValue = fields.theme ? String(fields.theme).trim() : ""
         setValue("theme", themeValue)
         if (themeValue) filledFieldNames.push("theme")
       }
       
-      // Organising Body - replace if exists in extraction
+      // Organising Body - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.organising_body !== undefined) {
-        const organisingBodyValue = fields.organising_body ? String(fields.organising_body) : ""
+        const organisingBodyValue = fields.organising_body ? String(fields.organising_body).trim() : ""
         setValue("organising_body", organisingBodyValue)
         if (organisingBodyValue) filledFieldNames.push("organising_body")
       }
       
-      // Place - replace if exists in extraction
+      // Place - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.place !== undefined) {
-        const placeValue = fields.place ? String(fields.place) : ""
+        const placeValue = fields.place ? String(fields.place).trim() : ""
         setValue("place", placeValue)
         if (placeValue) filledFieldNames.push("place")
       }
       
-      // Date - replace if exists in extraction
+      // Date - replace if exists in extraction (only highlight if valid date)
       if (fields.date !== undefined) {
-        const dateValue = fields.date ? String(fields.date) : ""
-        setValue("date", dateValue)
-        if (dateValue) filledFieldNames.push("date")
+        const dateValue = fields.date ? String(fields.date).trim() : ""
+        if (dateValue) {
+          // Validate date format
+          try {
+            const parsedDate = new Date(dateValue)
+            const today = new Date()
+            today.setHours(23, 59, 59, 999)
+            if (!isNaN(parsedDate.getTime()) && parsedDate <= today) {
+              setValue("date", dateValue)
+              filledFieldNames.push("date")
+            } else {
+              setValue("date", "")
+            }
+          } catch {
+            setValue("date", "")
+          }
+        } else {
+          setValue("date", "")
+        }
       }
       
-      // Title of Paper - replace if exists in extraction
+      // Title of Paper - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.title_of_paper !== undefined) {
-        const titleOfPaperValue = fields.title_of_paper ? String(fields.title_of_paper) : ""
+        const titleOfPaperValue = fields.title_of_paper ? String(fields.title_of_paper).trim() : ""
         setValue("title_of_paper", titleOfPaperValue)
         if (titleOfPaperValue) filledFieldNames.push("title_of_paper")
       }
       
-      // Mode - replace if exists in extraction
+      // Mode - replace if exists in extraction (only highlight if valid mode)
       if (fields.mode !== undefined) {
-        const modeValue = fields.mode ? String(fields.mode) : ""
-        setValue("mode", modeValue)
-        if (modeValue) filledFieldNames.push("mode")
+        const modeValue = fields.mode ? String(fields.mode).trim() : ""
+        if (modeValue && ["Physical", "Virtual", "Hybrid"].includes(modeValue)) {
+          setValue("mode", modeValue)
+          filledFieldNames.push("mode")
+        } else {
+          setValue("mode", "")
+        }
       }
       
-      // Level - replace if exists in extraction
+      // Level - replace if exists in extraction (only highlight if value matches dropdown option)
       if (fields.level !== undefined) {
-        if (fields.level !== null && fields.level !== undefined) {
-          const matchingLevel = resPubLevelOptions.find(
-            (l) => l.id === Number(fields.level)
-          )
-          if (matchingLevel) {
-            setValue("level", matchingLevel.id)
-            filledFieldNames.push("level")
-          } else {
-            setValue("level", null)
-          }
-        } else {
-          setValue("level", null)
-        }
+        setDropdownValue("level", fields.level, resPubLevelOptions, filledFieldNames)
       }
       
       // Update the auto-filled fields set AFTER processing all fields
@@ -384,7 +422,7 @@ export default function EditPaperPage() {
       {CancelDialog && <CancelDialog />}
       <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <Button variant="outline" size="sm" onClick={handleCancel} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={handleCancel} disabled={updatePaper.isPending} className="flex items-center gap-2">
           <ArrowLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back</span>
         </Button>
@@ -415,6 +453,7 @@ export default function EditPaperPage() {
               allowedFileTypes={["pdf", "jpg", "jpeg"]}
               maxFileSize={1 * 1024 * 1024}
               isEditMode={true}
+              disabled={updatePaper.isPending}
               onClearFields={() => {
                 reset()
                 setAutoFilledFields(new Set())
@@ -438,6 +477,7 @@ export default function EditPaperPage() {
                   }
                 })}
                 placeholder="Enter all authors"
+                disabled={updatePaper.isPending}
                 className={cn(
                   isAutoFilled("authors") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                 )}
@@ -472,6 +512,7 @@ export default function EditPaperPage() {
                       }}
                       placeholder="Select presentation level"
                       emptyMessage="No level found"
+                      disabled={updatePaper.isPending}
                       className={cn(
                         isAutoFilled("level") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                       )}
@@ -504,6 +545,7 @@ export default function EditPaperPage() {
                         field.onChange(val)
                         clearAutoFillHighlight("mode")
                       }}
+                      disabled={updatePaper.isPending}
                     >
                       <SelectTrigger className={cn(
                         isAutoFilled("mode") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
@@ -532,6 +574,7 @@ export default function EditPaperPage() {
                   maxLength: { value: 500, message: "Theme must not exceed 500 characters" }
                 })} 
                 placeholder="Enter conference theme"
+                disabled={updatePaper.isPending}
                 className={cn(
                   isAutoFilled("theme") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                 )}
@@ -553,6 +596,7 @@ export default function EditPaperPage() {
                   maxLength: { value: 1000, message: "Title must not exceed 1000 characters" }
                 })}
                 placeholder="Enter paper title"
+                disabled={updatePaper.isPending}
                 className={cn(
                   isAutoFilled("title_of_paper") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                 )}
@@ -579,6 +623,7 @@ export default function EditPaperPage() {
                     }
                   })} 
                   placeholder="Enter organizing body"
+                  disabled={updatePaper.isPending}
                   className={cn(
                     isAutoFilled("organising_body") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -603,6 +648,7 @@ export default function EditPaperPage() {
                     }
                   })} 
                   placeholder="Enter place"
+                  disabled={updatePaper.isPending}
                   className={cn(
                     isAutoFilled("place") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                   )}
@@ -640,6 +686,7 @@ export default function EditPaperPage() {
                     return true
                   }
                 })}
+                disabled={updatePaper.isPending}
                 className={cn(
                   isAutoFilled("date") && "bg-blue-50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
                 )}
@@ -662,7 +709,7 @@ export default function EditPaperPage() {
                   "Update Paper Presentation"
                 )}
               </Button>
-              <Button type="button" variant="outline" onClick={handleCancel} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" onClick={handleCancel} disabled={updatePaper.isPending} className="w-full sm:w-auto">
                 Cancel
               </Button>
             </div>

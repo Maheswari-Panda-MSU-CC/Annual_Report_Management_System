@@ -89,12 +89,93 @@ export function ConsultancyForm({
 
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.title) setValue("title", fields.title)
-    if (fields.collaboratingInstitute) setValue("collaboratingInstitute", fields.collaboratingInstitute)
-    if (fields.address) setValue("address", fields.address)
-    if (fields.startDate) setValue("startDate", fields.startDate)
-    if (fields.duration) setValue("duration", fields.duration)
-    if (fields.amount) setValue("amount", fields.amount)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Title - validate non-empty string
+    if (fields.title) {
+      const titleValue = String(fields.title).trim()
+      if (titleValue.length > 0) {
+        setValue("title", titleValue)
+        filledFieldNames.push("title")
+        onFieldChange?.("title")
+      }
+    }
+    
+    // Collaborating Institute - validate non-empty string
+    if (fields.collaboratingInstitute) {
+      const instValue = String(fields.collaboratingInstitute).trim()
+      if (instValue.length > 0) {
+        setValue("collaboratingInstitute", instValue)
+        filledFieldNames.push("collaboratingInstitute")
+        onFieldChange?.("collaboratingInstitute")
+      }
+    }
+    
+    // Address - validate non-empty string
+    if (fields.address) {
+      const addressValue = String(fields.address).trim()
+      if (addressValue.length > 0) {
+        setValue("address", addressValue)
+        filledFieldNames.push("address")
+        onFieldChange?.("address")
+      }
+    }
+    
+    // Start Date - validate date format and not in future
+    if (fields.startDate) {
+      const dateValue = String(fields.startDate).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("startDate", dateValue)
+          filledFieldNames.push("startDate")
+          onFieldChange?.("startDate")
+        }
+      }
+    }
+    
+    // Duration - validate number
+    if (fields.duration !== undefined && fields.duration !== null) {
+      const durationValue = Number(fields.duration)
+      if (!isNaN(durationValue) && durationValue >= 0) {
+        setValue("duration", durationValue)
+        filledFieldNames.push("duration")
+        onFieldChange?.("duration")
+      }
+    }
+    
+    // Amount - validate number
+    if (fields.amount !== undefined && fields.amount !== null) {
+      // Handle comma-separated numbers
+      const amountValue = String(fields.amount).replace(/,/g, '').trim()
+      const numValue = Number(amountValue)
+      if (!isNaN(numValue) && numValue >= 0) {
+        setValue("amount", numValue)
+        filledFieldNames.push("amount")
+        onFieldChange?.("amount")
+      }
+    }
+    
+    // Details/Outcome - validate non-empty string
+    if (fields.detailsOutcome) {
+      const detailsValue = String(fields.detailsOutcome).trim()
+      if (detailsValue.length > 0) {
+        setValue("detailsOutcome", detailsValue)
+        filledFieldNames.push("detailsOutcome")
+        onFieldChange?.("detailsOutcome")
+      }
+    } else if (fields.details || fields.outcome) {
+      // Fallback if mapping didn't work
+      const detailsValue = String(fields.details || fields.outcome).trim()
+      if (detailsValue.length > 0) {
+        setValue("detailsOutcome", detailsValue)
+        filledFieldNames.push("detailsOutcome")
+        onFieldChange?.("detailsOutcome")
+      }
+    }
   }
 
   return (
@@ -113,6 +194,7 @@ export function ConsultancyForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -124,6 +206,7 @@ export function ConsultancyForm({
           <Input
             id="title"
             placeholder="Enter consultancy project title"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("title") && "bg-blue-50 border-blue-200"
@@ -142,6 +225,7 @@ export function ConsultancyForm({
             <Input
               id="collaboratingInstitute"
               placeholder="Enter institute/industry name"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("collaboratingInstitute") && "bg-blue-50 border-blue-200"
@@ -161,6 +245,7 @@ export function ConsultancyForm({
             <Input
               id="address"
               placeholder="Enter address"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("address") && "bg-blue-50 border-blue-200"
@@ -180,12 +265,30 @@ export function ConsultancyForm({
             <Input
               id="startDate"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("startDate") && "bg-blue-50 border-blue-200"
               )}
               {...register("startDate", { 
                 required: "Start date is required",
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Start date is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
+                    return "Start date cannot be in the future"
+                  }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
+                  }
+                  return true
+                },
                 onChange: () => onFieldChange?.("startDate")
               })}
             />
@@ -198,6 +301,7 @@ export function ConsultancyForm({
               id="duration"
               type="number"
               placeholder="Enter duration"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("duration") && "bg-blue-50 border-blue-200"
@@ -214,6 +318,7 @@ export function ConsultancyForm({
               id="amount"
               type="number"
               placeholder="Enter amount"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("amount") && "bg-blue-50 border-blue-200"
@@ -231,6 +336,7 @@ export function ConsultancyForm({
             id="detailsOutcome"
             placeholder="Enter details about the consultancy project and its outcomes"
             rows={4}
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("detailsOutcome") && "bg-blue-50 border-blue-200"
@@ -248,6 +354,7 @@ export function ConsultancyForm({
               type="button"
               variant="outline"
               onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=consultancy"))}
+              disabled={isSubmitting}
               className="w-full sm:w-auto text-xs sm:text-sm"
             >
               Cancel

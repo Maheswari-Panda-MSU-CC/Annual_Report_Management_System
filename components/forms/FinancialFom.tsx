@@ -112,13 +112,96 @@ export function FinancialForm({
     }
   }, [isEdit, editData, setValue])
 
+  // Helper function to validate and set dropdown value
+  const setDropdownValue = (fieldName: string, value: any, options: Array<{ id: number; name: string }>): boolean => {
+    if (value === undefined || value === null) return false
+    
+    let validValue: number | null = null
+    
+    if (typeof value === 'number') {
+      if (options.some(opt => opt.id === value)) {
+        validValue = value
+      }
+    } else {
+      // Try to find matching option by name
+      const option = options.find(opt => opt.name.toLowerCase() === String(value).toLowerCase())
+      if (option) {
+        validValue = option.id
+      } else {
+        // Try to convert to number and check
+        const numValue = Number(value)
+        if (!isNaN(numValue) && options.some(opt => opt.id === numValue)) {
+          validValue = numValue
+        }
+      }
+    }
+    
+    if (validValue !== null) {
+      setValue(fieldName, validValue, { shouldValidate: true })
+      onFieldChange?.(fieldName)
+      return true
+    }
+    return false
+  }
+
   // Handle extracted fields from DocumentUpload
   const handleExtractedFields = (fields: Record<string, any>) => {
-    if (fields.nameOfSupport) setValue("nameOfSupport", fields.nameOfSupport)
-    if (fields.type) setValue("type", fields.type)
-    if (fields.supportingAgency) setValue("supportingAgency", fields.supportingAgency)
-    if (fields.grantReceived) setValue("grantReceived", fields.grantReceived)
-    if (fields.date) setValue("date", fields.date)
+    // Track which fields were successfully filled
+    const filledFieldNames: string[] = []
+    
+    // Name of Support - validate non-empty string
+    if (fields.nameOfSupport) {
+      const nameValue = String(fields.nameOfSupport).trim()
+      if (nameValue.length > 0) {
+        setValue("nameOfSupport", nameValue)
+        filledFieldNames.push("nameOfSupport")
+        onFieldChange?.("nameOfSupport")
+      }
+    }
+    
+    // Type - validate dropdown
+    if (fields.type !== undefined && fields.type !== null) {
+      if (setDropdownValue("type", fields.type, financialSupportTypeOptions)) {
+        filledFieldNames.push("type")
+      }
+    }
+    
+    // Supporting Agency - validate non-empty string
+    if (fields.supportingAgency) {
+      const agencyValue = String(fields.supportingAgency).trim()
+      if (agencyValue.length > 0) {
+        setValue("supportingAgency", agencyValue)
+        filledFieldNames.push("supportingAgency")
+        onFieldChange?.("supportingAgency")
+      }
+    }
+    
+    // Grant Received - validate number >= 0
+    if (fields.grantReceived !== undefined && fields.grantReceived !== null) {
+      // Handle comma-separated numbers
+      const grantValue = String(fields.grantReceived).replace(/,/g, '').trim()
+      const numValue = Number(grantValue)
+      if (!isNaN(numValue) && numValue >= 0) {
+        setValue("grantReceived", numValue)
+        filledFieldNames.push("grantReceived")
+        onFieldChange?.("grantReceived")
+      }
+    }
+    
+    // Date - validate date format and not in future
+    if (fields.date) {
+      const dateValue = String(fields.date).trim()
+      if (dateValue.length > 0) {
+        const dateObj = new Date(dateValue)
+        const today = new Date()
+        today.setHours(23, 59, 59, 999)
+        if (!isNaN(dateObj.getTime()) && dateObj <= today) {
+          setValue("date", dateValue)
+          filledFieldNames.push("date")
+          onFieldChange?.("date")
+        }
+      }
+    }
   }
 
   return (
@@ -138,6 +221,7 @@ export function FinancialForm({
           onClearFields={onClearFields}
           isEditMode={isEdit}
           className="w-full"
+          disabled={isSubmitting}
         />
       </div>
 
@@ -151,6 +235,7 @@ export function FinancialForm({
           <Input
             id="nameOfSupport"
             placeholder="Enter support name"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base h-9 sm:h-10 mt-1",
               isAutoFilled?.("nameOfSupport") && "bg-blue-50 border-blue-200"
@@ -184,6 +269,7 @@ export function FinancialForm({
                   }}
                   placeholder="Select type"
                   emptyMessage="No type found"
+                  disabled={isSubmitting}
                   className={isAutoFilled?.("type") ? "bg-blue-50 border-blue-200" : undefined}
                 />
               )}
@@ -198,6 +284,7 @@ export function FinancialForm({
             <Input
               id="supportingAgency"
               placeholder="Enter agency name"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("supportingAgency") && "bg-blue-50 border-blue-200"
@@ -224,6 +311,7 @@ export function FinancialForm({
               placeholder="Enter amount"
               min="0"
               step="0.01"
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("grantReceived") && "bg-blue-50 border-blue-200"
@@ -252,16 +340,27 @@ export function FinancialForm({
             <Input
               id="date"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
+              disabled={isSubmitting}
               className={cn(
                 "text-sm sm:text-base h-9 sm:h-10 mt-1",
                 isAutoFilled?.("date") && "bg-blue-50 border-blue-200"
               )}
-              max={new Date().toISOString().split('T')[0]}
               {...register("date", { 
                 required: "Date is required",
-                validate: (value) => {
-                  if (value && new Date(value) > new Date()) {
+                validate: (v) => {
+                  if (!v || v.trim() === "") {
+                    return "Date is required"
+                  }
+                  const selectedDate = new Date(v)
+                  const today = new Date()
+                  today.setHours(23, 59, 59, 999) // Set to end of today to allow today's date
+                  if (selectedDate > today) {
                     return "Date cannot be in the future"
+                  }
+                  // Check if date is valid
+                  if (isNaN(selectedDate.getTime())) {
+                    return "Please enter a valid date"
                   }
                   return true
                 },
@@ -282,6 +381,7 @@ export function FinancialForm({
             id="detailsOfEvent"
             rows={3}
             placeholder="Enter details"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("detailsOfEvent") && "bg-blue-50 border-blue-200"
@@ -298,6 +398,7 @@ export function FinancialForm({
             id="purposeOfGrant"
             rows={3}
             placeholder="Enter purpose of grant"
+            disabled={isSubmitting}
             className={cn(
               "text-sm sm:text-base mt-1",
               isAutoFilled?.("purposeOfGrant") && "bg-blue-50 border-blue-200"
@@ -315,6 +416,7 @@ export function FinancialForm({
               type="button"
               variant="outline"
               onClick={onCancel || (() => router.push("/teacher/research-contributions?tab=financial"))}
+              disabled={isSubmitting}
               className="w-full sm:w-auto text-xs sm:text-sm"
             >
               Cancel
