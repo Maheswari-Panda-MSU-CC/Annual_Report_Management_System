@@ -121,7 +121,7 @@ export function LoginForm() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-          <div className="flex items-center">
+          {/* <div className="flex items-center">
             <input
               id="remember-me"
               name="remember-me"
@@ -131,7 +131,7 @@ export function LoginForm() {
             <label htmlFor="remember-me" className="ml-2 block text-xs sm:text-sm text-gray-700">
               Remember me
             </label>
-          </div>
+          </div> */}
 
           <div className="text-xs sm:text-sm">
             <Link

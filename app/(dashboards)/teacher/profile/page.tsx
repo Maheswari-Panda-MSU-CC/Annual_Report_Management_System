@@ -2595,19 +2595,13 @@ export default function ProfilePage() {
                             label: faculty.Fname,
                           }))}
                           value={field.value ?? selectedFacultyId ?? facultyData?.Fid ?? undefined}
-                          onValueChange={(value: string | number) => {
-                            const fidNum = Number(value)
-                            setSelectedFacultyId(Number.isNaN(fidNum) ? null : fidNum)
-                            // Reset department when faculty changes
-                            setValue('deptid', undefined)
-                            setDepartmentData(null)
-                            // Update form field
-                            field.onChange(fidNum)
+                          onValueChange={() => {
+                            // Disabled - no changes allowed
                           }}
                           placeholder="Select faculty"
-                          disabled={!isEditingPersonal || isSavingPersonal}
+                          disabled={true}
                           emptyMessage="No faculty found."
-                          className={`w-full min-w-0 ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
+                          className="w-full min-w-0 bg-[#f9fafb] text-foreground opacity-100"
                         />
                       )}
                     />
@@ -2646,11 +2640,13 @@ export default function ProfilePage() {
                               label: dept.name,
                             }))}
                             value={field.value}
-                            onValueChange={(v: string | number) => field.onChange(Number(v))}
+                            onValueChange={() => {
+                              // Disabled - no changes allowed
+                            }}
                             placeholder="Select department"
-                            disabled={!isEditingPersonal || !facultyValue}
+                            disabled={true}
                             emptyMessage={!facultyValue ? "Please select a faculty first" : "No department found."}
-                            className={`w-full min-w-0 ${!isEditingPersonal || !facultyValue ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
+                            className="w-full min-w-0 bg-[#f9fafb] text-foreground opacity-100"
                           />
                         );
                       }}
