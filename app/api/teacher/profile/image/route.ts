@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { writeFile, readFile, unlink } from "fs/promises"
 import { existsSync, mkdirSync } from "fs"
 import { join } from "path"
-import { isS3Configured, uploadToS3, getSignedUrl } from "@/lib/s3-service"
+import { isS3Configured, uploadToS3, getSignedUrl, deleteFromS3 } from "@/lib/s3-service"
 import type { FilePatternMetadata } from "@/lib/s3-service"
 import { authenticateRequest } from "@/lib/api-auth"
 
@@ -153,9 +153,14 @@ export async function POST(request: NextRequest) {
       // ignore
     }
 
+    // Always use upload/Profile/email.extension format for database
+    // This ensures consistency whether stored in S3 or locally
     let databasePath = `upload/Profile/${fileName}`
+    let uploadedToS3 = false
+    let uploadError: string | undefined = undefined
 
     if (uploadToS3Flag && isS3Configured()) {
+      // Upload to S3
       try {
         const metadata: FilePatternMetadata = {
           patternType: 2,
@@ -164,20 +169,42 @@ export async function POST(request: NextRequest) {
           fileExtension: `.${ext}`,
         }
         const uploadResult = await uploadToS3(buffer, metadata, file.type)
+        
         if (uploadResult.success) {
+          // S3 upload successful - use S3 virtual path
           databasePath = uploadResult.virtualPath
-          // clean local if exists
-          if (existsSync(filePath)) await unlink(filePath)
+          uploadedToS3 = true
+          
+          // Delete local file only after confirmed S3 upload success
+          if (existsSync(filePath)) {
+            try {
+              await unlink(filePath)
+            } catch (unlinkErr) {
+              console.warn("Failed to delete local file after S3 upload:", unlinkErr)
+              // Don't fail the request if cleanup fails
+            }
+          }
         } else {
-          // fallback to local
+          // S3 upload failed - save locally as fallback
+          uploadError = uploadResult.message
           await writeFile(filePath, buffer)
+          // Keep databasePath as upload/Profile/email.extension (local storage)
         }
       } catch (err) {
         console.error("S3 upload error, saving locally:", err)
+        uploadError = err instanceof Error ? err.message : "S3 upload failed"
+        // Fallback to local storage
         await writeFile(filePath, buffer)
+        // Keep databasePath as upload/Profile/email.extension (local storage)
       }
     } else {
+      // Save locally (either S3 not configured or uploadToS3Flag is false)
       await writeFile(filePath, buffer)
+      
+      if (uploadToS3Flag && !isS3Configured()) {
+        uploadError = "S3 is not configured. Image saved locally."
+      }
+      // databasePath already set to upload/Profile/email.extension format
     }
 
     let timestamp: number | undefined
@@ -192,16 +219,80 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      path: databasePath,
+      path: databasePath, // Always in format: upload/Profile/email.extension
       fileName,
       fileSize: file.size,
       fileType: file.type,
-      uploadedToS3: uploadToS3Flag && isS3Configured(),
+      uploadedToS3,
+      error: uploadError,
       timestamp,
     })
   } catch (error: any) {
     console.error("Error in POST /api/teacher/profile/image:", error)
     return NextResponse.json({ success: false, error: error.message || "Failed to process request" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+
+    const { searchParams } = new URL(request.url)
+    const imagePath = searchParams.get("path")
+
+    if (!imagePath) {
+      return NextResponse.json({ success: false, error: "Image path is required" }, { status: 400 })
+    }
+
+    // If it's an S3 path, delete from S3
+    if (isS3Configured() && imagePath.startsWith("upload/")) {
+      const deleteResult = await deleteFromS3(imagePath)
+      
+      if (deleteResult.success) {
+        return NextResponse.json({ 
+          success: true, 
+          message: "Image deleted from S3 successfully" 
+        })
+      } else {
+        return NextResponse.json({ 
+          success: false, 
+          error: deleteResult.message 
+        }, { status: 500 })
+      }
+    }
+
+    // If it's a local path, delete from local storage
+    const fileName = getFileNameFromPath(imagePath)
+    if (fileName) {
+      const localFilePath = join(PROFILE_IMAGE_DIR, fileName)
+      if (existsSync(localFilePath)) {
+        try {
+          await unlink(localFilePath)
+          return NextResponse.json({ 
+            success: true, 
+            message: "Image deleted from local storage successfully" 
+          })
+        } catch (unlinkError) {
+          console.error("Error deleting local file:", unlinkError)
+          return NextResponse.json({ 
+            success: false, 
+            error: "Failed to delete local file" 
+          }, { status: 500 })
+        }
+      }
+    }
+
+    return NextResponse.json({ 
+      success: false, 
+      error: "Image not found" 
+    }, { status: 404 })
+  } catch (error: any) {
+    console.error("Error in DELETE /api/teacher/profile/image:", error)
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message || "Failed to delete image" 
+    }, { status: 500 })
   }
 }
 

@@ -10,7 +10,7 @@ const s3Client = new S3Client({
   },
 });
 
-const BUCKET_NAME = process.env.AWS_BUCKET_NAME || 'arms-documents';
+const BUCKET_NAME = process.env.AWS_BUCKET_NAME || 'msuis-dsw';
 const PRESIGNED_URL_EXPIRY = parseInt(process.env.S3_PRESIGNED_URL_EXPIRY || '3600');
 
 // File naming pattern types
