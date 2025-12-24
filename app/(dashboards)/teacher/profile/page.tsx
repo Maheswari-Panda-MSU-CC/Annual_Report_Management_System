@@ -303,13 +303,18 @@ export default function ProfilePage() {
         if (data.success && data.url) {
           setProfileImage(data.url)
         } else {
+          // File not found or error - show default icon
           setProfileImage(null)
         }
       } else {
+        // 404 or other error - file doesn't exist, show default icon
+        const errorData = await response.json().catch(() => ({}))
+        console.warn("Profile image not found:", errorData.error || "File not found")
         setProfileImage(null)
       }
     } catch (error) {
       console.error("Error fetching profile image URL:", error)
+      // On error, show default icon
       setProfileImage(null)
     }
   }
@@ -339,7 +344,7 @@ export default function ProfilePage() {
         // Only fetch if we didn't just set this image
         if (justSetProfileImageRef.current !== currentImagePath) {
           fetchProfileImageUrl(currentImagePath)
-        } else {
+      } else {
           // Clear the ref after a short delay to allow normal behavior next time
           setTimeout(() => {
             justSetProfileImageRef.current = null
@@ -348,7 +353,7 @@ export default function ProfilePage() {
       } else {
         // Only clear if we don't have a pending image
         if (!pendingProfileImageFile) {
-          setProfileImage(null)
+        setProfileImage(null)
         }
       }
       
@@ -657,14 +662,31 @@ export default function ProfilePage() {
     }
 
     // Do NOT upload immediately. Only prepare preview and pending file.
-    setPendingProfileImageFile(file)
-    const previewUrl = URL.createObjectURL(file)
-    setProfileImage(previewUrl)
+    let previewUrl: string | null = null
+    try {
+      setPendingProfileImageFile(file)
+      previewUrl = URL.createObjectURL(file)
+      setProfileImage(previewUrl)
 
-    toast({
-      title: "Image Selected",
-      description: "Image ready. Click 'Save Changes' to upload to S3 and update profile.",
-    })
+      toast({
+        title: "Image Selected",
+        description: "Image ready. Click 'Save Changes' to upload to S3 and update profile.",
+      })
+    } catch (error: any) {
+      console.error("Error creating preview URL:", error)
+      // Cleanup on error
+      setPendingProfileImageFile(null)
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl)
+      }
+      toast({
+        title: "Error",
+        description: "Failed to preview image. Please try again.",
+        variant: "destructive"
+      })
+      return
+    }
+    
     // Reset file input
     const fileInput = document.getElementById("profile-image-input") as HTMLInputElement
     if (fileInput) {
@@ -677,7 +699,7 @@ export default function ProfilePage() {
     fileInput?.click()
   }
 
-  // Download profile image
+  // Download profile image from S3
   const handleDownloadProfileImage = async () => {
     if (!teacherInfo?.ProfileImage) {
       toast({
@@ -691,48 +713,65 @@ export default function ProfilePage() {
     try {
       setIsUploadingImage(true)
       
-      // Get the image URL (presigned URL for S3 or local URL)
-      const response = await fetch("/api/teacher/profile/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: teacherInfo.ProfileImage }),
+      // Use GET endpoint with download=true to avoid CORS issues
+      // Server will fetch from S3 and stream to client
+      const response = await fetch(`/api/teacher/profile/image?path=${encodeURIComponent(teacherInfo.ProfileImage)}&download=true`, {
+        method: "GET",
       })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch image URL")
+        const errorData = await response.json().catch(() => ({ error: "Download failed" }))
+        
+        // More specific error messages
+        let errorMessage = errorData.error || "Failed to download image"
+        if (response.status === 404) {
+          errorMessage = "Image not found. It may have been deleted."
+        } else if (response.status === 500) {
+          errorMessage = "Server error while downloading image. Please try again."
+        } else if (response.status === 0 || !response.ok) {
+          errorMessage = "Network error. Please check your connection and try again."
+        }
+        
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
-      if (!data.success || !data.url) {
-        throw new Error("Image URL not available")
+      // Get the blob from response with error handling
+      let blob: Blob
+      try {
+        blob = await response.blob()
+      } catch (blobError: any) {
+        console.error("Error creating blob from response:", blobError)
+        throw new Error("Failed to process image data. The file may be corrupted.")
       }
-
-      // Fetch the image as blob
-      const imageResponse = await fetch(data.url)
-      if (!imageResponse.ok) {
-        throw new Error("Failed to download image")
-      }
-
-      const blob = await imageResponse.blob()
       
-      // Create download link
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      
-      // Extract filename from path
+      // Extract filename from path (format: upload/Profile/email.extension)
       const fileName = teacherInfo.ProfileImage.split("/").pop() || `profile-${user?.email || "image"}.jpg`
-      link.download = fileName
       
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      // Create download link with error handling
+      let downloadUrl: string | null = null
+      try {
+        downloadUrl = window.URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = downloadUrl
+        link.download = fileName
+        
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
 
-      toast({
-        title: "Download Started",
-        description: "Profile image download started successfully.",
-      })
+        toast({
+          title: "Download Started",
+          description: "Profile image download started successfully.",
+        })
+      } catch (linkError: any) {
+        console.error("Error creating download link:", linkError)
+        throw new Error("Failed to initiate download. Please try again.")
+      } finally {
+        // Always cleanup blob URL
+        if (downloadUrl) {
+          window.URL.revokeObjectURL(downloadUrl)
+        }
+      }
     } catch (error: any) {
       console.error("Error downloading profile image:", error)
       toast({
@@ -756,6 +795,9 @@ export default function ProfilePage() {
       return
     }
 
+    const originalProfileImage = teacherInfo.ProfileImage // Store for rollback
+    let deleteSucceeded = false
+
     try {
       setIsUploadingImage(true)
 
@@ -766,13 +808,24 @@ export default function ProfilePage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Delete failed" }))
-        throw new Error(errorData.error || "Failed to delete image")
+        
+        // More specific error messages
+        let errorMessage = errorData.error || "Failed to delete image"
+        if (response.status === 404) {
+          errorMessage = "Image not found. It may have already been deleted."
+        } else if (response.status === 500) {
+          errorMessage = "Server error while deleting image. Please try again."
+        }
+        
+        throw new Error(errorMessage)
       }
 
       const result = await response.json()
       if (!result.success) {
         throw new Error(result.error || "Failed to delete image")
       }
+
+      deleteSucceeded = true
 
       // Update teacher info to remove profile image path
       const teacherId = user?.role_id || teacherInfo?.Tid
@@ -793,12 +846,13 @@ export default function ProfilePage() {
       })
 
       if (!updateResponse.ok) {
-        throw new Error("Failed to update profile")
+        const errorData = await updateResponse.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to update profile. Image was deleted but profile not updated.")
       }
 
       const updateResult = await updateResponse.json()
       if (!updateResult.success) {
-        throw new Error(updateResult.error || "Failed to update profile")
+        throw new Error(updateResult.error || "Failed to update profile. Image was deleted but profile not updated.")
       }
 
       // Update local state
@@ -806,11 +860,27 @@ export default function ProfilePage() {
       setProfileImage(null)
       setPendingProfileImageFile(null)
 
-      // Update auth context
-      updateUser({ profilePicture: undefined })
+      // Update auth context - same pattern as successful profile save
+      const authUpdates: any = {
+        profilePicture: undefined
+      }
+      updateUser(authUpdates)
 
       // Invalidate cache
       await invalidateProfile()
+
+      // Dispatch custom event to notify header component to refresh profile image
+      // Same pattern as successful profile save
+      if (typeof window !== "undefined") {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("profileImageUpdated", {
+            detail: { 
+              profilePicture: undefined,
+              timestamp: Date.now()
+            }
+          }))
+        }, 100) // Small delay to ensure AuthContext has updated
+      }
 
       toast({
         title: "Image Removed",
@@ -818,11 +888,51 @@ export default function ProfilePage() {
       })
     } catch (error: any) {
       console.error("Error removing profile image:", error)
-      toast({
-        title: "Remove Failed",
-        description: error.message || "Failed to remove profile image. Please try again.",
-        variant: "destructive"
-      })
+      
+      // If delete succeeded but update failed, update local state to null
+      // This way the UI reflects the deletion, and when user clicks "Save Changes",
+      // the null value will be saved to backend
+      if (deleteSucceeded) {
+        // Update local state to reflect deletion (even though backend update failed)
+        const updatedPayload: TeacherInfo = {
+          ...teacherInfo,
+          ProfileImage: null,
+        }
+        setTeacherInfo(updatedPayload)
+        setProfileImage(null)
+        setPendingProfileImageFile(null)
+
+        // Update auth context - same pattern as successful profile save
+        // This ensures the UI and header reflect the deletion
+        const authUpdates: any = {
+          profilePicture: undefined
+        }
+        updateUser(authUpdates)
+
+        // Dispatch custom event to notify header component
+        if (typeof window !== "undefined") {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("profileImageUpdated", {
+              detail: { 
+                profilePicture: undefined,
+                timestamp: Date.now()
+              }
+            }))
+          }, 100)
+        }
+
+        toast({
+          title: "Image Deleted",
+          description: "Image was deleted from storage. Click 'Save Changes' to update your profile and sync the change.",
+          variant: "default"
+        })
+      } else {
+        toast({
+          title: "Remove Failed",
+          description: error.message || "Failed to remove profile image. Please try again.",
+          variant: "destructive"
+        })
+      }
     } finally {
       setIsUploadingImage(false)
     }
@@ -1013,7 +1123,8 @@ export default function ProfilePage() {
           // Clear pending file
           setPendingProfileImageFile(null)
 
-          // Fetch the full URL for immediate preview with cache-busting
+          // Fetch the S3 presigned URL for immediate preview
+          // Don't append cache-busting params to S3 presigned URLs (breaks signature)
           try {
             const urlResponse = await fetch("/api/teacher/profile/image", {
               method: "POST",
@@ -1024,21 +1135,44 @@ export default function ProfilePage() {
             if (urlResponse.ok) {
               const urlData = await urlResponse.json()
               if (urlData.success && urlData.url) {
-                const ts = urlData.timestamp || Date.now()
-                const sep = urlData.url.includes("?") ? "&" : "?"
-                const imageUrl = `${urlData.url}${sep}t=${ts}`
-                console.log("Setting profile image after S3 upload:", imageUrl)
+                // Use S3 presigned URL as-is - don't modify it
+                console.log("Setting profile image after S3 upload:", urlData.url)
                 // Mark that we just set this image path
                 justSetProfileImageRef.current = uploadResult.path
-                setProfileImage(imageUrl)
+                setProfileImage(urlData.url)
+              } else {
+                // File not found or error getting URL
+                console.warn("Failed to get presigned URL after upload:", urlData.error)
+                toast({
+                  title: "Image Uploaded",
+                  description: "Image uploaded successfully, but preview unavailable. Please refresh the page.",
+                  variant: "default"
+                })
               }
+            } else {
+              // HTTP error getting URL
+              const errorData = await urlResponse.json().catch(() => ({}))
+              console.warn("Failed to fetch image URL for preview:", errorData.error || urlResponse.statusText)
+              toast({
+                title: "Image Uploaded",
+                description: "Image uploaded successfully, but preview unavailable. Please refresh the page.",
+                variant: "default"
+              })
             }
-          } catch (urlErr) {
-            console.warn("Failed to fetch image URL for preview:", urlErr)
+          } catch (urlErr: any) {
+            console.error("Error fetching image URL for preview:", urlErr)
+            toast({
+              title: "Image Uploaded",
+              description: "Image uploaded successfully, but preview unavailable. Please refresh the page.",
+              variant: "default"
+            })
             // Don't fail the save if URL fetch fails
           }
         } catch (imageError: any) {
           console.error("Error uploading profile image to S3:", imageError)
+          
+          // Cleanup pending file on error
+          setPendingProfileImageFile(null)
           
           // Determine error type for better user feedback
           let errorTitle = "S3 Upload Failed"
@@ -1162,20 +1296,16 @@ export default function ProfilePage() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ path: payload.ProfileImage }),
-                cache: "no-store",
-                credentials: "include",
               })
 
               if (refreshResponse.ok) {
                 const refreshData = await refreshResponse.json()
                 if (refreshData.success && refreshData.url) {
-                  const ts = refreshData.timestamp || Date.now()
-                  const sep = refreshData.url.includes("?") ? "&" : "?"
-                  const imageUrl = `${refreshData.url}${sep}t=${ts}`
-                  console.log("Setting profile image after profile save:", imageUrl)
+                  // Use S3 presigned URL as-is - don't append parameters (breaks signature)
+                  console.log("Setting profile image after profile save:", refreshData.url)
                   // Mark that we just set this image path
                   justSetProfileImageRef.current = payload.ProfileImage
-                  setProfileImage(imageUrl)
+                  setProfileImage(refreshData.url)
                 }
               }
             } catch (refreshError) {
@@ -2222,14 +2352,15 @@ export default function ProfilePage() {
                         className="w-full h-full object-cover"
                         // crossOrigin="anonymous"
                         onError={(e) => {
+                          const target = e.currentTarget as HTMLImageElement
                           console.error("Profile image load error:", {
                             url: profileImage,
-                            error: e,
-                            target: e.currentTarget
+                            src: target?.src,
+                            errorMessage: "Image failed to load"
                           })
-                          // Don't clear immediately for S3 URLs - might be CORS issue
+                          // Don't clear immediately for S3 URLs - might be temporary CORS issue
                           // Only clear if it's not an S3 URL
-                          if (!profileImage.includes('s3.amazonaws.com')) {
+                          if (!profileImage?.includes('s3.amazonaws.com') && !profileImage?.includes('amazonaws.com')) {
                             setProfileImage(null)
                           }
                         }}
@@ -2247,17 +2378,17 @@ export default function ProfilePage() {
                     <>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
-                            disabled={isUploadingImage}
-                            className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      <button
+                        disabled={isUploadingImage}
+                        className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Profile image options"
-                          >
-                            {isUploadingImage ? (
-                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                            ) : (
-                              <Camera className="h-4 w-4" />
-                            )}
-                          </button>
+                      >
+                        {isUploadingImage ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                        ) : (
+                          <Camera className="h-4 w-4" />
+                        )}
+                      </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48 sm:w-56">
                           {teacherInfo?.ProfileImage && (

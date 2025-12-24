@@ -29,79 +29,49 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0) // Force refresh trigger
 
-  // Fetch profile image for teachers when profilePicture path changes
+  // Fetch profile image from S3 for teachers when profilePicture path changes
+  // This fetches the S3 presigned URL using the path format: upload/Profile/teacheremailId.extension
   useEffect(() => {
     const fetchProfileImage = async () => {
+      // Only fetch for teachers (user_type === 4) and if profilePicture exists
       if (user?.user_type !== 4 || !user?.profilePicture) {
         setProfileImageUrl(null)
         return
       }
 
       try {
-        // Use cache-busting timestamp to ensure fresh image
-        // Add a unique timestamp to force refresh even if path is the same
-        const timestamp = Date.now()
-        
-        // First, get the image URL from API (POST endpoint returns JSON with URL)
+        // Call API to get S3 presigned URL or local URL
+        // The API handles both S3 (upload/Profile/...) and local paths
         const response = await fetch("/api/teacher/profile/image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ path: user.profilePicture }),
-          cache: "no-store",
-          credentials: "include", // Include cookies for production
         })
 
         if (!response.ok) {
-          console.error(`Failed to fetch image URL: ${response.status} ${response.statusText}`)
+          // 404 or other error - file doesn't exist, show default icon
+          const errorData = await response.json().catch(() => ({}))
+          if (response.status === 404) {
+            console.warn("Profile image not found:", errorData.error || "File not found")
+          } else {
+            console.error(`Failed to fetch image URL: ${response.status} ${response.statusText}`)
+          }
           setProfileImageUrl(null)
           return
         }
 
         const data = await response.json()
         if (data.success && data.url) {
-          const imgTimestamp = data.timestamp || timestamp
-          let finalUrl = data.url
-          
-          // Handle both absolute URLs (S3) and relative URLs (local)
-          try {
-            // If it's already an absolute URL (starts with http), use it directly
-            if (data.url.startsWith("http://") || data.url.startsWith("https://")) {
-              const urlObj = new URL(data.url)
-              // Add both timestamp from API and current timestamp for maximum cache busting
-              urlObj.searchParams.set("t", imgTimestamp.toString())
-              urlObj.searchParams.set("_", timestamp.toString()) // Additional cache buster
-              urlObj.searchParams.set("r", refreshTrigger.toString()) // Refresh trigger for force refresh
-              finalUrl = urlObj.toString()
-            } else {
-              // Relative URL - construct full URL
-              const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-              const urlObj = new URL(data.url, baseUrl)
-              urlObj.searchParams.set("t", imgTimestamp.toString())
-              urlObj.searchParams.set("_", timestamp.toString()) // Additional cache buster
-              urlObj.searchParams.set("r", refreshTrigger.toString()) // Refresh trigger for force refresh
-              finalUrl = urlObj.toString()
-            }
-          } catch (urlError) {
-            // Fallback: simple string concatenation
-            const separator = data.url.includes("?") ? "&" : "?"
-            finalUrl = `${data.url}${separator}t=${imgTimestamp}&_=${timestamp}&r=${refreshTrigger}`
-          }
-          
-          setProfileImageUrl(finalUrl)
+          const imageUrl = `${data.url}`
+          setProfileImageUrl(imageUrl)
         } else {
-          // If POST returns image directly (shouldn't happen, but handle it)
-          const contentType = response.headers.get("content-type")
-          if (contentType && contentType.startsWith("image/")) {
-            // Response is image directly, create blob URL
-            const blob = await response.blob()
-            const blobUrl = URL.createObjectURL(blob)
-            setProfileImageUrl(blobUrl)
-          } else {
-            setProfileImageUrl(null)
-          }
+          // File not found or error - show default icon
+          console.warn("Profile image fetch failed:", data.error || "No URL returned")
+          setProfileImageUrl(null)
         }
       } catch (error) {
-        console.error("Error fetching profile image:", error)
+        console.error("Error fetching profile image URL:", error)
+        // On error, show default icon
         setProfileImageUrl(null)
       }
     }
@@ -115,9 +85,12 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     if (typeof window === "undefined") return
 
     const handleProfileImageUpdate = () => {
-      // Force refresh by incrementing trigger and clearing current image
-      setProfileImageUrl(null) // Clear current image first to show loading state
-      setRefreshTrigger(prev => prev + 1) // This will trigger the useEffect above to fetch new image
+      // Clear current image and trigger refresh to fetch new image
+      setProfileImageUrl(null)
+      // Small delay to ensure AuthContext has updated with new profilePicture
+      setTimeout(() => {
+        setRefreshTrigger(prev => prev + 1)
+      }, 100)
     }
 
     window.addEventListener("profileImageUpdated" as any, handleProfileImageUpdate as EventListener)
@@ -131,13 +104,20 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
     if (typeof window === "undefined") return
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "user" && e.newValue) {
+      if (e.key === "user") {
         try {
-          const updatedUser = JSON.parse(e.newValue)
-          // If profilePicture changed, trigger a refresh
-          if (updatedUser.profilePicture && updatedUser.profilePicture !== user?.profilePicture) {
-            setRefreshTrigger(prev => prev + 1)
-            setProfileImageUrl(null) // Clear current image to force reload
+          if (e.newValue) {
+            const updatedUser = JSON.parse(e.newValue)
+            // If profilePicture changed (including when removed), trigger a refresh
+            const newProfilePicture = updatedUser.profilePicture || null
+            const currentProfilePicture = user?.profilePicture || null
+            if (newProfilePicture !== currentProfilePicture) {
+              setProfileImageUrl(null) // Clear current image to force reload
+              setRefreshTrigger(prev => prev + 1)
+            }
+          } else {
+            // User data cleared - clear image
+            setProfileImageUrl(null)
           }
         } catch (error) {
           console.error("Error parsing user from storage:", error)
@@ -362,7 +342,30 @@ export function Header({ onMobileMenuToggle }: HeaderProps) {
               <Button variant="ghost" className="relative h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10 rounded-full p-0 flex-shrink-0">
                 <Avatar className="h-8 w-8 sm:h-9 sm:w-9 lg:h-10 lg:w-10">
                   {profileImageUrl ? (
-                    <AvatarImage src={profileImageUrl} alt={user?.name || "User"} />
+                    <AvatarImage 
+                      src={profileImageUrl} 
+                      alt={user?.name || "User"}
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement
+                        console.error("Header profile image load error:", {
+                          url: profileImageUrl,
+                          src: target?.src,
+                          errorMessage: "Image failed to load"
+                        })
+                        // For S3 URLs, try to refresh after a delay (might be temporary CORS issue)
+                        if (profileImageUrl.includes('s3.amazonaws.com') || profileImageUrl.includes('amazonaws.com')) {
+                          setTimeout(() => {
+                            setRefreshTrigger(prev => prev + 1)
+                          }, 2000)
+                        } else {
+                          // For non-S3 URLs, clear immediately to show default icon
+                          setProfileImageUrl(null)
+                        }
+                      }}
+                      onLoad={() => {
+                        console.log("Header profile image loaded successfully:", profileImageUrl)
+                      }}
+                    />
                   ) : (
                     <AvatarFallback className="bg-blue-500 text-white text-[10px] sm:text-xs">
                       {user ? getInitials(user.email) : <User className="h-3 w-3 sm:h-4 sm:w-4" />}

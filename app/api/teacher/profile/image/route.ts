@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { writeFile, readFile, unlink } from "fs/promises"
 import { existsSync, mkdirSync } from "fs"
 import { join } from "path"
-import { isS3Configured, uploadToS3, getSignedUrl, deleteFromS3 } from "@/lib/s3-service"
+import { isS3Configured, uploadToS3, getSignedUrl, deleteFromS3, downloadFromS3 } from "@/lib/s3-service"
 import type { FilePatternMetadata } from "@/lib/s3-service"
 import { authenticateRequest } from "@/lib/api-auth"
 
@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const imagePath = searchParams.get("path")
+    const download = searchParams.get("download") === "true" // Check if this is a download request
     const fileName = getFileNameFromPath(imagePath)
     if (!fileName) {
       return NextResponse.json({ success: false, error: "Image path is required" }, { status: 400 })
@@ -46,27 +47,60 @@ export async function GET(request: NextRequest) {
 
     const localFilePath = join(PROFILE_IMAGE_DIR, fileName)
 
+    // Handle local file
     if (existsSync(localFilePath)) {
       const fileBuffer = await readFile(localFilePath)
       const mimeType = "image/jpeg"
+      const headers: Record<string, string> = {
+        "Content-Type": mimeType,
+        "Cache-Control": "public, max-age=0, must-revalidate",
+      }
+      
+      // Add download header if this is a download request
+      if (download) {
+        headers["Content-Disposition"] = `attachment; filename="${fileName}"`
+      }
+      
       return new NextResponse(new Uint8Array(fileBuffer), {
         status: 200,
-        headers: {
-          "Content-Type": mimeType,
-          "Cache-Control": "public, max-age=0, must-revalidate",
-        },
+        headers,
       })
     }
 
-    // Fallback to S3 if configured and virtual path looks valid
+    // Handle S3 file - download directly from S3 (no CORS issues)
     if (isS3Configured() && imagePath?.startsWith("upload/")) {
       try {
-        const signed = await getSignedUrl(imagePath)
-        if (signed.success && signed.url) {
-          return NextResponse.redirect(signed.url)
+        // For downloads, fetch from S3 server-side and stream to client
+        if (download) {
+          const downloadResult = await downloadFromS3(imagePath)
+          
+          if (downloadResult.success && downloadResult.buffer) {
+            const contentType = downloadResult.contentType || "image/jpeg"
+            return new NextResponse(new Uint8Array(downloadResult.buffer), {
+              status: 200,
+              headers: {
+                "Content-Type": contentType,
+                "Content-Disposition": `attachment; filename="${fileName}"`,
+                "Cache-Control": "public, max-age=0, must-revalidate",
+              },
+            })
+          } else {
+            return NextResponse.json({ success: false, error: downloadResult.message || "Failed to download from S3" }, { status: 500 })
+          }
+        } else {
+          // For viewing, return presigned URL (redirect)
+          // getSignedUrl now checks file existence internally
+          const signed = await getSignedUrl(imagePath)
+          if (signed.success && signed.url) {
+            return NextResponse.redirect(signed.url)
+          } else {
+            // File doesn't exist in S3, return 404
+            return NextResponse.json({ success: false, error: signed.message || "Image not found in S3" }, { status: 404 })
+          }
         }
       } catch (err) {
-        console.error("Error getting S3 URL:", err)
+        console.error("Error getting S3 file:", err)
+        return NextResponse.json({ success: false, error: err instanceof Error ? err.message : "Failed to fetch from S3" }, { status: 500 })
       }
     }
 
@@ -105,12 +139,17 @@ export async function POST(request: NextRequest) {
 
       if (isS3Configured() && imagePath?.startsWith("upload/")) {
         try {
+          // getSignedUrl now checks file existence internally
           const signed = await getSignedUrl(imagePath)
           if (signed.success && signed.url) {
             return NextResponse.json({ success: true, url: signed.url, path: imagePath })
+          } else {
+            // File doesn't exist in S3
+            return NextResponse.json({ success: false, error: signed.message || "Image not found in S3" }, { status: 404 })
           }
         } catch (err) {
           console.error("Error getting S3 URL:", err)
+          return NextResponse.json({ success: false, error: "Failed to get S3 URL" }, { status: 500 })
         }
       }
 

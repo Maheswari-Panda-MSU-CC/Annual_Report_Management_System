@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl as getS3SignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Initialize S3 Client
@@ -281,6 +281,7 @@ export async function deleteFromS3(
 
 /**
  * Get presigned URL for secure file access
+ * Checks if file exists in S3 before generating presigned URL
  */
 export async function getSignedUrl(
   virtualPath: string,
@@ -289,7 +290,21 @@ export async function getSignedUrl(
   try {
     // Validate path
     if (!validateVirtualPath(virtualPath)) {
-      throw new Error('Invalid virtual path');
+      return {
+        success: false,
+        url: '',
+        message: 'Invalid virtual path',
+      };
+    }
+
+    // Check if file exists in S3 before generating presigned URL
+    const existsCheck = await checkS3ObjectExists(virtualPath);
+    if (!existsCheck.exists) {
+      return {
+        success: false,
+        url: '',
+        message: existsCheck.message || 'Object not found in S3',
+      };
     }
 
     const command = new GetObjectCommand({
@@ -310,6 +325,50 @@ export async function getSignedUrl(
       success: false,
       url: '',
       message: error.message || 'Failed to generate signed URL',
+    };
+  }
+}
+
+/**
+ * Check if an S3 object exists
+ */
+export async function checkS3ObjectExists(
+  virtualPath: string
+): Promise<{ exists: boolean; message: string }> {
+  try {
+    // Validate path
+    if (!validateVirtualPath(virtualPath)) {
+      return {
+        exists: false,
+        message: 'Invalid virtual path',
+      };
+    }
+
+    const command = new HeadObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: virtualPath,
+    });
+
+    await s3Client.send(command);
+
+    return {
+      exists: true,
+      message: 'Object exists in S3',
+    };
+  } catch (error: any) {
+    // If error code is NotFound, the object doesn't exist
+    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+      return {
+        exists: false,
+        message: 'Object not found in S3',
+      };
+    }
+    
+    // Other errors (permissions, network, etc.)
+    console.error('S3 object existence check error:', error);
+    return {
+      exists: false,
+      message: error.message || 'Failed to check object existence',
     };
   }
 }
