@@ -54,7 +54,7 @@ export const FOLDER_MAPPINGS: Record<string, string> = {
   'consultancy': 'Consultancy_Undertaken',
   'copyrights': 'Copyrights',
   'patents': 'patents',
-  'policy': 'Policy_Document',
+  'policy': 'Policy_Doc',
   'collaborations': 'Collaborations',
 };
 
@@ -129,7 +129,7 @@ export const FILES_TO_MIGRATE = [
   { path: 'app/(dashboards)/teacher/research-contributions/consultancy/add/page.tsx', folder: 'Consultancy_Undertaken', type: 'add' },
   { path: 'app/(dashboards)/teacher/research-contributions/copyrights/add/page.tsx', folder: 'Copyrights', type: 'add' },
   { path: 'app/(dashboards)/teacher/research-contributions/patents/add/page.tsx', folder: 'patents', type: 'add' },
-  { path: 'app/(dashboards)/teacher/research-contributions/policy/add/page.tsx', folder: 'Policy_Document', type: 'add' },
+  { path: 'app/(dashboards)/teacher/research-contributions/policy/add/page.tsx', folder: 'Policy_Doc', type: 'add' },
   { path: 'app/(dashboards)/teacher/research-contributions/collaborations/add/page.tsx', folder: 'Collaborations', type: 'add' },
 ];
 

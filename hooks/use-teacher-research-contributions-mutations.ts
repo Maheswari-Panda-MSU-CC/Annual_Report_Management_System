@@ -171,12 +171,19 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async ({ id, docPath }: { id: number; docPath?: string | null }) => {
       const { controller, unregister } = createAbortController()
       const config = DELETE_CONFIG[sectionId]
       try {
         const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
           method: "DELETE",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            [config.param]: id,
+            doc: docPath || null,
+          }),
           signal: controller.signal,
         })
         if (!res.ok) {
@@ -188,7 +195,7 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
         unregister()
       }
     },
-    onMutate: async (id) => {
+    onMutate: async ({ id }) => {
       await queryClient.cancelQueries({ 
         queryKey: researchContributionsQueryKeys.section(teacherId, sectionId) 
       })
@@ -207,7 +214,7 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
       
       return { previousData }
     },
-    onError: (err, id, context) => {
+    onError: (err, { id }, context) => {
       if (handleUnauthorized(err)) return
       if (context?.previousData) {
         queryClient.setQueryData(
@@ -222,7 +229,7 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.section(teacherId, sectionId),
         refetchType: 'all'
@@ -230,11 +237,27 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.all(teacherId)
       })
-      toast({ 
-        title: "Success", 
-        description: DELETE_CONFIG[sectionId].successMessage,
-        duration: 3000,
-      })
+      
+      // Show success message - handle different scenarios
+      if (data.warning) {
+        toast({
+          title: "Success",
+          description: data.message || DELETE_CONFIG[sectionId].successMessage,
+          duration: 5000,
+        })
+        toast({
+          title: "Warning",
+          description: data.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      } else {
+        toast({ 
+          title: "Success", 
+          description: data.message || DELETE_CONFIG[sectionId].successMessage,
+          duration: 3000,
+        })
+      }
     },
   })
 

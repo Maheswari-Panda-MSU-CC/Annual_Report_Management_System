@@ -184,8 +184,45 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Get policyId from query params (backward compatibility)
     const { searchParams } = new URL(request.url)
-    const policyId = parseInt(searchParams.get('policyId') || '', 10)
+    let policyId = parseInt(searchParams.get('policyId') || '', 10)
+    let docPath: string | null = null
+
+    // Try to get doc from request body (preferred method)
+    try {
+      // Check if request has body content
+      const contentType = request.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const bodyText = await request.text()
+          if (bodyText && bodyText.trim()) {
+            const body = JSON.parse(bodyText)
+            if (body) {
+              if (body.policyId) {
+                const bodyPolicyId = parseInt(String(body.policyId), 10)
+                if (!isNaN(bodyPolicyId)) policyId = bodyPolicyId
+              }
+              if (body.doc && typeof body.doc === 'string') {
+                docPath = body.doc.trim() || null
+              }
+            }
+          }
+        } catch (parseError) {
+          // JSON parse failed, continue with query params
+          console.warn('[DELETE Policy] Could not parse JSON body:', parseError)
+        }
+      }
+    } catch (bodyError) {
+      // Body reading failed, continue with query params only
+      console.warn('[DELETE Policy] Could not read request body, using query params:', bodyError)
+    }
+
+    // Fallback: try query param for doc (backward compatibility)
+    if (!docPath) {
+      const queryDoc = searchParams.get('doc')
+      if (queryDoc) docPath = queryDoc
+    }
 
     if (isNaN(policyId)) {
       return NextResponse.json(
@@ -195,14 +232,74 @@ export async function DELETE(request: NextRequest) {
     }
 
     const pool = await connectToDatabase()
+    
+    // Step 1: Delete S3 document if doc exists and is a valid S3 path
+    let s3DeleteSuccess = false
+    let s3DeleteMessage = 'No document to delete'
+    
+    if (docPath && typeof docPath === 'string' && docPath.trim() && docPath.startsWith('upload/')) {
+      try {
+        const { deleteFromS3 } = await import('@/lib/s3-service')
+        
+        console.log(`[DELETE Policy] Attempting to delete S3 document: ${docPath}`)
+        const s3DeleteResult = await deleteFromS3(docPath.trim())
+        
+        if (s3DeleteResult.success) {
+          s3DeleteSuccess = true
+          s3DeleteMessage = 'S3 document deleted successfully'
+          console.log(`[DELETE Policy] ✓ S3 document deleted: ${docPath}`)
+        } else {
+          // Check if file doesn't exist (acceptable scenario)
+          if (s3DeleteResult.message?.toLowerCase().includes('not found') || 
+              s3DeleteResult.message?.toLowerCase().includes('object not found')) {
+            s3DeleteSuccess = true // Consider this success - file already gone
+            s3DeleteMessage = 'S3 document not found (may have been already deleted)'
+            console.log(`[DELETE Policy] ⚠ S3 document not found (acceptable): ${docPath}`)
+          } else {
+            s3DeleteSuccess = false
+            s3DeleteMessage = s3DeleteResult.message || 'Failed to delete S3 document'
+            console.error(`[DELETE Policy] ✗ Failed to delete S3 document: ${docPath}`, s3DeleteResult.message)
+          }
+        }
+      } catch (s3Error: any) {
+        s3DeleteSuccess = false
+        s3DeleteMessage = s3Error.message || 'Error deleting S3 document'
+        console.error('[DELETE Policy] Error deleting S3 document:', s3Error)
+      }
+    } else if (docPath && docPath.trim()) {
+      // Doc path exists but is not a valid S3 path - log warning but continue
+      console.warn(`[DELETE Policy] Invalid S3 path format (not starting with 'upload/'): ${docPath}`)
+      s3DeleteMessage = 'Invalid document path format (not an S3 path)'
+    }
+
+    // Step 2: Delete database record
     const req = pool.request()
     req.input('Id', sql.Int, policyId)
-
     await req.execute('sp_DeletePolicy_DocumentDeveloped')
-
-    return NextResponse.json({ success: true, message: 'Policy document deleted successfully' })
+    console.log(`[DELETE Policy] ✓ Database record deleted: policyId=${policyId}`)
+    
+    // Step 3: Return success response with S3 deletion status
+    // Database deletion succeeded - that's the primary operation
+    // S3 deletion failure is logged but doesn't block the operation
+    if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {
+      // Success if: S3 deleted successfully OR no S3 file to delete OR invalid path
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Policy document and document deleted successfully',
+        s3DeleteMessage,
+      })
+    } else {
+      // Database deleted but S3 deletion failed
+      // Still return success but include warning
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Policy document deleted from database',
+        warning: `S3 document deletion failed: ${s3DeleteMessage}`,
+        s3DeleteMessage,
+      })
+    }
   } catch (err: any) {
-    console.error('Error deleting policy document:', err)
+    console.error('[DELETE Policy] Error deleting policy document:', err)
     return NextResponse.json(
       { success: false, error: err.message || 'Failed to delete policy document' },
       { status: 500 }

@@ -894,39 +894,48 @@ export default function ResearchContributionsPage() {
 
   const handleDelete = useCallback((sectionId: string, itemId: number) => {
     const section = sectionId as SectionId
+    
+    // Find the item to get its doc field (for patents and other sections that use S3)
+    let docPath: string | null = null
+    const sectionData = data[section as keyof typeof data]
+    if (Array.isArray(sectionData)) {
+      const item = sectionData.find((item: any) => item.id === itemId)
+      docPath = item?.doc || item?.supportingDocument?.[0] || null
+    }
+    
     switch (section) {
       case "patents":
-        deletePatent.mutate(itemId)
+        deletePatent.mutate({ id: itemId, docPath })
         break
       case "policy":
-        deletePolicy.mutate(itemId)
+        deletePolicy.mutate({ id: itemId, docPath })
         break
       case "econtent":
-        deleteEContent.mutate(itemId)
+        deleteEContent.mutate({ id: itemId, docPath })
         break
       case "consultancy":
-        deleteConsultancy.mutate(itemId)
+        deleteConsultancy.mutate({ id: itemId, docPath })
         break
       case "collaborations":
-        deleteCollaboration.mutate(itemId)
+        deleteCollaboration.mutate({ id: itemId, docPath })
         break
       case "visits":
-        deleteVisit.mutate(itemId)
+        deleteVisit.mutate({ id: itemId, docPath })
         break
       case "financial":
-        deleteFinancial.mutate(itemId)
+        deleteFinancial.mutate({ id: itemId, docPath })
         break
       case "jrfSrf":
-        deleteJrfSrf.mutate(itemId)
+        deleteJrfSrf.mutate({ id: itemId, docPath })
         break
       case "phd":
-        deletePhd.mutate(itemId)
+        deletePhd.mutate({ id: itemId, docPath })
         break
       case "copyrights":
-        deleteCopyright.mutate(itemId)
+        deleteCopyright.mutate({ id: itemId, docPath })
         break
     }
-  }, [deletePatent, deletePolicy, deleteEContent, deleteConsultancy, deleteCollaboration, deleteVisit, deleteFinancial, deleteJrfSrf, deletePhd, deleteCopyright])
+  }, [deletePatent, deletePolicy, deleteEContent, deleteConsultancy, deleteCollaboration, deleteVisit, deleteFinancial, deleteJrfSrf, deletePhd, deleteCopyright, data])
 
   const handleEdit = useCallback((sectionId: string, item: any) => {
     // Clear any previous document data before opening edit modal
@@ -995,37 +1004,170 @@ export default function ResearchContributionsPage() {
         : editingItem.doc || editingItem.supportingDocument?.[0] || null
 
       // Handle document upload to S3 if a new document was uploaded
-      let docUrl = documentUrl
+      let docUrl: string | null = documentUrl
+      const oldDocPath = editingItem.doc || null // Store for deletion if new file is uploaded
+
+      // Enhanced helper function to handle old file deletion with improved logging and error handling
+      const handleOldFileDeletion = async (
+        oldPath: string | null,
+        newPath: string,
+        recordId: number
+      ) => {
+        // Early return if no old path or paths are the same (updating same file)
+        if (!oldPath || !oldPath.startsWith("upload/")) {
+          return
+        }
+
+        // If old and new paths are the same, no deletion needed (same file being updated)
+        if (oldPath === newPath) {
+          console.log("Old and new file paths are identical - skipping deletion (same file update)")
+          return
+        }
+
+        // Import helper functions
+        const { deleteDocument, checkDocumentExists } = await import("@/lib/s3-upload-helper")
+
+        try {
+          // Optional: Check if file exists before attempting deletion (optimization)
+          const existsCheck = await checkDocumentExists(oldPath)
+          
+          if (!existsCheck.exists) {
+            console.log(`Old file does not exist in S3 (may have been already deleted): ${oldPath}`)
+            return
+          }
+
+          // File exists, proceed with deletion
+          console.log(`Attempting to delete old S3 file: ${oldPath}`)
+          const deleteResult = await deleteDocument(oldPath)
+          
+          if (deleteResult.success) {
+            console.log(`Successfully deleted old S3 file: ${oldPath}`)
+          } else {
+            console.warn(`Failed to delete old S3 file: ${oldPath}`, {
+              error: deleteResult.message,
+              recordId,
+              oldPath,
+              newPath
+            })
+            // Don't fail the update if old file deletion fails - this is a cleanup operation
+          }
+        } catch (deleteError: any) {
+          console.warn("Error during old file deletion process:", {
+            error: deleteError?.message || deleteError,
+            oldPath,
+            newPath,
+            recordId
+          })
+          // Don't fail the update if old file deletion fails - this is a cleanup operation
+        }
+      }
 
       // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
       if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
         try {
-          // Extract fileName from local URL
-          const fileName = documentUrl.split("/").pop()
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
           
-          if (fileName) {
-            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+          // For inline edits, use existing item ID if available
+          const recordId = editingItem?.id || Date.now()
+          
+          // Determine folder name based on section
+          const folderNameMap: Record<SectionId, string> = {
+            patents: "patents",
+            policy: "Policy_Doc",
+            econtent: "EContent",
+            consultancy: "Consultancy",
+            collaborations: "Collaborations",
+            visits: "Visits",
+            financial: "Financial_Support",
+            jrfSrf: "JRF_SRF",
+            phd: "PhD_Guidance",
+            copyrights: "Copyrights",
+          }
+          const folderName = folderNameMap[sectionId] || "research_contributions"
+          
+          // Upload new document to S3
+          docUrl = await uploadDocumentToS3(
+            documentUrl,
+            user?.role_id || 0,
+            recordId,
+            folderName
+          )
+          
+          // CRITICAL: For patents and policy - verify we got a valid S3 virtual path (not dummy URL)
+          if (sectionId === "patents" || sectionId === "policy") {
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
             
-            // For inline edits, use existing item ID if available
-            const recordId = editingItem?.id || Date.now()
-            
-            docUrl = await uploadDocumentToS3(
-              documentUrl,
-              user?.role_id||0,
-              recordId,
-              editingItem?.category || "research_contributions"
-            )
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+          }
+
+          // Enhanced deletion logic: Delete old file if it exists and is different from new one
+          if ((sectionId === "patents" || sectionId === "policy") && oldDocPath && docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, recordId)
           }
         } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          setIsSubmitting(false)
-          return
+          console.error(`❌ [${sectionId} Edit] Document upload error:`, docError)
+          
+          // For patents and policy - prevent update if S3 upload fails
+          if (sectionId === "patents" || sectionId === "policy") {
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+              duration: 5000,
+            })
+            setIsSubmitting(false)
+            return // CRITICAL: Prevent record from being updated
+          } else {
+            // For other sections - show warning but allow update (backward compatibility)
+            toast({
+              title: "Document Upload Warning",
+              description: docError.message || "Failed to upload document to S3. Update will continue without document.",
+              variant: "default",
+              duration: 5000,
+            })
+            // Continue with update using existing doc or null
+            docUrl = oldDocPath || null
+          }
         }
+      } else if (documentUrl && documentUrl.startsWith("upload/")) {
+        // Already an S3 path, use as-is
+        docUrl = documentUrl
+        
+        // If the document URL changed but is still an S3 path, check if we need to delete old file
+        if ((sectionId === "patents" || sectionId === "policy") && oldDocPath && docUrl && oldDocPath !== docUrl) {
+          const recordId = editingItem?.id || Date.now()
+          await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+        }
+      } else if (!documentUrl && oldDocPath) {
+        // No new document, use existing one
+        docUrl = oldDocPath
+      } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/") && !documentUrl.startsWith("upload/")) {
+        // Invalid path format
+        toast({
+          title: "Invalid Document Path",
+          description: "Document path format is invalid. Please upload the document again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+        setIsSubmitting(false)
+        return // Prevent record from being updated
+      }
+
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path (for patents and policy)
+      if ((sectionId === "patents" || sectionId === "policy") && (!docUrl || !docUrl.startsWith("upload/"))) {
+        toast({
+          title: "Validation Error",
+          description: "Document validation failed. Update will not be saved.",
+          variant: "destructive",
+          duration: 5000,
+        })
+        setIsSubmitting(false)
+        return // Prevent record from being updated
       }
 
       // Create update payload using mapper - pass docUrl instead of selectedFiles

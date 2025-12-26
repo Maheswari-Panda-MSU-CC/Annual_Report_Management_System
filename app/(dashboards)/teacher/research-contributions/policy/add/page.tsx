@@ -223,39 +223,73 @@ export default function AddPolicyPage() {
     }
 
     setIsSubmitting(true)
-    try {
-      // Handle document upload to S3 if a new document was uploaded
-      let docUrl = documentUrl
+    
+    // Handle document upload to S3 - MUST succeed before saving record
+    let docUrl: string | null = null
 
-      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
-      if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
-        try {
-          // Extract fileName from local URL
-          const fileName = documentUrl.split("/").pop()
-          
-          if (fileName) {
-            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
-            
-            const tempRecordId = Date.now()
-            
-            docUrl = await uploadDocumentToS3(
-              documentUrl,
-              user?.role_id||0,
-              tempRecordId,
-              "Policy_Document"
-            )
-          }
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
-          toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
-            variant: "destructive",
-          })
-          setIsSubmitting(false)
-          return
+    if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+      try {
+        const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+        
+        // For new records, use timestamp as recordId since DB record doesn't exist yet
+        const tempRecordId = Date.now()
+        
+        // Upload new document to S3 with Pattern 1: upload/Policy_Doc/{userId}_{recordId}.pdf
+        docUrl = await uploadDocumentToS3(
+          documentUrl,
+          user?.role_id || 0,
+          tempRecordId,
+          "Policy_Doc"
+        )
+        
+        // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
         }
+        
+        // Additional validation: Ensure it's not a dummy URL
+        if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+          throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+        }
+      } catch (docError: any) {
+        console.error("❌ [Policy Add] Document upload error:", docError)
+        toast({
+          title: "Document Upload Error",
+          description: docError.message || "Failed to upload document to S3. Record will not be saved.",
+          variant: "destructive",
+          duration: 5000,
+        })
+        setIsSubmitting(false)
+        return // CRITICAL: Prevent record from being saved
       }
+    } else if (documentUrl && documentUrl.startsWith("upload/")) {
+      // Already an S3 path, use as-is (should not happen in add page, but handle it)
+      docUrl = documentUrl
+    } else {
+      // Invalid path format or no document
+      toast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      setIsSubmitting(false)
+      return // Prevent record from being saved
+    }
+
+    // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+    if (!docUrl || !docUrl.startsWith("upload/")) {
+      toast({
+        title: "Validation Error",
+        description: "Document upload validation failed. Record will not be saved.",
+        variant: "destructive",
+        duration: 5000,
+      })
+      setIsSubmitting(false)
+      return // Prevent record from being saved
+    }
+
+    try {
 
       // Get level name from levelId
       let levelName = data.level
@@ -275,20 +309,35 @@ export default function AddPolicyPage() {
       // Use mutation to create policy
       createPolicy.mutate(policyData, {
         onSuccess: () => {
+          clearDocumentData()
+          clearAutoFillData()
           // Smooth transition
           setTimeout(() => {
             router.push("/teacher/research-contributions?tab=policy")
           }, 500)
         },
+        onError: (error: Error) => {
+          toast({
+            title: "Error",
+            description: error.message || "Failed to save policy document. Please try again.",
+            variant: "destructive",
+            duration: 5000,
+          })
+        },
       })
     } catch (error: any) {
-      // Error is handled by mutation's onError callback
+      console.error("❌ [Policy Add] Unexpected error:", error)
+      toast({
+        title: "Error",
+        description: error.message || "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+        duration: 5000,
+      })
       setIsSubmitting(false)
     } finally {
       // Only reset if not submitting (mutation handles success/error)
       if (!createPolicy.isPending) {
         setIsSubmitting(false)
-        form.reset()
       }
     }
   }
