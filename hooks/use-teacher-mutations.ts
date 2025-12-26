@@ -159,11 +159,18 @@ export function useJournalMutations() {
   })
 
   const deleteJournal = useMutation({
-    mutationFn: async (journalId: number) => {
+    mutationFn: async ({ journalId, imagePath }: { journalId: number; imagePath?: string | null }) => {
       const { controller, unregister } = createAbortController()
       try {
         const res = await fetch(`/api/teacher/publication/journals?journalId=${journalId}`, {
           method: "DELETE",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            journalId,
+            image: imagePath || null,
+          }),
           signal: controller.signal,
         })
         if (!res.ok) {
@@ -198,7 +205,7 @@ export function useJournalMutations() {
       
       return { previousJournals }
     },
-    onError: (err, journalId, context) => {
+    onError: (err, { journalId }, context) => {
       if (handleUnauthorized(err)) return
       if (context?.previousJournals) {
         queryClient.setQueryData(
@@ -213,7 +220,7 @@ export function useJournalMutations() {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.publications.all(teacherId),
         refetchType: 'active'
@@ -221,11 +228,26 @@ export function useJournalMutations() {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.dashboard(teacherId) 
       })
-      toast({ 
-        title: "Success", 
-        description: "Journal article deleted successfully!",
-        duration: 3000,
-      })
+      // Show success message - handle different scenarios
+      if (data.warning) {
+        toast({
+          title: "Success",
+          description: data.message || "Journal article deleted successfully",
+          duration: 5000,
+        })
+        toast({
+          title: "Warning",
+          description: data.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      } else {
+        toast({ 
+          title: "Success", 
+          description: data.message || "Journal article and document deleted successfully!",
+          duration: 3000,
+        })
+      }
     },
   })
 
@@ -378,11 +400,18 @@ export function useBookMutations() {
   })
 
   const deleteBook = useMutation({
-    mutationFn: async (bookId: number) => {
+    mutationFn: async ({ bookId, imagePath }: { bookId: number; imagePath?: string | null }) => {
       const { controller, unregister } = createAbortController()
       try {
         const res = await fetch(`/api/teacher/publication/books?bookId=${bookId}`, {
           method: "DELETE",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            bookId,
+            image: imagePath || null,
+          }),
           signal: controller.signal,
         })
         if (!res.ok) {
@@ -394,7 +423,7 @@ export function useBookMutations() {
         unregister()
       }
     },
-    onMutate: async (bookId) => {
+    onMutate: async ({ bookId }) => {
       await queryClient.cancelQueries({ 
         queryKey: teacherQueryKeys.publications.books(teacherId) 
       })
@@ -416,7 +445,7 @@ export function useBookMutations() {
       
       return { previousBooks }
     },
-    onError: (err, bookId, context) => {
+    onError: (err, { bookId }, context) => {
       if (handleUnauthorized(err)) return
       if (context?.previousBooks) {
         queryClient.setQueryData(
@@ -431,7 +460,7 @@ export function useBookMutations() {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.publications.all(teacherId),
         refetchType: 'active'
@@ -439,11 +468,26 @@ export function useBookMutations() {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.dashboard(teacherId) 
       })
-      toast({ 
-        title: "Success", 
-        description: "Book/Book chapter deleted successfully!",
-        duration: 3000,
-      })
+      // Show success message - handle different scenarios
+      if (data.warning) {
+        toast({
+          title: "Success",
+          description: data.message || "Book/Book chapter deleted successfully",
+          duration: 5000,
+        })
+        toast({
+          title: "Warning",
+          description: data.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      } else {
+        toast({ 
+          title: "Success", 
+          description: data.message || "Book/Book chapter and document deleted successfully!",
+          duration: 3000,
+        })
+      }
     },
   })
 
@@ -596,11 +640,18 @@ export function usePaperMutations() {
   })
 
   const deletePaper = useMutation({
-    mutationFn: async (paperId: number) => {
+    mutationFn: async ({ paperId, imagePath }: { paperId: number; imagePath?: string | null }) => {
       const { controller, unregister } = createAbortController()
       try {
         const res = await fetch(`/api/teacher/publication/papers?paperId=${paperId}`, {
           method: "DELETE",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            paperId,
+            image: imagePath || null,
+          }),
           signal: controller.signal,
         })
         if (!res.ok) {
@@ -612,7 +663,7 @@ export function usePaperMutations() {
         unregister()
       }
     },
-    onMutate: async (paperId) => {
+    onMutate: async ({ paperId }) => {
       await queryClient.cancelQueries({ 
         queryKey: teacherQueryKeys.publications.papers(teacherId) 
       })
@@ -634,7 +685,7 @@ export function usePaperMutations() {
       
       return { previousPapers }
     },
-    onError: (err, paperId, context) => {
+    onError: (err, { paperId }, context) => {
       if (handleUnauthorized(err)) return
       if (context?.previousPapers) {
         queryClient.setQueryData(
@@ -649,7 +700,7 @@ export function usePaperMutations() {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.publications.all(teacherId),
         refetchType: 'active'
@@ -657,11 +708,26 @@ export function usePaperMutations() {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.dashboard(teacherId) 
       })
-      toast({ 
-        title: "Success", 
-        description: "Paper presentation deleted successfully!",
-        duration: 3000,
-      })
+      // Show success message - handle different scenarios
+      if (data.warning) {
+        toast({
+          title: "Success",
+          description: data.message || "Paper presentation deleted successfully",
+          duration: 5000,
+        })
+        toast({
+          title: "Warning",
+          description: data.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      } else {
+        toast({ 
+          title: "Success", 
+          description: data.message || "Paper presentation and document deleted successfully!",
+          duration: 3000,
+        })
+      }
     },
   })
 

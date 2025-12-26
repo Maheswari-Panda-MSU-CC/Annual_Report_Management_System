@@ -27,7 +27,7 @@ interface BookFormData {
   authors: string
   title: string
   isbn: string
-  cha: string
+  cha: string | null
   publisher_name: string
   submit_date: string
   place: string
@@ -62,7 +62,7 @@ export default function EditBookPage() {
       authors: "",
       title: "",
       isbn: "",
-      cha: "",
+      cha: null,
       publisher_name: "",
       submit_date: "",
       place: "",
@@ -264,8 +264,8 @@ export default function EditBookPage() {
       
       // Chapter/Article Title - replace if exists in extraction (only highlight if non-empty after setting)
       if (fields.cha !== undefined) {
-        const chaValue = fields.cha ? String(fields.cha).trim() : ""
-        setValue("cha", chaValue)
+        const chaValue = fields.cha ? String(fields.cha).trim() : null
+        setValue("cha", chaValue || null)
         if (chaValue) filledFieldNames.push("cha")
       }
       
@@ -357,6 +357,7 @@ export default function EditBookPage() {
 
     // Set existing document URL if available
     if (book.Image) {
+      console.log(book)
       setExistingDocumentUrl(book.Image)
       setDocumentUrl(book.Image)
       setValue("Image", book.Image) // Update form field so cancel handler can detect document
@@ -367,7 +368,7 @@ export default function EditBookPage() {
       authors: book.authors || "",
       title: book.title || "",
       isbn: book.isbn || "",
-      cha: book.cha || "",
+      cha: book.cha || null,
       publisher_name: book.publisher_name || "",
       submit_date: formatDateForInput(book.submit_date),
       place: book.place || "",
@@ -420,38 +421,137 @@ export default function EditBookPage() {
 
     // Handle document upload to S3 if a new document was uploaded
     let pdfPath = existingDocumentUrl || null
-    
+    const oldImagePath = existingDocumentUrl // Store for deletion if new file is uploaded
+
+    // Enhanced helper function to handle old file deletion with improved logging and error handling
+    const handleOldFileDeletion = async (
+      oldPath: string | null,
+      newPath: string,
+      recordId: number
+    ) => {
+      // Early return if no old path or paths are the same (updating same file)
+      if (!oldPath || !oldPath.startsWith("upload/")) {
+        return
+      }
+
+      // If old and new paths are the same, no deletion needed (same file being updated)
+      if (oldPath === newPath) {
+        console.log("Old and new file paths are identical - skipping deletion (same file update)")
+        return
+      }
+
+      // Import helper functions
+      const { deleteDocument, checkDocumentExists } = await import("@/lib/s3-upload-helper")
+
+      try {
+        // Optional: Check if file exists before attempting deletion (optimization)
+        // This prevents unnecessary API calls if file was already deleted
+        const existsCheck = await checkDocumentExists(oldPath)
+        
+        if (!existsCheck.exists) {
+          console.log(`Old file does not exist in S3 (may have been already deleted): ${oldPath}`)
+          return
+        }
+
+        // File exists, proceed with deletion
+        console.log(`Attempting to delete old S3 file: ${oldPath}`)
+        const deleteResult = await deleteDocument(oldPath)
+        
+        if (deleteResult.success) {
+          console.log(`Successfully deleted old S3 file: ${oldPath}`)
+        } else {
+          console.warn(`Failed to delete old S3 file: ${oldPath}`, {
+            error: deleteResult.message,
+            recordId,
+            oldPath,
+            newPath
+          })
+          // Don't fail the update if old file deletion fails - this is a cleanup operation
+        }
+      } catch (deleteError: any) {
+        console.warn("Error during old file deletion process:", {
+          error: deleteError?.message || deleteError,
+          oldPath,
+          newPath,
+          recordId
+        })
+        // Don't fail the update if old file deletion fails - this is a cleanup operation
+      }
+    }
+
     // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
     if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
       try {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
+        // For edit pages, use the actual record ID from the database
         const recordId = parseInt(id as string, 10)
         
+        // Upload new document to S3 with Pattern 1: upload/book/{userId}_{recordId}.pdf
         pdfPath = await uploadDocumentToS3(
           documentUrl,
           user?.role_id || 0,
           recordId,
           "book"
         )
+        
+        // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+        if (!pdfPath || !pdfPath.startsWith("upload/")) {
+          throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+        }
+        
+        // Additional validation: Ensure it's not a dummy URL
+        if (pdfPath.includes("dummy_document") || pdfPath.includes("localhost") || pdfPath.includes("http://") || pdfPath.includes("https://")) {
+          throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+        }
+
+        // Enhanced deletion logic: Delete old file if it exists and is different from new one
+        await handleOldFileDeletion(oldImagePath, pdfPath, recordId)
       } catch (docError: any) {
         console.error("Document upload error:", docError)
         showToast({
           title: "Document Upload Error",
-          description: docError.message || "Failed to upload document. Please try again.",
+          description: docError.message || "Failed to upload document to S3. Update will not be saved.",
           variant: "destructive",
         })
-        return
+        return // CRITICAL: Prevent record from being updated
       }
-    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
-      // Keep existing document URL if it's not a new upload
+    } else if (documentUrl && documentUrl.startsWith("upload/")) {
+      // Already an S3 path, use as-is
       pdfPath = documentUrl
+      
+      // If the document URL changed but is still an S3 path, check if we need to delete old file
+      if (oldImagePath && oldImagePath !== pdfPath) {
+        const recordId = parseInt(id as string, 10)
+        await handleOldFileDeletion(oldImagePath, pdfPath, recordId)
+      }
+    } else if (!documentUrl && existingDocumentUrl) {
+      // No new document, use existing one
+      pdfPath = existingDocumentUrl
+    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/") && !documentUrl.startsWith("upload/")) {
+      // Invalid path format
+      showToast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+      })
+      return // Prevent record from being updated
+    }
+
+    // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+    if (!pdfPath || !pdfPath.startsWith("upload/")) {
+      showToast({
+        title: "Validation Error",
+        description: "Document validation failed. Update will not be saved.",
+        variant: "destructive",
+      })
+      return // Prevent record from being updated
     }
 
     const bookData = {
       title: data.title,
       isbn: data.isbn || null,
-      cha: data.cha || null,
+      cha: (data.cha && typeof data.cha === 'string' && data.cha.trim()) ? data.cha.trim() : null,
       publisher_name: data.publisher_name || null,
       submit_date: data.submit_date || null,
       place: data.place || null,
@@ -660,18 +760,18 @@ export default function EditBookPage() {
               </div>
             </div>
 
-            <div hidden={true}>
-              <Label htmlFor="cha">Chapter/Article Title</Label>
-              <Input 
-                id="cha" 
-                {...register("cha", {
-                  maxLength: { value: 500, message: "Chapter title must not exceed 500 characters" }
-                })} 
-                placeholder="Enter chapter/article title if applicable"
-                disabled={updateBook.isPending}
-              />
-              {errors.cha && <p className="text-sm text-red-500 mt-1">{errors.cha.message}</p>}
-            </div>
+            {/* Hidden input for cha field - nullable, no validation to prevent silent errors */}
+            <input
+              type="hidden"
+              {...register("cha", {
+                setValueAs: (value) => {
+                  // Convert empty string to null, trim whitespace
+                  if (!value || typeof value !== 'string') return null
+                  const trimmed = value.trim()
+                  return trimmed === '' ? null : trimmed
+                }
+              })}
+            />
             
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

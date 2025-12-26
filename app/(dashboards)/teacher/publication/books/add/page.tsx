@@ -25,7 +25,7 @@ interface BookFormData {
   authors: string
   title: string
   isbn: string
-  cha: string
+  cha: string | null
   publisher_name: string
   submit_date: string
   place: string
@@ -57,7 +57,7 @@ export default function AddBookPage() {
       authors: "",
       title: "",
       isbn: "",
-      cha: "",
+      cha: null,
       publisher_name: "",
       submit_date: "",
       place: "",
@@ -396,8 +396,8 @@ export default function AddBookPage() {
     
     // Chapter/Article Title - replace if exists in extraction (only track if non-empty)
     if (extractedData.cha !== undefined) {
-      const chaValue = extractedData.cha ? String(extractedData.cha).trim() : ""
-      setValue("cha", chaValue)
+      const chaValue = extractedData.cha ? String(extractedData.cha).trim() : null
+      setValue("cha", chaValue || null)
       if (chaValue) filledFieldNames.push("cha")
     }
 
@@ -462,36 +462,70 @@ export default function AddBookPage() {
       return
     }
 
-    // Handle document upload to S3 if a document exists
-    let pdfPath = documentUrl || null
+    // Handle document upload to S3 - MUST succeed before saving record
+    let pdfPath: string | null = null
     
-    if (pdfPath && pdfPath.startsWith("/uploaded-document/")) {
+    if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
       try {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
+        // For new records, use timestamp as recordId since DB record doesn't exist yet
+        // This maintains the upload/FolderName/userId_recordId.ext pattern
         const tempRecordId = Date.now()
         
+        // Upload new document to S3 with Pattern 1: upload/book/{userId}_{recordId}.pdf
         pdfPath = await uploadDocumentToS3(
-          pdfPath,
+          documentUrl,
           user?.role_id || 0,
           tempRecordId,
           "book"
         )
+        
+        // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+        if (!pdfPath || !pdfPath.startsWith("upload/")) {
+          throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+        }
+        
+        // Additional validation: Ensure it's not a dummy URL
+        if (pdfPath.includes("dummy_document") || pdfPath.includes("localhost") || pdfPath.includes("http://") || pdfPath.includes("https://")) {
+          throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+        }
       } catch (docError: any) {
         console.error("Document upload error:", docError)
         showToast({
           title: "Document Upload Error",
-          description: docError.message || "Failed to upload document. Please try again.",
+          description: docError.message || "Failed to upload document to S3. Record will not be saved.",
           variant: "destructive",
         })
-        return
+        return // CRITICAL: Prevent record from being saved
       }
+    } else if (documentUrl && documentUrl.startsWith("upload/")) {
+      // Already an S3 path, use as-is (should not happen in add page, but handle it)
+      pdfPath = documentUrl
+    } else {
+      // Invalid path format or no document
+      showToast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+      })
+      return // Prevent record from being saved
+    }
+
+    // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+    if (!pdfPath || !pdfPath.startsWith("upload/")) {
+      showToast({
+        title: "Validation Error",
+        description: "Document upload validation failed. Record will not be saved.",
+        variant: "destructive",
+      })
+      return // Prevent record from being saved
     }
 
     const bookData = {
       title: data.title,
       isbn: data.isbn || null,
-      cha: data.cha || null,
+      cha: (data.cha && typeof data.cha === 'string' && data.cha.trim()) ? data.cha.trim() : null,
       publisher_name: data.publisher_name || null,
       submit_date: data.submit_date || null,
       place: data.place || null,
@@ -692,18 +726,18 @@ export default function AddBookPage() {
                 </div>
               </div>
 
-              <div hidden={true}>
-                <Label htmlFor="cha">Chapter/Article Title</Label>
-                <Input 
-                  id="cha" 
-                  {...register("cha", {
-                    maxLength: { value: 500, message: "Chapter title must not exceed 500 characters" }
-                  })} 
-                  placeholder="Enter chapter/article title if applicable"
-                  disabled={createBook.isPending}
-                />
-                {errors.cha && <p className="text-sm text-red-500 mt-1">{errors.cha.message}</p>}
-              </div>
+              {/* Hidden input for cha field - nullable, no validation to prevent silent errors */}
+              <input
+                type="hidden"
+                {...register("cha", {
+                  setValueAs: (value) => {
+                    // Convert empty string to null, trim whitespace
+                    if (!value || typeof value !== 'string') return null
+                    const trimmed = value.trim()
+                    return trimmed === '' ? null : trimmed
+                  }
+                })}
+              />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

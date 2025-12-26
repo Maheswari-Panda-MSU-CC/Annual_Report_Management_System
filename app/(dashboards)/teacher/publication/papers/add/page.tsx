@@ -395,21 +395,35 @@ export default function AddConferencePaperPage() {
         // This maintains the upload/FolderName/userId_recordId.ext pattern
         const tempRecordId = Date.now()
         
+        // Upload new document to S3 with Pattern 1: upload/Paper_Presented/{userId}_{recordId}.pdf
         pdfPath = await uploadDocumentToS3(
           pdfPath,
           user?.role_id || 0,
           tempRecordId,
           "Paper_Presented"
         )
+        
+        // Verify we got a valid S3 virtual path
+        if (!pdfPath || !pdfPath.startsWith("upload/")) {
+          throw new Error("Failed to get S3 virtual path from upload")
+        }
       } catch (docError: any) {
         console.error("Document upload error:", docError)
         toast({
           title: "Document Upload Error",
-          description: docError.message || "Failed to upload document. Please try again.",
+          description: docError.message || "Failed to upload document to S3. Please try again.",
           variant: "destructive",
         })
         return
       }
+    } else if (pdfPath && !pdfPath.startsWith("/uploaded-document/") && !pdfPath.startsWith("upload/")) {
+      // Invalid path format
+      toast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+      })
+      return
     }
 
     const paperData = {

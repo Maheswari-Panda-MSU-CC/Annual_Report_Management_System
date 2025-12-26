@@ -371,16 +371,23 @@ export default function PublicationsPage() {
   const confirmDelete = () => {
     if (!deleteConfirm) return
 
-    // Use mutations for delete operations - they handle cache invalidation automatically
+    // Find the item to get its Image field
+    let imagePath: string | null = null
     switch (deleteConfirm.sectionId) {
       case "journals":
-        deleteJournal.mutate(deleteConfirm.itemId)
+        const journalItem = data.journals.find((j: any) => j.id === deleteConfirm.itemId)
+        imagePath = journalItem?.Image || null
+        deleteJournal.mutate({ journalId: deleteConfirm.itemId, imagePath })
         break
       case "books":
-        deleteBook.mutate(deleteConfirm.itemId)
+        const bookItem = data.books.find((b: any) => b.id === deleteConfirm.itemId)
+        imagePath = bookItem?.Image || null
+        deleteBook.mutate({ bookId: deleteConfirm.itemId, imagePath })
         break
       case "papers":
-        deletePaper.mutate(deleteConfirm.itemId)
+        const paperItem = data.papers.find((p: any) => p.id === deleteConfirm.itemId)
+        imagePath = paperItem?.Image || null
+        deletePaper.mutate({ paperId: deleteConfirm.itemId, imagePath })
         break
     }
 

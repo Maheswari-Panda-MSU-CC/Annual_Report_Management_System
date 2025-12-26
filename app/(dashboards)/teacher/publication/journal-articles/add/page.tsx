@@ -529,23 +529,38 @@ export default function AddJournalArticlePage() {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
         // For new records, use timestamp as recordId since DB record doesn't exist yet
+        // This maintains the upload/FolderName/userId_recordId.ext pattern
         const tempRecordId = Date.now()
         
+        // Upload new document to S3 with Pattern 1: upload/Journal_Paper/{userId}_{recordId}.pdf
         pdfPath = await uploadDocumentToS3(
           pdfPath,
           user.role_id,
           tempRecordId,
           "Journal_Paper"
         )
+        
+        // Verify we got a valid S3 virtual path
+        if (!pdfPath || !pdfPath.startsWith("upload/")) {
+          throw new Error("Failed to get S3 virtual path from upload")
+        }
       } catch (docError: any) {
         console.error("Document upload error:", docError)
         toast({
           title: "Document Upload Error",
-          description: docError.message || "Failed to upload document. Please try again.",
+          description: docError.message || "Failed to upload document to S3. Please try again.",
           variant: "destructive",
         })
         return
       }
+    } else if (pdfPath && !pdfPath.startsWith("/uploaded-document/") && !pdfPath.startsWith("upload/")) {
+      // Invalid path format
+      toast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+      })
+      return
     }
 
     const journalData = {
