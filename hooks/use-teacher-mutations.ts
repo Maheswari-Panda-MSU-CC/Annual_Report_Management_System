@@ -815,11 +815,18 @@ export function useResearchMutations() {
   })
 
   const deleteResearch = useMutation({
-    mutationFn: async (projectId: number) => {
+    mutationFn: async ({ projectId, pdfPath }: { projectId: number; pdfPath?: string | null }) => {
       const { controller, unregister } = createAbortController()
       try {
         const res = await fetch(`/api/teacher/research?projectId=${projectId}`, {
           method: "DELETE",
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            projectId,
+            pdf: pdfPath || null,
+          }),
           signal: controller.signal,
         })
         if (!res.ok) {
@@ -831,7 +838,7 @@ export function useResearchMutations() {
         unregister()
       }
     },
-    onMutate: async (projectId) => {
+    onMutate: async ({ projectId }) => {
       await queryClient.cancelQueries({ 
         queryKey: teacherQueryKeys.research(teacherId) 
       })
@@ -853,7 +860,7 @@ export function useResearchMutations() {
       
       return { previousProjects }
     },
-    onError: (err, projectId, context) => {
+    onError: (err, variables, context) => {
       if (handleUnauthorized(err)) return
       if (context?.previousProjects) {
         queryClient.setQueryData(
@@ -868,7 +875,7 @@ export function useResearchMutations() {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.research(teacherId),
         refetchType: 'active'
@@ -876,11 +883,30 @@ export function useResearchMutations() {
       queryClient.invalidateQueries({ 
         queryKey: teacherQueryKeys.dashboard(teacherId) 
       })
-      toast({ 
-        title: "Success", 
-        description: "Research project deleted successfully!",
-        duration: 3000,
-      })
+      
+      // Show success message - handle different scenarios
+      if (data.warning) {
+        // Database deleted but S3 deletion had issues
+        toast({ 
+          title: "Success", 
+          description: data.message || "Research project deleted successfully",
+          duration: 5000,
+        })
+        // Also show warning toast
+        toast({ 
+          title: "Warning", 
+          description: data.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      } else {
+        // Complete success - both database and S3 deleted
+        toast({ 
+          title: "Success", 
+          description: data.message || "Research project and document deleted successfully!",
+          duration: 3000,
+        })
+      }
     },
   })
 

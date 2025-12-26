@@ -184,10 +184,38 @@ export function ResearchProjectsList({ refreshKey }: { refreshKey?: number }) {
 
   // Open document viewer
   const handleViewDocument = (project: ResearchProject) => {
-    // For now, use dummy document - in future, fetch from S3
     const docUrl = project.document || "/assets/demo_document.pdf"
+    
+    // Extract file extension from URL (handle S3 paths, local paths, and URLs with query params)
+    const getFileExtension = (url: string): string => {
+      if (!url) return "pdf" // default
+      
+      // Remove query parameters and hash
+      const urlWithoutParams = url.split('?')[0].split('#')[0]
+      
+      // Extract extension from the last part of the path
+      const parts = urlWithoutParams.split('/')
+      const fileName = parts[parts.length - 1]
+      
+      // Extract extension (handle cases like "file.pdf", "1_12345.pdf", "file.jpg", etc.)
+      const extensionMatch = fileName.match(/\.([a-zA-Z0-9]+)$/)
+      if (extensionMatch) {
+        const ext = extensionMatch[1].toLowerCase()
+        // Map common extensions
+        if (['pdf'].includes(ext)) return 'pdf'
+        if (['jpg', 'jpeg'].includes(ext)) return 'jpg'
+        if (['png'].includes(ext)) return 'png'
+        // Return the extension as-is for other types
+        return ext
+      }
+      
+      // Default to pdf if no extension found
+      return "pdf"
+    }
+    
+    // Use project title as the document name (more user-friendly than S3 filename)
     const docName = project.title || "Research Project Document"
-    const docType = docUrl.endsWith(".pdf") ? "pdf" : "jpg"
+    const docType = getFileExtension(docUrl)
     
     setSelectedDocument({ url: docUrl, name: docName, type: docType })
     setIsDocViewerOpen(true)
@@ -211,8 +239,19 @@ export function ResearchProjectsList({ refreshKey }: { refreshKey?: number }) {
   const deleteProject = async (projectId: number) => {
     setIsDeleting(true)
     try {
+      // Get the document path from the project to delete
+      const pdfPath = projectToDeleteConfirm?.document || null
+      
+      // Send DELETE request with body containing projectId and pdf
       const res = await fetch(`/api/teacher/research?projectId=${projectId}`, {
         method: "DELETE",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectId,
+          pdf: pdfPath,
+        }),
       })
 
       const result = await res.json()
@@ -221,10 +260,29 @@ export function ResearchProjectsList({ refreshKey }: { refreshKey?: number }) {
         throw new Error(result.error || "Failed to delete research project")
       }
 
-      toast({
-        title: "Success",
-        description: "Research project deleted successfully",
-      })
+      // Show success message - handle different scenarios
+      if (result.warning) {
+        // Database deleted but S3 deletion had issues
+        toast({
+          title: "Success",
+          description: result.message || "Research project deleted successfully",
+          duration: 5000,
+        })
+        // Also show warning toast
+        toast({
+          title: "Warning",
+          description: result.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      } else {
+        // Complete success - both database and S3 deleted
+        toast({
+          title: "Success",
+          description: result.message || "Research project and document deleted successfully",
+          duration: 3000,
+        })
+      }
 
       // Reload projects
       const refreshRes = await fetch(`/api/teacher/research?teacherId=${user?.role_id}&type=projects`)

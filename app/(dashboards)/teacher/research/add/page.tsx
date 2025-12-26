@@ -656,23 +656,41 @@ export default function AddResearchPage() {
       try {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
+        // Use temp record ID - will be replaced with actual record ID after creation
+        // The S3 file will be uploaded with pattern: upload/research pdf/{userId}_{tempId}.pdf
         const tempRecordId = Date.now()
         
         pdfPath = await uploadDocumentToS3(
           pdfPath,
-          user?.role_id||0,
+          teacherId,
           tempRecordId,
-          "research pdf"
+          "research pdf" // Folder name for research projects (matches existing convention)
         )
+        
+        // Verify we got a valid S3 virtual path
+        if (!pdfPath || !pdfPath.startsWith("upload/")) {
+          throw new Error("Failed to get S3 virtual path from upload")
+        }
       } catch (docError: any) {
         console.error("Document upload error:", docError)
         toast({
           title: "Document Upload Error",
-          description: docError.message || "Failed to upload document. Please try again.",
+          description: docError.message || "Failed to upload document to S3. Please try again.",
           variant: "destructive",
         })
         return
       }
+    } else if (pdfPath && pdfPath.startsWith("upload/")) {
+      // Already an S3 path, use as-is
+      // This handles cases where document was already uploaded
+    } else if (pdfPath) {
+      // Invalid path format
+      toast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+      })
+      return
     }
 
     // Validate numeric fields

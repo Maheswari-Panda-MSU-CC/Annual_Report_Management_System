@@ -190,8 +190,45 @@ export async function PATCH(request: NextRequest) {
 // Delete research project
 export async function DELETE(request: Request) {
   try {
+    // Get projectId from query params (backward compatibility)
     const { searchParams } = new URL(request.url)
-    const projectId = parseInt(searchParams.get('projectId') || '', 10)
+    let projectId = parseInt(searchParams.get('projectId') || '', 10)
+    let pdfPath: string | null = null
+
+    // Try to get pdf from request body (preferred method)
+    try {
+      // Check if request has body content
+      const contentType = request.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const bodyText = await request.text()
+          if (bodyText && bodyText.trim()) {
+            const body = JSON.parse(bodyText)
+            if (body) {
+              if (body.projectId) {
+                const bodyProjectId = parseInt(String(body.projectId), 10)
+                if (!isNaN(bodyProjectId)) projectId = bodyProjectId
+              }
+              if (body.pdf && typeof body.pdf === 'string') {
+                pdfPath = body.pdf.trim() || null
+              }
+            }
+          }
+        } catch (parseError) {
+          // JSON parse failed, continue with query params
+          console.warn('[DELETE Research] Could not parse JSON body:', parseError)
+        }
+      }
+    } catch (bodyError) {
+      // Body reading failed, continue with query params only
+      console.warn('[DELETE Research] Could not read request body, using query params:', bodyError)
+    }
+
+    // Fallback: try query param for pdf (backward compatibility)
+    if (!pdfPath) {
+      const queryPdf = searchParams.get('pdf')
+      if (queryPdf) pdfPath = queryPdf
+    }
 
     if (isNaN(projectId)) {
       return new Response(JSON.stringify({ success: false, error: 'projectId is required' }), {
@@ -201,21 +238,81 @@ export async function DELETE(request: Request) {
     }
 
     const pool = await connectToDatabase()
-    const req = pool.request()
-
-    req.input('projid', sql.Int, projectId)
-
-    await req.execute('sp_DeleteResearchProject_T')
     
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Research project deleted successfully',
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    // Step 1: Delete S3 document if Pdf exists and is a valid S3 path
+    let s3DeleteSuccess = false
+    let s3DeleteMessage = 'No document to delete'
+    
+    if (pdfPath && typeof pdfPath === 'string' && pdfPath.trim() && pdfPath.startsWith('upload/')) {
+      try {
+        const { deleteFromS3 } = await import('@/lib/s3-service')
+        
+        console.log(`[DELETE Research] Attempting to delete S3 document: ${pdfPath}`)
+        const s3DeleteResult = await deleteFromS3(pdfPath.trim())
+        
+        if (s3DeleteResult.success) {
+          s3DeleteSuccess = true
+          s3DeleteMessage = 'S3 document deleted successfully'
+          console.log(`[DELETE Research] ✓ S3 document deleted: ${pdfPath}`)
+        } else {
+          // Check if file doesn't exist (acceptable scenario)
+          if (s3DeleteResult.message?.toLowerCase().includes('not found') || 
+              s3DeleteResult.message?.toLowerCase().includes('object not found')) {
+            s3DeleteSuccess = true // Consider this success - file already gone
+            s3DeleteMessage = 'S3 document not found (may have been already deleted)'
+            console.log(`[DELETE Research] ⚠ S3 document not found (acceptable): ${pdfPath}`)
+          } else {
+            s3DeleteSuccess = false
+            s3DeleteMessage = s3DeleteResult.message || 'Failed to delete S3 document'
+            console.error(`[DELETE Research] ✗ Failed to delete S3 document: ${pdfPath}`, s3DeleteResult.message)
+          }
+        }
+      } catch (s3Error: any) {
+        s3DeleteSuccess = false
+        s3DeleteMessage = s3Error.message || 'Error deleting S3 document'
+        console.error('[DELETE Research] Error deleting S3 document:', s3Error)
+      }
+    } else if (pdfPath && pdfPath.trim()) {
+      // Pdf path exists but is not a valid S3 path - log warning but continue
+      console.warn(`[DELETE Research] Invalid S3 path format (not starting with 'upload/'): ${pdfPath}`)
+      s3DeleteMessage = 'Invalid document path format (not an S3 path)'
+    }
+
+    // Step 2: Delete database record
+    const deleteReq = pool.request()
+    deleteReq.input('projid', sql.Int, projectId)
+    
+    await deleteReq.execute('sp_DeleteResearchProject_T')
+    console.log(`[DELETE Research] ✓ Database record deleted: projectId=${projectId}`)
+    
+    // Step 3: Return success response with S3 deletion status
+    // Database deletion succeeded - that's the primary operation
+    // S3 deletion failure is logged but doesn't block the operation
+    if (s3DeleteSuccess || !pdfPath || !pdfPath.trim() || !pdfPath.startsWith('upload/')) {
+      // Success if: S3 deleted successfully OR no S3 file to delete OR invalid path
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Research project and document deleted successfully',
+        s3DeleteMessage,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    } else {
+      // Database deleted but S3 deletion failed
+      // Still return success but include warning
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Research project deleted from database',
+        warning: `S3 document deletion failed: ${s3DeleteMessage}`,
+        s3DeleteMessage,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   } catch (err: any) {
-    console.error('Error deleting research project:', err)
+    console.error('[DELETE Research] Error deleting research project:', err)
     return new Response(JSON.stringify({ success: false, error: err.message || 'Failed to delete research project' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

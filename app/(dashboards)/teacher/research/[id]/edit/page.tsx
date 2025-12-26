@@ -735,6 +735,63 @@ export default function EditResearchPage() {
 
     // Handle document upload to S3 if a new document was uploaded
     let pdfPath = existingDocumentUrl || data.Pdf || ""
+    const oldPdfPath = existingDocumentUrl // Store for deletion if new file is uploaded
+
+    // Enhanced helper function to handle old file deletion with improved logging and error handling
+    const handleOldFileDeletion = async (
+      oldPath: string | null,
+      newPath: string,
+      recordId: number
+    ) => {
+      // Early return if no old path or paths are the same (updating same file)
+      if (!oldPath || !oldPath.startsWith("upload/")) {
+        return
+      }
+
+      // If old and new paths are the same, no deletion needed (same file being updated)
+      if (oldPath === newPath) {
+        console.log("Old and new file paths are identical - skipping deletion (same file update)")
+        return
+      }
+
+      // Import helper functions
+      const { deleteDocument, checkDocumentExists } = await import("@/lib/s3-upload-helper")
+
+      try {
+        // Optional: Check if file exists before attempting deletion (optimization)
+        // This prevents unnecessary API calls if file was already deleted
+        const existsCheck = await checkDocumentExists(oldPath)
+        
+        if (!existsCheck.exists) {
+          console.log(`Old file does not exist in S3 (may have been already deleted): ${oldPath}`)
+          return
+        }
+
+        // File exists, proceed with deletion
+        console.log(`Attempting to delete old S3 file: ${oldPath}`)
+        const deleteResult = await deleteDocument(oldPath)
+        
+        if (deleteResult.success) {
+          console.log(`Successfully deleted old S3 file: ${oldPath}`)
+        } else {
+          console.warn(`Failed to delete old S3 file: ${oldPath}`, {
+            error: deleteResult.message,
+            recordId,
+            oldPath,
+            newPath
+          })
+          // Don't fail the update if old file deletion fails - this is a cleanup operation
+        }
+      } catch (deleteError: any) {
+        console.warn("Error during old file deletion process:", {
+          error: deleteError?.message || deleteError,
+          oldPath,
+          newPath,
+          recordId
+        })
+        // Don't fail the update if old file deletion fails - this is a cleanup operation
+      }
+    }
 
     // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
     if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
@@ -743,24 +800,47 @@ export default function EditResearchPage() {
         
         const recordId = parseInt(projectId, 10)
         
+        // Upload new document to S3 with Pattern 1: upload/research pdf/{userId}_{recordId}.pdf
         pdfPath = await uploadDocumentToS3(
           documentUrl,
-          user?.role_id||0,
+          teacherId,
           recordId,
-          "research pdf"
+          "research pdf" // Folder name for research projects (matches existing convention)
         )
+        
+        // Verify we got a valid S3 virtual path
+        if (!pdfPath || !pdfPath.startsWith("upload/")) {
+          throw new Error("Failed to get S3 virtual path from upload")
+        }
+
+        // Enhanced deletion logic: Delete old file if it exists and is different from new one
+        await handleOldFileDeletion(oldPdfPath, pdfPath, recordId)
       } catch (docError: any) {
         console.error("Document upload error:", docError)
         toast({
           title: "Document Upload Error",
-          description: docError.message || "Failed to upload document. Please try again.",
+          description: docError.message || "Failed to upload document to S3. Please try again.",
           variant: "destructive",
         })
         return
       }
-    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/")) {
-      // Keep existing document URL if it's not a new upload
+    } else if (documentUrl && documentUrl.startsWith("upload/")) {
+      // Already an S3 path, use as-is
       pdfPath = documentUrl
+      
+      // If the document URL changed but is still an S3 path, check if we need to delete old file
+      if (oldPdfPath && oldPdfPath !== pdfPath) {
+        const recordId = parseInt(projectId, 10)
+        await handleOldFileDeletion(oldPdfPath, pdfPath, recordId)
+      }
+    } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/") && !documentUrl.startsWith("upload/")) {
+      // Invalid path format
+      toast({
+        title: "Invalid Document Path",
+        description: "Document path format is invalid. Please upload the document again.",
+        variant: "destructive",
+      })
+      return
     }
 
     const projectData = {

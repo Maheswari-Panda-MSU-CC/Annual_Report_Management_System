@@ -236,6 +236,50 @@ export async function getDocumentUrl(
 }
 
 /**
+ * Check if an S3 document exists (client-side helper)
+ */
+export async function checkDocumentExists(
+  virtualPath: string
+): Promise<{ exists: boolean; message: string }> {
+  try {
+    // Use the get-signed-url endpoint to check existence
+    // If it returns success, the file exists
+    const response = await fetch('/api/s3/get-signed-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        virtualPath,
+      }),
+    });
+
+    const data = await response.json();
+    
+    // If we get a success response, the file exists
+    // If we get "Object not found", it doesn't exist
+    if (data.success) {
+      return {
+        exists: true,
+        message: 'Document exists in S3',
+      };
+    }
+    
+    const isNotFound = data.message?.toLowerCase().includes('not found') || 
+                       data.message?.toLowerCase().includes('object not found');
+    
+    return {
+      exists: false,
+      message: isNotFound ? 'Document not found in S3' : data.message || 'Unknown error',
+    };
+  } catch (error: any) {
+    console.error('Error checking document existence:', error);
+    return {
+      exists: false,
+      message: error.message || 'Failed to check document existence',
+    };
+  }
+}
+
+/**
  * Delete document from S3
  */
 export async function deleteDocument(

@@ -394,7 +394,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Download, ExternalLink, FileText, ImageIcon, File, Loader2 } from "lucide-react"
-import { getDocumentDisplayUrlAsync, isS3VirtualPath } from "@/lib/document-url-utils"
+import { getDocumentDisplayUrlAsync, isS3VirtualPath, isLocalDocumentUrl } from "@/lib/document-url-utils"
 
 interface DocumentViewerProps {
   documentUrl: string
@@ -412,9 +412,18 @@ export function DocumentViewer({
   const [displayUrl, setDisplayUrl] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
   
   useEffect(() => {
     const loadUrl = async () => {
+      // Don't try to load if documentUrl is empty or invalid
+      if (!documentUrl || (typeof documentUrl === 'string' && documentUrl.trim() === '')) {
+        setLoading(false)
+        setError(null)
+        setDisplayUrl(undefined)
+        return
+      }
+      
       setLoading(true)
       setError(null)
       
@@ -422,7 +431,9 @@ export function DocumentViewer({
         const url = await getDocumentDisplayUrlAsync(documentUrl)
         
         if (!url) {
-          setError('Unable to load document')
+          // Don't set error for "not found" - this is expected during document updates
+          // The error is already logged as a warning in getS3PresignedUrl
+          setDisplayUrl(undefined)
           setLoading(false)
           return
         }
@@ -430,9 +441,20 @@ export function DocumentViewer({
         setDisplayUrl(url)
         setLoading(false)
       } catch (err: any) {
-        console.error('Error loading document URL:', err)
-        setError(err.message || 'Failed to load document')
-        setLoading(false)
+        // Check if error is about document not found - don't show error to user
+        const isNotFoundError = 
+          err?.message?.toLowerCase().includes('not found') ||
+          err?.message?.toLowerCase().includes('object not found')
+        
+        if (isNotFoundError) {
+          // Silently handle "not found" errors (expected during updates)
+          setDisplayUrl(undefined)
+          setLoading(false)
+        } else {
+          console.error('Error loading document URL:', err)
+          setError(err.message || 'Failed to load document')
+          setLoading(false)
+        }
       }
     }
     
@@ -459,16 +481,73 @@ export function DocumentViewer({
     }
   }
 
-  const handleDownload = () => {
-    if (!displayUrl) return
-    const link = document.createElement("a")
-    link.href = displayUrl
-    link.download = documentName
-    link.target = "_blank"
-    link.rel = "noopener noreferrer"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const handleDownload = async () => {
+    // Check if it's an S3 virtual path - use S3 download API
+    if (isS3VirtualPath(documentUrl)) {
+      setDownloading(true)
+      try {
+        // Call S3 download API to get file as base64
+        const response = await fetch('/api/s3/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ virtualPath: documentUrl }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.message || `Failed to download: ${response.statusText}`)
+        }
+
+        const data = await response.json()
+        
+        if (!data.success || !data.fileBase64) {
+          throw new Error(data.message || 'Failed to download document')
+        }
+
+        // Convert base64 to blob
+        const base64Data = data.fileBase64
+        const byteCharacters = atob(base64Data)
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        const blob = new Blob([byteArray], { type: data.contentType || 'application/pdf' })
+
+        // Create download link
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = documentName || "document"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        
+        // Clean up the object URL
+        URL.revokeObjectURL(url)
+      } catch (err: any) {
+        console.error('Error downloading from S3:', err)
+        // Fallback: try to open presigned URL in new tab
+        if (displayUrl) {
+          window.open(displayUrl, "_blank", "noopener,noreferrer")
+        } else {
+          setError(err.message || 'Failed to download document')
+        }
+      } finally {
+        setDownloading(false)
+      }
+    } else {
+      // For local files or other URLs, use the existing download logic
+      if (!displayUrl) return
+      const link = document.createElement("a")
+      link.href = displayUrl
+      link.download = documentName
+      link.target = "_blank"
+      link.rel = "noopener noreferrer"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
   }
 
   const handleViewInNewTab = () => {
@@ -523,9 +602,18 @@ export function DocumentViewer({
           variant="outline"
           size="sm"
           onClick={handleDownload}
+          disabled={downloading}
           className="flex items-center gap-1 bg-transparent"
         >
-          <Download className="w-4 h-4" /> Download
+          {downloading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Downloading...
+            </>
+          ) : (
+            <>
+              <Download className="w-4 h-4" /> Download
+            </>
+          )}
         </Button>
       </div>
     </div>

@@ -87,21 +87,133 @@ export function getDocumentApiUrl(url: string | undefined | null | string[]): st
  */
 export async function getS3PresignedUrl(virtualPath: string): Promise<string | undefined> {
   try {
+    // Validate virtual path format before sending
+    if (!virtualPath || !virtualPath.startsWith("upload/")) {
+      console.error('Invalid virtual path format:', virtualPath)
+      return undefined
+    }
+
     const response = await fetch('/api/s3/get-signed-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ virtualPath }),
     })
     
+    // Check if response has content before parsing
+    const contentType = response.headers.get('content-type')
+    const hasJsonContent = contentType && contentType.includes('application/json')
+    
     if (!response.ok) {
-      console.error('Failed to get presigned URL:', response.statusText)
+      // Get the actual error message from the response body
+      let errorMessage = response.statusText
+      let errorData: any = null
+      
+      try {
+        // Only try to parse if we have content and it's JSON
+        if (hasJsonContent) {
+          const text = await response.text()
+          if (text && text.trim()) {
+            errorData = JSON.parse(text)
+            errorMessage = errorData?.message || errorData?.error || response.statusText
+          } else {
+            errorMessage = `Empty response body (Status: ${response.status})`
+          }
+        } else {
+          const text = await response.text()
+          errorMessage = text || response.statusText || `HTTP ${response.status}`
+        }
+      } catch (parseError: any) {
+        console.error('Failed to parse error response:', parseError)
+        errorMessage = `Failed to parse error response: ${parseError?.message || 'Unknown error'}`
+      }
+      
+      // Check if this is a "not found" error - these are expected during document updates
+      // when old documents are deleted, so we log them as warnings instead of errors
+      const isNotFoundError = 
+        errorMessage?.toLowerCase().includes('not found') ||
+        errorMessage?.toLowerCase().includes('object not found') ||
+        response.status === 404 ||
+        (errorData?.message && errorData.message.toLowerCase().includes('not found'))
+      
+      if (isNotFoundError) {
+        // Log as warning for "not found" errors (expected during updates)
+        console.warn('Document not found in S3 (this may be expected during updates):', {
+          status: response.status,
+          message: errorMessage,
+          virtualPath: virtualPath
+        })
+      } else {
+        // Log as error for other failures
+        console.error('Failed to get presigned URL:', {
+          status: response.status,
+          statusText: response.statusText,
+          message: errorMessage,
+          virtualPath: virtualPath,
+          errorData: errorData,
+          contentType: contentType
+        })
+      }
       return undefined
     }
     
-    const data = await response.json()
-    return data.success ? data.url : undefined
-  } catch (error) {
-    console.error('Error getting presigned URL:', error)
+    // Parse successful response
+    let data: any
+    try {
+      const text = await response.text()
+      if (!text || !text.trim()) {
+        console.error('Empty response body from presigned URL API:', {
+          status: response.status,
+          virtualPath: virtualPath
+        })
+        return undefined
+      }
+      data = JSON.parse(text)
+    } catch (parseError: any) {
+      console.error('Failed to parse presigned URL response:', {
+        error: parseError?.message || 'Unknown parse error',
+        virtualPath: virtualPath,
+        status: response.status
+      })
+      return undefined
+    }
+    
+    if (!data.success) {
+      // Check if this is a "not found" error - log as warning instead of error
+      const isNotFoundError = 
+        data.message?.toLowerCase().includes('not found') ||
+        data.message?.toLowerCase().includes('object not found')
+      
+      if (isNotFoundError) {
+        console.warn('Document not found in S3 (this may be expected during updates):', {
+          message: data.message,
+          virtualPath: virtualPath
+        })
+      } else {
+        console.error('Presigned URL request failed:', {
+          message: data.message || 'Unknown error',
+          virtualPath: virtualPath,
+          data: data
+        })
+      }
+      return undefined
+    }
+    
+    if (!data.url) {
+      console.error('Presigned URL response missing URL field:', {
+        data: data,
+        virtualPath: virtualPath
+      })
+      return undefined
+    }
+    
+    return data.url
+  } catch (error: any) {
+    console.error('Error getting presigned URL:', {
+      error: error?.message || error,
+      errorType: error?.name,
+      stack: error?.stack,
+      virtualPath: virtualPath
+    })
     return undefined
   }
 }
