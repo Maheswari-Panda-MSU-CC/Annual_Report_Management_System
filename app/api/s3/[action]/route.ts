@@ -263,9 +263,9 @@ async function handleSignedUrl(data: SignedUrlRequest): Promise<SignedUrlRespons
 // App Router API Handler
 export async function POST(
   request: NextRequest,
-  { params }: { params: { action: string } }
+  { params }: { params: Promise<{ action: string }> }
 ) {
-  const { action } = params;
+  const { action } = await params;
 
   try {
     const body = await request.json();
