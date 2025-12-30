@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -28,9 +28,17 @@ export default function PolicyForm({
 }: PolicyFormProps) {
   const router = useRouter()
   const { register, handleSubmit, setValue, control, formState: { errors } } = form
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrlRef = useRef<string | undefined>(
+    isEdit && editData?.supportingDocument?.[0] 
+      ? (Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+      : undefined
+  )
+
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
-    (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)
+    originalDocumentUrlRef.current
   )
 
   // Update documentUrl when initialDocumentUrl changes
@@ -69,6 +77,17 @@ export default function PolicyForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Only run once on mount
 
+  // Update originalDocumentUrlRef when editData changes
+  useEffect(() => {
+    if (isEdit && editData?.supportingDocument?.[0]) {
+      originalDocumentUrlRef.current = Array.isArray(editData.supportingDocument) 
+        ? editData.supportingDocument[0] 
+        : editData.supportingDocument
+    } else if (initialDocumentUrl) {
+      originalDocumentUrlRef.current = initialDocumentUrl
+    }
+  }, [isEdit, editData, initialDocumentUrl])
+
   // Set initial values when in edit mode - optimized to reset and set all values at once
   useEffect(() => {
     if (isEdit && editData && Object.keys(editData).length > 0) {
@@ -90,7 +109,9 @@ export default function PolicyForm({
       if (editData.date) formValues.date = editData.date
       if (editData.supportingDocument) {
         formValues.supportingDocument = editData.supportingDocument
-        setDocumentUrl(Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+        const docUrl = Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument
+        setDocumentUrl(docUrl)
+        originalDocumentUrlRef.current = docUrl
       }
       
       // Set all values at once
@@ -192,6 +213,12 @@ export default function PolicyForm({
                 onChange={(url) => {
                   setDocumentUrl(url)
                   setValue("supportingDocument", url ? [url] : [])
+                  // Only update originalDocumentUrlRef if document actually changed (new upload)
+                  if (url && url.startsWith("/uploaded-document/")) {
+                    // New upload - will be tracked by handleSaveEdit in page.tsx
+                  } else if (url && url !== originalDocumentUrlRef.current) {
+                    // Document URL changed but not a new upload
+                  }
                 }}
                 onExtract={handleExtractedFields}
                 onClearFields={onClearFields}

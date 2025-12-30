@@ -227,12 +227,87 @@ export async function DELETE(request: NextRequest) {
     }
 
     const pool = await connectToDatabase()
+    
+    // Step 1: Fetch the collaboration record to get the document path
+    let docPath: string | null = null
+    try {
+      const fetchReq = pool.request()
+      fetchReq.input('tid', sql.Int, teacherId)
+      const fetchResult = await fetchReq.execute('sp_GetCollaborations_ByTeacherId')
+      const collaboration = fetchResult.recordset?.find((c: any) => c.id === collaborationId)
+      if (collaboration?.doc) {
+        docPath = collaboration.doc
+      }
+    } catch (fetchErr: any) {
+      console.error('[DELETE Collaboration] Error fetching collaboration:', fetchErr)
+      // Continue with deletion even if fetch fails
+    }
+
+    // Step 2: Delete S3 document if doc exists and is a valid S3 path
+    let s3DeleteSuccess = false
+    let s3DeleteMessage = 'No document to delete'
+    
+    if (docPath && typeof docPath === 'string' && docPath.trim() && docPath.startsWith('upload/')) {
+      try {
+        const { deleteFromS3 } = await import('@/lib/s3-service')
+        
+        console.log(`[DELETE Collaboration] Attempting to delete S3 document: ${docPath}`)
+        const s3DeleteResult = await deleteFromS3(docPath.trim())
+        
+        if (s3DeleteResult.success) {
+          s3DeleteSuccess = true
+          s3DeleteMessage = 'S3 document deleted successfully'
+          console.log(`[DELETE Collaboration] ✓ S3 document deleted: ${docPath}`)
+        } else {
+          // Check if file doesn't exist (acceptable scenario)
+          if (s3DeleteResult.message?.toLowerCase().includes('not found') || 
+              s3DeleteResult.message?.toLowerCase().includes('object not found')) {
+            s3DeleteSuccess = true // Consider this success - file already gone
+            s3DeleteMessage = 'S3 document not found (may have been already deleted)'
+            console.log(`[DELETE Collaboration] ⚠ S3 document not found (acceptable): ${docPath}`)
+          } else {
+            s3DeleteSuccess = false
+            s3DeleteMessage = s3DeleteResult.message || 'Failed to delete S3 document'
+            console.error(`[DELETE Collaboration] ✗ Failed to delete S3 document: ${docPath}`, s3DeleteResult.message)
+          }
+        }
+      } catch (s3Error: any) {
+        s3DeleteSuccess = false
+        s3DeleteMessage = s3Error.message || 'Error deleting S3 document'
+        console.error('[DELETE Collaboration] Error deleting S3 document:', s3Error)
+      }
+    } else if (docPath && docPath.trim()) {
+      // Doc path exists but is not a valid S3 path - log warning but continue
+      console.warn(`[DELETE Collaboration] Invalid S3 path format (not starting with 'upload/'): ${docPath}`)
+      s3DeleteMessage = 'Invalid document path format (not an S3 path)'
+    }
+
+    // Step 3: Delete database record
     const req = pool.request()
     req.input('id', sql.Int, collaborationId)
-
     await req.execute('sp_Delete_Collaboration')
-
-    return NextResponse.json({ success: true, message: 'Collaboration deleted successfully' })
+    console.log(`[DELETE Collaboration] ✓ Database record deleted: id=${collaborationId}`)
+    
+    // Step 4: Return success response with S3 deletion status
+    // Database deletion succeeded - that's the primary operation
+    // S3 deletion failure is logged but doesn't block the operation
+    if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {
+      // Success if: S3 deleted successfully OR no S3 file to delete OR invalid path
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Collaboration record and document deleted successfully',
+        s3DeleteMessage,
+      })
+    } else {
+      // Database deleted but S3 deletion failed
+      // Still return success but include warning
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Collaboration record deleted from database',
+        warning: `S3 document deletion failed: ${s3DeleteMessage}`,
+        s3DeleteMessage,
+      })
+    }
   } catch (err: any) {
     console.error('Error deleting collaboration:', err)
     return NextResponse.json(

@@ -55,7 +55,7 @@ export const FOLDER_MAPPINGS: Record<string, string> = {
   'copyrights': 'Copyrights',
   'patents': 'patents',
   'policy': 'Policy_Doc',
-  'collaborations': 'Collaborations',
+  'collaborations': 'MOU_Linkage',
 };
 
 /**
@@ -130,7 +130,7 @@ export const FILES_TO_MIGRATE = [
   { path: 'app/(dashboards)/teacher/research-contributions/copyrights/add/page.tsx', folder: 'Copyrights', type: 'add' },
   { path: 'app/(dashboards)/teacher/research-contributions/patents/add/page.tsx', folder: 'patents', type: 'add' },
   { path: 'app/(dashboards)/teacher/research-contributions/policy/add/page.tsx', folder: 'Policy_Doc', type: 'add' },
-  { path: 'app/(dashboards)/teacher/research-contributions/collaborations/add/page.tsx', folder: 'Collaborations', type: 'add' },
+  { path: 'app/(dashboards)/teacher/research-contributions/collaborations/add/page.tsx', folder: 'MOU_Linkage', type: 'add' },
 ];
 
 console.log('S3 Migration Script - File mappings generated');

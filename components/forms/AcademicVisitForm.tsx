@@ -1,7 +1,7 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Controller } from "react-hook-form"
 import { Button } from "@/components/ui/button"
@@ -43,9 +43,17 @@ export function AcademicVisitForm({
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrlRef = useRef<string | undefined>(
+    isEdit && editData?.supportingDocument?.[0] 
+      ? (Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+      : undefined
+  )
+
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
-    (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)
+    originalDocumentUrlRef.current
   )
 
   // Update documentUrl when initialDocumentUrl changes
@@ -87,6 +95,17 @@ export function AcademicVisitForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Update originalDocumentUrlRef when editData changes
+  useEffect(() => {
+    if (isEdit && editData?.supportingDocument?.[0]) {
+      originalDocumentUrlRef.current = Array.isArray(editData.supportingDocument) 
+        ? editData.supportingDocument[0] 
+        : editData.supportingDocument
+    } else if (initialDocumentUrl) {
+      originalDocumentUrlRef.current = initialDocumentUrl
+    }
+  }, [isEdit, editData, initialDocumentUrl])
+
   // Set initial values when in edit mode
   useEffect(() => {
     if (isEdit && editData) {
@@ -101,7 +120,9 @@ export function AcademicVisitForm({
       if (editData.doc) setValue("doc", editData.doc)
       if (editData.supportingDocument) {
         setValue("supportingDocument", editData.supportingDocument)
-        setDocumentUrl(Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+        const docUrl = Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument
+        setDocumentUrl(docUrl)
+        originalDocumentUrlRef.current = docUrl
       }
     }
   }, [isEdit, editData, setValue])
@@ -208,6 +229,12 @@ export function AcademicVisitForm({
           onChange={(url) => {
             setDocumentUrl(url)
             setValue("supportingDocument", url ? [url] : [])
+            // Only update originalDocumentUrlRef if document actually changed (new upload)
+            if (url && url.startsWith("/uploaded-document/")) {
+              // New upload - will be tracked by handleSaveEdit in page.tsx
+            } else if (url && url !== originalDocumentUrlRef.current) {
+              // Document URL changed but not a new upload
+            }
           }}
           onExtract={handleExtractedFields}
           onClearFields={onClearFields}

@@ -191,7 +191,17 @@ export async function DELETE(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const visitId = parseInt(searchParams.get('visitId') || '', 10)
+    let visitId = parseInt(searchParams.get('visitId') || '', 10)
+    
+    // Also check request body for visitId
+    if (isNaN(visitId)) {
+      try {
+        const body = await request.json().catch(() => ({}))
+        if (body.visitId) {
+          visitId = parseInt(String(body.visitId), 10)
+        }
+      } catch { /* ignore */ }
+    }
 
     if (isNaN(visitId)) {
       return NextResponse.json(
@@ -201,12 +211,87 @@ export async function DELETE(request: NextRequest) {
     }
 
     const pool = await connectToDatabase()
+    
+    // Step 1: Fetch the visit record to get the document path
+    let docPath: string | null = null
+    try {
+      const fetchReq = pool.request()
+      fetchReq.input('tid', sql.Int, teacherId)
+      const fetchResult = await fetchReq.execute('sp_GetAll_Academic_Research_Visit_ByTid')
+      const visit = fetchResult.recordset?.find((v: any) => v.id === visitId)
+      if (visit?.doc) {
+        docPath = visit.doc
+      }
+    } catch (fetchErr: any) {
+      console.error('[DELETE Visit] Error fetching visit:', fetchErr)
+      // Continue with deletion even if fetch fails
+    }
+
+    // Step 2: Delete S3 document if doc exists and is a valid S3 path
+    let s3DeleteSuccess = false
+    let s3DeleteMessage = 'No document to delete'
+    
+    if (docPath && typeof docPath === 'string' && docPath.trim() && docPath.startsWith('upload/')) {
+      try {
+        const { deleteFromS3 } = await import('@/lib/s3-service')
+        
+        console.log(`[DELETE Visit] Attempting to delete S3 document: ${docPath}`)
+        const s3DeleteResult = await deleteFromS3(docPath.trim())
+        
+        if (s3DeleteResult.success) {
+          s3DeleteSuccess = true
+          s3DeleteMessage = 'S3 document deleted successfully'
+          console.log(`[DELETE Visit] ✓ S3 document deleted: ${docPath}`)
+        } else {
+          // Check if file doesn't exist (acceptable scenario)
+          if (s3DeleteResult.message?.toLowerCase().includes('not found') || 
+              s3DeleteResult.message?.toLowerCase().includes('object not found')) {
+            s3DeleteSuccess = true // Consider this success - file already gone
+            s3DeleteMessage = 'S3 document not found (may have been already deleted)'
+            console.log(`[DELETE Visit] ⚠ S3 document not found (acceptable): ${docPath}`)
+          } else {
+            s3DeleteSuccess = false
+            s3DeleteMessage = s3DeleteResult.message || 'Failed to delete S3 document'
+            console.error(`[DELETE Visit] ✗ Failed to delete S3 document: ${docPath}`, s3DeleteResult.message)
+          }
+        }
+      } catch (s3Error: any) {
+        s3DeleteSuccess = false
+        s3DeleteMessage = s3Error.message || 'Error deleting S3 document'
+        console.error('[DELETE Visit] Error deleting S3 document:', s3Error)
+      }
+    } else if (docPath && docPath.trim()) {
+      // Doc path exists but is not a valid S3 path - log warning but continue
+      console.warn(`[DELETE Visit] Invalid S3 path format (not starting with 'upload/'): ${docPath}`)
+      s3DeleteMessage = 'Invalid document path format (not an S3 path)'
+    }
+
+    // Step 3: Delete database record
     const req = pool.request()
     req.input('id', sql.Int, visitId)
-
     await req.execute('sp_Delete_Academic_Research_Visit_ById')
-
-    return NextResponse.json({ success: true, message: 'Academic research visit deleted successfully' })
+    console.log(`[DELETE Visit] ✓ Database record deleted: id=${visitId}`)
+    
+    // Step 4: Return success response with S3 deletion status
+    // Database deletion succeeded - that's the primary operation
+    // S3 deletion failure is logged but doesn't block the operation
+    if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {
+      // Success if: S3 deleted successfully OR no S3 file to delete OR invalid path
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Academic research visit record and document deleted successfully',
+        s3DeleteMessage,
+      })
+    } else {
+      // Database deleted but S3 deletion failed
+      // Still return success but include warning
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Academic research visit record deleted from database',
+        warning: `S3 document deletion failed: ${s3DeleteMessage}`,
+        s3DeleteMessage,
+      })
+    }
   } catch (err: any) {
     console.error('Error deleting academic research visit:', err)
     return NextResponse.json(

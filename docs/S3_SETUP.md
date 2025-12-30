@@ -158,7 +158,7 @@ arms-documents/
 │   ├── Copyrights/
 │   ├── patents/
 │   ├── Policy_Document/
-│   ├── Collaborations/
+│   ├── MOU_Linkage/
 │   └── ...
 ```
 

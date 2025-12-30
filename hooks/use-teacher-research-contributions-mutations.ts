@@ -67,12 +67,30 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
           const error = await res.json()
           throw new Error(error.error || `Failed to create ${sectionId} record`)
         }
-        return res.json()
+        const result = await res.json()
+        return result
       } finally {
         unregister()
       }
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
+      // Show S3 deletion status toast if available (for collaborations, consultancy, etc.)
+      if (result?.s3DeleteMessage && (sectionId === 'collaborations' || sectionId === 'consultancy' || sectionId === 'patents' || sectionId === 'policy' || sectionId === 'econtent')) {
+        if (result.warning) {
+          toast({
+            title: "S3 Document Deletion",
+            description: result.s3DeleteMessage || "S3 document deletion had issues.",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "S3 Document Deleted",
+            description: result.s3DeleteMessage || "Document deleted from S3 successfully.",
+          })
+        }
+      }
+      
+      // Show database deletion success toast
       queryClient.invalidateQueries({ 
         queryKey: researchContributionsQueryKeys.section(teacherId, sectionId),
         refetchType: 'all'
@@ -238,26 +256,38 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
         queryKey: researchContributionsQueryKeys.all(teacherId)
       })
       
-      // Show success message - handle different scenarios
-      if (data.warning) {
-        toast({
-          title: "Success",
-          description: data.message || DELETE_CONFIG[sectionId].successMessage,
-          duration: 5000,
-        })
+      // Show S3 deletion status toast if available (for collaborations, consultancy, visits, etc.)
+      if (data?.s3DeleteMessage && (sectionId === 'collaborations' || sectionId === 'consultancy' || sectionId === 'patents' || sectionId === 'policy' || sectionId === 'econtent' || sectionId === 'visits')) {
+        if (data.warning) {
+          toast({
+            title: "S3 Document Deletion",
+            description: data.s3DeleteMessage || "S3 document deletion had issues.",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "S3 Document Deleted",
+            description: data.s3DeleteMessage || "Document deleted from S3 successfully.",
+          })
+        }
+      }
+      
+      // Show database deletion success message
+      if (data.warning && !data.s3DeleteMessage) {
+        // Only show warning toast if it's not an S3-related warning (already shown above)
         toast({
           title: "Warning",
           description: data.warning,
           variant: "default",
           duration: 5000,
         })
-      } else {
-        toast({ 
-          title: "Success", 
-          description: data.message || DELETE_CONFIG[sectionId].successMessage,
-          duration: 3000,
-        })
       }
+      
+      toast({ 
+        title: "Success", 
+        description: data.message || DELETE_CONFIG[sectionId].successMessage,
+        duration: 3000,
+      })
     },
   })
 

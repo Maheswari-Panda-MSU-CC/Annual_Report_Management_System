@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getSignedUrl as getS3SignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Initialize S3 Client
@@ -169,6 +169,19 @@ export async function uploadToS3(
       throw new Error('Invalid virtual path generated');
     }
 
+    // Extract folder path from virtual path (e.g., "upload/MOU_Linkage/" from "upload/MOU_Linkage/1_123.pdf")
+    const folderPath = virtualPath.substring(0, virtualPath.lastIndexOf('/') + 1);
+    
+    // Check if folder exists in S3 before uploading
+    const folderCheck = await checkS3FolderExists(folderPath);
+    if (!folderCheck.exists) {
+      return {
+        success: false,
+        virtualPath: '',
+        message: `Folder does not exist in S3: ${folderPath}. Please ensure the folder exists in S3 before uploading.`,
+      };
+    }
+
     // Determine content type
     const ext = metadata.fileExtension.toLowerCase().replace('.', '');
     const mimeType = contentType || getMimeType(ext);
@@ -208,6 +221,18 @@ export async function uploadToS3(
 export async function downloadFromS3(
   virtualPath: string
 ): Promise<{ success: boolean; buffer: Buffer | null; message: string; contentType?: string }> {
+  // Extract folder path from virtual path
+  const folderPath = virtualPath.substring(0, virtualPath.lastIndexOf('/') + 1);
+  
+  // Check if folder exists in S3 before downloading
+  const folderCheck = await checkS3FolderExists(folderPath);
+  if (!folderCheck.exists) {
+    return {
+      success: false,
+      buffer: null,
+      message: `Folder does not exist in S3: ${folderPath}. Cannot download file.`,
+    };
+  }
   try {
     // Validate path
     if (!validateVirtualPath(virtualPath)) {
@@ -259,6 +284,18 @@ export async function deleteFromS3(
       throw new Error('Invalid virtual path');
     }
 
+    // Extract folder path from virtual path
+    const folderPath = virtualPath.substring(0, virtualPath.lastIndexOf('/') + 1);
+    
+    // Check if folder exists in S3 before deleting
+    const folderCheck = await checkS3FolderExists(folderPath);
+    if (!folderCheck.exists) {
+      return {
+        success: false,
+        message: `Folder does not exist in S3: ${folderPath}. Cannot delete file.`,
+      };
+    }
+
     const command = new DeleteObjectCommand({
       Bucket: BUCKET_NAME,
       Key: virtualPath,
@@ -297,6 +334,19 @@ export async function getSignedUrl(
       };
     }
 
+    // Extract folder path from virtual path
+    const folderPath = virtualPath.substring(0, virtualPath.lastIndexOf('/') + 1);
+    
+    // Check if folder exists in S3 before generating presigned URL
+    const folderCheck = await checkS3FolderExists(folderPath);
+    if (!folderCheck.exists) {
+      return {
+        success: false,
+        url: '',
+        message: `Folder does not exist in S3: ${folderPath}. Cannot generate signed URL.`,
+      };
+    }
+
     // Check if file exists in S3 before generating presigned URL
     const existsCheck = await checkS3ObjectExists(virtualPath);
     if (!existsCheck.exists) {
@@ -325,6 +375,51 @@ export async function getSignedUrl(
       success: false,
       url: '',
       message: error.message || 'Failed to generate signed URL',
+    };
+  }
+}
+
+/**
+ * Check if a folder (prefix) exists in S3 by listing objects with that prefix
+ * Returns true if at least one object exists with the given prefix
+ */
+export async function checkS3FolderExists(
+  folderPath: string
+): Promise<{ exists: boolean; message: string }> {
+  try {
+    // Ensure folder path ends with / and starts with upload/
+    let normalizedPath = folderPath;
+    if (!normalizedPath.startsWith('upload/')) {
+      normalizedPath = normalizedPath.startsWith('/') 
+        ? `upload${normalizedPath}`
+        : `upload/${normalizedPath}`;
+    }
+    if (!normalizedPath.endsWith('/')) {
+      normalizedPath = `${normalizedPath}/`;
+    }
+
+    const command = new ListObjectsV2Command({
+      Bucket: BUCKET_NAME,
+      Prefix: normalizedPath,
+      MaxKeys: 1, // We only need to know if at least one object exists
+    });
+
+    const response = await s3Client.send(command);
+
+    // If Contents array exists and has at least one item, folder exists
+    const exists = response.Contents && response.Contents.length > 0;
+
+    return {
+      exists: exists || false,
+      message: exists 
+        ? `Folder exists in S3: ${normalizedPath}` 
+        : `Folder does not exist in S3: ${normalizedPath}`,
+    };
+  } catch (error: any) {
+    console.error('S3 folder existence check error:', error);
+    return {
+      exists: false,
+      message: error.message || 'Failed to check folder existence in S3',
     };
   }
 }
