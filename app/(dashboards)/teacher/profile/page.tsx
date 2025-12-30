@@ -3,27 +3,20 @@
 import type React from "react"
 
 import { useEffect, useState, useRef } from "react"
-import { useForm, Controller, useFieldArray } from "react-hook-form"
+import { useForm, useFieldArray } from "react-hook-form"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useAuth } from "@/app/api/auth/auth-provider"
-import { User, Camera, Save, X, Edit, Plus, Trash2, Upload, FileText, Eye, Loader2, Download } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
-import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { DocumentViewer } from "@/components/document-viewer"
+import { FileText } from "lucide-react"
 import { TeacherInfo, ExperienceEntry, PostDocEntry, EducationEntry, TeacherData, Faculty, Department, Designation, FacultyOption, DepartmentOption, DesignationOption, DegreeTypeOption } from "@/types/interfaces"
 import { useDropDowns } from "@/hooks/use-dropdowns"
-import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select"
 import { useTeacherProfile, useInvalidateTeacherData } from "@/hooks/use-teacher-data"
 import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton"
+import { PersonalInfoSection } from "./components/PersonalInfoSection"
+import { ExperienceDetailsSection } from "./components/ExperienceDetailsSection"
+import { PhdResearchSection } from "./components/PhdResearchSection"
+import { EducationDetailsSection } from "./components/EducationDetailsSection"
 
 
 
@@ -167,8 +160,6 @@ export default function ProfilePage() {
   const [isSavingExperience, setSavingExperience] = useState<Record<number, boolean>>({})
   const [isSavingPostDoc, setSavingPostDoc] = useState<Record<number, boolean>>({})
   const [isSavingEducation, setSavingEducation] = useState<Record<number, boolean>>({})
-  const [isSavingPhdDocument, setSavingPhdDocument] = useState<Record<number, boolean>>({})
-  const [isSavingEducationDocument, setSavingEducationDocument] = useState<Record<number, boolean>>({})
   const [isSavingAcademicYears, setIsSavingAcademicYears] = useState(false)
   const [teacherInfo, setTeacherInfo] = useState<TeacherInfo | null>(null);
   const [facultyData, setFacultyData] = useState<Faculty | null>(null);
@@ -469,12 +460,6 @@ export default function ProfilePage() {
   // Remove duplicate isLoading check that was after hooks
 
 
-  const handleInputChange = <K extends keyof TeacherInfo>(field: K, value: TeacherInfo[K]) => {
-    setTeacherInfo(prev => ({
-      ...(prev || {}), // fallback if prev is null
-      [field]: value,
-    } as TeacherInfo));
-  };
 
 
   const handleCheckboxChange = (field: string, checked: boolean) => {
@@ -485,6 +470,14 @@ export default function ProfilePage() {
   }
 
   const addExperienceEntry = () => {
+    if (hasAnyRecordEditing) {
+      toast({
+        title: "Cannot Add",
+        description: "Please save or cancel the currently editing record before adding a new one.",
+        variant: "default",
+      })
+      return
+    }
     const newEntry: ExperienceEntry = {
       Id: Date.now(),
       Tid: 1,
@@ -510,22 +503,44 @@ export default function ProfilePage() {
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({ error: 'Delete failed' }))
           toast({ title: "Delete Failed", description: errorData.error || "Could not delete experience.", variant: "destructive" })
-          return
+          throw new Error(errorData.error || "Could not delete experience.")
         }
       }
+      
+      // Remove from form array
+      removeExperience(index)
+      setExperienceEditingIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      
+      // Invalidate cache immediately to prevent showing stale data
+      await invalidateProfile()
+      
+      // Refresh form data
+      setTimeout(async () => {
+        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (refreshRes.ok) {
+          const refreshData: TeacherData = await refreshRes.json()
+          experienceForm.reset({ experiences: refreshData.teacherExperience || [] })
+        }
+      }, 100)
     } catch (e: any) {
       toast({ title: "Delete Failed", description: e.message || "Could not delete experience.", variant: "destructive" })
-      return
+      throw e // Re-throw so component can handle it
     }
-    removeExperience(index)
-    setExperienceEditingIds(prev => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
   }
 
   const addPostDocEntry = () => {
+    if (hasAnyRecordEditing) {
+      toast({
+        title: "Cannot Add",
+        description: "Please save or cancel the currently editing record before adding a new one.",
+        variant: "default",
+      })
+      return
+    }
     const newEntry: PostDocEntry = {
       Id: Date.now(),
       Tid: 1,
@@ -544,27 +559,94 @@ export default function ProfilePage() {
   const removePostDocEntry = async (index: number, id: number) => {
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (!teacherId) {
+        toast({ title: "Delete Failed", description: "Teacher ID not found.", variant: "destructive" })
+        throw new Error("Teacher ID not found.")
+      }
+
+      // Get the entry to retrieve document path for S3 deletion
+      const entry = postDocForm.getValues(`researches.${index}`)
+      const docPath = entry?.doc || null
+
       if (id && id <= 2147483647) {
-        const res = await fetch(`/api/teacher/profile/phd-research?teacherId=${teacherId}&id=${id}`, { method: 'DELETE' });
+        // Pass document path in request body so backend can delete S3 file first
+        const deleteUrl = `/api/teacher/profile/phd-research?teacherId=${teacherId}&id=${id}`
+        const res = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doc: docPath }),
+        });
+        
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({ error: 'Delete failed' }))
           toast({ title: "Delete Failed", description: errorData.error || "Could not delete post-doc entry.", variant: "destructive" })
-          return
+          throw new Error(errorData.error || "Could not delete post-doc entry.")
         }
+
+        // Check response for S3 deletion status
+        const result = await res.json().catch(() => ({}))
+        
+        // Show toast for S3 deletion status
+        if (docPath && docPath.startsWith('upload/')) {
+          if (result.s3DeleteMessage) {
+            if (result.warning) {
+              // S3 deletion failed but database deletion succeeded
+              toast({
+                title: "S3 Document Deletion",
+                description: result.s3DeleteMessage || "S3 document deletion had issues.",
+                variant: "destructive",
+              })
+            } else {
+              // S3 deletion succeeded
+              toast({
+                title: "S3 Document Deleted",
+                description: result.s3DeleteMessage || "Document deleted from S3 successfully.",
+              })
+            }
+          }
+        }
+        
+        // Show toast for database deletion (always succeeds if we reach here)
+        toast({
+          title: "Record Deleted",
+          description: "Post-doc entry deleted from database successfully.",
+        })
       }
+      
+      // Remove from form array
+      removePostDoc(index)
+      setPostDocEditingIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      
+      // Invalidate cache immediately to prevent showing stale data
+      await invalidateProfile()
+      
+      // Refresh form data
+      setTimeout(async () => {
+        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (refreshRes.ok) {
+          const refreshData: TeacherData = await refreshRes.json()
+          postDocForm.reset({ researches: refreshData.postDoctoralExp || [] })
+        }
+      }, 100)
     } catch (e: any) {
       toast({ title: "Delete Failed", description: e.message || "Could not delete post-doc entry.", variant: "destructive" })
-      return
+      throw e // Re-throw so component can handle it
     }
-    removePostDoc(index)
-    setPostDocEditingIds(prev => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
   }
 
   const addEducationEntry = () => {
+    if (hasAnyRecordEditing) {
+      toast({
+        title: "Cannot Add",
+        description: "Please save or cancel the currently editing record before adding a new one.",
+        variant: "default",
+      })
+      return
+    }
     const newEntry: EducationEntry = {
       gid: Date.now(),
       tid: 1,
@@ -582,8 +664,24 @@ export default function ProfilePage() {
     setEducationEditingIds(prev => new Set([...prev, newEntry.gid]))
   }
 
-  // Row-level edit toggles
+  // Check if any record in any section is currently being edited
+  const hasAnyRecordEditing = isEditingPersonal || 
+    experienceEditingIds.size > 0 || 
+    postDocEditingIds.size > 0 || 
+    educationEditingIds.size > 0
+
+  // Row-level edit toggles - prevent editing if another section is already editing
   const toggleExperienceRowEdit = (id: number) => {
+    // Allow toggling off (canceling) even if other sections are editing
+    const isCurrentlyEditing = experienceEditingIds.has(id)
+    if (!isCurrentlyEditing && hasAnyRecordEditing) {
+      toast({
+        title: "Cannot Edit",
+        description: "Please save or cancel the currently editing record before editing another.",
+        variant: "default",
+      })
+      return
+    }
     setExperienceEditingIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -591,13 +689,51 @@ export default function ProfilePage() {
     });
   }
   const togglePostDocRowEdit = (id: number) => {
+    // Allow toggling off (canceling) even if other sections are editing
+    const isCurrentlyEditing = postDocEditingIds.has(id)
+    if (!isCurrentlyEditing && hasAnyRecordEditing) {
+      toast({
+        title: "Cannot Edit",
+        description: "Please save or cancel the currently editing record before editing another.",
+        variant: "default",
+      })
+      return
+    }
     setPostDocEditingIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
+
+  // Cancel post-doc row edit
+  const handleCancelPostDocRow = async (index: number, id: number) => {
+    togglePostDocRowEdit(id)
+    // Reset form to original values on cancel
+    const teacherId = user?.role_id || teacherInfo?.Tid
+    if (teacherId) {
+      try {
+        const res = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (res.ok) {
+          const data: TeacherData = await res.json()
+          postDocForm.reset({ researches: data.postDoctoralExp || [] })
+        }
+      } catch (e) {
+        console.error('Error resetting post-doc form:', e)
+      }
+    }
+  }
   const toggleEducationRowEdit = (id: number) => {
+    // Allow toggling off (canceling) even if other sections are editing
+    const isCurrentlyEditing = educationEditingIds.has(id)
+    if (!isCurrentlyEditing && hasAnyRecordEditing) {
+      toast({
+        title: "Cannot Edit",
+        description: "Please save or cancel the currently editing record before editing another.",
+        variant: "default",
+      })
+      return
+    }
     setEducationEditingIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -608,24 +744,84 @@ export default function ProfilePage() {
   const removeEducationEntry = async (index: number, id: number) => {
     try {
       const teacherId = user?.role_id || teacherInfo?.Tid;
+      if (!teacherId) {
+        toast({ title: "Delete Failed", description: "Teacher ID not found.", variant: "destructive" })
+        throw new Error("Teacher ID not found.")
+      }
+
+      // Get the entry to retrieve document path for S3 deletion
+      const entry = educationForm.getValues(`educations.${index}`)
+      const docPath = entry?.Image || null
+
       if (id && id <= 2147483647) {
-        const res = await fetch(`/api/teacher/profile/graduation?teacherId=${teacherId}&gid=${id}`, { method: 'DELETE' });
+        // Pass document path in request body so backend can delete S3 file first
+        // Use 'Image' field name to match education API expectations
+        const deleteUrl = `/api/teacher/profile/graduation?teacherId=${teacherId}&gid=${id}`
+        const res = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ Image: docPath }),
+        });
+        
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({ error: 'Delete failed' }))
           toast({ title: "Delete Failed", description: errorData.error || "Could not delete education entry.", variant: "destructive" })
-          return
+          throw new Error(errorData.error || "Could not delete education entry.")
         }
+
+        // Check response for S3 deletion status
+        const result = await res.json().catch(() => ({}))
+        
+        // Show toast for S3 deletion status
+        if (docPath && docPath.startsWith('upload/')) {
+          if (result.s3DeleteMessage) {
+            if (result.warning) {
+              // S3 deletion failed but database deletion succeeded
+              toast({
+                title: "S3 Document Deletion",
+                description: result.s3DeleteMessage || "S3 document deletion had issues.",
+                variant: "destructive",
+              })
+            } else {
+              // S3 deletion succeeded
+              toast({
+                title: "S3 Document Deleted",
+                description: result.s3DeleteMessage || "Document deleted from S3 successfully.",
+              })
+            }
+          }
+        }
+        
+        // Show toast for database deletion (always succeeds if we reach here)
+        toast({
+          title: "Record Deleted",
+          description: "Education entry deleted from database successfully.",
+        })
       }
+      
+      // Remove from form array
+      removeEducation(index)
+      setEducationEditingIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      
+      // Invalidate cache immediately to prevent showing stale data
+      await invalidateProfile()
+      
+      // Refresh form data
+      setTimeout(async () => {
+        const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (refreshRes.ok) {
+          const refreshData: TeacherData = await refreshRes.json()
+          educationForm.reset({ educations: refreshData.graduationDetails || [] })
+        }
+      }, 100)
     } catch (e: any) {
       toast({ title: "Delete Failed", description: e.message || "Could not delete education entry.", variant: "destructive" })
-      return
+      throw e // Re-throw so component can handle it
     }
-    removeEducation(index)
-    setEducationEditingIds(prev => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
   }
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -795,7 +991,6 @@ export default function ProfilePage() {
       return
     }
 
-    const originalProfileImage = teacherInfo.ProfileImage // Store for rollback
     let deleteSucceeded = false
 
     try {
@@ -939,17 +1134,6 @@ export default function ProfilePage() {
   }
 
 
-  // const handleSavePersonal = () => {
-  //   // Build ICT_Details string from selections
-  //   const newIctDetails = buildIctDetails(editingData)
-  //   console.log("Saving personal data:", { ...editingData, ICT_Details: newIctDetails })
-  //   // Typically send to API here
-  //   if (teacherInfo) {
-  //     setTeacherInfo({ ...teacherInfo, ICT_Details: newIctDetails })
-  //   }
-  //   setIsEditingPersonal(false)
-  // }
-
   // Wrapper to handle validation errors
   const handlePersonalSubmit = handleSubmit(
     // Success callback - validation passed
@@ -1052,6 +1236,7 @@ export default function ProfilePage() {
       } as TeacherInfo;
 
       // If there's a pending profile image, upload it to S3 first
+      // pendingProfileImageFile is only set when user selects a NEW file, so if it exists, we need to upload
       if (pendingProfileImageFile && user?.email) {
         try {
           // Delete old S3 image if exists (to prevent orphaned files)
@@ -1432,6 +1617,24 @@ export default function ProfilePage() {
       fetchProfileImageUrl(init.profileImagePath)
     } else {
       setProfileImage(null)
+    }
+  }
+
+  // Cancel experience row edit
+  const handleCancelExperienceRow = async (index: number, id: number) => {
+    toggleExperienceRowEdit(id)
+    // Reset form to original values on cancel
+    const teacherId = user?.role_id || teacherInfo?.Tid
+    if (teacherId) {
+      try {
+        const res = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+        if (res.ok) {
+          const data: TeacherData = await res.json()
+          experienceForm.reset({ experiences: data.teacherExperience || [] })
+        }
+      } catch (e) {
+        console.error('Error resetting experience form:', e)
+      }
     }
   }
 
@@ -1996,229 +2199,6 @@ export default function ProfilePage() {
     }
   }
 
-  // Handle document update for PhD Research (document-only update)
-  const handlePhdDocumentUpdate = async (index: number, id: number, documentUrl: string) => {
-    if (!documentUrl) {
-      toast({
-        title: "Error",
-        description: "Please upload a document first.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSavingPhdDocument(prev => ({ ...prev, [id]: true }))
-    try {
-      const teacherId = user?.role_id || teacherInfo?.Tid
-      if (!teacherId) {
-        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
-        return
-      }
-
-      // Check if it's a local file that needs to be uploaded to S3
-      const isLocalFile = documentUrl.startsWith('/uploaded-document/')
-      let s3Url = documentUrl // Default to existing URL (might already be S3 URL)
-
-      // Only upload to S3 if it's a local file
-      if (isLocalFile) {
-        // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
-        const fileName = documentUrl.split('/').pop() || 'document.pdf'
-        
-        // Upload to S3 and get the URL
-        const uploadRes = await fetch('/api/shared/s3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName }),
-        })
-
-        if (!uploadRes.ok) {
-          const errorData = await uploadRes.json().catch(() => ({}))
-          throw new Error(errorData.error || 'Failed to upload document to S3')
-        }
-
-        const uploadData = await uploadRes.json()
-        s3Url = uploadData.url
-
-        // Delete local file after successful S3 upload
-        try {
-          await fetch('/api/shared/local-document-upload', {
-            method: 'DELETE',
-          })
-        } catch (deleteError) {
-          console.error('Error deleting local file:', deleteError)
-          // Don't fail the upload if deletion fails
-        }
-      }
-
-      // Call document-only update endpoint
-      const res = await fetch(`/api/teacher/profile/phd-research/${id}/document`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          teacherId, 
-          doc: s3Url 
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to update document')
-      }
-
-      const result = await res.json()
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update document')
-      }
-
-      await invalidateProfile()
-      // Update state with S3 URL
-      setPhdDocumentUrls(prev => {
-        const newUrls = { ...prev, [id]: s3Url }
-        return newUrls
-      })
-      // Close the dialog after successful save
-      setPhdDialogOpen(prev => ({ ...prev, [id]: false }))
-      
-      // Refresh form data to reflect the updated document
-      if (teacherId) {
-        setTimeout(async () => {
-          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-          if (refreshRes.ok) {
-            const refreshData: TeacherData = await refreshRes.json()
-            postDocForm.reset({ researches: refreshData.postDoctoralExp || [] })
-          }
-        }, 100)
-      }
-      
-      toast({ 
-        title: "Success", 
-        description: "Document updated successfully." 
-      })
-    } catch (e: any) {
-      console.error('Document update error:', e)
-      toast({ 
-        title: "Update Failed", 
-        description: e.message || "Could not update document.", 
-        variant: "destructive" 
-      })
-    }
-  }
-
-  // Handle document update for Education (document-only update)
-  const handleEducationDocumentUpdate = async (index: number, id: number, documentUrl: string) => {
-    if (!documentUrl) {
-      toast({
-        title: "Error",
-        description: "Please upload a document first.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setSavingEducationDocument(prev => ({ ...prev, [id]: true }))
-    try {
-      const teacherId = user?.role_id || teacherInfo?.Tid
-      if (!teacherId) {
-        toast({ title: "Error", description: "Teacher ID not found.", variant: "destructive" })
-        return
-      }
-
-      // Check if it's a local file that needs to be uploaded to S3
-      const isLocalFile = documentUrl.startsWith('/uploaded-document/')
-      let s3Url = documentUrl // Default to existing URL (might already be S3 URL)
-
-      // Only upload to S3 if it's a local file
-      if (isLocalFile) {
-        // Extract filename from URL (e.g., /uploaded-document/file.pdf -> file.pdf)
-        const fileName = documentUrl.split('/').pop() || 'document.pdf'
-        
-        // Upload to S3 and get the URL
-        const uploadRes = await fetch('/api/shared/s3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileName }),
-        })
-
-        if (!uploadRes.ok) {
-          const errorData = await uploadRes.json().catch(() => ({}))
-          throw new Error(errorData.error || 'Failed to upload document to S3')
-        }
-
-        const uploadData = await uploadRes.json()
-        s3Url = uploadData.url
-
-        // Delete local file after successful S3 upload
-        try {
-          await fetch('/api/shared/local-document-upload', {
-            method: 'DELETE',
-          })
-        } catch (deleteError) {
-          console.error('Error deleting local file:', deleteError)
-          // Don't fail the upload if deletion fails
-        }
-      }
-
-      // Call document-only update endpoint
-      const res = await fetch(`/api/teacher/profile/graduation/${id}/document`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          teacherId, 
-          Image: s3Url 
-        }),
-      })
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to update document')
-      }
-
-      const result = await res.json()
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to update document')
-      }
-
-      await invalidateProfile()
-      // Update state with S3 URL
-      setEducationDocumentUrls(prev => {
-        const newUrls = { ...prev, [id]: s3Url }
-        return newUrls
-      })
-      // Close the dialog after successful save
-      setEducationDialogOpen(prev => ({ ...prev, [id]: false }))
-      
-      // Refresh form data to reflect the updated document
-      if (teacherId) {
-        setTimeout(async () => {
-          const refreshRes = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-          if (refreshRes.ok) {
-            const refreshData: TeacherData = await refreshRes.json()
-            educationForm.reset({ educations: refreshData.graduationDetails || [] })
-          }
-        }, 100)
-      }
-      
-      toast({ 
-        title: "Success", 
-        description: "Document updated successfully." 
-      })
-    } catch (e: any) {
-      console.error('Document update error:', e)
-      toast({ 
-        title: "Update Failed", 
-        description: e.message || "Could not update document.", 
-        variant: "destructive" 
-      })
-    } finally {
-      setSavingEducationDocument(prev => {
-        const next = { ...prev }
-        delete next[id]
-        return next
-      })
-    }
-  }
 
   const handleSaveAcademicYears = async () => {
     setIsSavingAcademicYears(true)
@@ -2288,2686 +2268,178 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Personal Information */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <div>
-              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                <User className="h-4 w-4 sm:h-5 sm:w-5" />
-                Personal Information
-              </CardTitle>
-              <CardDescription className="text-[11px] sm:text-xs">Your personal and academic details</CardDescription>
-            </div>
-            {!isEditingPersonal ? (
-              <Button onClick={() => setIsEditingPersonal(true)} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
-                <Edit className="h-4 w-4" />
-                <span className="hidden sm:inline">Edit Personal Info</span>
-                <span className="sm:hidden">Edit</span>
-              </Button>
-            ) : (
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <Button onClick={handlePersonalSubmit} disabled={isSavingPersonal} className="flex items-center gap-2 w-full sm:w-auto" size="sm">
-                  {isSavingPersonal ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="hidden sm:inline">Saving...</span>
-                      <span className="sm:hidden">Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      <span className="hidden sm:inline">Save Changes</span>
-                      <span className="sm:hidden">Save</span>
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleCancelPersonal}
-                  disabled={isSavingPersonal}
-                  className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
-                  size="sm"
-                >
-                  <X className="h-4 w-4" />
-                  Cancel
-                </Button>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="p-3 sm:p-4">
-          <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full">
-            <div className="space-y-3 sm:space-y-4 w-full">
 
-              {/* Profile Photo Section */}
-              <div className="col-span-full flex flex-col items-center space-y-2 sm:space-y-3 w-full">
-
-                <div className="relative">
-                  <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 sm:border-4 border-white shadow-lg">
-                    {profileImage ? (
-                      <img
-                        src={profileImage}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                        // crossOrigin="anonymous"
-                        onError={(e) => {
-                          const target = e.currentTarget as HTMLImageElement
-                          console.error("Profile image load error:", {
-                            url: profileImage,
-                            src: target?.src,
-                            errorMessage: "Image failed to load"
-                          })
-                          // Don't clear immediately for S3 URLs - might be temporary CORS issue
-                          // Only clear if it's not an S3 URL
-                          if (!profileImage?.includes('s3.amazonaws.com') && !profileImage?.includes('amazonaws.com')) {
-                            setProfileImage(null)
-                          }
-                        }}
-                        onLoad={() => {
-                          console.log("Profile image loaded successfully:", profileImage)
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-                        <User className="h-12 w-12 sm:h-16 sm:w-16 text-blue-400" />
-                      </div>
-                    )}
-                  </div>
-                  {isEditingPersonal && (
-                    <>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                      <button
-                        disabled={isUploadingImage}
-                        className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Profile image options"
-                      >
-                        {isUploadingImage ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                        ) : (
-                          <Camera className="h-4 w-4" />
-                        )}
-                      </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 sm:w-56">
-                          {teacherInfo?.ProfileImage && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={handleDownloadProfileImage}
-                                disabled={isUploadingImage}
-                                className="cursor-pointer"
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                <span className="text-xs sm:text-sm">Download Profile Image</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                            </>
-                          )}
-                          <DropdownMenuItem
-                            onClick={triggerImageUpload}
-                            disabled={isUploadingImage}
-                            className="cursor-pointer"
-                          >
-                            <Upload className="h-4 w-4 mr-2" />
-                            <span className="text-xs sm:text-sm">
-                              {teacherInfo?.ProfileImage ? "Update Profile Image" : "Upload Profile Image"}
-                            </span>
-                          </DropdownMenuItem>
-                          {teacherInfo?.ProfileImage && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={handleRemoveProfileImage}
-                                disabled={isUploadingImage}
-                                className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                <span className="text-xs sm:text-sm">Remove Profile Image</span>
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <input
-                        id="profile-image-input"
-                        type="file"
-                        accept="image/jpeg,image/jpg"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                    </>
-                  )}
-                </div>
-                <div className="text-center">
-                  <p className="font-medium text-xs sm:text-sm">{`${teacherInfo?.Abbri} ${teacherInfo?.fname} ${teacherInfo?.lname}`}</p>
-                  <p className="text-xs text-muted-foreground">{designationData?.name}</p>
-                  <p className="text-xs text-muted-foreground">{departmentData?.name}</p>
-                </div>
-                {isEditingPersonal && (
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500 mb-2">Click the camera icon to upload a profile picture</p>
-                    <p className="text-xs text-gray-400">Supported: JPG, JPEG (Max 1MB)</p>
-                  </div>
-                )}
-              </div>
-              {/* Basic Information */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Basic Information</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="salutation" className="text-sm font-medium">
-                      Salutation <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="Abbri"
-                      rules={{
-                        required: isEditingPersonal ? "Salutation is required" : false
-                      }}
-                      render={({ field, fieldState: { error } }) => (
-                        <div>
-                          <Select
-                            value={field.value}
-                            onValueChange={(v: any) => field.onChange(v)}
-                            disabled={!isEditingPersonal || isSavingPersonal}
-                          >
-                            <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""} ${error ? 'border-red-500' : ''}`}>
-                              <SelectValue placeholder="Select salutation" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Dr.">Dr.</SelectItem>
-                              <SelectItem value="Prof.">Prof.</SelectItem>
-                              <SelectItem value="Mr.">Mr.</SelectItem>
-                              <SelectItem value="Ms.">Ms.</SelectItem>
-                              <SelectItem value="Mrs.">Mrs.</SelectItem>
-                              <SelectItem value="Shri.">Shri.</SelectItem>
-                              <SelectItem value="Er.">Er.</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          {error && isEditingPersonal && (
-                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                          )}
-                        </div>
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName" className="text-sm font-medium">
-                      First Name <span className="text-red-500">*</span>
-                    </Label>
-                    <Input 
-                      id="firstName" 
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.fname ? 'border-red-500' : ''}`}
-                      {...register('fname', {
-                        required: isEditingPersonal ? "First name is required" : false,
-                        minLength: {
-                          value: 3,
-                          message: "First name must be at least 3 characters"
-                        },
-                        pattern: {
-                          value: /^[A-Za-z\s'-]+$/,
-                          message: "First name should only contain letters, spaces, hyphens, or apostrophes"
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                    />
-                    {errors.fname && isEditingPersonal && touchedFields.fname && (
-                      <p className="text-xs text-red-500 mt-1">{errors.fname.message as string}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="middleName" className="text-sm font-medium">Middle Name</Label>
-                    <Input 
-                      id="middleName" 
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.mname ? 'border-red-500' : ''}`}
-                      {...register('mname', {
-                        validate: (value) => {
-                          if (!value || value.trim() === '') return true; // Optional field
-                          if (value.length < 3) {
-                            return "Middle name must be at least 3 characters if provided";
-                          }
-                          if (!/^[A-Za-z\s'-]+$/.test(value)) {
-                            return "Middle name should only contain letters, spaces, hyphens, or apostrophes";
-                          }
-                          return true;
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                    />
-                    {errors.mname && isEditingPersonal && touchedFields.mname && (
-                      <p className="text-xs text-red-500 mt-1">{errors.mname.message as string}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName" className="text-sm font-medium">
-                      Last Name <span className="text-red-500">*</span>
-                    </Label>
-                    <Input 
-                      id="lastName" 
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.lname ? 'border-red-500' : ''}`}
-                      {...register('lname', {
-                        required: isEditingPersonal ? "Last name is required" : false,
-                        minLength: {
-                          value: 3,
-                          message: "Last name must be at least 3 characters"
-                        },
-                        pattern: {
-                          value: /^[A-Za-z\s'-]+$/,
-                          message: "Last name should only contain letters, spaces, hyphens, or apostrophes"
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                    />
-                    {errors.lname && isEditingPersonal && touchedFields.lname && (
-                      <p className="text-xs text-red-500 mt-1">{errors.lname.message as string}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Contact Information */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Contact Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm font-medium">
-                      Email <span className="text-red-500">*</span>
-                    </Label>
-                    <Input 
-                      id="email" 
-                      type="email" 
-                      {...register('email_id')} 
-                      readOnly 
-                      className="h-10 text-base bg-[#f9fafb] text-foreground cursor-default" 
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone" className="text-sm font-medium">
-                      Phone Number <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="phone_no"
-                      rules={{
-                        required: isEditingPersonal ? "Phone number is required" : false,
-                        pattern: {
-                          value: /^[0-9]{10}$/,
-                          message: "Phone number must contain exactly 10 digits"
-                        },
-                        minLength: {
-                          value: 10,
-                          message: "Phone number must be exactly 10 digits"
-                        },
-                        maxLength: {
-                          value: 10,
-                          message: "Phone number must be exactly 10 digits"
-                        }
-                      }}
-                      render={({ field, fieldState: { error } }) => (
-                        <div>
-                          <Input
-                            id="phone"
-                            type="tel"
-                            {...field}
-                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                            onChange={(e) => {
-                              // Only allow digits and limit to 10
-                              const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-                              field.onChange(value);
-                            }}
-                            readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                            placeholder="Enter 10 digit phone number"
-                            maxLength={10}
-                          />
-                          {error && isEditingPersonal && (
-                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                          )}
-                        </div>
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Additional Personal Information */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Additional Information</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="dateOfBirth" className="text-sm font-medium">
-                      Date of Birth <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="DOB"
-                      rules={{
-                        required: isEditingPersonal ? "Date of birth is required" : false,
-                        validate: (value) => {
-                          if (!value || (typeof value === 'string' && value.trim() === '')) {
-                            if (isEditingPersonal) return "Date of birth is required";
-                            return true;
-                          }
-                          const dob = new Date(value);
-                          if (isNaN(dob.getTime())) {
-                            if (isEditingPersonal) return "Please enter a valid date";
-                            return true;
-                          }
-                          const today = new Date();
-                          const age = today.getFullYear() - dob.getFullYear();
-                          const monthDiff = today.getMonth() - dob.getMonth();
-                          
-                          if (dob > today) {
-                            return "Date of birth cannot be in the future";
-                          }
-                          if (age < 18 || (age === 18 && monthDiff < 0)) {
-                            return "Age must be at least 18 years";
-                          }
-                          if (age > 100) {
-                            return "Please enter a valid date of birth";
-                          }
-                          return true;
-                        }
-                      }}
-                      render={({ field, fieldState: { error } }) => (
-                        <div>
-                          <Input
-                            id="dateOfBirth"
-                            type="date"
-                            {...field}
-                            max={new Date().toISOString().split('T')[0]}
-                            readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                          />
-                          {error && isEditingPersonal && (
-                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                          )}
-                        </div>
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="dateOfJoining" className="text-sm font-medium">
-                      Date of Joining <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="recruit_date"
-                      rules={{
-                        required: isEditingPersonal ? "Date of joining is required" : false,
-                        validate: (value) => {
-                          if (!value || (typeof value === 'string' && value.trim() === '')) {
-                            if (isEditingPersonal) return "Date of joining is required";
-                            return true;
-                          }
-                          const joinDate = new Date(value);
-                          if (isNaN(joinDate.getTime())) {
-                            if (isEditingPersonal) return "Please enter a valid date";
-                            return true;
-                          }
-                          const today = new Date();
-                          const dob = watch('DOB') ? new Date(watch('DOB')) : null;
-                          
-                          if (joinDate > today) {
-                            return "Date of joining cannot be in the future";
-                          }
-                          if (dob && !isNaN(dob.getTime()) && joinDate < dob) {
-                            return "Date of joining must be after date of birth";
-                          }
-                          return true;
-                        }
-                      }}
-                      render={({ field, fieldState: { error } }) => (
-                        <div>
-                          <Input
-                            id="dateOfJoining"
-                            type="date"
-                            {...field}
-                            max={new Date().toISOString().split('T')[0]}
-                            readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                          />
-                          {error && isEditingPersonal && (
-                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                          )}
-                        </div>
-                      )}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="panNo" className="text-sm font-medium">
-                      PAN Number <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="PAN_No"
-                      rules={{
-                        required: isEditingPersonal ? "PAN number is required" : false,
-                        validate: (value) => {
-                          if (!value || (typeof value === 'string' && value.trim() === '')) {
-                            if (isEditingPersonal) return "PAN number is required";
-                            return true;
-                          }
-                          const panValue = String(value).trim().toUpperCase();
-                          if (panValue.length !== 10) {
-                            return "PAN number must be exactly 10 characters";
-                          }
-                          if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(panValue)) {
-                            return "PAN must be in format: ABCDE1234F (5 letters, 4 digits, 1 letter)";
-                          }
-                          return true;
-                        }
-                      }}
-                      render={({ field, fieldState: { error } }) => (
-                        <div>
-                          <Input
-                            id="panNo"
-                            {...field}
-                            onChange={(e) => {
-                              const upperValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-                              field.onChange(upperValue);
-                            }}
-                            readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                            placeholder="ABCDE1234F"
-                            maxLength={10}
-                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                          />
-                          {error && isEditingPersonal && (
-                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                          )}
-                        </div>
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Research Metrics - Add this new section */}
-              <div className="space-y-4">
-                <h4 className="text-xs sm:text-sm font-medium">Research Metrics</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="hIndex" className="text-sm font-medium">H-Index</Label>
-                      <Input 
-                      id="hIndex" 
-                      type="number" 
-                      {...register('H_INDEX', {
-                        min: { value: 0, message: "H-Index must be a positive number" },
-                        max: { value: 200, message: "H-Index value seems too high" },
-                        valueAsNumber: true,
-                        validate: (value) => {
-                          if (value !== undefined && value !== null && value !== '') {
-                            if (!Number.isInteger(Number(value))) {
-                              return "H-Index must be a whole number";
-                            }
-                          }
-                          return true;
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                      placeholder="Enter H-Index"
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.H_INDEX ? 'border-red-500' : ''}`}
-                    />
-                    {errors.H_INDEX && isEditingPersonal && touchedFields.H_INDEX && (
-                      <p className="text-xs text-red-500 mt-1">{errors.H_INDEX.message as string}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="i10Index" className="text-sm font-medium">i10-Index</Label>
-                      <Input 
-                      id="i10Index" 
-                      type="number" 
-                      {...register('i10_INDEX', {
-                        min: { value: 0, message: "i10-Index must be a positive number" },
-                        max: { value: 200, message: "i10-Index value seems too high" },
-                        valueAsNumber: true,
-                        validate: (value) => {
-                          if (value !== undefined && value !== null && value !== '') {
-                            if (!Number.isInteger(Number(value))) {
-                              return "i10-Index must be a whole number";
-                            }
-                          }
-                          return true;
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                      placeholder="Enter i10-Index"
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.i10_INDEX ? 'border-red-500' : ''}`}
-                    />
-                    {errors.i10_INDEX && isEditingPersonal && touchedFields.i10_INDEX && (
-                      <p className="text-xs text-red-500 mt-1">{errors.i10_INDEX.message as string}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="citations" className="text-sm font-medium">Citations</Label>
-                      <Input 
-                      id="citations" 
-                      type="number" 
-                      {...register('CITIATIONS', {
-                        min: { value: 0, message: "Citations must be a positive number" },
-                        max: { value: 1000000, message: "Citations value seems too high" },
-                        valueAsNumber: true,
-                        validate: (value) => {
-                          if (value !== undefined && value !== null && value !== '') {
-                            if (!Number.isInteger(Number(value))) {
-                              return "Citations must be a whole number";
-                            }
-                          }
-                          return true;
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                      placeholder="Enter total citations"
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.CITIATIONS ? 'border-red-500' : ''}`}
-                    />
-                    {errors.CITIATIONS && isEditingPersonal && touchedFields.CITIATIONS && (
-                      <p className="text-xs text-red-500 mt-1">{errors.CITIATIONS.message as string}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="orcidId" className="text-sm font-medium">ORCHID ID</Label>
-                      <Input 
-                      id="orcidId" 
-                      {...register('ORCHID_ID', {
-                        pattern: {
-                          value: /^(\d{4}-){3}\d{3}[\dX]$/,
-                          message: "Invalid ORCID ID format (e.g., 0000-0000-0000-0000)"
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                      placeholder="0000-0000-0000-0000"
-                      maxLength={19}
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.ORCHID_ID ? 'border-red-500' : ''}`}
-                    />
-                    {errors.ORCHID_ID && isEditingPersonal && touchedFields.ORCHID_ID && (
-                      <p className="text-xs text-red-500 mt-1">{errors.ORCHID_ID.message as string}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="researcherId" className="text-sm font-medium">Researcher ID</Label>
-                      <Input 
-                      id="researcherId" 
-                      {...register('RESEARCHER_ID', {
-                        maxLength: {
-                          value: 100,
-                          message: "Researcher ID must be less than 100 characters"
-                        },
-                        validate: (value) => {
-                          if (!value || value.trim() === '') {
-                            return true; // Optional field
-                          }
-                          if (value.length < 3) {
-                            return "Researcher ID must be at least 3 characters";
-                          }
-                          if (!/^[A-Za-z0-9._-]+$/.test(value)) {
-                            return "Researcher ID can only contain letters, numbers, dots, hyphens, and underscores";
-                          }
-                          return true;
-                        }
-                      })} 
-                      readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal} 
-                      placeholder="Enter Researcher ID"
-                      maxLength={100}
-                      className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${errors.RESEARCHER_ID ? 'border-red-500' : ''}`}
-                    />
-                    {errors.RESEARCHER_ID && isEditingPersonal && touchedFields.RESEARCHER_ID && (
-                      <p className="text-xs text-red-500 mt-1">{errors.RESEARCHER_ID.message as string}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Teaching Status */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Teaching Status</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="teachingStatus" className="text-sm font-medium">
-                      Teaching Status <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="perma_or_tenure"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value === false ? "Permanent" : "Tenured"}
-                          onValueChange={(value: string) => {
-                            const isPermanent = value === "Permanent";
-                            field.onChange(isPermanent ? false : true);
-                          }}
-                          disabled={!isEditingPersonal || isSavingPersonal}
-                        >
-                          <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""}`}>
-                            <SelectValue placeholder="Select teaching status" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Tenured">Tenured</SelectItem>
-                            <SelectItem value="Permanent">Permanent</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Academic Information */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Academic Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="designation" className="text-sm font-medium">
-                      Designation <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name={watch('perma_or_tenure') === false ? 'desig_perma' : 'desig_tenure'}
-                      rules={{
-                        required: isEditingPersonal ? "Designation is required" : false
-                      }}
-                      render={({ field }) => {
-                        const designationOptions = watch('perma_or_tenure') === false 
-                          ? permanentDesignationOptions 
-                          : temporaryDesignationOptions
-                        return (
-                          <SearchableSelect
-                            options={designationOptions.map((desig) => ({
-                              value: desig.id,
-                              label: desig.name,
-                            }))}
-                            value={field.value}
-                            onValueChange={(v: string | number) => field.onChange(Number(v))}
-                            placeholder="Select designation"
-                            disabled={!isEditingPersonal || isSavingPersonal}
-                            emptyMessage="No designation found."
-                            className={`w-full min-w-0 ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground opacity-100" : ""}`}
-                          />
-                        )
-                      }}
-                    />
-                    {errors.desig_perma && isEditingPersonal && touchedFields.desig_perma && (
-                      <p className="text-xs text-red-500 mt-1">{errors.desig_perma.message as string}</p>
-                    )}
-                    {errors.desig_tenure && isEditingPersonal && touchedFields.desig_tenure && (
-                      <p className="text-xs text-red-500 mt-1">{errors.desig_tenure.message as string}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="faculty" className="text-sm font-medium">
-                      Faculty <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="faculty"
-                      rules={{
-                        required: isEditingPersonal ? "Faculty is required" : false
-                      }}
-                      render={({ field }) => (
-                        <SearchableSelect
-                          options={facultyOptions.map((faculty) => ({
-                            value: faculty.Fid,
-                            label: faculty.Fname,
-                          }))}
-                          value={field.value ?? selectedFacultyId ?? facultyData?.Fid ?? undefined}
-                          onValueChange={() => {
-                            // Disabled - no changes allowed
-                          }}
-                          placeholder="Select faculty"
-                          disabled={true}
-                          emptyMessage="No faculty found."
-                          className="w-full min-w-0 bg-[#f9fafb] text-foreground opacity-100"
-                        />
-                      )}
-                    />
-                    {errors.faculty && isEditingPersonal && touchedFields.faculty && (
-                      <p className="text-xs text-red-500 mt-1">{errors.faculty.message as string}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:gap-4 w-full">
-                  <div className="space-y-2">
-                    <Label htmlFor="department" className="text-sm font-medium">
-                      Department <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="deptid"
-                      rules={{
-                        required: isEditingPersonal ? "Department is required" : false,
-                        validate: (value) => {
-                          const facultyValue = watch('faculty');
-                          if (isEditingPersonal && !facultyValue) {
-                            return "Please select a faculty first";
-                          }
-                          if (isEditingPersonal && !value) {
-                            return "Department is required";
-                          }
-                          return true;
-                        }
-                      }}
-                      render={({ field }) => {
-                        const facultyValue = watch('faculty');
-                        return (
-                          <SearchableSelect
-                            options={departmentOptions.map((dept) => ({
-                              value: dept.Deptid,
-                              label: dept.name,
-                            }))}
-                            value={field.value}
-                            onValueChange={() => {
-                              // Disabled - no changes allowed
-                            }}
-                            placeholder="Select department"
-                            disabled={true}
-                            emptyMessage={!facultyValue ? "Please select a faculty first" : "No department found."}
-                            className="w-full min-w-0 bg-[#f9fafb] text-foreground opacity-100"
-                          />
-                        );
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Qualification Information */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Qualification Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 w-full">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Qualified NET Exam <span className="text-red-500">*</span>
-                      </Label>
-                      <RadioGroup
-                        value={watch('NET') ? "yes" : "no"}
-                        onValueChange={(value: any) => setValue('NET', value === 'yes')}
-                        className={`flex gap-6 ${!isEditingPersonal || isSavingPersonal ? "pointer-events-none" : ""}`}
-                        disabled={isSavingPersonal}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="yes" id="net-yes" />
-                          <Label htmlFor="net-yes" className="text-sm">Yes</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="no" id="net-no" />
-                          <Label htmlFor="net-no" className="text-sm">No</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                    {watch('NET') && (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="netYear" className="text-sm font-medium">
-                            NET Qualified Year <span className="text-red-500">*</span>
-                          </Label>
-                          <Controller
-                            control={control}
-                            name="NET_year"
-                            rules={{
-                              required: watch('NET') && isEditingPersonal ? "NET qualified year is required" : false,
-                              validate: (value) => {
-                                if (watch('NET') && isEditingPersonal) {
-                                  if (!value || value.toString().trim() === '') {
-                                    return "NET qualified year is required";
-                                  }
-                                  const yearStr = value.toString().trim();
-                                  if (yearStr.length !== 4) {
-                                    return "Year must be 4 digits";
-                                  }
-                                  const year = parseInt(yearStr);
-                                  const currentYear = new Date().getFullYear();
-                                  if (isNaN(year) || year < 1950 || year > currentYear) {
-                                    return `Year must be between 1950 and ${currentYear}`;
-                                  }
-                                }
-                                return true;
-                              }
-                            }}
-                            render={({ field, fieldState: { error } }) => (
-                              <div>
-                                <Input
-                                  id="netYear"
-                                  {...field}
-                                  onChange={(e) => {
-                                    const year = e.target.value.replace(/\D/g, '').slice(0, 4);
-                                    field.onChange(year);
-                                  }}
-                                  readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                                  placeholder="YYYY (e.g., 2018)"
-                                  maxLength={4}
-                                  className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                                />
-                                {error && isEditingPersonal && (
-                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                                )}
-                              </div>
-                            )}
-                          />
-                        </div>
-
-                      </>
-                    )}
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">
-                        Qualified GATE Exam <span className="text-red-500">*</span>
-                      </Label>
-                      <RadioGroup
-                        value={watch('GATE') ? "yes" : "no"}
-                        onValueChange={(value: any) => setValue('GATE', value === 'yes')}
-                        className={`flex gap-6 ${!isEditingPersonal || isSavingPersonal ? "pointer-events-none" : ""}`}
-                        disabled={isSavingPersonal}
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="yes" id="gate-yes" />
-                          <Label htmlFor="gate-yes" className="text-sm">Yes</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="no" id="gate-no" />
-                          <Label htmlFor="gate-no" className="text-sm">No</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                    {watch('GATE') && (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="gateYear" className="text-sm font-medium">GATE Qualified Year</Label>
-                          <Controller
-                            control={control}
-                            name="GATE_year"
-                            rules={{
-                              required: watch('GATE') && isEditingPersonal ? "GATE qualified year is required" : false,
-                              validate: (value) => {
-                                if (watch('GATE') && isEditingPersonal) {
-                                  if (!value || value.toString().trim() === '') {
-                                    return "GATE qualified year is required";
-                                  }
-                                  const yearStr = value.toString().trim();
-                                  if (yearStr.length !== 4) {
-                                    return "Year must be 4 digits";
-                                  }
-                                  const year = parseInt(yearStr);
-                                  const currentYear = new Date().getFullYear();
-                                  if (isNaN(year) || year < 1950 || year > currentYear) {
-                                    return `Year must be between 1950 and ${currentYear}`;
-                                  }
-                                }
-                                return true;
-                              }
-                            }}
-                            render={({ field, fieldState: { error } }) => (
-                              <div>
-                                <Input
-                                  id="gateYear"
-                                  {...field}
-                                  onChange={(e) => {
-                                    const year = e.target.value.replace(/\D/g, '').slice(0, 4);
-                                    field.onChange(year);
-                                  }}
-                                  readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                                  placeholder="YYYY (e.g., 2018)"
-                                  maxLength={4}
-                                  className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                                />
-                                {error && isEditingPersonal && (
-                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                                )}
-                              </div>
-                            )}
-                          />
-                        </div>
-
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Registration Information */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Registration Information</h4>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    Registered Phd Guide at MSU <span className="text-red-500">*</span>
-                  </Label>
-                  <RadioGroup
-                    value={watch('PHDGuide') ? "yes" : "no"}
-                    onValueChange={(value: any) => setValue('PHDGuide', value === 'yes')}
-                    className={`flex gap-6 ${!isEditingPersonal ? "pointer-events-none" : ""}`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="guide-yes" />
-                      <Label htmlFor="guide-yes" className="text-sm">Yes</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="guide-no" />
-                      <Label htmlFor="guide-no" className="text-sm">No</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-                {watch('PHDGuide') && (
-                  <div className="space-y-2">
-                    <Label htmlFor="registrationYear" className="text-sm font-medium">
-                      Year of Registration <span className="text-red-500">*</span>
-                    </Label>
-                    <Controller
-                      control={control}
-                      name="Guide_year"
-                      rules={{
-                        required: watch('PHDGuide') && isEditingPersonal ? "Year of registration is required" : false,
-                        validate: (value) => {
-                          if (watch('PHDGuide') && isEditingPersonal) {
-                            if (!value || value.toString().trim() === '') {
-                              return "Year of registration is required";
-                            }
-                            const yearStr = value.toString().trim();
-                            if (yearStr.length !== 4) {
-                              return "Year must be 4 digits";
-                            }
-                            const year = parseInt(yearStr);
-                            const currentYear = new Date().getFullYear();
-                            if (isNaN(year) || year < 1950 || year > currentYear) {
-                              return `Year must be between 1950 and ${currentYear}`;
-                            }
-                          }
-                          return true;
-                        }
-                      }}
-                      render={({ field, fieldState: { error } }) => (
-                        <div>
-                          <Input
-                            id="registrationYear"
-                            {...field}
-                            onChange={(e) => {
-                              const year = e.target.value.replace(/\D/g, '').slice(0, 4);
-                              field.onChange(year);
-                            }}
-                            readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                            placeholder="YYYY (e.g., 2015)"
-                            maxLength={4}
-                            className={`h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                          />
-                          {error && isEditingPersonal && (
-                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                          )}
-                        </div>
-                      )}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* ICT in Teaching */}
-              <div className="space-y-3 sm:space-y-4">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Use of ICT in Teaching</h4>
-                <div className="space-y-4">
-                  <Label className="text-[11px] sm:text-xs font-medium">Technologies Used for Teaching (Select all that apply)</Label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 w-full">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="smartBoard"
-                        checked={editingData.ictSmartBoard}
-                        onChange={(e: any) => handleCheckboxChange("ictSmartBoard", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
-                        disabled={isSavingPersonal}
-                      />
-                      <Label htmlFor="smartBoard" className="text-sm font-normal">
-                        Smart Board
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="powerPoint"
-                        checked={editingData.ictPowerPoint}
-                        onChange={(e: any) => handleCheckboxChange("ictPowerPoint", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
-                        disabled={isSavingPersonal}
-                      />
-                      <Label htmlFor="powerPoint" className="text-sm font-normal">
-                        PowerPoint Presentation
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="ictTools"
-                        checked={editingData.ictTools}
-                        onChange={(e: any) => handleCheckboxChange("ictTools", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
-                        disabled={isSavingPersonal}
-                      />
-                      <Label htmlFor="ictTools" className="text-sm font-normal">
-                        ICT Tools
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="eLearningTools"
-                        checked={editingData.ictELearningTools}
-                        onChange={(e: any) => handleCheckboxChange("ictELearningTools", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
-                        disabled={isSavingPersonal}
-                      />
-                      <Label htmlFor="eLearningTools" className="text-sm font-normal">
-                        E-Learning Tools
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="onlineCourse"
-                        checked={editingData.ictOnlineCourse}
-                        onChange={(e: any) => handleCheckboxChange("ictOnlineCourse", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
-                        disabled={isSavingPersonal}
-                      />
-                      <Label htmlFor="onlineCourse" className="text-sm font-normal">
-                        Online Course
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="others"
-                        checked={editingData.ictOthers}
-                        onChange={(e) => handleCheckboxChange("ictOthers", e.target.checked)}
-                        className={`rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${!isEditingPersonal || isSavingPersonal ? 'pointer-events-none' : ''}`}
-                        disabled={isSavingPersonal}
-                      />
-                      <Label htmlFor="others" className="text-sm font-normal">
-                        Others
-                      </Label>
-                    </div>
-                  </div>
-                  {editingData.ictOthers && (
-                    <div className="space-y-2">
-                      <Label htmlFor="otherIctTools" className="text-sm font-medium">
-                        If Others, please specify: <span className="text-red-500">*</span>
-                      </Label>
-                      <Controller
-                        control={control}
-                        name="ictOthersSpecify"
-                        rules={{
-                          required: editingData.ictOthers && isEditingPersonal ? "Please specify other ICT tools" : false,
-                          minLength: editingData.ictOthers && isEditingPersonal ? {
-                            value: 3,
-                            message: "Please provide at least 3 characters"
-                          } : undefined,
-                          maxLength: {
-                            value: 200,
-                            message: "Specification must be less than 200 characters"
-                          }
-                        }}
-                        render={({ field, fieldState: { error } }) => (
-                          <div>
-                            <Input
-                              id="otherIctTools"
-                              value={editingData.ictOthersSpecify}
-                              onChange={(e) => {
-                                const value = e.target.value.slice(0, 200);
-                                setEditingData(prev => ({ ...prev, ictOthersSpecify: value }));
-                                field.onChange(value);
-                              }}
-                              placeholder="Please specify other ICT tools used..."
-                              readOnly={!isEditingPersonal || isSavingPersonal}
-                      disabled={isSavingPersonal}
-                              maxLength={200}
-                              className={`max-w-md h-10 text-base ${!isEditingPersonal ? 'bg-[#f9fafb] text-foreground cursor-default' : ''} ${error ? 'border-red-500' : ''}`}
-                            />
-                            {error && isEditingPersonal && (
-                              <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                            )}
-                          </div>
-                        )}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        </CardContent>
-      </Card>
+      {/* Personal Information - Using Component */}
+      <PersonalInfoSection
+        teacherInfo={teacherInfo}
+        facultyData={facultyData}
+        departmentData={departmentData}
+        designationData={designationData}
+        profileImage={profileImage}
+        isEditingPersonal={isEditingPersonal}
+        isSavingPersonal={isSavingPersonal}
+        isUploadingImage={isUploadingImage}
+        pendingProfileImageFile={pendingProfileImageFile}
+        editingData={editingData}
+        facultyOptions={facultyOptions}
+        departmentOptions={departmentOptions}
+        permanentDesignationOptions={permanentDesignationOptions}
+        temporaryDesignationOptions={temporaryDesignationOptions}
+        selectedFacultyId={selectedFacultyId}
+        hasAnyEditMode={isExperienceDirty || isPostDocDirty || isEducationDirty}
+        isPersonalDirty={isPersonalDirty}
+        hasAnyRecordEditing={hasAnyRecordEditing && !isEditingPersonal}
+        onEditClick={() => {
+          if (hasAnyRecordEditing && !isEditingPersonal) {
+            toast({
+              title: "Cannot Edit",
+              description: "Please save or cancel the currently editing record before editing personal information.",
+              variant: "default",
+            })
+            return
+          }
+          setIsEditingPersonal(true)
+        }}
+        onSave={onSubmitPersonal}
+        onCancel={handleCancelPersonal}
+        onImageUpload={handleImageUpload}
+        onDownloadImage={handleDownloadProfileImage}
+        onRemoveImage={handleRemoveProfileImage}
+        onCheckboxChange={handleCheckboxChange}
+        onEditingDataChange={(field, value) => {
+          setEditingData((prev: any) => ({ ...prev, [field]: value }))
+        }}
+        onSaveAcademicYears={handleSaveAcademicYears}
+        isSavingAcademicYears={isSavingAcademicYears}
+        onAcademicYearChange={(field, checked) => {
+          if (teacherInfo) {
+            setTeacherInfo({ ...teacherInfo, [field]: checked } as TeacherInfo)
+          }
+        }}
+        control={control}
+        register={register}
+        watch={watch}
+        setValue={setValue}
+        errors={errors}
+        touchedFields={touchedFields}
+        handlePersonalSubmit={handlePersonalSubmit}
+        handleCancelPersonal={handleCancelPersonal}
+        triggerImageUpload={triggerImageUpload}
+        setEditingData={(updater) => setEditingData(updater)}
+        setTeacherInfo={(updater) => setTeacherInfo(updater)}
+      />
 
       {/* Experience Details - Always Editable */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <div>
-              <CardTitle className="text-sm sm:text-base">Experience Details</CardTitle>
-              <CardDescription className="text-[11px] sm:text-xs">Your professional work experience</CardDescription>
-            </div>
-            <Button onClick={addExperienceEntry} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Experience</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-2 sm:p-3">
-          <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
-            <div className="min-w-full inline-block align-middle">
-              <div className="overflow-hidden border rounded-lg">
-                <Table className="w-full table-auto text-xs sm:text-sm">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Employer <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Currently Employed? <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Designation <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Joining <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Date of Relieving</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Nature of Job <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[130px]">Type of Teaching <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-              <TableBody>
-                {experienceFields.map((field:any, index:number) => {
-                  const entry = experienceForm.watch(`experiences.${index}`)
-                  const rowEditing = experienceEditingIds.has(field.Id);
-                  return (
-                    <TableRow key={field.id}>
-                      <TableCell className="p-2 sm:p-3 text-center">{index + 1}</TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.Employeer`}
-                          rules={{
-                            required: rowEditing ? "Employer is required" : false,
-                            minLength: {
-                              value: 2,
-                              message: "Employer name must be at least 2 characters"
-                            },
-                            maxLength: {
-                              value: 200,
-                              message: "Employer name must be less than 200 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Employer is required";
-                                }
-                                if (!/^[A-Za-z0-9\s.,'-]+$/.test(value)) {
-                                  return "Employer name contains invalid characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing || isSavingExperience[field.Id]}
-                                disabled={isSavingExperience[field.Id]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.currente`}
-                          render={({ field: formField }) => {
-                            // Handle database values: 0/1 or boolean
-                            const currentValue = formField.value === true || (typeof formField.value === 'number' && formField.value === 1)
-                            return (
-                              <Select
-                                value={currentValue ? "yes" : "no"}
-                                onValueChange={(value: string) => {
-                                  // Convert to boolean for form (will be converted to 0/1 on save)
-                                  const boolValue = value === "yes"
-                                  formField.onChange(boolValue)
-                                  // Clear End_Date if currently employed is Yes
-                                  if (boolValue) {
-                                    experienceForm.setValue(`experiences.${index}.End_Date`, "")
-                                  }
-                                  // Only trigger validation on End_Date field, not all fields
-                                  setTimeout(() => {
-                                    experienceForm.trigger(`experiences.${index}.End_Date`, { shouldFocus: false })
-                                  }, 0)
-                                }}
-                                disabled={!rowEditing || isSavingExperience[field.Id]}
-                              >
-                                <SelectTrigger className="w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="yes">Yes</SelectItem>
-                                  <SelectItem value="no">No</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.desig`}
-                          rules={{
-                            required: rowEditing ? "Designation is required" : false,
-                            maxLength: {
-                              value: 100,
-                              message: "Designation must be less than 100 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Designation is required";
-                                }
-                                if (value.length < 2) {
-                                  return "Designation must be at least 2 characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing || isSavingExperience[field.Id]}
-                                disabled={isSavingExperience[field.Id]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.Start_Date`}
-                          rules={{
-                            required: rowEditing ? "Start date is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Start date is required";
-                                }
-                                const startDate = new Date(value);
-                                if (isNaN(startDate.getTime())) {
-                                  return "Please enter a valid start date";
-                                }
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                if (startDate > today) {
-                                  return "Start date cannot be in the future";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                type="date"
-                                value={formatDateForInput(formField.value)}
-                                onChange={(e) => {
-                                  formField.onChange(e.target.value)
-                                  // Trigger end date validation when start date changes
-                                  if (rowEditing) {
-                                    setTimeout(() => {
-                                      experienceForm.trigger(`experiences.${index}.End_Date`)
-                                    }, 100)
-                                  }
-                                }}
-                                className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
-                                max={new Date().toISOString().split('T')[0]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.End_Date`}
-                          rules={{
-                            validate: (value) => {
-                              if (!rowEditing) return true;
-                              
-                              // Handle database values: 0/1 or boolean
-                              const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
-                              const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
-                              
-                              // If currently employed is YES, allow empty (no validation)
-                              if (currenteValue) {
-                                return true;
-                              }
-                              
-                              // Only validate if currently employed is NO
-                              if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                return "End date is required when currently employed is No";
-                              }
-                              
-                              const endDate = new Date(value);
-                              if (isNaN(endDate.getTime())) {
-                                return "Please enter a valid end date";
-                              }
-                              
-                              const startDate = experienceForm.watch(`experiences.${index}.Start_Date`)
-                              
-                              // End date cannot be in the future if not currently employed
-                              const today = new Date();
-                              today.setHours(23, 59, 59, 999);
-                              if (endDate > today) {
-                                return "End date cannot be in the future if not currently employed";
-                              }
-                              
-                              // End date must be after start date
-                              if (startDate) {
-                                const start = new Date(startDate);
-                                if (!isNaN(start.getTime())) {
-                                  if (endDate < start) {
-                                    return "End date must be after start date";
-                                  }
-                                }
-                              }
-                              
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => {
-                            // Handle database values: 0/1 or boolean
-                            const currenteRaw = experienceForm.watch(`experiences.${index}.currente`)
-                            const currenteValue = currenteRaw === true || (typeof currenteRaw === 'number' && currenteRaw === 1)
-                            return (
-                              <div>
-                                <Input
-                                  {...formField}
-                                  type="date"
-                                  value={formatDateForInput(formField.value)}
-                                  onChange={(e) => formField.onChange(e.target.value)}
-                                  max={currenteValue ? undefined : new Date().toISOString().split('T')[0]}
-                                  className={`w-full h-8 text-xs read-only:bg-white read-only:text-foreground read-only:opacity-100 read-only:cursor-default ${error ? 'border-red-500' : ''}`}
-                                  readOnly={!rowEditing || currenteValue}
-                                />
-                                {error && rowEditing && (
-                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                                )}
-                              </div>
-                            )
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.Nature`}
-                          rules={{
-                            required: rowEditing ? "Nature of job is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Nature of job is required";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Select
-                                value={formField.value || ""}
-                                onValueChange={formField.onChange}
-                                disabled={!rowEditing || isSavingExperience[field.Id]}
-                              >
-                                <SelectTrigger className={`w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default ${error ? 'border-red-500' : ''}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Teaching">Teaching</SelectItem>
-                                  <SelectItem value="Administration">Administration</SelectItem>
-                                  <SelectItem value="Industrial Work">Industrial Work</SelectItem>
-                                  <SelectItem value="Non-Teaching">Non-Teaching</SelectItem>
-                                  <SelectItem value="Research">Research</SelectItem>
-                                  <SelectItem value="Other">Other</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={experienceForm.control}
-                          name={`experiences.${index}.UG_PG`}
-                          rules={{
-                            required: rowEditing ? "Teaching type is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Teaching type is required";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Select
-                                value={formField.value || ""}
-                                onValueChange={formField.onChange}
-                                disabled={!rowEditing || isSavingExperience[field.Id]}
-                              >
-                                <SelectTrigger className={`w-full h-8 text-xs disabled:opacity-100 disabled:cursor-default ${error ? 'border-red-500' : ''}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="UG">UG</SelectItem>
-                                  <SelectItem value="PG">PG</SelectItem>
-                                  <SelectItem value="UG & PG">UG & PG</SelectItem>
-                                  <SelectItem value="Other">Other</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                   
-                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
-                          {!rowEditing ? (
-                            <>
-                              <Button size="sm" onClick={() => toggleExperienceRowEdit(field.Id)} className="h-7 w-7 p-0">
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removeExperienceEntry(index, field.Id)} className="h-7 w-7 p-0">
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button 
-                                size="sm" 
-                                variant="default"
-                                onClick={() => handleSaveExperienceRow(index, field.Id)}
-                                disabled={isSavingExperience[field.Id]}
-                                className="flex items-center gap-1 h-7 text-xs px-2"
-                              >
-                                {isSavingExperience[field.Id] ? (
-                                  <>
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    <span className="hidden sm:inline">Saving...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="h-3 w-3" />
-                                    <span className="hidden sm:inline">Save</span>
-                                  </>
-                                )}
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => {
-                                  toggleExperienceRowEdit(field.Id)
-                                  // Reset form to original values on cancel
-                                  const teacherId = user?.role_id || teacherInfo?.Tid
-                                  if (teacherId) {
-                                    fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-                                      .then(res => res.json())
-                                      .then((data: TeacherData) => {
-                                        experienceForm.reset({ experiences: data.teacherExperience || [] })
-                                      })
-                                  }
-                                }}
-                                disabled={isSavingExperience[field.Id]}
-                                className="flex items-center gap-1 h-7 text-xs px-2"
-                              >
-                                <X className="h-3 w-3" />
-                                <span className="hidden sm:inline">Cancel</span>
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-                </Table>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <ExperienceDetailsSection
+        teacherId={user?.role_id || teacherInfo?.Tid || 0}
+        experienceForm={experienceForm}
+        experienceFields={experienceFields}
+        experienceEditingIds={experienceEditingIds}
+        isSavingExperience={isSavingExperience}
+        hasAnyEditMode={isExperienceDirty || isPostDocDirty || isEducationDirty}
+        hasAnyRecordEditing={hasAnyRecordEditing && experienceEditingIds.size === 0}
+        onAddEntry={addExperienceEntry}
+        onSaveRow={handleSaveExperienceRow}
+        onCancelRow={handleCancelExperienceRow}
+        onDeleteRow={removeExperienceEntry}
+        onToggleEdit={toggleExperienceRowEdit}
+        onRefresh={invalidateProfile}
+      />
+
 
       {/* Post Doctoral Research Experience - Always Editable */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <div>
-              <CardTitle className="text-sm sm:text-base">Post Doctoral Research Experience</CardTitle>
-              <CardDescription className="text-[11px] sm:text-xs">Your post-doctoral research positions</CardDescription>
-            </div>
-            <Button onClick={addPostDocEntry} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Post-Doc</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6">
-          <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
-            <div className="min-w-full inline-block align-middle">
-              <div className="overflow-hidden border rounded-lg">
-                <Table className="w-full table-auto">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Institute / Industry <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Start Date <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">End Date <span className="text-red-500">*</span></TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Sponsored By</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">QS / THE World University Ranking</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Supporting Document</TableHead>
-                      <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-              <TableBody>
-                {postDocFields.map((field, index) => {
-                  const entry = postDocForm.watch(`researches.${index}`)
-                  const rowEditing = postDocEditingIds.has(field.Id);
-                  return (
-                    <TableRow key={field.id}>
-                      <TableCell className="p-2 sm:p-3 text-center">{index + 1}</TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={postDocForm.control}
-                          name={`researches.${index}.Institute`}
-                          rules={{
-                            required: rowEditing ? "Institute is required" : false,
-                            minLength: {
-                              value: 2,
-                              message: "Institute name must be at least 2 characters"
-                            },
-                            maxLength: {
-                              value: 200,
-                              message: "Institute name must be less than 200 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Institute is required";
-                                }
-                                if (value.trim().length < 2) {
-                                  return "Institute name must be at least 2 characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing || isSavingPostDoc[field.Id]}
-                                disabled={isSavingPostDoc[field.Id]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={postDocForm.control}
-                          name={`researches.${index}.Start_Date`}
-                          rules={{
-                            required: rowEditing ? "Start date is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Start date is required";
-                                }
-                                const startDate = new Date(value);
-                                if (isNaN(startDate.getTime())) {
-                                  return "Please enter a valid start date";
-                                }
-                                const today = new Date();
-                                today.setHours(0, 0, 0, 0);
-                                if (startDate > today) {
-                                  return "Start date cannot be in the future";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                type="date"
-                                value={formatDateForInput(formField.value)}
-                                onChange={(e) => {
-                                  formField.onChange(e.target.value)
-                                  // Trigger end date validation when start date changes
-                                  if (rowEditing) {
-                                    setTimeout(() => {
-                                      postDocForm.trigger(`researches.${index}.End_Date`)
-                                    }, 100)
-                                  }
-                                }}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
-                                max={new Date().toISOString().split('T')[0]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={postDocForm.control}
-                          name={`researches.${index}.End_Date`}
-                          rules={{
-                            required: rowEditing ? "End date is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "End date is required";
-                                }
-                                const endDate = new Date(value);
-                                if (isNaN(endDate.getTime())) {
-                                  return "Please enter a valid end date";
-                                }
-                                // End date must not be in the future
-                                const today = new Date();
-                                today.setHours(23, 59, 59, 999); // End of today
-                                if (endDate > today) {
-                                  return "End date cannot be in the future";
-                                }
-                                // End date must be after start date
-                                const startDate = entry.Start_Date;
-                                if (startDate) {
-                                  const start = new Date(startDate);
-                                  if (!isNaN(start.getTime())) {
-                                    if (endDate < start) {
-                                      return "End date must be after start date";
-                                    }
-                                  }
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                type="date"
-                                value={formatDateForInput(formField.value)}
-                                onChange={(e) => formField.onChange(e.target.value)}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
-                                max={new Date().toISOString().split('T')[0]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={postDocForm.control}
-                          name={`researches.${index}.SponsoredBy`}
-                          rules={{
-                            maxLength: {
-                              value: 200,
-                              message: "Sponsored by must be less than 200 characters"
-                            },
-                            validate: (value) => {
-                              if (value && typeof value === 'string' && value.trim() !== '') {
-                                if (value.trim().length < 2) {
-                                  return "If provided, must be at least 2 characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs"
-                              placeholder="e.g., UGC, CSIR"
-                              readOnly={!rowEditing}
-                            />
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={postDocForm.control}
-                          name={`researches.${index}.QS_THE`}
-                          rules={{
-                            maxLength: {
-                              value: 100,
-                              message: "QS/THE ranking must be less than 100 characters"
-                            },
-                            validate: (value) => {
-                              if (value && typeof value === 'string' && value.trim() !== '') {
-                                if (!/^[A-Za-z0-9\s:.-]+$/.test(value)) {
-                                  return "QS/THE ranking contains invalid characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField }) => (
-                            <Input
-                              {...formField}
-                              className="w-full h-8 text-xs"
-                              placeholder="e.g., QS Ranking: 172"
-                              readOnly={!rowEditing}
-                            />
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                        {!rowEditing && entry.doc ? (
-                          // View mode: Show Eye icon to view document
-                          <Dialog 
-                            open={phdViewDialogOpen[field.Id] || false}
-                            onOpenChange={(open) => setPhdViewDialogOpen(prev => ({ ...prev, [field.Id]: open }))}
-                          >
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Document">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>View Supporting Document</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <DocumentViewer
-                                  documentUrl={entry.doc}
-                                  documentName="Supporting Document"
-                                  documentType={entry.doc.split('.').pop()?.toLowerCase() || 'pdf'}
-                                />
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : rowEditing ? (
-                          // Edit mode: Show Upload icon if no document, FileText if document exists
-                          <Dialog 
-                            open={phdDialogOpen[field.Id] || false}
-                            onOpenChange={(open) => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: open }))}
-                          >
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.doc || phdDocumentUrls[field.Id] ? "Update Document" : "Upload Document"}>
-                                {entry.doc || phdDocumentUrls[field.Id] ? (
-                                  <FileText className="h-4 w-4" />
-                                ) : (
-                                  <Upload className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>{entry.doc || phdDocumentUrls[field.Id] ? "Update Supporting Document" : "Upload Supporting Document"}</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <DocumentUpload
-                                  documentUrl={phdDocumentUrls[field.Id] || entry.doc}
-                                  onChange={(url) => {
-                                    if (url) {
-                                      setPhdDocumentUrls(prev => ({ ...prev, [field.Id]: url }))
-                                    }
-                                  }}
-                                  onClear={() => {
-                                    setPhdDocumentUrls(prev => {
-                                      const newUrls = { ...prev }
-                                      delete newUrls[field.Id]
-                                      return newUrls
-                                    })
-                                  }}
-                                  hideExtractButton={true}
-                                  isEditMode={!!entry.doc}
-                                />
-                                <div className="flex justify-end gap-2 pt-4 border-t">
-                                  <Button 
-                                    variant="outline"
-                                    onClick={() => setPhdDialogOpen(prev => ({ ...prev, [field.Id]: false }))}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button 
-                                    variant="default" 
-                                    className="cursor-pointer"
-                                    onClick={async () => {
-                                      const currentUrl = phdDocumentUrls[field.Id] || entry.doc
-                                      if (currentUrl) {
-                                        await handlePhdDocumentUpdate(index, field.Id, currentUrl)
-                                      }
-                                    }}
-                                    disabled={!phdDocumentUrls[field.Id] && !entry.doc}
-                                  >
-                                    Save Document
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          <span className="text-xs text-gray-400">No document</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
-                          {!rowEditing ? (
-                            <>
-                              <Button size="sm" onClick={() => togglePostDocRowEdit(field.Id)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removePostDocEntry(index, field.Id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button 
-                                size="sm" 
-                                variant="default"
-                                onClick={() => handleSavePostDocRow(index, field.Id)}
-                                disabled={isSavingPostDoc[field.Id]}
-                                className="flex items-center gap-1"
-                              >
-                                {isSavingPostDoc[field.Id] ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span className="hidden sm:inline">Saving...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Save</span>
-                                  </>
-                                )}
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => {
-                                  togglePostDocRowEdit(field.Id)
-                                  const teacherId = user?.role_id || teacherInfo?.Tid
-                                  if (teacherId) {
-                                    fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-                                      .then(res => res.json())
-                                      .then((data: TeacherData) => {
-                                        postDocForm.reset({ researches: data.postDoctoralExp || [] })
-                                      })
-                                  }
-                                }}
-                                disabled={isSavingPostDoc[field.Id]}
-                                className="flex items-center gap-1"
-                              >
-                                <X className="h-4 w-4" />
-                                <span className="hidden sm:inline">Cancel</span>
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-                </Table>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <PhdResearchSection
+        teacherId={user?.role_id || teacherInfo?.Tid || 0}
+        postDocForm={postDocForm}
+        postDocFields={postDocFields}
+        postDocEditingIds={postDocEditingIds}
+        isSavingPostDoc={isSavingPostDoc}
+        phdDocumentUrls={phdDocumentUrls}
+        phdDialogOpen={phdDialogOpen}
+        phdViewDialogOpen={phdViewDialogOpen}
+        hasAnyEditMode={isExperienceDirty || isPostDocDirty || isEducationDirty}
+        hasAnyRecordEditing={hasAnyRecordEditing && postDocEditingIds.size === 0}
+        onAddEntry={addPostDocEntry}
+        onSaveRow={handleSavePostDocRow}
+        onCancelRow={handleCancelPostDocRow}
+        onDeleteRow={removePostDocEntry}
+        onToggleEdit={togglePostDocRowEdit}
+        onDocumentUrlChange={(id, url) => {
+          if (url) {
+            setPhdDocumentUrls(prev => ({ ...prev, [id]: url }))
+          } else {
+            setPhdDocumentUrls(prev => {
+              const newUrls = { ...prev }
+              delete newUrls[id]
+              return newUrls
+            })
+          }
+        }}
+        onDialogOpenChange={(id, open) => {
+          setPhdDialogOpen(prev => ({ ...prev, [id]: open }))
+        }}
+        onViewDialogOpenChange={(id, open) => {
+          setPhdViewDialogOpen(prev => ({ ...prev, [id]: open }))
+        }}
+        onRefresh={invalidateProfile}
+      />
+
+
 
       {/* Education Details - Always Editable */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <div>
-              <CardTitle className="text-sm sm:text-base">Education Details</CardTitle>
-              <CardDescription className="text-[11px] sm:text-xs">Your academic qualifications</CardDescription>
-            </div>
-            <Button onClick={addEducationEntry} size="sm" className="flex items-center gap-2 w-full sm:w-auto">
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Education</span>
-              <span className="sm:hidden">Add</span>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto custom-scrollbar w-full max-w-full">
-            <Table className="w-full table-auto">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[60px]">Sr No.</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">Degree Type <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">University <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[120px]">State <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Year of Passing <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[200px]">Specialization <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[150px]">QS Ranking <span className="text-red-500">*</span></TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap min-w-[140px]">Image</TableHead>
-                  <TableHead className="p-2 sm:p-3 text-xs whitespace-nowrap w-[120px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {educationFields.map((field, index) => {
-                  const entry = educationForm.watch(`educations.${index}`)
-                  const rowEditing = educationEditingIds.has(field.gid);
-                  return (
-                    <TableRow key={field.id}>
-                      <TableCell className="p-2 sm:p-3 text-center">{index + 1}</TableCell>
+      <EducationDetailsSection
+        teacherId={user?.role_id || teacherInfo?.Tid || 0}
+        educationForm={educationForm}
+        educationFields={educationFields}
+        educationEditingIds={educationEditingIds}
+        isSavingEducation={isSavingEducation}
+        educationDocumentUrls={educationDocumentUrls}
+        educationDialogOpen={educationDialogOpen}
+        educationViewDialogOpen={educationViewDialogOpen}
+        hasAnyEditMode={isExperienceDirty || isPostDocDirty || isEducationDirty}
+        hasAnyRecordEditing={hasAnyRecordEditing && educationEditingIds.size === 0}
+        onAddEntry={addEducationEntry}
+        onSaveRow={handleSaveEducationRow}
+        onCancelRow={async (index: number, id: number) => {
+          toggleEducationRowEdit(id)
+          // Reset form to original values on cancel
+          const teacherId = user?.role_id || teacherInfo?.Tid
+          if (teacherId) {
+            try {
+              const res = await fetch(`/api/teacher/profile?teacherId=${teacherId}`)
+              if (res.ok) {
+                const data: TeacherData = await res.json()
+                educationForm.reset({ educations: data.graduationDetails || [] })
+              }
+            } catch (e) {
+              console.error('Error resetting education form:', e)
+            }
+          }
+        }}
+        onDeleteRow={removeEducationEntry}
+        onToggleEdit={toggleEducationRowEdit}
+        onDocumentUrlChange={(id, url) => {
+          if (url) {
+            setEducationDocumentUrls(prev => ({ ...prev, [id]: url }))
+          } else {
+            setEducationDocumentUrls(prev => {
+              const newUrls = { ...prev }
+              delete newUrls[id]
+              return newUrls
+            })
+          }
+        }}
+        onDialogOpenChange={(id, open) => {
+          setEducationDialogOpen(prev => ({ ...prev, [id]: open }))
+        }}
+        onViewDialogOpenChange={(id, open) => {
+          setEducationViewDialogOpen(prev => ({ ...prev, [id]: open }))
+        }}
+        degreeTypeOptions={degreeTypeOptions}
+      />
 
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={educationForm.control}
-                          name={`educations.${index}.degree_type`}
-                          rules={{
-                            required: rowEditing ? "Degree type is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || value === 0) {
-                                  return "Degree type is required";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <SearchableSelect
-                                options={degreeTypeOptions.map((degreeType) => ({
-                                  value: degreeType.id,
-                                  label: degreeType.name,
-                                }))}
-                                value={formField.value}
-                                onValueChange={(value: string | number) => formField.onChange(Number(value))}
-                                placeholder="Select degree type"
-                                disabled={!rowEditing || isSavingEducation[field.gid]}
-                                emptyMessage="No degree type found."
-                                className={`w-full ${error ? 'border-red-500' : ''}`}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={educationForm.control}
-                          name={`educations.${index}.university_name`}
-                          rules={{
-                            required: rowEditing ? "University name is required" : false,
-                            minLength: {
-                              value: 3,
-                              message: "University name must be at least 3 characters"
-                            },
-                            maxLength: {
-                              value: 200,
-                              message: "University name must be less than 200 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "University name is required";
-                                }
-                                if (!/^[A-Za-z0-9\s.,'-]+$/.test(value)) {
-                                  return "University name contains invalid characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing || isSavingEducation[field.gid]}
-                                disabled={isSavingEducation[field.gid]}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={educationForm.control}
-                          name={`educations.${index}.state`}
-                          rules={{
-                            required: rowEditing ? "State is required" : false,
-                            maxLength: {
-                              value: 50,
-                              message: "State must be less than 50 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "State is required";
-                                }
-                                if (value.trim().length < 2) {
-                                  return "State must be at least 2 characters";
-                                }
-                                if (!/^[A-Za-z\s]+$/.test(value)) {
-                                  return "State should only contain letters and spaces";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                placeholder="Enter state"
-                                readOnly={!rowEditing}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={educationForm.control}
-                          name={`educations.${index}.year_of_passing`}
-                          rules={{
-                            required: rowEditing ? "Year of passing is required" : false,
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Year of passing is required";
-                                }
-                                let yearStr = '';
-                                if (typeof value === 'string' && value.includes('-')) {
-                                  const date = new Date(value);
-                                  if (!isNaN(date.getTime())) {
-                                    yearStr = date.getFullYear().toString();
-                                  }
-                                } else {
-                                  yearStr = String(value).trim().replace(/\D/g, '').slice(0, 4);
-                                }
-                                if (yearStr.length !== 4) {
-                                  return "Year must be 4 digits";
-                                }
-                                const year = parseInt(yearStr);
-                                const currentYear = new Date().getFullYear();
-                                if (isNaN(year) || year < 1950 || year > currentYear) {
-                                  return `Year must be between 1950 and ${currentYear}`;
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => {
-                            // Extract year value: handle both date format (YYYY-MM-DD) and plain year strings
-                            let yearValue = ""
-                            if (formField.value) {
-                              const valueStr = String(formField.value)
-                              // Check if it's already a date format (contains hyphen)
-                              if (valueStr.includes('-')) {
-                                try {
-                                  const date = new Date(valueStr)
-                                  if (!isNaN(date.getTime())) {
-                                    yearValue = date.getFullYear().toString()
-                                  }
-                                } catch (e) {
-                                  yearValue = ""
-                                }
-                              } else {
-                                // It's a plain year string (1-4 digits), use it directly
-                                yearValue = valueStr.replace(/\D/g, "").slice(0, 4)
-                              }
-                            }
-                            
-                            return (
-                              <div>
-                                <Input
-                                  type="text"
-                                  value={yearValue}
-                                  onChange={(e) => {
-                                    const inputValue = e.target.value
-                                    const year = inputValue.replace(/\D/g, "").slice(0, 4);
-                                    
-                                    // If user entered 4 digits, convert to date format
-                                    if (year.length === 4) {
-                                      formField.onChange(`${year}-01-01`);
-                                    } else if (year.length > 0) {
-                                      // Store partial year as plain string for editing
-                                      formField.onChange(year);
-                                    } else {
-                                      // Empty input
-                                      formField.onChange("");
-                                    }
-                                  }}
-                                  onBlur={(e) => {
-                                    // On blur, if we have a valid 4-digit year, ensure it's in date format
-                                    const year = e.target.value.replace(/\D/g, "").slice(0, 4);
-                                    if (year.length === 4) {
-                                      formField.onChange(`${year}-01-01`);
-                                    }
-                                    formField.onBlur();
-                                  }}
-                                  name={formField.name}
-                                  ref={formField.ref}
-                                  className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                  placeholder="YYYY"
-                                  readOnly={!rowEditing}
-                                />
-                                {error && rowEditing && (
-                                  <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                                )}
-                              </div>
-                            )
-                          }}
-                        />
-                      </TableCell>
-
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={educationForm.control}
-                          name={`educations.${index}.subject`}
-                          rules={{
-                            required: rowEditing ? "Specialization is required" : false,
-                            maxLength: {
-                              value: 200,
-                              message: "Specialization must be less than 200 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "Specialization is required";
-                                }
-                                if (value.trim().length < 2) {
-                                  return "Specialization must be at least 2 characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                value={formField.value || ""}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                readOnly={!rowEditing}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-
-                      <TableCell className="p-2 sm:p-3">
-                        <Controller
-                          control={educationForm.control}
-                          name={`educations.${index}.QS_Ranking`}
-                          rules={{
-                            required: rowEditing ? "QS Ranking is required" : false,
-                            maxLength: {
-                              value: 50,
-                              message: "QS Ranking must be less than 50 characters"
-                            },
-                            validate: (value) => {
-                              if (rowEditing) {
-                                if (!value || (typeof value === 'string' && value.trim() === '')) {
-                                  return "QS Ranking is required";
-                                }
-                                if (!/^[A-Za-z0-9\s:.-]+$/.test(value)) {
-                                  return "QS Ranking contains invalid characters";
-                                }
-                              }
-                              return true;
-                            }
-                          }}
-                          render={({ field: formField, fieldState: { error } }) => (
-                            <div>
-                              <Input
-                                {...formField}
-                                value={formField.value || ""}
-                                className={`w-full h-8 text-xs ${error ? 'border-red-500' : ''}`}
-                                placeholder="e.g., QS Ranking: 172"
-                                readOnly={!rowEditing}
-                              />
-                              {error && rowEditing && (
-                                <p className="text-xs text-red-500 mt-1">{error.message}</p>
-                              )}
-                            </div>
-                          )}
-                        />
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                        {!rowEditing && entry.Image ? (
-                          // View mode: Show Eye icon to view document
-                          <Dialog 
-                            open={educationViewDialogOpen[field.gid] || false}
-                            onOpenChange={(open) => setEducationViewDialogOpen(prev => ({ ...prev, [field.gid]: open }))}
-                          >
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="View Document">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>View Document</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <DocumentViewer
-                                  documentUrl={entry.Image}
-                                  documentName="Education Document"
-                                  documentType={entry.Image.split('.').pop()?.toLowerCase() || 'pdf'}
-                                />
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : rowEditing ? (
-                          // Edit mode: Show Upload icon if no document, FileText if document exists
-                          <Dialog 
-                            open={educationDialogOpen[field.gid] || false}
-                            onOpenChange={(open) => setEducationDialogOpen(prev => ({ ...prev, [field.gid]: open }))}
-                          >
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title={entry.Image || educationDocumentUrls[field.gid] ? "Update Document" : "Upload Document"}>
-                                {entry.Image || educationDocumentUrls[field.gid] ? (
-                                  <FileText className="h-4 w-4" />
-                                ) : (
-                                  <Upload className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent className="w-[90vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-                              <DialogHeader>
-                                <DialogTitle>{entry.Image || educationDocumentUrls[field.gid] ? "Update Document" : "Upload Document"}</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <DocumentUpload
-                                  documentUrl={educationDocumentUrls[field.gid] || entry.Image || undefined}
-                                  onChange={(url) => {
-                                    if (url) {
-                                      setEducationDocumentUrls(prev => ({ ...prev, [field.gid]: url }))
-                                    }
-                                  }}
-                                  onClear={() => {
-                                    setEducationDocumentUrls(prev => {
-                                      const newUrls = { ...prev }
-                                      delete newUrls[field.gid]
-                                      return newUrls
-                                    })
-                                  }}
-                                  hideExtractButton={true}
-                                  isEditMode={!!entry.Image}
-                                />
-                                <div className="flex justify-end gap-2 pt-4 border-t">
-                                  <Button 
-                                    variant="outline"
-                                    onClick={() => setEducationDialogOpen(prev => ({ ...prev, [field.gid]: false }))}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button 
-                                    variant="default" 
-                                    className="cursor-pointer"
-                                    onClick={async () => {
-                                      const currentUrl = educationDocumentUrls[field.gid] || entry.Image
-                                      if (currentUrl) {
-                                        await handleEducationDocumentUpdate(index, field.gid, currentUrl)
-                                      }
-                                    }}
-                                    disabled={!educationDocumentUrls[field.gid] && !entry.Image}
-                                  >
-                                    Save Document
-                                  </Button>
-                                </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        ) : (
-                          <span className="text-xs text-gray-400">No document</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap sm:flex-nowrap">
-                          {!rowEditing ? (
-                            <>
-                              <Button size="sm" onClick={() => toggleEducationRowEdit(field.gid)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="destructive" size="sm" onClick={() => removeEducationEntry(index, field.gid)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button 
-                                size="sm" 
-                                variant="default"
-                                onClick={() => handleSaveEducationRow(index, field.gid)}
-                                disabled={isSavingEducation[field.gid]}
-                                className="flex items-center gap-1"
-                              >
-                                {isSavingEducation[field.gid] ? (
-                                  <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span className="hidden sm:inline">Saving...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Save className="h-4 w-4" />
-                                    <span className="hidden sm:inline">Save</span>
-                                  </>
-                                )}
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => {
-                                  toggleEducationRowEdit(field.gid)
-                                  const teacherId = user?.role_id || teacherInfo?.Tid
-                                  if (teacherId) {
-                                    fetch(`/api/teacher/profile?teacherId=${teacherId}`)
-                                      .then(res => res.json())
-                                      .then((data: TeacherData) => {
-                                        educationForm.reset({ educations: data.graduationDetails || [] })
-                                      })
-                                  }
-                                }}
-                                disabled={isSavingEducation[field.gid]}
-                                className="flex items-center gap-1"
-                              >
-                                <X className="h-4 w-4" />
-                                <span className="hidden sm:inline">Cancel</span>
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Academic Year Information Availability */}
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-2">
-            <div>
-              <CardTitle className="text-sm sm:text-base">Academic Year Information Availability</CardTitle>
-              <CardDescription className="text-[11px] sm:text-xs">
-                Academic Year Information Activity - Please tick if you DON'T have any information to submit in the
-                following academic years
-              </CardDescription>
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button
-                onClick={handleSaveAcademicYears}
-                size="sm"
-                variant="outline"
-                disabled={isSavingAcademicYears}
-                className="flex items-center gap-2 bg-transparent w-full sm:w-auto"
-              >
-                {isSavingAcademicYears ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-2 sm:p-3">
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 w-full">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2016-17"
-                  checked={teacherInfo?.NILL2016_17 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2016_17: e.target.checked });
-                    }
-                  }}
-                  disabled={isSavingAcademicYears}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2016-17" className="text-sm font-normal">
-                  A.Y. 2016-17
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2017-18"
-                  checked={teacherInfo?.NILL2017_18 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2017_18: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2017-18" className="text-sm font-normal">
-                  A.Y. 2017-18
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2018-19"
-                  checked={teacherInfo?.NILL2018_19 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2018_19: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2018-19" className="text-sm font-normal">
-                  A.Y. 2018-19
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2019-20"
-                  checked={teacherInfo?.NILL2019_20 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2019_20: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2019-20" className="text-sm font-normal">
-                  A.Y. 2019-20
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2020-21"
-                  checked={teacherInfo?.NILL2020_21 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2020_21: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2020-21" className="text-sm font-normal">
-                  A.Y. 2020-21
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2021-22"
-                  checked={teacherInfo?.NILL2021_22 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2021_22: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2021-22" className="text-sm font-normal">
-                  A.Y. 2021-22
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2022-23"
-                  checked={teacherInfo?.NILL2022_23 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2022_23: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2022-23" className="text-sm font-normal">
-                  A.Y. 2022-23
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2023-24"
-                  checked={teacherInfo?.NILL2023_24 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2023_24: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2023-24" className="text-sm font-normal">
-                  A.Y. 2023-24
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2024-25"
-                  checked={teacherInfo?.NILL2024_25 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2024_25: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2024-25" className="text-sm font-normal">
-                  A.Y. 2024-25
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="ay2025-26"
-                  checked={teacherInfo?.NILL2025_26 || false}
-                  onChange={(e) => {
-                    if (teacherInfo) {
-                      setTeacherInfo({ ...teacherInfo, NILL2025_26: e.target.checked });
-                    }
-                  }}
-                  className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                />
-                <Label htmlFor="ay2025-26" className="text-sm font-normal">
-                  A.Y. 2025-26
-                </Label>
-              </div>
-            </div>
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <p className="text-sm text-yellow-800">
-                <strong>Academic Year Information Activity:</strong> Please check the academic years for which you do
-                NOT have any information to submit. This helps in generating accurate reports and understanding your
-                research activity across different academic years.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      
+    
       </div>
     </div>
   )

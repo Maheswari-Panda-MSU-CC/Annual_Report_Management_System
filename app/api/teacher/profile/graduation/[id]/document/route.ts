@@ -6,7 +6,7 @@ import { authenticateRequest } from "@/lib/api-auth"
 // Update only the Image field for Graduation/Education entry
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await authenticateRequest(request)
@@ -17,7 +17,8 @@ export async function PATCH(
     const { Image } = body
     const teacherId = user.role_id
 
-    const gid = parseInt(params.id, 10)
+    const { id: idParam } = await params
+    const gid = parseInt(idParam, 10)
 
     if (!teacherId || !gid) {
       return NextResponse.json(

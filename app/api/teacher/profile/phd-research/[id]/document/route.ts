@@ -6,7 +6,7 @@ import { authenticateRequest } from "@/lib/api-auth"
 // Update only the document field for Post-Doctoral Research entry
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authResult = await authenticateRequest(request)
@@ -17,7 +17,8 @@ export async function PATCH(
     const { doc } = body
     const teacherId = user.role_id
 
-    const id = parseInt(params.id, 10)
+    const { id: idParam } = await params
+    const id = parseInt(idParam, 10)
 
     if (!teacherId || !id) {
       return NextResponse.json(

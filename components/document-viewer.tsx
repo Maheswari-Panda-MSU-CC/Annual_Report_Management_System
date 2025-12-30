@@ -481,7 +481,40 @@ export function DocumentViewer({
     }
   }
 
+  // Helper function to extract filename with extension from URL
+  const getFileNameFromUrl = (url: string): string => {
+    if (!url) return "document"
+    
+    // Remove query parameters and hash
+    const urlWithoutParams = url.split('?')[0].split('#')[0]
+    
+    // Extract filename from the last part of the path
+    const parts = urlWithoutParams.split('/')
+    const fileName = parts[parts.length - 1]
+    
+    // If we have a valid filename with extension, use it
+    if (fileName && fileName.includes('.')) {
+      return fileName
+    }
+    
+    // Fallback: construct filename from documentName and documentType
+    if (documentName && documentType) {
+      // Check if documentName already has an extension
+      if (documentName.includes('.')) {
+        return documentName
+      }
+      // Add extension from documentType
+      return `${documentName}.${documentType}`
+    }
+    
+    // Last resort: use documentType as extension
+    return documentType ? `document.${documentType}` : "document"
+  }
+
   const handleDownload = async () => {
+    // Extract original filename with extension from URL
+    const downloadFileName = getFileNameFromUrl(documentUrl)
+    
     // Check if it's an S3 virtual path - use S3 download API
     if (isS3VirtualPath(documentUrl)) {
       setDownloading(true)
@@ -514,11 +547,11 @@ export function DocumentViewer({
         const byteArray = new Uint8Array(byteNumbers)
         const blob = new Blob([byteArray], { type: data.contentType || 'application/pdf' })
 
-        // Create download link
+        // Create download link with original filename and extension
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
         link.href = url
-        link.download = documentName || "document"
+        link.download = downloadFileName // Use extracted filename with extension
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -541,7 +574,7 @@ export function DocumentViewer({
       if (!displayUrl) return
       const link = document.createElement("a")
       link.href = displayUrl
-      link.download = documentName
+      link.download = downloadFileName // Use extracted filename with extension
       link.target = "_blank"
       link.rel = "noopener noreferrer"
       document.body.appendChild(link)
