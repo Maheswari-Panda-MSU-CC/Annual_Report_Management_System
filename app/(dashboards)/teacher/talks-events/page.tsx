@@ -150,10 +150,13 @@ export default function TalksEventsPage() {
   const [activeTab, setActiveTab] = useState("refresher")
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [editingItem, setEditingItem] = useState<any>(null)
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrlRef = useRef<string | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string; item?: any } | null>(null)
   const [formData, setFormData] = useState<any>({})
   const form = useForm()
   const router = useRouter()
@@ -378,19 +381,29 @@ export default function TalksEventsPage() {
   }
 
 
-  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string) => {
-    setDeleteConfirm({ sectionId, itemId, itemName })
+  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string, item?: any) => {
+    setDeleteConfirm({ sectionId, itemId, itemName, item })
   }, [])
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
 
-    const { sectionId, itemId } = deleteConfirm
+    const { sectionId, itemId, item } = deleteConfirm
     setIsDeleting(true)
 
     try {
       // Get the appropriate mutation based on section
       let deleteMutation
+      let docPath: string | null = null
+      
+      // Get doc path from item for refresher, academic-programs, academic-bodies, committees, and talks sections
+      // Talks uses Image field instead of supporting_doc
+      if ((sectionId === "refresher" || sectionId === "academic-programs" || sectionId === "academic-bodies" || sectionId === "committees") && item) {
+        docPath = item.supporting_doc || null
+      } else if (sectionId === "talks" && item) {
+        docPath = item.Image || item.supporting_doc || null
+      }
+      
       if (sectionId === "refresher") {
         deleteMutation = refresherMutations.deleteMutation
       } else if (sectionId === "academic-programs") {
@@ -405,8 +418,12 @@ export default function TalksEventsPage() {
         throw new Error(`Unknown section: ${sectionId}`)
       }
 
-      // Execute delete mutation (toast and UI update handled by mutation)
-      await deleteMutation.mutateAsync(itemId)
+      // Execute delete mutation - pass doc path for refresher, academic-programs, academic-bodies, committees, and talks
+      if ((sectionId === "refresher" || sectionId === "academic-programs" || sectionId === "academic-bodies" || sectionId === "committees" || sectionId === "talks") && docPath) {
+        await deleteMutation.mutateAsync({ id: itemId, doc: docPath })
+      } else {
+        await deleteMutation.mutateAsync(itemId)
+      }
       setDeleteConfirm(null)
     } catch (error: any) {
       // Error toast is handled by mutation, but we can add additional handling if needed
@@ -720,6 +737,17 @@ export default function TalksEventsPage() {
     
     setFormData(formItem)
     form.reset(formItem)
+    
+    // Track original document URL for refresher, academic-programs, academic-bodies, committees, and talks sections
+    // Talks uses Image field instead of supporting_doc
+    if ((sectionId === "refresher" || sectionId === "academic-programs" || sectionId === "academic-bodies" || sectionId === "committees") && item.supporting_doc) {
+      originalDocumentUrlRef.current = item.supporting_doc
+    } else if (sectionId === "talks" && (item.Image || item.supporting_doc)) {
+      originalDocumentUrlRef.current = item.Image || item.supporting_doc
+    } else {
+      originalDocumentUrlRef.current = null
+    }
+    
     setIsEditDialogOpen(true)
   }, [form, clearAutoFillData])
 
@@ -791,7 +819,50 @@ export default function TalksEventsPage() {
     setIsEditDialogOpen(open)
   }
 
-  // Helper function to upload document to S3 (wrapper for single-document uploads)
+  // Enhanced helper function to handle old file deletion
+  const handleOldFileDeletion = async (
+    oldPath: string | null,
+    newPath: string,
+    recordId: number
+  ) => {
+    // Early return if no old path or paths are the same
+    if (!oldPath || !oldPath.startsWith("upload/")) {
+      return
+    }
+
+    // If old and new paths are the same, no deletion needed
+    if (oldPath === newPath) {
+      console.log("Old and new file paths are identical - skipping deletion")
+      return
+    }
+
+    // Import helper functions
+    const { deleteDocument, checkDocumentExists } = await import("@/lib/s3-upload-helper")
+
+    try {
+      // Check if file exists before attempting deletion
+      const existsCheck = await checkDocumentExists(oldPath)
+      
+      if (!existsCheck.exists) {
+        console.log(`Old file does not exist in S3: ${oldPath}`)
+        return
+      }
+
+      // File exists, proceed with deletion
+      console.log(`Attempting to delete old S3 file: ${oldPath}`)
+      const deleteResult = await deleteDocument(oldPath)
+      
+      if (deleteResult.success) {
+        console.log(`Successfully deleted old S3 file: ${oldPath}`)
+      } else {
+        console.warn(`Failed to delete old S3 file: ${oldPath}`, deleteResult.message)
+      }
+    } catch (deleteError: any) {
+      console.warn("Error during old file deletion:", deleteError)
+    }
+  }
+
+  // Helper function to upload document to S3 (for sections other than refresher)
   const handleDocumentUpload = async (documentUrl: string | undefined): Promise<string> => {
     if (!documentUrl) {
       return "http://localhost:3000/assets/demo_document.pdf"
@@ -802,13 +873,16 @@ export default function TalksEventsPage() {
       try {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
-        const recordId = editingItem.id
+        const recordId = editingItem?.id || Date.now()
+        
+        // Use appropriate folder name based on section (default to "talks" for backward compatibility)
+        const folderName = editingItem?.sectionId === "talks" ? "talks" : "talks"
         
         const s3Url = await uploadDocumentToS3(
           documentUrl,
-          user?.role_id||0,
+          user?.role_id || 0,
           recordId,
-          "talks"
+          folderName
         )
 
         return s3Url
@@ -841,8 +915,89 @@ export default function TalksEventsPage() {
       // Prepare data and get appropriate mutation based on section
       if (editingItem.sectionId === "refresher") {
         updateMutation = refresherMutations.updateMutation
-        // Handle document upload to S3 using the wrapper function
-        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
+        
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.supporting_doc
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "Acdm_Ref"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "Acdm_Ref"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           refresher_type: formValues.refresher_type,
@@ -856,7 +1011,89 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "academic-programs") {
         updateMutation = academicProgramMutations.updateMutation
-        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
+        
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.supporting_doc
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "Acdm_Contri"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "Acdm_Contri"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           programme: formValues.programme,
@@ -868,7 +1105,89 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "academic-bodies") {
         updateMutation = academicBodiesMutations.updateMutation
-        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
+        
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.supporting_doc
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "Acdm_oth"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "Acdm_oth"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           acad_body: formValues.acad_body,
@@ -880,7 +1199,89 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "committees") {
         updateMutation = committeeMutations.updateMutation
-        const docUrl = await handleDocumentUpload(formValues.supporting_doc)
+        
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.supporting_doc
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "Acdm_Uni"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "Acdm_Uni"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           committee_name: formValues.committee_name,
@@ -895,7 +1296,90 @@ export default function TalksEventsPage() {
         }
       } else if (editingItem.sectionId === "talks") {
         updateMutation = talksMutations.updateMutation
-        const docUrl = await handleDocumentUpload(formValues.Image || formValues.supporting_doc)
+        
+        // Handle document upload to S3 - only if document has actually changed
+        // Talks uses Image field instead of supporting_doc
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.Image || formValues.supporting_doc
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "talks"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "talks"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           programme: formValues.programme,
@@ -1133,7 +1617,7 @@ export default function TalksEventsPage() {
   const createColumnsForSection = (
     section: any,
     handleEdit: (sectionId: string, item: any) => void,
-    handleDelete: (sectionId: string, itemId: number, itemName: string) => void,
+    handleDelete: (sectionId: string, itemId: number, itemName: string, item?: any) => void,
   ): ColumnDef<any>[] => {
     const columns: ColumnDef<any>[] = []
 
@@ -1348,7 +1832,7 @@ export default function TalksEventsPage() {
               size="sm" 
               onClick={(e) => { 
                 e.stopPropagation()
-                handleDelete(section.id, item.id, item.name || "this record")
+                handleDelete(section.id, item.id, item.name || "this record", item)
               }}
               className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
             >
@@ -1568,7 +2052,7 @@ export default function TalksEventsPage() {
               {editingItem && renderForm(editingItem.sectionId, true)}
             </div>
             <div className="flex flex-col sm:flex-row justify-end gap-2 mt-4 pt-4 border-t">
-              <Button variant="outline" onClick={handleModalCancel} className="w-full sm:w-auto">
+              <Button variant="outline" onClick={handleModalCancel} disabled={isSubmitting} className="w-full sm:w-auto">
                 Cancel
               </Button>
               <Button onClick={handleSaveEdit} disabled={isSubmitting} className="w-full sm:w-auto">

@@ -2,7 +2,7 @@
 
 import { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
@@ -45,8 +45,15 @@ export function AcademicTalkForm({
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
     const formData = watch()
+    
+    // Track original document URL to detect changes (only in edit mode)
+    // Talks uses Image field, but we track both Image and supporting_doc
+    const originalDocumentUrl = useRef<string | undefined>(
+        isEdit && (editData?.Image || editData?.supporting_doc) ? (editData.Image || editData.supporting_doc) : undefined
+    )
+    
     const [documentUrl, setDocumentUrl] = useState<string | undefined>(
-        isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
+        isEdit && (editData?.Image || editData?.supporting_doc) ? (editData.Image || editData.supporting_doc) : undefined
     )
 
     useEffect(() => {
@@ -60,6 +67,8 @@ export function AcademicTalkForm({
                 setDocumentUrl(docUrl)
                 setValue("supporting_doc", docUrl, { shouldValidate: false })
                 setValue("Image", docUrl, { shouldValidate: false })
+                // Track original document URL to detect changes
+                originalDocumentUrl.current = docUrl
             }
         }
     }, [isEdit, editData, setValue])

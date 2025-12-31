@@ -1,7 +1,7 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Controller } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,6 +41,12 @@ export function RefresherOrientationForm({
   const router = useRouter()
   const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
   const formData = watch()
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrl = useRef<string | undefined>(
+    isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
+  )
+  
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
   )
@@ -54,6 +60,8 @@ export function RefresherOrientationForm({
       if (editData.supporting_doc) {
         setDocumentUrl(editData.supporting_doc)
         setValue("supporting_doc", editData.supporting_doc, { shouldValidate: false })
+        // Track original document URL to detect changes
+        originalDocumentUrl.current = editData.supporting_doc
       }
     }
   }, [isEdit, editData, setValue])

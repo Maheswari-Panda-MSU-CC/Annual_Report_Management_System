@@ -696,8 +696,78 @@ export default function AddEventPage() {
     }
 
     try {
-      // Handle document upload to S3
-      const docUrl = await handleDocumentUpload(data.supporting_doc)
+      // Validate document upload is required
+      if (!data.supporting_doc) {
+        toast({
+          title: "Validation Error",
+          description: "Please upload a supporting document",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Handle document upload to S3 - only upload if it's a new document
+      let docUrl = data.supporting_doc
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (data.supporting_doc && data.supporting_doc.startsWith("/uploaded-document/")) {
+        try {
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+          
+          // For new records, use a temporary record ID (will be replaced with actual ID after DB insert)
+          const tempRecordId = Date.now()
+          
+          // Upload new document to S3 with folder name "Acdm_Ref"
+          docUrl = await uploadDocumentToS3(
+            data.supporting_doc,
+            user?.role_id || 0,
+            tempRecordId,
+            "Acdm_Ref"
+          )
+          
+          // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+          if (!docUrl || !docUrl.startsWith("upload/")) {
+            throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+          }
+          
+          // Additional validation: Ensure it's not a dummy URL
+          if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+            throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+          }
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Document uploaded to S3 successfully",
+            duration: 3000,
+          })
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document to S3. Record will not be saved.",
+            variant: "destructive",
+          })
+          return // CRITICAL: Prevent record from being created
+        }
+      } else if (data.supporting_doc && !data.supporting_doc.startsWith("upload/") && !data.supporting_doc.startsWith("/uploaded-document/")) {
+        // Invalid path format
+        toast({
+          title: "Invalid Document Path",
+          description: "Document path format is invalid. Please upload the document again.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
+
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+      if (!docUrl || !docUrl.startsWith("upload/")) {
+        toast({
+          title: "Validation Error",
+          description: "Document validation failed. Record will not be saved.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
 
       const payload = {
         name: data.name,
@@ -740,8 +810,78 @@ export default function AddEventPage() {
     }
 
     try {
-      // Handle document upload to S3
-      const docUrl = await handleDocumentUpload(data.supporting_doc)
+      // Validate document upload is required
+      if (!data.supporting_doc) {
+        toast({
+          title: "Validation Error",
+          description: "Please upload a supporting document",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Handle document upload to S3 - only upload if it's a new document
+      let docUrl = data.supporting_doc
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (data.supporting_doc && data.supporting_doc.startsWith("/uploaded-document/")) {
+        try {
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+          
+          // For new records, use a temporary record ID (will be replaced with actual ID after DB insert)
+          const tempRecordId = Date.now()
+          
+          // Upload new document to S3 with folder name "Acdm_Contri"
+          docUrl = await uploadDocumentToS3(
+            data.supporting_doc,
+            user?.role_id || 0,
+            tempRecordId,
+            "Acdm_Contri"
+          )
+          
+          // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+          if (!docUrl || !docUrl.startsWith("upload/")) {
+            throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+          }
+          
+          // Additional validation: Ensure it's not a dummy URL
+          if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+            throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+          }
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Document uploaded to S3 successfully",
+            duration: 3000,
+          })
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document to S3. Record will not be saved.",
+            variant: "destructive",
+          })
+          return // CRITICAL: Prevent record from being created
+        }
+      } else if (data.supporting_doc && !data.supporting_doc.startsWith("upload/") && !data.supporting_doc.startsWith("/uploaded-document/")) {
+        // Invalid path format
+        toast({
+          title: "Invalid Document Path",
+          description: "Document path format is invalid. Please upload the document again.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
+
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+      if (!docUrl || !docUrl.startsWith("upload/")) {
+        toast({
+          title: "Validation Error",
+          description: "Document validation failed. Record will not be saved.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
 
       const payload = {
         name: data.name,
@@ -782,8 +922,78 @@ export default function AddEventPage() {
     }
 
     try {
-      // Handle document upload to S3
-      const docUrl = await handleDocumentUpload(data.supporting_doc)
+      // Validate document upload is required
+      if (!data.supporting_doc) {
+        toast({
+          title: "Validation Error",
+          description: "Please upload a supporting document",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Handle document upload to S3 - only upload if it's a new document
+      let docUrl = data.supporting_doc
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (data.supporting_doc && data.supporting_doc.startsWith("/uploaded-document/")) {
+        try {
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+          
+          // For new records, use a temporary record ID (will be replaced with actual ID after DB insert)
+          const tempRecordId = Date.now()
+          
+          // Upload new document to S3 with folder name "Acdm_oth"
+          docUrl = await uploadDocumentToS3(
+            data.supporting_doc,
+            user?.role_id || 0,
+            tempRecordId,
+            "Acdm_oth"
+          )
+          
+          // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+          if (!docUrl || !docUrl.startsWith("upload/")) {
+            throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+          }
+          
+          // Additional validation: Ensure it's not a dummy URL
+          if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+            throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+          }
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Document uploaded to S3 successfully",
+            duration: 3000,
+          })
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document to S3. Record will not be saved.",
+            variant: "destructive",
+          })
+          return // CRITICAL: Prevent record from being created
+        }
+      } else if (data.supporting_doc && !data.supporting_doc.startsWith("upload/") && !data.supporting_doc.startsWith("/uploaded-document/")) {
+        // Invalid path format
+        toast({
+          title: "Invalid Document Path",
+          description: "Document path format is invalid. Please upload the document again.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
+
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+      if (!docUrl || !docUrl.startsWith("upload/")) {
+        toast({
+          title: "Validation Error",
+          description: "Document validation failed. Record will not be saved.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
 
       const payload = {
         name: data.name,
@@ -824,8 +1034,78 @@ export default function AddEventPage() {
     }
 
     try {
-      // Handle document upload to S3
-      const docUrl = await handleDocumentUpload(data.supporting_doc)
+      // Validate document upload is required
+      if (!data.supporting_doc) {
+        toast({
+          title: "Validation Error",
+          description: "Please upload a supporting document",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Handle document upload to S3 - only upload if it's a new document
+      let docUrl = data.supporting_doc
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (data.supporting_doc && data.supporting_doc.startsWith("/uploaded-document/")) {
+        try {
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+          
+          // For new records, use a temporary record ID (will be replaced with actual ID after DB insert)
+          const tempRecordId = Date.now()
+          
+          // Upload new document to S3 with folder name "Acdm_Uni"
+          docUrl = await uploadDocumentToS3(
+            data.supporting_doc,
+            user?.role_id || 0,
+            tempRecordId,
+            "Acdm_Uni"
+          )
+          
+          // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+          if (!docUrl || !docUrl.startsWith("upload/")) {
+            throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+          }
+          
+          // Additional validation: Ensure it's not a dummy URL
+          if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+            throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+          }
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Document uploaded to S3 successfully",
+            duration: 3000,
+          })
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document to S3. Record will not be saved.",
+            variant: "destructive",
+          })
+          return // CRITICAL: Prevent record from being created
+        }
+      } else if (data.supporting_doc && !data.supporting_doc.startsWith("upload/") && !data.supporting_doc.startsWith("/uploaded-document/")) {
+        // Invalid path format
+        toast({
+          title: "Invalid Document Path",
+          description: "Document path format is invalid. Please upload the document again.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
+
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+      if (!docUrl || !docUrl.startsWith("upload/")) {
+        toast({
+          title: "Validation Error",
+          description: "Document validation failed. Record will not be saved.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
 
       const payload = {
         name: data.name,
@@ -869,8 +1149,79 @@ export default function AddEventPage() {
     }
 
     try {
-      // Handle document upload to S3 (talks uses Image field)
-      const docUrl = await handleDocumentUpload(data.supporting_doc || data.Image)
+      // Validate document upload is required (talks uses Image field)
+      const documentField = data.Image || data.supporting_doc
+      if (!documentField) {
+        toast({
+          title: "Validation Error",
+          description: "Please upload a supporting document",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Handle document upload to S3 - only upload if it's a new document
+      let docUrl = documentField
+      
+      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
+      if (documentField && documentField.startsWith("/uploaded-document/")) {
+        try {
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+          
+          // For new records, use a temporary record ID (will be replaced with actual ID after DB insert)
+          const tempRecordId = Date.now()
+          
+          // Upload new document to S3 with folder name "talks"
+          docUrl = await uploadDocumentToS3(
+            documentField,
+            user?.role_id || 0,
+            tempRecordId,
+            "talks"
+          )
+          
+          // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+          if (!docUrl || !docUrl.startsWith("upload/")) {
+            throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+          }
+          
+          // Additional validation: Ensure it's not a dummy URL
+          if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+            throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+          }
+          
+          toast({
+            title: "Document Uploaded",
+            description: "Document uploaded to S3 successfully",
+            duration: 3000,
+          })
+        } catch (docError: any) {
+          console.error("Document upload error:", docError)
+          toast({
+            title: "Document Upload Error",
+            description: docError.message || "Failed to upload document to S3. Record will not be saved.",
+            variant: "destructive",
+          })
+          return // CRITICAL: Prevent record from being created
+        }
+      } else if (documentField && !documentField.startsWith("upload/") && !documentField.startsWith("/uploaded-document/")) {
+        // Invalid path format
+        toast({
+          title: "Invalid Document Path",
+          description: "Document path format is invalid. Please upload the document again.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
+
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path
+      if (!docUrl || !docUrl.startsWith("upload/")) {
+        toast({
+          title: "Validation Error",
+          description: "Document validation failed. Record will not be saved.",
+          variant: "destructive",
+        })
+        return // Prevent record from being created
+      }
 
       const payload = {
         name: data.name,

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Save, Loader2, Brain } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { DocumentUpload } from "@/components/shared/DocumentUpload"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { SearchableSelect } from "@/components/ui/searchable-select"
 import { DropdownOption } from "@/hooks/use-dropdowns"
 import { cn } from "@/lib/utils"
@@ -41,6 +41,12 @@ export function AcademicBodiesForm({
     const router = useRouter()
     const { register, handleSubmit, setValue, watch, control, formState: { errors } } = form
     const formData = watch()
+    
+    // Track original document URL to detect changes (only in edit mode)
+    const originalDocumentUrl = useRef<string | undefined>(
+        isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
+    )
+    
     const [documentUrl, setDocumentUrl] = useState<string | undefined>(
         isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
     )
@@ -54,6 +60,8 @@ export function AcademicBodiesForm({
             if (editData.supporting_doc) {
                 setDocumentUrl(editData.supporting_doc)
                 setValue("supporting_doc", editData.supporting_doc, { shouldValidate: false })
+                // Track original document URL to detect changes
+                originalDocumentUrl.current = editData.supporting_doc
             }
         }
     }, [isEdit, editData, setValue])

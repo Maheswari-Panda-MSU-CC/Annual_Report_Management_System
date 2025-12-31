@@ -259,24 +259,51 @@ export function useTalksEventsMutations(sectionId: SectionId) {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (params: number | { id: number; doc?: string }) => {
       const { controller, unregister } = createAbortController()
       const config = DELETE_CONFIG[sectionId]
+      
+      // Handle both old format (just id) and new format (object with id and doc)
+      const id = typeof params === 'number' ? params : params.id
+      const docPath = typeof params === 'object' ? params.doc : undefined
+      
       try {
-        const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
-          method: "DELETE",
-          signal: controller.signal,
-        })
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.error || `Failed to delete ${sectionId} record`)
+        // For refresher, academic-programs, academic-bodies, committees, and talks, send doc path in request body
+        if ((sectionId === "refresher" || sectionId === "academic-programs" || sectionId === "academic-bodies" || sectionId === "committees" || sectionId === "talks") && docPath) {
+          const bodyKey = sectionId === "refresher" ? "refresherDetailId" 
+            : sectionId === "academic-programs" ? "academicContriId" 
+            : sectionId === "academic-bodies" ? "partiAcadsId"
+            : sectionId === "committees" ? "partiCommiId"
+            : "teacherTalkId"
+          const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [bodyKey]: id, doc: docPath }),
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            const error = await res.json()
+            throw new Error(error.error || `Failed to delete ${sectionId} record`)
+          }
+          return res.json()
+        } else {
+          // For other sections, use query param only
+          const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
+            method: "DELETE",
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            const error = await res.json()
+            throw new Error(error.error || `Failed to delete ${sectionId} record`)
+          }
+          return res.json()
         }
-        return res.json()
       } finally {
         unregister()
       }
     },
-    onMutate: async (id) => {
+    onMutate: async (params) => {
+      const id = typeof params === 'number' ? params : params.id
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey })
 
@@ -303,7 +330,8 @@ export function useTalksEventsMutations(sectionId: SectionId) {
 
       return { previousData }
     },
-    onError: (err, id, context) => {
+    onError: (err, params, context) => {
+      const id = typeof params === 'number' ? params : params.id
       if (handleUnauthorized(err)) return
       // Rollback on error
       if (context?.previousData) {
@@ -316,7 +344,7 @@ export function useTalksEventsMutations(sectionId: SectionId) {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate to refetch fresh data
       queryClient.invalidateQueries({
         queryKey,
@@ -325,9 +353,36 @@ export function useTalksEventsMutations(sectionId: SectionId) {
       queryClient.invalidateQueries({
         queryKey: teacherQueryKeys.talks.all(teacherId),
       })
+      
+      // Show S3 deletion status toast if available (for refresher, academic-programs, academic-bodies, committees, and talks)
+      if (data?.s3DeleteMessage && (sectionId === 'refresher' || sectionId === 'academic-programs' || sectionId === 'academic-bodies' || sectionId === 'committees' || sectionId === 'talks')) {
+        if (data.warning) {
+          toast({
+            title: "S3 Document Deletion",
+            description: data.s3DeleteMessage || "S3 document deletion had issues.",
+            variant: "destructive",
+          })
+        } else {
+          toast({
+            title: "S3 Document Deleted",
+            description: data.s3DeleteMessage || "Document deleted from S3 successfully.",
+          })
+        }
+      }
+      
+      // Show database deletion success message
+      if (data?.warning && !data.s3DeleteMessage) {
+        toast({
+          title: "Warning",
+          description: data.warning,
+          variant: "default",
+          duration: 5000,
+        })
+      }
+      
       toast({
         title: "Success",
-        description: DELETE_CONFIG[sectionId].successMessage,
+        description: data?.message || DELETE_CONFIG[sectionId].successMessage,
         duration: 3000,
       })
     },

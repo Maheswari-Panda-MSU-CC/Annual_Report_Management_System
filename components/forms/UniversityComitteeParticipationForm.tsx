@@ -2,7 +2,7 @@
 
 import { UseFormReturn } from "react-hook-form"
 import { Controller } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 
 import { Input } from "@/components/ui/input"
@@ -54,6 +54,12 @@ export function UniversityCommitteeParticipationForm({
   } = form
 
   const formData = watch()
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrl = useRef<string | undefined>(
+    isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
+  )
+  
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     isEdit && editData?.supporting_doc ? editData.supporting_doc : undefined
   )
@@ -67,6 +73,8 @@ export function UniversityCommitteeParticipationForm({
       if (editData.supporting_doc) {
         setDocumentUrl(editData.supporting_doc)
         setValue("supporting_doc", editData.supporting_doc, { shouldValidate: false })
+        // Track original document URL to detect changes
+        originalDocumentUrl.current = editData.supporting_doc
       }
     }
   }, [isEdit, editData, setValue])
