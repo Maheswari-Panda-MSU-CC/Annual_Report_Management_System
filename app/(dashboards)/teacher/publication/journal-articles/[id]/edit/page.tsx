@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -57,6 +57,10 @@ export default function EditJournalArticlePage() {
   const teacherId: number = user?.role_id ? parseInt(user.role_id.toString()) : parseInt(user?.id?.toString() || '0')
   const [documentUrl, setDocumentUrl] = useState<string>("")
   const [existingDocumentUrl, setExistingDocumentUrl] = useState<string>("")
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrl = useRef<string | null>(null)
+  
   const { clearDocumentData, hasDocumentData } = useDocumentAnalysis()
 
   const {
@@ -432,6 +436,8 @@ export default function EditJournalArticlePage() {
       setExistingDocumentUrl(journal.Image)
       setDocumentUrl(journal.Image)
       setValue("Image", journal.Image) // Update form field so cancel handler can detect document
+      // Track original document URL to detect changes
+      originalDocumentUrl.current = journal.Image
     }
 
     // Populate form with fetched data
@@ -488,9 +494,10 @@ export default function EditJournalArticlePage() {
       return
     }
 
-    // Handle document upload to S3 if a new document was uploaded
+    // Handle document upload to S3 - only if document has actually changed
     let pdfPath = existingDocumentUrl || null
     const oldImagePath = existingDocumentUrl // Store for deletion if new file is uploaded
+    const originalImagePath = originalDocumentUrl.current // Original document URL from when page loaded
 
     // Enhanced helper function to handle old file deletion with improved logging and error handling
     const handleOldFileDeletion = async (
@@ -548,8 +555,13 @@ export default function EditJournalArticlePage() {
       }
     }
 
+    // CRITICAL: Only upload to S3 if document has actually changed
+    // Check if document is a new upload OR if it's different from the original
+    const isNewUpload = documentUrl && documentUrl.startsWith("/uploaded-document/")
+    const isDocumentChanged = documentUrl !== originalImagePath
+    
     // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
-    if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
+    if (isNewUpload && isDocumentChanged) {
       try {
         const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
         
@@ -581,14 +593,22 @@ export default function EditJournalArticlePage() {
         return
       }
     } else if (documentUrl && documentUrl.startsWith("upload/")) {
-      // Already an S3 path, use as-is
-      pdfPath = documentUrl
-      
-      // If the document URL changed but is still an S3 path, check if we need to delete old file
-      if (oldImagePath && oldImagePath !== pdfPath) {
-        const recordId = parseInt(id as string, 10)
-        await handleOldFileDeletion(oldImagePath, pdfPath, recordId)
+      // Already an S3 path - only update if it's different from original
+      if (isDocumentChanged) {
+        pdfPath = documentUrl
+        
+        // If the document URL changed but is still an S3 path, check if we need to delete old file
+        if (oldImagePath && oldImagePath !== pdfPath) {
+          const recordId = parseInt(id as string, 10)
+          await handleOldFileDeletion(oldImagePath, pdfPath, recordId)
+        }
+      } else {
+        // Document hasn't changed, use existing path
+        pdfPath = originalImagePath || existingDocumentUrl || null
       }
+    } else if (!documentUrl && originalImagePath) {
+      // No new document, use existing one (document not changed)
+      pdfPath = originalImagePath
     } else if (documentUrl && !documentUrl.startsWith("/uploaded-document/") && !documentUrl.startsWith("upload/")) {
       // Invalid path format
       toast({
