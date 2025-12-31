@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { UseFormReturn } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -35,6 +35,12 @@ export function PerformanceTeacherForm({
 }: PerformanceTeacherFormProps) {
   const { register, handleSubmit, setValue, watch, clearErrors, formState: { errors } } = form
   const formData = watch()
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrl = useRef<string | undefined>(
+    isEdit && editData?.Image ? editData.Image : undefined
+  )
+  
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     isEdit && editData?.Image ? editData.Image : undefined
   )
@@ -49,6 +55,8 @@ export function PerformanceTeacherForm({
       if (editData.Image) {
         setDocumentUrl(editData.Image)
         setValue("Image", editData.Image, { shouldValidate: false, shouldDirty: false })
+        // Track original document URL to detect changes
+        originalDocumentUrl.current = editData.Image
       }
       // Clear any existing errors when loading edit data
       clearErrors()
@@ -195,8 +203,8 @@ export function PerformanceTeacherForm({
               if (!value || (typeof value === 'string' && value.trim() === '')) {
                 return "Please upload a supporting document"
               }
-              // Check if it's a valid URL or local path
-              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document'))) {
+              // Check if it's a valid URL or local path or S3 path
+              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document') || value.startsWith('upload/'))) {
                 return true
               }
               return "Invalid document URL"

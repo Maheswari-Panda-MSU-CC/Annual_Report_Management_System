@@ -229,24 +229,49 @@ export function useAwardsRecognitionMutations(sectionId: SectionId) {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (params: number | { id: number; doc?: string }) => {
       const { controller, unregister } = createAbortController()
       const config = DELETE_CONFIG[sectionId]
+      
+      // Handle both old format (just id) and new format (object with id and doc)
+      const id = typeof params === 'number' ? params : params.id
+      const docPath = typeof params === 'object' ? params.doc : undefined
+      
       try {
-        const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
-          method: "DELETE",
-          signal: controller.signal,
-        })
-        if (!res.ok) {
-          const error = await res.json()
-          throw new Error(error.error || `Failed to delete ${sectionId} record`)
+        // For performance, awards, and extension sections, send doc path in request body
+        if ((sectionId === "performance" || sectionId === "awards" || sectionId === "extension") && docPath) {
+          const bodyKey = sectionId === "performance" ? "perfTeacherId" : 
+                         sectionId === "awards" ? "awardsFellowId" : 
+                         "extensionActId"
+          const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [bodyKey]: id, doc: docPath }),
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            const error = await res.json()
+            throw new Error(error.error || `Failed to delete ${sectionId} record`)
+          }
+          return res.json()
+        } else {
+          // For other sections, use query param only
+          const res = await fetch(`${config.endpoint}?${config.param}=${id}`, {
+            method: "DELETE",
+            signal: controller.signal,
+          })
+          if (!res.ok) {
+            const error = await res.json()
+            throw new Error(error.error || `Failed to delete ${sectionId} record`)
+          }
+          return res.json()
         }
-        return res.json()
       } finally {
         unregister()
       }
     },
-    onMutate: async (id) => {
+    onMutate: async (params) => {
+      const id = typeof params === 'number' ? params : params.id
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey })
 
@@ -271,7 +296,7 @@ export function useAwardsRecognitionMutations(sectionId: SectionId) {
 
       return { previousData }
     },
-    onError: (err, id, context) => {
+    onError: (err, params, context) => {
       if (handleUnauthorized(err)) return
       // Rollback on error
       if (context?.previousData) {
@@ -284,7 +309,7 @@ export function useAwardsRecognitionMutations(sectionId: SectionId) {
         duration: 5000,
       })
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       // Invalidate to refetch fresh data
       queryClient.invalidateQueries({
         queryKey,
@@ -293,11 +318,36 @@ export function useAwardsRecognitionMutations(sectionId: SectionId) {
       queryClient.invalidateQueries({
         queryKey: teacherQueryKeys.awards.all(teacherId),
       })
-      toast({
-        title: "Success",
-        description: DELETE_CONFIG[sectionId].successMessage,
-        duration: 3000,
-      })
+      
+      // Show S3 deletion status toast if available (for performance, awards, and extension sections)
+      if (data?.s3DeleteMessage && (sectionId === 'performance' || sectionId === 'awards' || sectionId === 'extension')) {
+        if (data.s3DeleteMessage.toLowerCase().includes('successfully')) {
+          toast({
+            title: "Success",
+            description: `${DELETE_CONFIG[sectionId].successMessage} ${data.s3DeleteMessage}`,
+            duration: 3000,
+          })
+        } else if (data.warning) {
+          toast({
+            title: "Warning",
+            description: `${DELETE_CONFIG[sectionId].successMessage} However, ${data.s3DeleteMessage}`,
+            variant: "default",
+            duration: 5000,
+          })
+        } else {
+          toast({
+            title: "Success",
+            description: DELETE_CONFIG[sectionId].successMessage,
+            duration: 3000,
+          })
+        }
+      } else {
+        toast({
+          title: "Success",
+          description: DELETE_CONFIG[sectionId].successMessage,
+          duration: 3000,
+        })
+      }
     },
   })
 

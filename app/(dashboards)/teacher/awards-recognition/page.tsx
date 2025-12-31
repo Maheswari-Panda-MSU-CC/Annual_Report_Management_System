@@ -94,8 +94,11 @@ export default function AwardsRecognitionPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null)
   const [editingItem, setEditingItem] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ sectionId: string; itemId: number; itemName: string; item?: any } | null>(null)
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set())
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrlRef = useRef<string | null>(null)
 
   const [formData, setFormData] = useState<any>({})
   const form = useForm({
@@ -232,22 +235,40 @@ export default function AwardsRecognitionPage() {
     setSelectedFiles(files)
   }, [])
 
-  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string) => {
-    setDeleteConfirm({ sectionId, itemId, itemName })
+  const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string, item?: any) => {
+    setDeleteConfirm({ sectionId, itemId, itemName, item })
   }, [])
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
 
-    const { sectionId, itemId } = deleteConfirm
+    const { sectionId, itemId, item } = deleteConfirm
 
     try {
+      // Get doc path from item for performance, awards, and extension sections
+      let docPath: string | null = null
+      if ((sectionId === "performance" || sectionId === "awards" || sectionId === "extension") && item) {
+        docPath = item.Image || null
+      }
+      
       if (sectionId === "performance") {
-        await performanceMutations.deleteMutation.mutateAsync(itemId)
+        if (docPath) {
+          await performanceMutations.deleteMutation.mutateAsync({ id: itemId, doc: docPath })
+        } else {
+          await performanceMutations.deleteMutation.mutateAsync(itemId)
+        }
       } else if (sectionId === "awards") {
-        await awardsMutations.deleteMutation.mutateAsync(itemId)
+        if (docPath) {
+          await awardsMutations.deleteMutation.mutateAsync({ id: itemId, doc: docPath })
+        } else {
+          await awardsMutations.deleteMutation.mutateAsync(itemId)
+        }
       } else if (sectionId === "extension") {
-        await extensionMutations.deleteMutation.mutateAsync(itemId)
+        if (docPath) {
+          await extensionMutations.deleteMutation.mutateAsync({ id: itemId, doc: docPath })
+        } else {
+          await extensionMutations.deleteMutation.mutateAsync(itemId)
+        }
       }
       setDeleteConfirm(null)
     } catch (error) {
@@ -502,6 +523,12 @@ export default function AwardsRecognitionPage() {
         perf_nature: item.perf_nature || item.natureOfPerformance,
         Image: item.Image || null, // Include Image for DocumentUpload component
       }
+      // Track original document URL to detect changes
+      if (item.Image) {
+        originalDocumentUrlRef.current = item.Image
+      } else {
+        originalDocumentUrlRef.current = null
+      }
     } else if (sectionId === "awards") {
       formItem = {
         name: item.name || item.nameOfAwardFellowship,
@@ -512,6 +539,12 @@ export default function AwardsRecognitionPage() {
         level: item.levelId || item.level,
         Image: item.Image || null, // Include Image for DocumentUpload component
       }
+      // Track original document URL to detect changes
+      if (item.Image) {
+        originalDocumentUrlRef.current = item.Image
+      } else {
+        originalDocumentUrlRef.current = null
+      }
     } else if (sectionId === "extension") {
       formItem = {
         names: item.names || item.natureOfActivity,
@@ -521,6 +554,12 @@ export default function AwardsRecognitionPage() {
         sponsered: item.sponseredId || item.sponsered,
         level: item.levelId || item.level,
         Image: item.Image || null, // Include Image for DocumentUpload component
+      }
+      // Track original document URL to detect changes
+      if (item.Image) {
+        originalDocumentUrlRef.current = item.Image
+      } else {
+        originalDocumentUrlRef.current = null
       }
     } else {
       formItem = { ...item }
@@ -597,6 +636,49 @@ export default function AwardsRecognitionPage() {
     }
   }
 
+  // Enhanced helper function to handle old file deletion
+  const handleOldFileDeletion = async (
+    oldPath: string | null,
+    newPath: string,
+    recordId: number
+  ) => {
+    // Early return if no old path or paths are the same
+    if (!oldPath || !oldPath.startsWith("upload/")) {
+      return
+    }
+
+    // If old and new paths are the same, no deletion needed
+    if (oldPath === newPath) {
+      console.log("Old and new file paths are identical - skipping deletion")
+      return
+    }
+
+    // Import helper functions
+    const { deleteDocument, checkDocumentExists } = await import("@/lib/s3-upload-helper")
+
+    try {
+      // Check if file exists before attempting deletion
+      const existsCheck = await checkDocumentExists(oldPath)
+      
+      if (!existsCheck.exists) {
+        console.log(`Old file does not exist in S3: ${oldPath}`)
+        return
+      }
+
+      // File exists, proceed with deletion
+      console.log(`Attempting to delete old S3 file: ${oldPath}`)
+      const deleteResult = await deleteDocument(oldPath)
+      
+      if (deleteResult.success) {
+        console.log(`Successfully deleted old S3 file: ${oldPath}`)
+      } else {
+        console.warn(`Failed to delete old S3 file: ${oldPath}`, deleteResult.message)
+      }
+    } catch (deleteError: any) {
+      console.warn("Error during old file deletion:", deleteError)
+    }
+  }
+
   const handleSaveEdit = async () => {
     if (!editingItem || !user?.role_id) return
 
@@ -604,24 +686,89 @@ export default function AwardsRecognitionPage() {
     let updateData: any = {}
 
     try {
-      // Handle document upload to S3 if a document exists (matches research module pattern)
-      let docUrl = formValues.Image || null
-
-      if (docUrl && docUrl.startsWith("/uploaded-document/")) {
-        try {
-          docUrl = await handleDocumentUpload(docUrl)
-        } catch (docError: any) {
-          console.error("Document upload error:", docError)
+      if (editingItem.sectionId === "performance") {
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.Image
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "Performance"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "Performance"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
           toast({
-            title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
             variant: "destructive",
           })
-          return // Stop update if S3 upload fails (matches research pattern)
+          return // Prevent record from being updated
         }
-      }
-
-      if (editingItem.sectionId === "performance") {
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           place: formValues.place,
@@ -634,6 +781,88 @@ export default function AwardsRecognitionPage() {
           data: updateData,
         })
       } else if (editingItem.sectionId === "awards") {
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.Image
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "award"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "award"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           name: formValues.name,
           details: formValues.details || "",
@@ -648,6 +877,88 @@ export default function AwardsRecognitionPage() {
           data: updateData,
         })
       } else if (editingItem.sectionId === "extension") {
+        // Handle document upload to S3 - only if document has actually changed
+        const originalDocUrl = originalDocumentUrlRef.current
+        const currentDocUrl = formValues.Image
+        let docUrl = originalDocUrl || currentDocUrl || null
+        const oldDocPath = originalDocUrl
+        
+        // Check if document has actually changed
+        const isDocumentChanged = currentDocUrl && currentDocUrl !== originalDocUrl
+        
+        // Only upload to S3 if document is a new upload AND has changed
+        if (currentDocUrl && currentDocUrl.startsWith("/uploaded-document/") && isDocumentChanged) {
+          try {
+            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
+            
+            const recordId = editingItem.id
+            
+            // Upload new document to S3 with folder name "extension"
+            docUrl = await uploadDocumentToS3(
+              currentDocUrl,
+              user?.role_id || 0,
+              recordId,
+              "extension"
+            )
+            
+            // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+            if (!docUrl || !docUrl.startsWith("upload/")) {
+              throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+            }
+            
+            // Additional validation: Ensure it's not a dummy URL
+            if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+              throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
+            }
+            
+            // Delete old file if it exists and is different from new one
+            if (oldDocPath && oldDocPath !== docUrl) {
+              await handleOldFileDeletion(oldDocPath, docUrl, recordId)
+            }
+            
+            toast({
+              title: "Document Uploaded",
+              description: "Document uploaded to S3 successfully",
+              duration: 3000,
+            })
+          } catch (docError: any) {
+            console.error("Document upload error:", docError)
+            toast({
+              title: "Document Upload Error",
+              description: docError.message || "Failed to upload document to S3. Update will not be saved.",
+              variant: "destructive",
+            })
+            return // CRITICAL: Prevent record from being updated
+          }
+        } else if (currentDocUrl && currentDocUrl.startsWith("upload/") && isDocumentChanged) {
+          // Already an S3 path, but it changed from the original
+          docUrl = currentDocUrl
+          if (oldDocPath && oldDocPath !== docUrl) {
+            await handleOldFileDeletion(oldDocPath, docUrl, editingItem.id)
+          }
+        } else if (!isDocumentChanged) {
+          // Document hasn't changed, use the existing path
+          docUrl = originalDocUrl || null
+        } else if (!currentDocUrl || (!currentDocUrl.startsWith("/uploaded-document/") && !currentDocUrl.startsWith("upload/"))) {
+          // Invalid path format
+          toast({
+            title: "Invalid Document Path",
+            description: "Document path format is invalid. Please upload the document again.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
+        // CRITICAL: Final validation before saving
+        if (!docUrl || !docUrl.startsWith("upload/")) {
+          toast({
+            title: "Validation Error",
+            description: "Document validation failed. Update will not be saved.",
+            variant: "destructive",
+          })
+          return // Prevent record from being updated
+        }
+        
         updateData = {
           names: formValues.names,
           place: formValues.place,
@@ -954,7 +1265,7 @@ export default function AwardsRecognitionPage() {
               size="sm" 
               onClick={(e) => { 
                 e.stopPropagation()
-                handleDeleteClick(section.id, item.id, item.name || item.nameOfAwardFellowship || item.nameOfActivity || "this record")
+                handleDeleteClick(section.id, item.id, item.name || item.nameOfAwardFellowship || item.nameOfActivity || "this record", item)
               }}
               className="h-8 w-8 sm:h-9 sm:w-auto sm:px-3 text-red-600 hover:text-red-700"
             >
@@ -1119,6 +1430,7 @@ export default function AwardsRecognitionPage() {
                 variant="outline" 
                 onClick={handleModalCancel} 
                 className="w-full sm:w-auto order-2 sm:order-1 text-sm sm:text-base"
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>

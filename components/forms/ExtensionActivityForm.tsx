@@ -1,7 +1,7 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { Controller } from "react-hook-form"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,6 +41,12 @@ export function ExtensionActivityForm({
 }: ExtensionActivityFormProps) {
   const { register, handleSubmit, setValue, watch, control, clearErrors, formState: { errors } } = form
   const formData = watch()
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrl = useRef<string | undefined>(
+    isEdit && editData?.Image ? editData.Image : undefined
+  )
+  
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     isEdit && editData?.Image ? editData.Image : undefined
   )
@@ -55,6 +61,8 @@ export function ExtensionActivityForm({
       if (editData.Image) {
         setDocumentUrl(editData.Image)
         setValue("Image", editData.Image, { shouldValidate: false, shouldDirty: false })
+        // Track original document URL to detect changes
+        originalDocumentUrl.current = editData.Image
       }
       // Clear any existing errors when loading edit data
       clearErrors()
@@ -201,8 +209,8 @@ export function ExtensionActivityForm({
               if (!value || (typeof value === 'string' && value.trim() === '')) {
                 return "Please upload a supporting document"
               }
-              // Check if it's a valid URL or local path
-              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document'))) {
+              // Check if it's a valid URL or local path or S3 path
+              if (typeof value === 'string' && (value.startsWith('http') || value.startsWith('/') || value.startsWith('uploaded-document') || value.startsWith('upload/'))) {
                 return true
               }
               return "Invalid document URL"
