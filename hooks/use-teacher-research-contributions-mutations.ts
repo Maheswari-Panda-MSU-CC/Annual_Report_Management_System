@@ -256,8 +256,8 @@ export function useResearchContributionsMutations(sectionId: SectionId) {
         queryKey: researchContributionsQueryKeys.all(teacherId)
       })
       
-      // Show S3 deletion status toast if available (for collaborations, consultancy, visits, etc.)
-      if (data?.s3DeleteMessage && (sectionId === 'collaborations' || sectionId === 'consultancy' || sectionId === 'patents' || sectionId === 'policy' || sectionId === 'econtent' || sectionId === 'visits')) {
+      // Show S3 deletion status toast if available (for collaborations, consultancy, visits, financial, jrfSrf, phd, copyrights, etc.)
+      if (data?.s3DeleteMessage && (sectionId === 'collaborations' || sectionId === 'consultancy' || sectionId === 'patents' || sectionId === 'policy' || sectionId === 'econtent' || sectionId === 'visits' || sectionId === 'financial' || sectionId === 'jrfSrf' || sectionId === 'phd' || sectionId === 'copyrights')) {
         if (data.warning) {
           toast({
             title: "S3 Document Deletion",

@@ -1,7 +1,7 @@
 "use client"
 
 import { UseFormReturn } from "react-hook-form"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -44,9 +44,17 @@ export function CopyrightForm({
   } = form
 
   const formData = watch()
+  
+  // Track original document URL to detect changes (only in edit mode)
+  const originalDocumentUrl = useRef<string | undefined>(
+    isEdit && editData?.supportingDocument?.[0] 
+      ? (Array.isArray(editData.supportingDocument) ? editData.supportingDocument[0] : editData.supportingDocument)
+      : undefined
+  )
+
   const [documentUrl, setDocumentUrl] = useState<string | undefined>(
     initialDocumentUrl || // Use initial document URL from auto-fill first
-    (isEdit && editData?.supportingDocument?.[0] ? editData.supportingDocument[0] : undefined)
+    originalDocumentUrl.current
   )
 
   // Update documentUrl when initialDocumentUrl changes

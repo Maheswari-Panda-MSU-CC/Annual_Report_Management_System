@@ -216,8 +216,45 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Get collaborationId from query params (backward compatibility)
     const { searchParams } = new URL(request.url)
-    const collaborationId = parseInt(searchParams.get('collaborationId') || '', 10)
+    let collaborationId = parseInt(searchParams.get('collaborationId') || '', 10)
+    let docPath: string | null = null
+
+    // Try to get doc and collaborationId from request body (preferred method)
+    try {
+      // Check if request has body content
+      const contentType = request.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        try {
+          const bodyText = await request.text()
+          if (bodyText && bodyText.trim()) {
+            const body = JSON.parse(bodyText)
+            if (body) {
+              if (body.collaborationId) {
+                const bodyCollaborationId = parseInt(String(body.collaborationId), 10)
+                if (!isNaN(bodyCollaborationId)) collaborationId = bodyCollaborationId
+              }
+              if (body.doc && typeof body.doc === 'string') {
+                docPath = body.doc.trim() || null
+              }
+            }
+          }
+        } catch (parseError) {
+          // JSON parse failed, continue with query params
+          console.warn('[DELETE Collaboration] Could not parse JSON body:', parseError)
+        }
+      }
+    } catch (bodyError) {
+      // Body reading failed, continue with query params only
+      console.warn('[DELETE Collaboration] Could not read request body, using query params:', bodyError)
+    }
+
+    // Fallback: try query param for doc (backward compatibility)
+    if (!docPath) {
+      const queryDoc = searchParams.get('doc')
+      if (queryDoc) docPath = queryDoc
+    }
 
     if (isNaN(collaborationId)) {
       return NextResponse.json(
@@ -227,23 +264,8 @@ export async function DELETE(request: NextRequest) {
     }
 
     const pool = await connectToDatabase()
-    
-    // Step 1: Fetch the collaboration record to get the document path
-    let docPath: string | null = null
-    try {
-      const fetchReq = pool.request()
-      fetchReq.input('tid', sql.Int, teacherId)
-      const fetchResult = await fetchReq.execute('sp_GetCollaborations_ByTeacherId')
-      const collaboration = fetchResult.recordset?.find((c: any) => c.id === collaborationId)
-      if (collaboration?.doc) {
-        docPath = collaboration.doc
-      }
-    } catch (fetchErr: any) {
-      console.error('[DELETE Collaboration] Error fetching collaboration:', fetchErr)
-      // Continue with deletion even if fetch fails
-    }
 
-    // Step 2: Delete S3 document if doc exists and is a valid S3 path
+    // Step 1: Delete S3 document if doc exists and is a valid S3 path
     let s3DeleteSuccess = false
     let s3DeleteMessage = 'No document to delete'
     
@@ -282,13 +304,13 @@ export async function DELETE(request: NextRequest) {
       s3DeleteMessage = 'Invalid document path format (not an S3 path)'
     }
 
-    // Step 3: Delete database record
+    // Step 2: Delete database record
     const req = pool.request()
     req.input('id', sql.Int, collaborationId)
     await req.execute('sp_Delete_Collaboration')
     console.log(`[DELETE Collaboration] ✓ Database record deleted: id=${collaborationId}`)
     
-    // Step 4: Return success response with S3 deletion status
+    // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation
     // S3 deletion failure is logged but doesn't block the operation
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {

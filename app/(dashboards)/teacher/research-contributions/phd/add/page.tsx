@@ -245,37 +245,57 @@ export default function AddPhdPage() {
 
     setIsSubmitting(true)
     try {
-      // Handle document upload to S3 if a new document was uploaded
-      let docUrl = documentUrl
+      // Handle document upload to S3 - MUST succeed before saving record
+      let docUrl: string | null = null
 
-      // If documentUrl is a new upload (starts with /uploaded-document/), upload to S3
       if (documentUrl && documentUrl.startsWith("/uploaded-document/")) {
         try {
-          // Extract fileName from local URL
-          const fileName = documentUrl.split("/").pop()
+          const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
           
-          if (fileName) {
-            const { uploadDocumentToS3 } = await import("@/lib/s3-upload-helper")
-            
-            const tempRecordId = Date.now()
-            
-            docUrl = await uploadDocumentToS3(
-              documentUrl,
-              user?.role_id||0,
-              tempRecordId,
-              "Phd_Guidance"
-            )
+          // For new records, use timestamp as recordId since DB record doesn't exist yet
+          const tempRecordId = Date.now()
+          
+          // Upload new document to S3 with Pattern: upload/Phd_Guidance/{userId}_{recordId}.pdf
+          docUrl = await uploadDocumentToS3(
+            documentUrl,
+            user?.role_id || 0,
+            tempRecordId,
+            "Phd_Guidance"
+          )
+          
+          // CRITICAL: Verify we got a valid S3 virtual path (not dummy URL)
+          if (!docUrl || !docUrl.startsWith("upload/")) {
+            throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
+          }
+          
+          // Additional validation: Ensure it's not a dummy URL
+          if (docUrl.includes("dummy_document") || docUrl.includes("localhost") || docUrl.includes("http://") || docUrl.includes("https://")) {
+            throw new Error("S3 upload failed: Document was not uploaded successfully. Please try again.")
           }
         } catch (docError: any) {
-          console.error("Document upload error:", docError)
+          console.error("❌ [PhD Guidance Add] Document upload error:", docError)
           toast({
             title: "Document Upload Error",
-            description: docError.message || "Failed to upload document. Please try again.",
+            description: docError.message || "Failed to upload document to S3. Record will not be saved.",
             variant: "destructive",
+            duration: 5000,
           })
           setIsSubmitting(false)
-          return
+          return // CRITICAL: Prevent record from being saved
         }
+      } else if (documentUrl && documentUrl.startsWith("upload/")) {
+        // Already an S3 path, use as-is (should not happen in add page, but handle it)
+        docUrl = documentUrl
+      } else {
+        // No document or invalid path
+        toast({
+          title: "Document Required",
+          description: "Please upload a supporting document.",
+          variant: "destructive",
+          duration: 3000,
+        })
+        setIsSubmitting(false)
+        return
       }
 
       // Map form data to API format

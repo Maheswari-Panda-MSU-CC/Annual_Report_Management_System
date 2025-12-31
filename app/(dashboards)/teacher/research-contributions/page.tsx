@@ -1084,9 +1084,9 @@ export default function ResearchContributionsPage() {
             consultancy: "Consultancy_Undertaken",
             collaborations: "MOU_Linkage",
             visits: "Acad_ResearchVisit",
-            financial: "Financial_Support",
+            financial: "Fin_Support",
             jrfSrf: "JRF_SRF",
-            phd: "PhD_Guidance",
+            phd: "Phd_Guidance",
             copyrights: "Copyrights",
           }
           const folderName = folderNameMap[sectionId] || "research_contributions"
@@ -1099,8 +1099,8 @@ export default function ResearchContributionsPage() {
             folderName
           )
           
-          // CRITICAL: For patents, policy, econtent, consultancy, and collaborations - verify we got a valid S3 virtual path (not dummy URL)
-          if (sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations") {
+          // CRITICAL: For patents, policy, econtent, consultancy, collaborations, financial, jrfSrf, phd, and copyrights - verify we got a valid S3 virtual path (not dummy URL)
+          if (sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "financial" || sectionId === "jrfSrf" || sectionId === "phd" || sectionId === "copyrights") {
             if (!docUrl || !docUrl.startsWith("upload/")) {
               throw new Error("S3 upload failed: Invalid virtual path returned. Please try uploading again.")
             }
@@ -1112,14 +1112,14 @@ export default function ResearchContributionsPage() {
           }
 
           // Enhanced deletion logic: Delete old file if it exists and is different from new one
-          if ((sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "visits") && oldDocPath && docUrl) {
+          if ((sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "visits" || sectionId === "financial" || sectionId === "jrfSrf" || sectionId === "phd" || sectionId === "copyrights") && oldDocPath && docUrl) {
             await handleOldFileDeletion(oldDocPath, docUrl, recordId)
           }
         } catch (docError: any) {
           console.error(`❌ [${sectionId} Edit] Document upload error:`, docError)
           
-          // For patents, policy, econtent, consultancy, and collaborations - prevent update if S3 upload fails
-          if (sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations") {
+          // For patents, policy, econtent, consultancy, collaborations, financial, jrfSrf, phd, and copyrights - prevent update if S3 upload fails
+          if (sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "financial" || sectionId === "jrfSrf" || sectionId === "phd" || sectionId === "copyrights") {
             toast({
               title: "Document Upload Error",
               description: docError.message || "Failed to upload document to S3. Update will not be saved.",
@@ -1145,7 +1145,7 @@ export default function ResearchContributionsPage() {
         if (documentUrl !== oldDocPath) {
           docUrl = documentUrl
           // If the document URL changed but is still an S3 path, check if we need to delete old file
-          if ((sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "visits") && oldDocPath) {
+          if ((sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "visits" || sectionId === "financial" || sectionId === "jrfSrf" || sectionId === "phd" || sectionId === "copyrights") && oldDocPath) {
             const recordId = editingItem?.id || Date.now()
             await handleOldFileDeletion(oldDocPath || '', docUrl || '', recordId)
           }
@@ -1168,8 +1168,8 @@ export default function ResearchContributionsPage() {
         return // Prevent record from being updated
       }
 
-      // CRITICAL: Final validation before saving - ensure we have a valid S3 path (for patents, policy, econtent, consultancy, and collaborations)
-      if ((sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations") && (!docUrl || !docUrl.startsWith("upload/"))) {
+      // CRITICAL: Final validation before saving - ensure we have a valid S3 path (for patents, policy, econtent, consultancy, collaborations, financial, jrfSrf, phd, and copyrights)
+      if ((sectionId === "patents" || sectionId === "policy" || sectionId === "econtent" || sectionId === "consultancy" || sectionId === "collaborations" || sectionId === "financial" || sectionId === "jrfSrf" || sectionId === "phd" || sectionId === "copyrights") && (!docUrl || !docUrl.startsWith("upload/"))) {
         toast({
           title: "Validation Error",
           description: "Document validation failed. Update will not be saved.",
