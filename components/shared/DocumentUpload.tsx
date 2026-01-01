@@ -75,6 +75,8 @@ export function DocumentUpload({
   // Store the actual File object for API calls (not just URL)
   const fileRef = useRef<File | null>(null)
   const extractControllerRef = useRef<{ controller: AbortController; unregister: () => void } | null>(null)
+  // Track if a new file was uploaded in edit mode (to show Extract button)
+  const [hasNewUploadInEditMode, setHasNewUploadInEditMode] = useState<boolean>(false)
   // Access document analysis context to store extracted data
   const { setDocumentData, clearDocumentData } = useDocumentAnalysis()
   const { confirm, DialogComponent: ClearDocumentDialog } = useConfirmationDialog()
@@ -93,16 +95,23 @@ export function DocumentUpload({
   // Handle Smart Document Analyzer redirect props
   useEffect(() => {
     if (initialDocumentUrl) {
-      setDocumentUrl(initialDocumentUrl)
-      setShowUploadUI(false)
-      // Determine document type from URL
-      const urlParts = initialDocumentUrl.split("/")
-      const fileName = urlParts[urlParts.length - 1]
-      const ext = getFileExtension(fileName)
-      setDocumentType(ext)
-      setDocumentName(fileName)
+      // Only reset documentUrl if no new upload was made in edit mode
+      // This prevents the useEffect from overwriting a newly uploaded file
+      if (!isEditMode || !hasNewUploadInEditMode) {
+        setDocumentUrl(initialDocumentUrl)
+        setShowUploadUI(false)
+        // Determine document type from URL
+        const urlParts = initialDocumentUrl.split("/")
+        const fileName = urlParts[urlParts.length - 1]
+        const ext = getFileExtension(fileName)
+        setDocumentType(ext)
+        setDocumentName(fileName)
+      }
+    } else {
+      // If initialDocumentUrl is cleared, reset the new upload flag
+      setHasNewUploadInEditMode(false)
     }
-  }, [initialDocumentUrl])
+  }, [initialDocumentUrl, isEditMode, hasNewUploadInEditMode])
 
   // Handle extracted fields from Smart Document Analyzer
   useEffect(() => {
@@ -282,6 +291,11 @@ export function DocumentUpload({
       setUploadedFile(null)
       // Store the actual File object for API calls
       fileRef.current = file
+      
+      // Mark that a new file was uploaded in edit mode (to show Extract button)
+      if (isEditMode) {
+        setHasNewUploadInEditMode(true)
+      }
 
       // Call onChange callback with local URL
       // Form submission will handle S3 upload using the file in /public/uploaded-document/
@@ -618,6 +632,8 @@ export function DocumentUpload({
       setUploadedFile(null)
       setError(null)
       setDocumentUrl(undefined)
+      // Reset the new upload flag when user clicks "Update Document"
+      setHasNewUploadInEditMode(false)
       if (onChange) {
         onChange("")
       }
@@ -690,6 +706,9 @@ export function DocumentUpload({
       fileRef.current = null // Clear stored file reference
       setError(null)
       
+      // Reset the new upload flag when document is cleared
+      setHasNewUploadInEditMode(false)
+      
       // Clear document data from context
       clearDocumentData()
       
@@ -714,6 +733,10 @@ export function DocumentUpload({
       setUploadedFile(null)
       fileRef.current = null
       setError(null)
+      
+      // Reset the new upload flag when document is cleared
+      setHasNewUploadInEditMode(false)
+      
       clearDocumentData()
 
       // Clear form fields if available - ALWAYS call if provided
@@ -837,7 +860,7 @@ export function DocumentUpload({
               <RefreshCw className="h-4 w-4" />
               Update Document
             </Button>
-            {!hideExtractButton && (
+            {!hideExtractButton && (!isEditMode || (isEditMode && hasNewUploadInEditMode && documentUrl)) && (
               <Button
                 type="button"
                 variant="outline"
