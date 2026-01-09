@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
 import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
+import { logActivityFromRequest } from '@/lib/activity-log';
 
 // Add new Post-Doctoral Research entry (single row)
 export async function POST(req: NextRequest) {
@@ -35,6 +36,10 @@ export async function POST(req: NextRequest) {
     request.input('doc', sql.VarChar(100), research.doc ?? '');
 
     const result = await request.execute('sp_Insert_Post_Doctoral_Exp'); // TODO: update to actual stored procedure name
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'CREATE', 'Post_Doctoral_Research', insertedId).catch(() => {});
 
     return Response.json({ success: true, message: 'Post-doctoral research added successfully', data: result });
   } catch (error) {
@@ -76,6 +81,9 @@ export async function PATCH(req: NextRequest) {
     request.input('doc', sql.VarChar(100), research.doc ?? '');
 
     await request.execute('sp_Update_Post_Doctoral_Exp');
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'UPDATE', 'Post_Doctoral_Research', research.Id).catch(() => {});
 
     return Response.json({ success: true, message: 'Post-doctoral research updated successfully' });
   } catch (error) {
@@ -182,6 +190,9 @@ export async function DELETE(req: NextRequest) {
     request.input('Id', sql.Int, id);
     await request.execute('sp_Delete_Post_Doctoral_Exp');
     console.log(`[DELETE PhD Research] ✓ Database record deleted: id=${id}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'DELETE', 'Post_Doctoral_Research', id).catch(() => {});
     
     // Step 4: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

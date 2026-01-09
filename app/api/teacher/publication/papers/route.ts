@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all papers for a teacher
 export async function GET(request: NextRequest) {
@@ -110,7 +111,11 @@ export async function POST(request: NextRequest) {
     req.input('mode', sql.VarChar(500), paper.mode || null)
 
     const result = await req.execute('sp_InsertPaperPresented')
-    const recordId = result.recordset[0].RecordId
+
+    const recordId =  result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Paper', recordId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -183,6 +188,9 @@ export async function PATCH(request: NextRequest) {
 
     await req.execute('sp_UpdatePaperPresented')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Paper', paperId).catch(() => {})
+
     return NextResponse.json({
       success: true,
       message: 'Paper updated successfully',
@@ -197,8 +205,12 @@ export async function PATCH(request: NextRequest) {
 }
 
 // DELETE - Delete paper
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     // Get paperId from query params (backward compatibility)
     const { searchParams } = new URL(request.url)
     let paperId = parseInt(searchParams.get('paperId') || '', 10)
@@ -293,6 +305,9 @@ export async function DELETE(request: Request) {
     
     await deleteReq.execute('sp_DeletePaperPresented')
     console.log(`[DELETE Paper] ✓ Database record deleted: paperId=${paperId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Paper', paperId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

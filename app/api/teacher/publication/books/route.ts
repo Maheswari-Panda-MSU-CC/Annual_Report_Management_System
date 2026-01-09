@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all books for a teacher
 export async function GET(request: NextRequest) {
@@ -114,7 +115,11 @@ export async function POST(request: NextRequest) {
     req.input('author_type', sql.Int, book.author_type)
     req.input('Image', sql.VarChar(1000), book.Image || null)
 
-    await req.execute('sp_Insert_Book_Pub')
+    const result = await req.execute('sp_Insert_Book_Pub')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Book', insertedId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -190,6 +195,9 @@ export async function PATCH(request: NextRequest) {
     req.input('Image', sql.VarChar(1000), book.Image || null)
 
     await req.execute('sp_Update_Book_Pub')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Book', bookId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -313,6 +321,9 @@ export async function DELETE(request: NextRequest) {
     
     await deleteReq.execute('sp_Delete_Book_Pub')
     console.log(`[DELETE Book] ✓ Database record deleted: bookId=${bookId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Book', bookId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

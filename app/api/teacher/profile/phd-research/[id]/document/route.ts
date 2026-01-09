@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import sql from "mssql"
 import { connectToDatabase } from "@/lib/db"
 import { authenticateRequest } from "@/lib/api-auth"
+import { logActivityFromRequest } from "@/lib/activity-log"
 
 // Update only the document field for Post-Doctoral Research entry
 export async function PATCH(
@@ -35,6 +36,9 @@ export async function PATCH(
     req.input('doc', sql.VarChar(1000), doc || null)
 
     await req.execute('sp_Update_Post_Doctoral_Exp_Document')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'PhD_Research_Document', id).catch(() => {});
 
     return NextResponse.json({
       success: true,

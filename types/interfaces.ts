@@ -24,6 +24,7 @@ export interface TeacherInfo {
     Abbri: string
     PAN_No: string
     DOB: string
+    gender: string | null
     PHDGuide: boolean
     OtherGuide: boolean
     ICT_Use: boolean | null

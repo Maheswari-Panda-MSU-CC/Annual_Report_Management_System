@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all journals for a teacher
 export async function GET(request: NextRequest) {
@@ -123,7 +124,11 @@ export async function POST(request: NextRequest) {
     req.input('DOI', sql.NVarChar(sql.MAX), journal.DOI || null)
     req.input('in_oldUGCList', sql.Bit, journal.in_oldUGCList ?? false)
 
-    await req.execute('sp_Insert_Teacher_Journal')
+    const result = await req.execute('sp_Insert_Teacher_Journal')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Journal', insertedId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -208,6 +213,9 @@ export async function PATCH(request: NextRequest) {
     req.input('in_oldUGCList', sql.Bit, journal.in_oldUGCList ?? false)
 
     await req.execute('sp_Update_Teacher_Journal')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Journal', journalId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -331,6 +339,9 @@ export async function DELETE(request: NextRequest) {
     
     await deleteReq.execute('sp_Delete_Teacher_Journal')
     console.log(`[DELETE Journal] ✓ Database record deleted: journalId=${journalId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Journal', journalId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

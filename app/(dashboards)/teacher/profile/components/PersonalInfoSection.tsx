@@ -454,6 +454,39 @@ export function PersonalInfoSection({
                 <h4 className="text-xs sm:text-sm font-semibold text-gray-700 border-b pb-2">Additional Information</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 w-full">
                   <div className="space-y-2">
+                    <Label htmlFor="gender" className="text-sm font-medium">
+                      Gender <span className="text-red-500">*</span>
+                    </Label>
+                    <Controller
+                      control={control}
+                      name="gender"
+                      rules={{
+                        required: isEditingPersonal ? "Gender is required" : false
+                      }}
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <Select
+                            value={field.value || ''}
+                            onValueChange={(v: string) => field.onChange(v)}
+                            disabled={!isEditingPersonal || isSavingPersonal}
+                          >
+                            <SelectTrigger className={`h-10 text-base ${!isEditingPersonal ? "bg-[#f9fafb] text-foreground cursor-default opacity-100" : ""} ${error ? 'border-red-500' : ''}`}>
+                              <SelectValue placeholder="Select gender" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Male">Male</SelectItem>
+                              <SelectItem value="Female">Female</SelectItem>
+                              <SelectItem value="Other">Other</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {error && isEditingPersonal && (
+                            <p className="text-xs text-red-500 mt-1">{error.message}</p>
+                          )}
+                        </div>
+                      )}
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="dateOfBirth" className="text-sm font-medium">
                       Date of Birth <span className="text-red-500">*</span>
                     </Label>

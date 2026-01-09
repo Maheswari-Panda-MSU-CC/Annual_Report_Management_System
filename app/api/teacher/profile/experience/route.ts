@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
+import { logActivityFromRequest } from '@/lib/activity-log';
 
 // Add new Experience entry (single row)
 export async function POST(req: NextRequest) {
@@ -44,6 +45,10 @@ export async function POST(req: NextRequest) {
     request.input('desig', sql.NVarChar(100), experience.desig ?? null);
 
     const result = await request.execute('sp_Insert_Teacher_Experience'); // TODO: update to actual stored procedure name
+    const insertedId = result.recordset?.[0]?.InsertedExperienceId || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'CREATE', 'Teacher_Experience', insertedId).catch(() => {});
 
     return NextResponse.json({ success: true, message: 'Experience added successfully', data: result });
   } catch (error) {
@@ -95,6 +100,9 @@ export async function PATCH(req: NextRequest) {
 
     await request.execute('sp_Update_Teacher_Experience');
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'UPDATE', 'Teacher_Experience', experience.Id).catch(() => {});
+
     return NextResponse.json({ success: true, message: 'Experience updated successfully' });
   } catch (error) {
     console.error('Experience PATCH error:', error);
@@ -131,6 +139,9 @@ export async function DELETE(req: NextRequest) {
 
     // TODO: update to actual stored procedure name
     await request.execute('sp_Delete_Teacher_Experience');
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'DELETE', 'Teacher_Experience', id).catch(() => {});
 
     return NextResponse.json({ success: true });
   } catch (error) {

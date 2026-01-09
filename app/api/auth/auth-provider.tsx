@@ -33,7 +33,7 @@ interface LoginResponse {
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string) => Promise<LoginResponse>
-  logout: () => void
+  logout: (reason?: string) => void
   updateUser: (updates: Partial<User>) => void
   isLoading: boolean
 }
@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const delay = Math.max(0, expiresAt - Date.now())
     const timer = setTimeout(() => {
-      logout()
+      logout('Session timeout')
     }, delay)
 
     return () => clearTimeout(timer)
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const value = kv ? kv.split('=')[1] : undefined
     const expiresAt = value ? Number(value) : undefined
     if (expiresAt && Date.now() >= expiresAt) {
-      logout()
+      logout('Session timeout')
     }
   }, [pathname, user])
 
@@ -117,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const expiresAt = value ? Number(value) : undefined
       if (expiresAt && Date.now() >= expiresAt) {
         clearInterval(interval)
-        logout()
+        logout('Session timeout')
       }
     }, 1800000)
     return () => clearInterval(interval)
@@ -166,9 +166,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
   
 
-  const logout = () => {
+  const logout = (reason?: string) => {
     // Call server to clear httpOnly cookies
-    fetch("/api/auth/login", { method: "DELETE", cache: "no-store", credentials: "include" })
+    const body = reason ? JSON.stringify({ logoutReason: reason }) : undefined
+    fetch("/api/auth/login", { 
+      method: "DELETE", 
+      cache: "no-store", 
+      credentials: "include",
+      headers: reason ? { "Content-Type": "application/json" } : undefined,
+      body
+    })
       .catch(() => {})
       .finally(() => {
         abortAllControllers("logout")

@@ -5,6 +5,7 @@ import { join } from "path"
 import { isS3Configured, uploadToS3, getSignedUrl, deleteFromS3, downloadFromS3 } from "@/lib/s3-service"
 import type { FilePatternMetadata } from "@/lib/s3-service"
 import { authenticateRequest } from "@/lib/api-auth"
+import { logActivityFromRequest } from "@/lib/activity-log"
 
 const MAX_PROFILE_IMAGE_SIZE = 1 * 1024 * 1024 // 1MB
 const ALLOWED_PROFILE_IMAGE_TYPES = ["image/jpeg", "image/jpg"]
@@ -256,6 +257,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Log activity if upload was successful (non-blocking)
+    if (uploadedToS3 || databasePath) {
+      const { user } = authResult
+      logActivityFromRequest(request, user, 'UPLOAD', 'Profile_Image', null).catch(() => {});
+    }
+
     return NextResponse.json({
       success: true,
       path: databasePath, // Always in format: upload/Profile/email.extension
@@ -289,6 +296,10 @@ export async function DELETE(request: NextRequest) {
       const deleteResult = await deleteFromS3(imagePath)
       
       if (deleteResult.success) {
+        // Log activity (non-blocking)
+        const { user } = authResult
+        logActivityFromRequest(request, user, 'DELETE', 'Profile_Image', null).catch(() => {});
+        
         return NextResponse.json({ 
           success: true, 
           message: "Image deleted from S3 successfully" 
@@ -308,6 +319,11 @@ export async function DELETE(request: NextRequest) {
       if (existsSync(localFilePath)) {
         try {
           await unlink(localFilePath)
+          
+          // Log activity (non-blocking)
+          const { user } = authResult
+          logActivityFromRequest(request, user, 'DELETE', 'Profile_Image', null).catch(() => {});
+          
           return NextResponse.json({ 
             success: true, 
             message: "Image deleted from local storage successfully" 

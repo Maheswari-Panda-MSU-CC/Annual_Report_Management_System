@@ -379,6 +379,7 @@ export default function ProfilePage() {
         DOB: formatDateForInput(data.teacherInfo?.DOB),
         recruit_date: formatDateForInput(data.teacherInfo?.recruit_date),
         PAN_No: data.teacherInfo?.PAN_No || '',
+        gender: data.teacherInfo?.gender || '',
         // Teaching status and designations
         perma_or_tenure: data.teacherInfo?.perma_or_tenure ?? false,
         desig_perma: data.teacherInfo?.desig_perma ?? undefined,

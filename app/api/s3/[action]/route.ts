@@ -11,6 +11,7 @@ import {
   FilePatternMetadata,
   isS3Configured,
 } from '@/lib/s3-service';
+import { logActivity } from '@/lib/activity-log';
 
 const TEMP_UPLOAD_DIR = join(process.cwd(), 'public', 'uploaded-document');
 
@@ -117,7 +118,7 @@ function buildPatternMetadata(data: UploadRequest): FilePatternMetadata {
 /**
  * Handle file upload to S3
  */
-async function handleUpload(data: UploadRequest): Promise<UploadResponse> {
+async function handleUpload(data: UploadRequest, request: NextRequest): Promise<UploadResponse> {
   try {
     // Check if S3 is configured
     if (!isS3Configured()) {
@@ -170,6 +171,20 @@ async function handleUpload(data: UploadRequest): Promise<UploadResponse> {
       }
     }
 
+    // Log activity if upload was successful (non-blocking)
+    if (result.success && result.virtualPath) {
+      // Extract recordId from metadata based on pattern type
+      let recordId: number | null = null;
+      if ('recordId' in metadata) {
+        recordId = metadata.recordId || null;
+      }
+      if (!recordId) {
+        recordId = data.recordId || null;
+      }
+      const entityName = `S3_Document_${data.folderName}`;
+      logActivity(request, 'UPLOAD', entityName, recordId, data.userId || null, null).catch(() => {});
+    }
+
     return result;
   } catch (error: any) {
     console.error('Upload handler error:', error);
@@ -219,7 +234,7 @@ async function handleDownload(data: DownloadRequest): Promise<DownloadResponse> 
 /**
  * Handle file deletion from S3
  */
-async function handleDelete(data: DeleteRequest): Promise<DeleteResponse> {
+async function handleDelete(data: DeleteRequest, request: NextRequest): Promise<DeleteResponse> {
   try {
     if (!isS3Configured()) {
       return {
@@ -228,7 +243,18 @@ async function handleDelete(data: DeleteRequest): Promise<DeleteResponse> {
       };
     }
 
-    return await deleteFromS3(data.virtualPath);
+    const result = await deleteFromS3(data.virtualPath);
+    
+    // Log activity if delete was successful (non-blocking)
+    if (result.success) {
+      // Extract recordId from virtual path if possible
+      const pathParts = data.virtualPath.split('/');
+      const recordId = pathParts.length > 2 ? parseInt(pathParts[pathParts.length - 2]) || null : null;
+      const folderName = pathParts.length > 1 ? pathParts[pathParts.length - 3] || 'S3_Document' : 'S3_Document';
+      logActivity(request, 'DELETE', `S3_Document_${folderName}`, recordId).catch(() => {});
+    }
+    
+    return result;
   } catch (error: any) {
     console.error('Delete handler error:', error);
     return {
@@ -272,7 +298,7 @@ export async function POST(
 
     switch (action) {
       case 'upload': {
-        const result = await handleUpload(body as UploadRequest);
+        const result = await handleUpload(body as UploadRequest, request);
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
 
@@ -282,7 +308,7 @@ export async function POST(
       }
 
       case 'delete': {
-        const result = await handleDelete(body as DeleteRequest);
+        const result = await handleDelete(body as DeleteRequest, request);
         return NextResponse.json(result, { status: result.success ? 200 : 400 });
       }
 

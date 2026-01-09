@@ -1,7 +1,8 @@
 // app/api/llm/categorize-file/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { logActivity } from '@/lib/activity-log';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
@@ -47,6 +48,12 @@ export async function POST(req: Request) {
     }
 
     const result = await llmResponse.json();
+
+    // Log activity if extraction was successful (non-blocking)
+    if (result.success) {
+      const entityName = category ? `LLM_Extract_${category}` : 'LLM_Extract';
+      logActivity(req, 'UPLOAD', entityName, null).catch(() => {});
+    }
 
     // Return the LLM API result to frontend
     return NextResponse.json(result);

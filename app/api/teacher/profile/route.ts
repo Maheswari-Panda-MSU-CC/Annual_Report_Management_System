@@ -3,6 +3,7 @@ import { cachedJsonResponse } from '@/lib/api-cache';
 import sql from 'mssql';
 import { NextRequest } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
+import { logActivityFromRequest } from '@/lib/activity-log';
 
 // #region Profile Data get
 
@@ -122,6 +123,7 @@ export async function PUT(req: NextRequest) {
     request.input("Abbri", sql.NVarChar(50), data.Abbri || '');
     request.input("PAN_No", sql.NVarChar(20), data.PAN_No || '');
     request.input("DOB", sql.Date, data.DOB || null);
+    request.input("gender", sql.NVarChar(10), data.gender || null);
     request.input("PHDGuide", sql.Bit, data.PHDGuide ?? false);
     request.input("OtherGuide", sql.Bit, data.OtherGuide ?? false);
     request.input("ICT_Use", sql.Bit, data.ICT_Use ?? null);
@@ -148,6 +150,9 @@ export async function PUT(req: NextRequest) {
 
     // Execute stored procedure
     await request.execute("sp_Update_Teacher");
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'UPDATE', 'Teacher_Profile', data.Tid).catch(() => {});
 
     return Response.json({ success: true, message: "Profile updated successfully" });
   } catch (error: any) {

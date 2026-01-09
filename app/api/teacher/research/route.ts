@@ -3,6 +3,7 @@ import { cachedJsonResponse } from '@/lib/api-cache'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,7 +100,11 @@ export async function POST(request: NextRequest) {
     req.input('proj_level', sql.Int, project.proj_level || null)
     req.input('grant_year', sql.Int, project.grant_year || null)
 
-    await req.execute('sp_InsertResearchProject_T')
+    const result = await req.execute('sp_InsertResearchProject_T')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Research_Project', insertedId).catch(() => {})
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -170,6 +175,9 @@ export async function PATCH(request: NextRequest) {
     req.input('grant_year', sql.Int, project.grant_year || null)
 
     await req.execute('sp_UpdateResearchProject_T')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Research_Project', projectId).catch(() => {})
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -188,8 +196,12 @@ export async function PATCH(request: NextRequest) {
 }
 
 // Delete research project
-export async function DELETE(request: Request) {
+export async function DELETE(request: NextRequest) {
   try {
+    const authResult = await authenticateRequest(request)
+    if (authResult.error) return authResult.error
+    const { user } = authResult
+
     // Get projectId from query params (backward compatibility)
     const { searchParams } = new URL(request.url)
     let projectId = parseInt(searchParams.get('projectId') || '', 10)
@@ -284,6 +296,9 @@ export async function DELETE(request: Request) {
     
     await deleteReq.execute('sp_DeleteResearchProject_T')
     console.log(`[DELETE Research] ✓ Database record deleted: projectId=${projectId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Research_Project', projectId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

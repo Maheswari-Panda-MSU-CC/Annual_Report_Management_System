@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db';
 import sql from 'mssql';
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest } from '@/lib/api-auth';
+import { logActivityFromRequest } from '@/lib/activity-log';
 
 // Add new Education/Graduation entry (single row)
 export async function POST(req: NextRequest) {
@@ -43,6 +44,10 @@ export async function POST(req: NextRequest) {
     request.input('subject', sql.NVarChar(100), education.subject ?? null);
 
     const result = await request.execute('sp_Insert_Grad_Details'); // TODO: update to actual stored procedure name
+    const insertedId = result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'CREATE', 'Graduation_Details', insertedId).catch(() => {});
 
     return NextResponse.json({ success: true, message: 'Education details added successfully', data: result });
   } catch (error) {
@@ -92,6 +97,9 @@ export async function PATCH(req: NextRequest) {
     request.input('subject', sql.NVarChar(100), education.subject ?? null);
 
     await request.execute('sp_Update_Grad_Details');
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'UPDATE', 'Graduation_Details', education.gid).catch(() => {});
 
     return NextResponse.json({ success: true, message: 'Education details updated successfully' });
   } catch (error) {
@@ -212,6 +220,9 @@ export async function DELETE(req: NextRequest) {
     request.input('gid', sql.Int, gid);
     await request.execute('sp_Delete_Grad_Details');
     console.log(`[DELETE Education] ✓ Database record deleted: gid=${gid}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(req, user, 'DELETE', 'Graduation_Details', gid).catch(() => {});
     
     // Step 4: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation
