@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all policy documents for a teacher
 export async function GET(request: NextRequest) {
@@ -96,7 +97,11 @@ export async function POST(request: NextRequest) {
     req.input('Date', sql.Date, new Date(policy.date))
     req.input('Doc', sql.NVarChar(100), policy.doc || null)
 
-    await req.execute('sp_InsertPolicy_DocumentDeveloped')
+    const result = await req.execute('sp_InsertPolicy_DocumentDeveloped')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Policy', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Policy document added successfully' })
   } catch (err: any) {
@@ -158,6 +163,9 @@ export async function PUT(request: NextRequest) {
     req.input('Doc', sql.NVarChar(100), policy.doc || null)
 
     await req.execute('sp_UpdatePolicy_DocumentDeveloped')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Policy', policyId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Policy document updated successfully' })
   } catch (err: any) {
@@ -277,6 +285,9 @@ export async function DELETE(request: NextRequest) {
     req.input('Id', sql.Int, policyId)
     await req.execute('sp_DeletePolicy_DocumentDeveloped')
     console.log(`[DELETE Policy] ✓ Database record deleted: policyId=${policyId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Policy', policyId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all consultancy records for a teacher
 export async function GET(request: NextRequest) {
@@ -102,7 +103,11 @@ export async function POST(request: NextRequest) {
     req.input('outcome', sql.VarChar(1000), consultancy.outcome || null)
     req.input('doc', sql.VarChar(1000), consultancy.doc || null)
 
-    await req.execute('sp_InsertConsultancy')
+    const result = await req.execute('sp_InsertConsultancy')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Consultancy', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Consultancy record added successfully' })
   } catch (err: any) {
@@ -170,6 +175,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.VarChar(1000), consultancy.doc || null)
 
     await req.execute('sp_UpdateConsultancy')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Consultancy', consultancyId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Consultancy record updated successfully' })
   } catch (err: any) {
@@ -289,6 +297,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, consultancyId)
     await req.execute('sp_DeleteConsultancy')
     console.log(`[DELETE Consultancy] ✓ Database record deleted: consultancyId=${consultancyId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Consultancy', consultancyId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

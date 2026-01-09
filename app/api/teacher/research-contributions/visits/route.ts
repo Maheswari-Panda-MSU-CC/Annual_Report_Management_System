@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all academic research visits for a teacher
 export async function GET(request: NextRequest) {
@@ -99,7 +100,11 @@ export async function POST(request: NextRequest) {
     req.input('date', sql.Date, visit.date ? new Date(visit.date) : null)
     req.input('doc', sql.VarChar(100), visit.doc || null)
 
-    await req.execute('sp_Insert_Academic_Research_Visit')
+    const result = await req.execute('sp_Insert_Academic_Research_Visit')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Visit', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Academic research visit added successfully' })
   } catch (err: any) {
@@ -164,6 +169,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.VarChar(100), visit.doc || null)
 
     await req.execute('sp_Update_Academic_Research_Visit')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Visit', visitId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Academic research visit updated successfully' })
   } catch (err: any) {
@@ -283,6 +291,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, visitId)
     await req.execute('sp_Delete_Academic_Research_Visit_ById')
     console.log(`[DELETE Visit] ✓ Database record deleted: id=${visitId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Visit', visitId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

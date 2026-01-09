@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all collaborations for a teacher
 export async function GET(request: NextRequest) {
@@ -112,7 +113,11 @@ export async function POST(request: NextRequest) {
     req.input('starting_date', sql.Date, collaboration.starting_date ? new Date(collaboration.starting_date) : null)
     req.input('doc', sql.VarChar(100), collaboration.doc || null)
 
-    await req.execute('sp_Insert_Collaboration')
+    const result = await req.execute('sp_Insert_Collaboration')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Collaboration', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Collaboration added successfully' })
   } catch (err: any) {
@@ -190,6 +195,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.VarChar(100), collaboration.doc || null)
 
     await req.execute('sp_Update_Collaboration')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Collaboration', collaborationId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Collaboration updated successfully' })
   } catch (err: any) {
@@ -309,6 +317,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, collaborationId)
     await req.execute('sp_Delete_Collaboration')
     console.log(`[DELETE Collaboration] ✓ Database record deleted: id=${collaborationId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Collaboration', collaborationId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

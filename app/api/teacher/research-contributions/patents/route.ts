@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all patents for a teacher
 export async function GET(request: NextRequest) {
@@ -101,7 +102,11 @@ export async function POST(request: NextRequest) {
     req.input('Earnings_Generate', sql.BigInt, patent.Earnings_Generate || null)
     req.input('PatentApplicationNo', sql.VarChar(50), patent.PatentApplicationNo || null)
 
-    await req.execute('sp_Insert_Patent')
+    const result = await req.execute('sp_Insert_Patent')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Patent', insertedId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -171,6 +176,9 @@ export async function PUT(request: NextRequest) {
     req.input('PatentApplicationNo', sql.VarChar(50), patent.PatentApplicationNo || null)
 
     await req.execute('sp_Update_Patent')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Patent', patentId).catch(() => {})
 
     return NextResponse.json({
       success: true,
@@ -305,6 +313,9 @@ export async function DELETE(request: NextRequest) {
         throw spError
       }
     }
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Patent', patentId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

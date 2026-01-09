@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all e-content for a teacher
 export async function GET(request: NextRequest) {
@@ -100,7 +101,11 @@ export async function POST(request: NextRequest) {
     req.input('e_content_type', sql.Int, eContent.e_content_type || null)
     req.input('doc', sql.VarChar(100), eContent.doc || null)
 
-    await req.execute('sp_insert_e_content')
+    const result = await req.execute('sp_insert_e_content')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'E_Content', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'E-Content added successfully' })
   } catch (err: any) {
@@ -166,6 +171,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.VarChar(100), eContent.doc || null)
 
     await req.execute('sp_update_e_content')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'E_Content', eContentId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'E-Content updated successfully' })
   } catch (err: any) {
@@ -285,6 +293,9 @@ export async function DELETE(request: NextRequest) {
     req.input('Eid', sql.Int, eContentId)
     await req.execute('sp_delete_e_content')
     console.log(`[DELETE E-Content] ✓ Database record deleted: eContentId=${eContentId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'E_Content', eContentId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

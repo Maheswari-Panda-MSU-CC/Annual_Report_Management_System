@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all copyright records for a teacher
 export async function GET(request: NextRequest) {
@@ -97,7 +98,11 @@ export async function POST(request: NextRequest) {
     req.input('Link', sql.NVarChar(500), copyright.Link || null)
     req.input('doc', sql.NVarChar(100), copyright.doc || null)
 
-    await req.execute('sp_InsertCopyright')
+    const result = await req.execute('sp_InsertCopyright')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Copyright', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Copyright record added successfully' })
   } catch (err: any) {
@@ -160,6 +165,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.NVarChar(100), copyright.doc || null)
 
     await req.execute('sp_UpdateCopyright')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Copyright', copyrightId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Copyright record updated successfully' })
   } catch (err: any) {
@@ -279,6 +287,9 @@ export async function DELETE(request: NextRequest) {
     req.input('Id', sql.Int, copyrightId)
     await req.execute('sp_DeleteCopyright')
     console.log(`[DELETE Copyrights] ✓ Database record deleted: id=${copyrightId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Copyright', copyrightId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

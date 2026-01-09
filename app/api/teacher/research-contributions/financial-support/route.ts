@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all financial support records for a teacher
 export async function GET(request: NextRequest) {
@@ -100,7 +101,11 @@ export async function POST(request: NextRequest) {
     req.input('date', sql.Date, financialSupport.date ? new Date(financialSupport.date) : null)
     req.input('doc', sql.VarChar(100), financialSupport.doc || null)
 
-    await req.execute('sp_Insert_Financial_Support')
+    const result = await req.execute('sp_Insert_Financial_Support')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Financial_Support', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Financial support record added successfully' })
   } catch (err: any) {
@@ -166,6 +171,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.VarChar(100), financialSupport.doc || null)
 
     await req.execute('sp_Update_Financial_Support')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Financial_Support', financialSupportId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Financial support record updated successfully' })
   } catch (err: any) {
@@ -285,6 +293,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, financialSupportId)
     await req.execute('sp_Delete_Financial_Support')
     console.log(`[DELETE Financial Support] ✓ Database record deleted: id=${financialSupportId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Financial_Support', financialSupportId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation

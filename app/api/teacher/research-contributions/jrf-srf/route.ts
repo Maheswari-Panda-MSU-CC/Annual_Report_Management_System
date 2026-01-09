@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all JRF/SRF records for a teacher
 export async function GET(request: NextRequest) {
@@ -99,7 +100,11 @@ export async function POST(request: NextRequest) {
     req.input('date', sql.Date, jrfSrf.date ? new Date(jrfSrf.date) : null)
     req.input('doc', sql.VarChar(100), jrfSrf.doc || null)
 
-    await req.execute('sp_InsertJRF_SRF')
+    const result = await req.execute('sp_InsertJRF_SRF')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'JRF_SRF', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'JRF/SRF record added successfully' })
   } catch (err: any) {
@@ -164,6 +169,9 @@ export async function PUT(request: NextRequest) {
     req.input('doc', sql.VarChar(100), jrfSrf.doc || null)
 
     await req.execute('sp_UpdateJRF_SRF')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'JRF_SRF', jrfSrfId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'JRF/SRF record updated successfully' })
   } catch (err: any) {
@@ -283,6 +291,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, jrfSrfId)
     await req.execute('sp_DeleteJRF_SRF')
     console.log(`[DELETE JRF/SRF] ✓ Database record deleted: id=${jrfSrfId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'JRF_SRF', jrfSrfId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     // Database deletion succeeded - that's the primary operation
