@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all Academic Contributions for a teacher
 export async function GET(request: NextRequest) {
@@ -86,7 +87,11 @@ export async function POST(request: NextRequest) {
     req.input('supporting_doc', sql.VarChar(500), academicContri.supporting_doc || 'http://localhost:3000/assets/demo_document.pdf')
     req.input('year_name', sql.Int, academicContri.year_name || new Date().getFullYear())
 
-    await req.execute('sp_Insert_Contri_Acads')
+    const result = await req.execute('sp_Insert_Contri_Acads')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'AcademicContribution', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Academic Contribution added successfully' })
   } catch (err: any) {
@@ -139,6 +144,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Update_Contri_Acads')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'AcademicContribution', academicContriId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Academic Contribution updated successfully' })
   } catch (err: any) {
     console.error('Error updating Academic Contribution:', err)
@@ -154,6 +162,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     let academicContriId = parseInt(searchParams.get('academicContriId') || '', 10)
@@ -246,6 +255,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, academicContriId)
     await req.execute('sp_Delete_Contri_Acads')
     console.log(`[DELETE Academic Contribution] ✓ Database record deleted: id=${academicContriId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'AcademicContribution', academicContriId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {

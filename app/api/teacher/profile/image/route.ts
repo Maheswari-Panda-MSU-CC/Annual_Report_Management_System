@@ -260,7 +260,9 @@ export async function POST(request: NextRequest) {
     // Log activity if upload was successful (non-blocking)
     if (uploadedToS3 || databasePath) {
       const { user } = authResult
-      logActivityFromRequest(request, user, 'UPLOAD', 'Profile_Image', null).catch(() => {});
+      // Use S3_Profile format when uploaded to S3, otherwise use Profile_Image
+      const entityName = uploadedToS3 ? 'S3_Profile' : 'Profile_Image';
+      logActivityFromRequest(request, user, 'UPLOAD', entityName, null).catch(() => {});
     }
 
     return NextResponse.json({
@@ -298,7 +300,12 @@ export async function DELETE(request: NextRequest) {
       if (deleteResult.success) {
         // Log activity (non-blocking)
         const { user } = authResult
-        logActivityFromRequest(request, user, 'DELETE', 'Profile_Image', null).catch(() => {});
+        // Extract entity name from S3 path: upload/Profile/email.jpg -> S3_Profile
+        let entityName = 'S3_Profile';
+        if (imagePath.startsWith('upload/')) {
+          entityName = 'S3_' + imagePath
+        }
+        logActivityFromRequest(request, user, 'DELETE', entityName, null).catch(() => {});
         
         return NextResponse.json({ 
           success: true, 

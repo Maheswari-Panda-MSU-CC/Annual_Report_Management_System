@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all Awards/Fellows records for a teacher
 export async function GET(request: NextRequest) {
@@ -86,7 +87,11 @@ export async function POST(request: NextRequest) {
     req.input('level', sql.Int, awardsFellow.level)
     req.input('Image', sql.NVarChar(500), awardsFellow.Image || 'http://localhost:3000/assets/demo_document.pdf')
 
-    await req.execute('sp_Insert_Awards_Fellows')
+    const result = await req.execute('sp_Insert_Awards_Fellows')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'AwardsFellow', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Awards/Fellows added successfully' })
   } catch (err: any) {
@@ -139,6 +144,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Update_Awards_Fellows')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'AwardsFellow', awardsFellowId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Awards/Fellows updated successfully' })
   } catch (err: any) {
     console.error('Error updating Awards/Fellows:', err)
@@ -154,6 +162,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     let awardsFellowId = parseInt(searchParams.get('awardsFellowId') || '', 10)
@@ -248,6 +257,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, awardsFellowId)
     await req.execute('sp_Delete_Awards_Fellows')
     console.log(`[DELETE Awards/Fellows] ✓ Database record deleted: id=${awardsFellowId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'AwardsFellow', awardsFellowId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {

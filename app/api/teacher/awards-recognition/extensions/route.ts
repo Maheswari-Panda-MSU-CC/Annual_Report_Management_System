@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all Extension Activities for a teacher
 export async function GET(request: NextRequest) {
@@ -86,7 +87,11 @@ export async function POST(request: NextRequest) {
     req.input('sponsered', sql.Int, extensionAct.sponsered)
     req.input('level', sql.Int, extensionAct.level)
 
-    await req.execute('sp_InsertExtension_Act')
+    const result = await req.execute('sp_InsertExtension_Act')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'ExtensionActivity', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Extension Activity added successfully' })
   } catch (err: any) {
@@ -139,6 +144,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_UpdateExtension_Act')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'ExtensionActivity', extensionActId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Extension Activity updated successfully' })
   } catch (err: any) {
     console.error('Error updating Extension Activity:', err)
@@ -154,6 +162,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     let extensionActId = parseInt(searchParams.get('extensionActId') || '', 10)
@@ -248,6 +257,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, extensionActId)
     await req.execute('sp_DeleteExtension_Act')
     console.log(`[DELETE Extension Activity] ✓ Database record deleted: id=${extensionActId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'ExtensionActivity', extensionActId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {

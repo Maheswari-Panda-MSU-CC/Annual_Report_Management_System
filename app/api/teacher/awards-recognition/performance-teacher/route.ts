@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all Performance Teacher records for a teacher
 export async function GET(request: NextRequest) {
@@ -84,7 +85,11 @@ export async function POST(request: NextRequest) {
     req.input('perf_nature', sql.NVarChar(250), perfTeacher.perf_nature)
     req.input('Image', sql.VarChar(500), perfTeacher.Image || 'http://localhost:3000/assets/demo_document.pdf')
 
-    await req.execute('sp_Insert_Perf_Teacher')
+    const result = await req.execute('sp_Insert_Perf_Teacher')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'PerformanceTeacher', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Performance Teacher added successfully' })
   } catch (err: any) {
@@ -135,6 +140,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Update_Perf_Teacher')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'PerformanceTeacher', perfTeacherId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Performance Teacher updated successfully' })
   } catch (err: any) {
     console.error('Error updating Performance Teacher:', err)
@@ -150,6 +158,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     let perfTeacherId = parseInt(searchParams.get('perfTeacherId') || '', 10)
@@ -244,6 +253,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, perfTeacherId)
     await req.execute('sp_Delete_Perf_Teacher')
     console.log(`[DELETE Performance Teacher] ✓ Database record deleted: id=${perfTeacherId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'PerformanceTeacher', perfTeacherId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {

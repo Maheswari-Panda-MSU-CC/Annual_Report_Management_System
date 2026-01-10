@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all University Committee Participation for a teacher
 export async function GET(request: NextRequest) {
@@ -89,7 +90,11 @@ export async function POST(request: NextRequest) {
     req.input('CDC', sql.Bit, partiCommi.CDC || false)
     req.input('year_name', sql.Int, partiCommi.year_name || new Date().getFullYear())
 
-    await req.execute('sp_Insert_Parti_Commi')
+    const result = await req.execute('sp_Insert_Parti_Commi')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'UniversityCommittee', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'University Committee Participation added successfully' })
   } catch (err: any) {
@@ -145,6 +150,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Update_Parti_Commi')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'UniversityCommittee', partiCommiId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'University Committee Participation updated successfully' })
   } catch (err: any) {
     console.error('Error updating University Committee Participation:', err)
@@ -160,6 +168,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     let partiCommiId = parseInt(searchParams.get('partiCommiId') || '', 10)
@@ -252,6 +261,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, partiCommiId)
     await req.execute('sp_Delete_Parti_Commi')
     console.log(`[DELETE University Committee] ✓ Database record deleted: id=${partiCommiId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'UniversityCommittee', partiCommiId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {

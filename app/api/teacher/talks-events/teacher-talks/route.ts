@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all Teacher Talks for a teacher
 export async function GET(request: NextRequest) {
@@ -86,7 +87,11 @@ export async function POST(request: NextRequest) {
     req.input('participated_as', sql.Int, teacherTalk.participated_as)
     req.input('Image', sql.NVarChar(500), teacherTalk.Image || 'http://localhost:3000/assets/demo_document.pdf')
 
-    await req.execute('sp_InsertTeacherTalk')
+    const result = await req.execute('sp_InsertTeacherTalk')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'TeacherTalk', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Teacher Talk added successfully' })
   } catch (err: any) {
@@ -139,6 +144,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_UpdateTeacherTalk')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'TeacherTalk', teacherTalkId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Teacher Talk updated successfully' })
   } catch (err: any) {
     console.error('Error updating Teacher Talk:', err)
@@ -154,6 +162,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     let teacherTalkId = parseInt(searchParams.get('teacherTalkId') || '', 10)
@@ -248,6 +257,9 @@ export async function DELETE(request: NextRequest) {
     req.input('id', sql.Int, teacherTalkId)
     await req.execute('sp_DeleteTeacherTalk')
     console.log(`[DELETE Teacher Talk] ✓ Database record deleted: id=${teacherTalkId}`)
+    
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'TeacherTalk', teacherTalkId).catch(() => {})
     
     // Step 3: Return success response with S3 deletion status
     if (s3DeleteSuccess || !docPath || !docPath.trim() || !docPath.startsWith('upload/')) {
