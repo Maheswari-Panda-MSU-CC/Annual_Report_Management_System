@@ -5,6 +5,7 @@ import { type CVTemplate } from "@/app/api/teacher/cv-generation/cv-template-sty
 import { fetchCVDataFromDB } from "@/app/api/teacher/cv-generation/fetch-cv-data"
 import { cachedJsonResponse } from '@/lib/api-cache'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 interface CVGenerationRequest {
   teacherId: number
@@ -130,6 +131,9 @@ export async function POST(request: NextRequest) {
     if (format === "word") {
       const buffer = await generateWordDocument(cvData, template, selectedSections, sessionCookie)
 
+      // Log activity (non-blocking)
+      logActivityFromRequest(request, user, 'CREATE', 'CVGeneration', teacherId).catch(() => {})
+
       return new NextResponse(buffer as any, {
         headers: {
           "Content-Type":
@@ -139,6 +143,9 @@ export async function POST(request: NextRequest) {
       })
     } else {
       const pdfBuffer = await generateCVPDF(cvData, template, selectedSections, sessionCookie)
+
+      // Log activity (non-blocking)
+      logActivityFromRequest(request, user, 'CREATE', 'CVGeneration', teacherId).catch(() => {})
 
       return new NextResponse(pdfBuffer as unknown as BodyInit, {
         headers: {

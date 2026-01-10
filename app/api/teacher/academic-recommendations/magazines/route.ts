@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all magazines for a teacher
 export async function GET(request: NextRequest) {
@@ -91,7 +92,11 @@ export async function POST(request: NextRequest) {
     req.input('Currency', sql.NVarChar(5), magazine.currency || null)
     req.input('CreatedBy', sql.Int, teacherId)
 
-    await req.execute('sp_Insert_Lib_Magazine')
+    const result = await req.execute('sp_Insert_Lib_Magazine')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Recommendation_Magazine', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Magazine added successfully' })
   } catch (err: any) {
@@ -148,6 +153,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Update_Lib_Magazine')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Recommendation_Magazine', magazineId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Magazine updated successfully' })
   } catch (err: any) {
     console.error('Error updating magazine:', err)
@@ -163,6 +171,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     const magazineId = parseInt(searchParams.get('magazineId') || '', 10)
@@ -179,6 +188,9 @@ export async function DELETE(request: NextRequest) {
     req.input('Id', sql.Int, magazineId)
 
     await req.execute('sp_Delete_Lib_Magazine')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Recommendation_Magazine', magazineId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Magazine deleted successfully' })
   } catch (err: any) {

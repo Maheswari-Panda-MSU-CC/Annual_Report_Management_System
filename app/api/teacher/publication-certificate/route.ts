@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import puppeteer from 'puppeteer'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 interface JournalArticle {
   id: number
@@ -538,6 +539,9 @@ export async function POST(request: NextRequest) {
       })
 
       await browser.close()
+
+      // Log activity (non-blocking)
+      logActivityFromRequest(request, authResult.user, 'CREATE', 'PublicationCertificate', null).catch(() => {})
 
       // Return PDF as response
       // Convert Buffer to Uint8Array for NextResponse compatibility

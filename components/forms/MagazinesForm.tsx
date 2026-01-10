@@ -195,6 +195,7 @@ export function MagazinesForm({
             <Input
               id="publication_date"
               type="date"
+              max={new Date().toISOString().split('T')[0]}
               disabled={isSubmitting}
               {...register("publication_date", {
                 required: "Publication date is required",

@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all tech reports for a teacher
 export async function GET(request: NextRequest) {
@@ -87,7 +88,11 @@ export async function POST(request: NextRequest) {
     req.input('Currency', sql.NVarChar(5), techReport.currency || null)
     req.input('CreatedBy', sql.Int, teacherId)
 
-    await req.execute('sp_Lib_TechReport_Insert')
+    const result = await req.execute('sp_Lib_TechReport_Insert')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Recommendation_TechReport', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Tech report added successfully' })
   } catch (err: any) {
@@ -141,6 +146,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Lib_TechReport_Update')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Recommendation_TechReport', techReportId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Tech report updated successfully' })
   } catch (err: any) {
     console.error('Error updating tech report:', err)
@@ -156,6 +164,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     const techReportId = parseInt(searchParams.get('techReportId') || '', 10)
@@ -172,6 +181,9 @@ export async function DELETE(request: NextRequest) {
     req.input('Id', sql.Int, techReportId)
 
     await req.execute('sp_Lib_TechReport_Delete')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Recommendation_TechReport', techReportId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Tech report deleted successfully' })
   } catch (err: any) {

@@ -2,6 +2,7 @@ import { connectToDatabase } from '@/lib/db'
 import sql from 'mssql'
 import { NextRequest, NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/api-auth'
+import { logActivityFromRequest } from '@/lib/activity-log'
 
 // GET - Fetch all books for a teacher
 export async function GET(request: NextRequest) {
@@ -96,7 +97,11 @@ export async function POST(request: NextRequest) {
     req.input('Proposed_AY', sql.NVarChar(20), book.proposed_ay || null)
     req.input('CreatedBy', sql.Int, teacherId)
 
-    await req.execute('sp_Insert_Lib_Book')
+    const result = await req.execute('sp_Insert_Lib_Book')
+    const insertedId = result.recordset?.[0]?.id || result.returnValue || null
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Recommendation_Book', insertedId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Book added successfully' })
   } catch (err: any) {
@@ -159,6 +164,9 @@ export async function PUT(request: NextRequest) {
 
     await req.execute('sp_Update_Lib_Book')
 
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'UPDATE', 'Recommendation_Book', bookId).catch(() => {})
+
     return NextResponse.json({ success: true, message: 'Book updated successfully' })
   } catch (err: any) {
     console.error('Error updating book:', err)
@@ -174,6 +182,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const authResult = await authenticateRequest(request)
     if (authResult.error) return authResult.error
+    const { user } = authResult
 
     const { searchParams } = new URL(request.url)
     const bookId = parseInt(searchParams.get('bookId') || '', 10)
@@ -190,6 +199,9 @@ export async function DELETE(request: NextRequest) {
     req.input('Id', sql.Int, bookId)
 
     await req.execute('sp_Delete_Lib_Book')
+
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'DELETE', 'Recommendation_Book', bookId).catch(() => {})
 
     return NextResponse.json({ success: true, message: 'Book deleted successfully' })
   } catch (err: any) {
