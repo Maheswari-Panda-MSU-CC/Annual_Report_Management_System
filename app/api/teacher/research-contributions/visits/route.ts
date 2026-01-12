@@ -105,6 +105,26 @@ export async function POST(request: NextRequest) {
 
     // Log activity (non-blocking)
     logActivityFromRequest(request, user, 'CREATE', 'Visit', insertedId).catch(() => {})
+    
+    // Log S3_UPLOAD activity if document was uploaded (with correct recordId)
+    if (visit.doc && typeof visit.doc === 'string' && visit.doc.startsWith('upload/')) {
+      // Extract entity name from virtual path
+      let entityName = 'S3_Document';
+      if (visit.doc.startsWith('upload/')) {
+        const pathWithoutUpload = visit.doc.substring(7); // Remove 'upload/'
+        const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+        
+        if (lastSlashIndex > 0) {
+          const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+          entityName = 'S3_' + folderPath.replace(/\//g, '_');
+        } else {
+          entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+        }
+      }
+      
+      // Log S3_UPLOAD activity with the correct recordId (non-blocking)
+      logActivityFromRequest(request, user, 'S3_UPLOAD', entityName, insertedId).catch(() => {})
+    }
 
     return NextResponse.json({ success: true, message: 'Academic research visit added successfully' })
   } catch (err: any) {
@@ -172,6 +192,26 @@ export async function PUT(request: NextRequest) {
 
     // Log activity (non-blocking)
     logActivityFromRequest(request, user, 'UPDATE', 'Visit', visitId).catch(() => {})
+    
+    // Log S3_UPLOAD activity if document was uploaded/updated (with correct recordId)
+    if (visit.doc && typeof visit.doc === 'string' && visit.doc.startsWith('upload/')) {
+      // Extract entity name from virtual path
+      let entityName = 'S3_Document';
+      if (visit.doc.startsWith('upload/')) {
+        const pathWithoutUpload = visit.doc.substring(7); // Remove 'upload/'
+        const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+        
+        if (lastSlashIndex > 0) {
+          const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+          entityName = 'S3_' + folderPath.replace(/\//g, '_');
+        } else {
+          entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+        }
+      }
+      
+      // Log S3_UPLOAD activity with the correct recordId (non-blocking)
+      logActivityFromRequest(request, user, 'S3_UPLOAD', entityName, visitId).catch(() => {})
+    }
 
     return NextResponse.json({ success: true, message: 'Academic research visit updated successfully' })
   } catch (err: any) {
@@ -262,6 +302,20 @@ export async function DELETE(request: NextRequest) {
           s3DeleteSuccess = true
           s3DeleteMessage = 'S3 document deleted successfully'
           console.log(`[DELETE Visit] ✓ S3 document deleted: ${docPath}`)
+          
+          // Log S3_DELETE activity (non-blocking)
+          let entityName = 'S3_Document';
+          if (docPath.startsWith('upload/')) {
+            const pathWithoutUpload = docPath.substring(7);
+            const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+            if (lastSlashIndex > 0) {
+              const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+              entityName = 'S3_' + folderPath.replace(/\//g, '_');
+            } else {
+              entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+            }
+          }
+          logActivityFromRequest(request, user, 'S3_DELETE', entityName, visitId).catch(() => {})
         } else {
           // Check if file doesn't exist (acceptable scenario)
           if (s3DeleteResult.message?.toLowerCase().includes('not found') || 
@@ -269,6 +323,20 @@ export async function DELETE(request: NextRequest) {
             s3DeleteSuccess = true // Consider this success - file already gone
             s3DeleteMessage = 'S3 document not found (may have been already deleted)'
             console.log(`[DELETE Visit] ⚠ S3 document not found (acceptable): ${docPath}`)
+            
+            // Still log S3_DELETE activity even if file was already deleted (non-blocking)
+            let entityName = 'S3_Document';
+            if (docPath.startsWith('upload/')) {
+              const pathWithoutUpload = docPath.substring(7);
+              const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+              if (lastSlashIndex > 0) {
+                const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+                entityName = 'S3_' + folderPath.replace(/\//g, '_');
+              } else {
+                entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+              }
+            }
+            logActivityFromRequest(request, user, 'S3_DELETE', entityName, visitId).catch(() => {})
           } else {
             s3DeleteSuccess = false
             s3DeleteMessage = s3DeleteResult.message || 'Failed to delete S3 document'

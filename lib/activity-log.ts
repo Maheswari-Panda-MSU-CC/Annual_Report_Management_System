@@ -37,7 +37,7 @@ export function getUserAgent(request: NextRequest | Request): string | null {
  */
 export async function logActivity(
   request: NextRequest | Request,
-  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'PATCH',
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'PATCH' | 'S3_UPLOAD' | 'S3_DOWNLOAD' | 'S3_DELETE' | 'S3_GET_SIGNED_URL',
   entityName: string,
   entityId: number | null = null,
   performedById: number | null = null,
@@ -95,7 +95,7 @@ export async function logActivity(
  */
 export async function logActivityWithUser(
   user: AuthUser,
-  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'PATCH',
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'PATCH' | 'S3_UPLOAD' | 'S3_DOWNLOAD' | 'S3_DELETE' | 'S3_GET_SIGNED_URL',
   entityName: string,
   entityId: number | null = null,
   ipAddress: string | null = null,
@@ -134,7 +134,7 @@ export async function logActivityWithUser(
 export async function logActivityFromRequest(
   request: NextRequest | Request,
   user: AuthUser,
-  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'PATCH',
+  actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'UPLOAD' | 'PATCH' | 'S3_UPLOAD' | 'S3_DOWNLOAD' | 'S3_DELETE' | 'S3_GET_SIGNED_URL',
   entityName: string,
   entityId: number | null = null
 ): Promise<void> {

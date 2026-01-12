@@ -41,6 +41,7 @@ export async function uploadWithPattern(
     const response = await fetch('/api/s3/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Ensure cookies are sent for authentication
       body: JSON.stringify({
         fileBase64,
         ...patternMetadata,
@@ -75,6 +76,7 @@ export async function uploadFromTempStorage(
     const response = await fetch('/api/s3/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Ensure cookies are sent for authentication
       body: JSON.stringify({
         fileName,
         ...patternMetadata,
@@ -218,6 +220,7 @@ export async function getDocumentUrl(
     const response = await fetch('/api/s3/get-signed-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Ensure cookies are sent for authentication
       body: JSON.stringify({
         virtualPath,
         expiresIn,
@@ -247,6 +250,7 @@ export async function checkDocumentExists(
     const response = await fetch('/api/s3/get-signed-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Ensure cookies are sent for authentication
       body: JSON.stringify({
         virtualPath,
       }),
@@ -289,6 +293,7 @@ export async function deleteDocument(
     const response = await fetch('/api/s3/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Ensure cookies are sent for authentication
       body: JSON.stringify({
         virtualPath,
       }),
@@ -389,6 +394,7 @@ export async function uploadDocumentToS3(
       try {
         await fetch('/api/shared/local-document-upload', {
           method: 'DELETE',
+          credentials: 'include', // Ensure cookies are sent for authentication
         });
       } catch (cleanupError) {
         console.warn('Failed to cleanup temp file:', cleanupError);

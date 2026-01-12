@@ -106,6 +106,32 @@ export async function POST(request: NextRequest) {
     // Log activity (non-blocking)
     logActivityFromRequest(request, user, 'CREATE', 'Research_Project', insertedId).catch(() => {})
     
+    // Log S3_UPLOAD activity if document was uploaded (with correct recordId)
+    // This ensures we have the correct entityId instead of the temporary timestamp used during upload
+    if (project.Pdf && typeof project.Pdf === 'string' && project.Pdf.startsWith('upload/')) {
+      // Extract entity name from virtual path
+      // Format: upload/Category/SubCategory/filename.ext
+      // Entity name: S3_Category_SubCategory
+      let entityName = 'S3_Document';
+      if (project.Pdf.startsWith('upload/')) {
+        const pathWithoutUpload = project.Pdf.substring(7); // Remove 'upload/'
+        const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+        
+        if (lastSlashIndex > 0) {
+          // Extract folder path (everything before the filename)
+          const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+          // Replace slashes with underscores and add S3_ prefix
+          entityName = 'S3_' + folderPath.replace(/\//g, '_');
+        } else {
+          // No subfolder, just use the folder name
+          entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+        }
+      }
+      
+      // Log S3_UPLOAD activity with the correct recordId (non-blocking)
+      logActivityFromRequest(request, user, 'S3_UPLOAD', entityName, insertedId).catch(() => {})
+    }
+    
     return new Response(JSON.stringify({ 
       success: true, 
       message: 'Research project added successfully',
@@ -178,6 +204,32 @@ export async function PATCH(request: NextRequest) {
 
     // Log activity (non-blocking)
     logActivityFromRequest(request, user, 'UPDATE', 'Research_Project', projectId).catch(() => {})
+    
+    // Log S3_UPLOAD activity if document was uploaded/updated (with correct projectId)
+    // This ensures we have the correct entityId instead of any temporary timestamp used during upload
+    if (project.Pdf && typeof project.Pdf === 'string' && project.Pdf.startsWith('upload/')) {
+      // Extract entity name from virtual path
+      // Format: upload/Category/SubCategory/filename.ext
+      // Entity name: S3_Category_SubCategory
+      let entityName = 'S3_Document';
+      if (project.Pdf.startsWith('upload/')) {
+        const pathWithoutUpload = project.Pdf.substring(7); // Remove 'upload/'
+        const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+        
+        if (lastSlashIndex > 0) {
+          // Extract folder path (everything before the filename)
+          const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+          // Replace slashes with underscores and add S3_ prefix
+          entityName = 'S3_' + folderPath.replace(/\//g, '_');
+        } else {
+          // No subfolder, just use the folder name
+          entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+        }
+      }
+      
+      // Log S3_UPLOAD activity with the correct projectId (non-blocking)
+      logActivityFromRequest(request, user, 'S3_UPLOAD', entityName, projectId).catch(() => {})
+    }
     
     return new Response(JSON.stringify({ 
       success: true, 
@@ -266,6 +318,27 @@ export async function DELETE(request: NextRequest) {
           s3DeleteSuccess = true
           s3DeleteMessage = 'S3 document deleted successfully'
           console.log(`[DELETE Research] ✓ S3 document deleted: ${pdfPath}`)
+          
+          // Log S3_DELETE activity (non-blocking)
+          // Extract entity name from virtual path
+          let entityName = 'S3_Document';
+          if (pdfPath.startsWith('upload/')) {
+            const pathWithoutUpload = pdfPath.substring(7); // Remove 'upload/'
+            const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+            
+            if (lastSlashIndex > 0) {
+              // Extract folder path (everything before the filename)
+              const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+              // Replace slashes with underscores and add S3_ prefix
+              entityName = 'S3_' + folderPath.replace(/\//g, '_');
+            } else {
+              // No subfolder, just use the folder name
+              entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+            }
+          }
+          
+          // Log S3_DELETE activity with the projectId as entityId (non-blocking)
+          logActivityFromRequest(request, user, 'S3_DELETE', entityName, projectId).catch(() => {})
         } else {
           // Check if file doesn't exist (acceptable scenario)
           if (s3DeleteResult.message?.toLowerCase().includes('not found') || 
@@ -273,6 +346,20 @@ export async function DELETE(request: NextRequest) {
             s3DeleteSuccess = true // Consider this success - file already gone
             s3DeleteMessage = 'S3 document not found (may have been already deleted)'
             console.log(`[DELETE Research] ⚠ S3 document not found (acceptable): ${pdfPath}`)
+            
+            // Still log S3_DELETE activity even if file was already deleted (non-blocking)
+            let entityName = 'S3_Document';
+            if (pdfPath.startsWith('upload/')) {
+              const pathWithoutUpload = pdfPath.substring(7);
+              const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+              if (lastSlashIndex > 0) {
+                const folderPath = pathWithoutUpload.substring(0, lastSlashIndex);
+                entityName = 'S3_' + folderPath.replace(/\//g, '_');
+              } else {
+                entityName = 'S3_' + pathWithoutUpload.split('/')[0];
+              }
+            }
+            logActivityFromRequest(request, user, 'S3_DELETE', entityName, projectId).catch(() => {})
           } else {
             s3DeleteSuccess = false
             s3DeleteMessage = s3DeleteResult.message || 'Failed to delete S3 document'

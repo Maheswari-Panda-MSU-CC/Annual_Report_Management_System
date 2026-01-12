@@ -76,6 +76,32 @@ export async function GET(request: NextRequest) {
           const downloadResult = await downloadFromS3(imagePath)
           
           if (downloadResult.success && downloadResult.buffer) {
+            // Log S3_DOWNLOAD activity (non-blocking)
+            const { user } = authResult
+            // Extract entity name from S3 path: upload/Profile/email.jpg -> S3_Profile
+            let entityName = 'S3_Profile';
+            if (imagePath.startsWith('upload/Profile/')) {
+              entityName = 'S3_Profile';
+            } else if (imagePath.startsWith('upload/')) {
+              // Extract folder name from path
+              const pathWithoutUpload = imagePath.substring(7); // Remove 'upload/'
+              const folderName = pathWithoutUpload.split('/')[0];
+              entityName = 'S3_' + folderName;
+            }
+            // Extract entityId from filename if possible (email.jpg -> null, but could be userId_recordId.jpg)
+            let entityId: number | null = null;
+            const pathWithoutUpload = imagePath.substring(7);
+            const lastSlashIndex = pathWithoutUpload.lastIndexOf('/');
+            if (lastSlashIndex > 0) {
+              const fileName = pathWithoutUpload.substring(lastSlashIndex + 1);
+              // Pattern: userId_recordId.ext -> extract recordId
+              const patternMatch = fileName.match(/^\d+_(\d+)\./);
+              if (patternMatch) {
+                entityId = parseInt(patternMatch[1], 10) || null;
+              }
+            }
+            logActivityFromRequest(request, user, 'S3_DOWNLOAD', entityName, entityId).catch(() => {});
+            
             const contentType = downloadResult.contentType || "image/jpeg"
             return new NextResponse(new Uint8Array(downloadResult.buffer), {
               status: 200,
@@ -258,11 +284,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Log activity if upload was successful (non-blocking)
-    if (uploadedToS3 || databasePath) {
+    if (uploadedToS3) {
       const { user } = authResult
-      // Use S3_Profile format when uploaded to S3, otherwise use Profile_Image
-      const entityName = uploadedToS3 ? 'S3_Profile' : 'Profile_Image';
-      logActivityFromRequest(request, user, 'UPLOAD', entityName, null).catch(() => {});
+      // Log S3_UPLOAD activity when uploaded to S3
+      logActivityFromRequest(request, user, 'S3_UPLOAD', 'S3_Profile', null).catch(() => {});
     }
 
     return NextResponse.json({
@@ -298,14 +323,19 @@ export async function DELETE(request: NextRequest) {
       const deleteResult = await deleteFromS3(imagePath)
       
       if (deleteResult.success) {
-        // Log activity (non-blocking)
+        // Log S3_DELETE activity (non-blocking)
         const { user } = authResult
         // Extract entity name from S3 path: upload/Profile/email.jpg -> S3_Profile
         let entityName = 'S3_Profile';
-        if (imagePath.startsWith('upload/')) {
-          entityName = 'S3_' + imagePath
+        if (imagePath.startsWith('upload/Profile/')) {
+          entityName = 'S3_Profile';
+        } else if (imagePath.startsWith('upload/')) {
+          // Extract folder name from path
+          const pathWithoutUpload = imagePath.substring(7); // Remove 'upload/'
+          const folderName = pathWithoutUpload.split('/')[0];
+          entityName = 'S3_' + folderName;
         }
-        logActivityFromRequest(request, user, 'DELETE', entityName, null).catch(() => {});
+        logActivityFromRequest(request, user, 'S3_DELETE', entityName, null).catch(() => {});
         
         return NextResponse.json({ 
           success: true, 
