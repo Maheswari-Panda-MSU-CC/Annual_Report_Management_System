@@ -383,7 +383,7 @@ export default function TalksEventsPage() {
 
   const handleDeleteClick = useCallback((sectionId: string, itemId: number, itemName: string, item?: any) => {
     setDeleteConfirm({ sectionId, itemId, itemName, item })
-  }, [])
+  }, []) 
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
