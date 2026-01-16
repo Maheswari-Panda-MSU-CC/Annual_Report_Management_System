@@ -16,6 +16,8 @@ export interface User {
   department?: string;
   faculty?: string;
   profilePicture?: string;
+  dept_id?: number | null;
+  faculty_id?: number | null;
 }
 
 interface LoginResponse {
