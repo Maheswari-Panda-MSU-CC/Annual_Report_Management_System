@@ -88,20 +88,21 @@ export async function POST(request: NextRequest) {
     const pool = await connectToDatabase();
     const requestObj = pool.request();
 
-    // Map all parameters with proper null handling
-    requestObj.input('deptid', sql.Int, data.deptid);
-    requestObj.input('year', sql.Int, data.year || null);
+    // Map all parameters with proper null handling (matching sp_Insert_Dept_Details)
+    requestObj.input('submit_date', sql.DateTime, data.submit_date ? new Date(data.submit_date) : null);
     requestObj.input('intro', sql.NVarChar(sql.MAX), data.intro || null);
     requestObj.input('exam_reforms', sql.NVarChar(sql.MAX), data.exam_reforms || null);
     requestObj.input('innovative_processes', sql.NVarChar(sql.MAX), data.innovative_processes || null);
+    requestObj.input('deptid', sql.Int, data.deptid);
+    requestObj.input('year', sql.Int, data.year || null);
     requestObj.input('dept_lib', sql.NVarChar(sql.MAX), data.dept_lib || null);
     requestObj.input('dept_lab', sql.NVarChar(sql.MAX), data.dept_lab || null);
 
     // Execute stored procedure
-    await requestObj.execute('sp_SaveDeptDetails');
+    const result = await requestObj.execute('sp_Insert_Dept_Details');
+    const insertedId = result.recordset?.[0]?.id || result.recordset?.[0]?.Id || result.returnValue || null;
 
-    // Log activity (non-blocking)
-    logActivityFromRequest(request, user, 'UPDATE', 'Department_Profile', data.deptid).catch(() => {});
+    logActivityFromRequest(request, user, 'UPDATE', 'Dept_Details', insertedId).catch(() => {});
 
     return new Response(JSON.stringify({ 
       success: true, 

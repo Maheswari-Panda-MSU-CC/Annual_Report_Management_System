@@ -120,10 +120,11 @@ export async function POST(request: NextRequest) {
     requestObj.input('Funds_Sancttioned', sql.BigInt, BigInt(data.fundsSancttioned));
     requestObj.input('Details', sql.VarChar(500), data.details?.trim() || null);
 
-    await requestObj.execute('sp_Insert_Dept_Funding');
+    const result = await requestObj.execute('sp_Insert_Dept_Funding');
+    const insertedId = result.recordset?.[0]?.id || result.recordset?.[0]?.Id || result.returnValue || null;
 
-    // Log activity
-    logActivityFromRequest(request, user, 'CREATE', 'Dept_Funding', data.deptId).catch(() => {});
+    // Log activity (non-blocking)
+    logActivityFromRequest(request, user, 'CREATE', 'Dept_Funding', insertedId).catch(() => {});
 
     return new Response(JSON.stringify({ 
       success: true, 

@@ -382,13 +382,39 @@ export async function uploadDocumentToS3(
     const fileExtension = getFileExtension(fileName);
 
     try {
-      const result = await uploadResearchPaper(
-        fileName,
-        userId,
-        recordId,
-        folderName,
-        fileExtension
-      );
+      // Check if this is a department-level upload (Pattern 4)
+      // Department folders: dept events, dept student academic activities, dept student body events, etc.
+      const folderNameLower = folderName.toLowerCase();
+      const isDepartmentUpload = folderNameLower.startsWith('dept ') || 
+                                 folderNameLower.includes('dept ') ||
+                                 folderNameLower === 'visitors dept' ||
+                                 folderNameLower === 'visitors other' ||
+                                 folderNameLower.includes('dept development programs') ||
+                                 folderNameLower.includes('dept extension act') ||
+                                 folderNameLower.includes('dept event student body') ||
+                                 folderNameLower.includes('dept student body events') ||
+                                 folderNameLower.includes('dept student academic');
+      
+      let result: S3UploadResponse;
+      
+      if (isDepartmentUpload) {
+        // Use Pattern 4: {RecordID}.{ext} for department-level uploads
+        result = await uploadDepartmentDocument(
+          fileName,
+          recordId,
+          folderName,
+          fileExtension
+        );
+      } else {
+        // Use Pattern 1: {UserID}_{RecordID}.{ext} for other uploads
+        result = await uploadResearchPaper(
+          fileName,
+          userId,
+          recordId,
+          folderName,
+          fileExtension
+        );
+      }
     
       // Clean up temp file
       try {
