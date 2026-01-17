@@ -260,8 +260,13 @@ export async function DELETE(request: NextRequest) {
   const ipAddress = getClientIP(request);
   const userAgent = getUserAgent(request);
   
-  // Get logout reason from request body (if provided)
+  // Parse request body to get logout reason and user info (sent from client before localStorage is cleared)
   let logoutReason: string = 'User initiated logout';
+  let bodyUserId: string | undefined;
+  let bodyEmail: string | undefined;
+  let bodyRoleId: number | undefined;
+  let bodyUserType: number | undefined;
+
   try {
     const contentType = request.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -272,18 +277,32 @@ export async function DELETE(request: NextRequest) {
           if (body && body.logoutReason && typeof body.logoutReason === 'string') {
             logoutReason = body.logoutReason;
           }
+          // Extract user info from request body (sent from client localStorage)
+          if (body.userId && typeof body.userId === 'string') {
+            bodyUserId = body.userId;
+          }
+          if (body.email && typeof body.email === 'string') {
+            bodyEmail = body.email;
+          }
+          if (body.roleId !== undefined && body.roleId !== null) {
+            bodyRoleId = typeof body.roleId === 'number' ? body.roleId : parseInt(String(body.roleId));
+          }
+          if (body.userType !== undefined && body.userType !== null) {
+            bodyUserType = typeof body.userType === 'number' ? body.userType : parseInt(String(body.userType));
+          }
         }
       } catch (parseError) {
         // JSON parse failed, use default reason
-        console.warn('Could not parse logout reason from body:', parseError);
+        console.warn('Could not parse logout request body:', parseError);
       }
     }
   } catch (bodyError) {
     // Body reading failed, use default reason
-    console.warn('Could not read logout reason from body:', bodyError);
+    console.warn('Could not read logout request body:', bodyError);
   }
   
   // Get user info from session cookie before clearing it
+  // If JWT is expired/invalid, fall back to user info from request body
   let loginId: number | null = null;
   let email: string | null = null;
   let userType: number | null = null;
@@ -299,18 +318,65 @@ export async function DELETE(request: NextRequest) {
         userType = decoded.user_type || null;
         roleId = decoded.role_id || null;
       } catch (jwtError) {
-        // Invalid or expired token - still proceed with logout
+        // Invalid or expired token - use user info from request body if available
         console.warn('Invalid session token during logout:', jwtError);
         // If token is expired, it's likely a session timeout
         if (logoutReason === 'User initiated logout') {
           logoutReason = 'Session timeout (expired token)';
         }
+        
+        // Fall back to user info from request body (sent from localStorage)
+        if (bodyUserId && bodyEmail) {
+          loginId = parseInt(bodyUserId);
+          email = bodyEmail;
+          userType = bodyUserType || null;
+          roleId = bodyRoleId || null;
+          console.log('Using user info from request body for logout log:', { loginId, email, userType, roleId });
+        }
+      }
+    } else {
+      // No session cookie - use user info from request body if available
+      if (bodyUserId && bodyEmail) {
+        loginId = parseInt(bodyUserId);
+        email = bodyEmail;
+        userType = bodyUserType || null;
+        roleId = bodyRoleId || null;
+        console.log('No session cookie, using user info from request body for logout log:', { loginId, email, userType, roleId });
       }
     }
   } catch (error) {
     console.error('Error extracting user info for logout log:', error);
+    // Try to use user info from request body as fallback
+    if (bodyUserId && bodyEmail) {
+      loginId = parseInt(bodyUserId);
+      email = bodyEmail;
+      userType = bodyUserType || null;
+      roleId = bodyRoleId || null;
+    }
   }
 
+  // Log logout attempt BEFORE clearing cookies and returning response
+  // This ensures the log is created with proper user info before any cleanup
+  if (loginId !== null && email) {
+    try {
+      const pool = await connectToDatabase();
+      await logLogout(pool, loginId, email, userType, roleId, logoutReason, ipAddress, userAgent);
+      console.log('Logout logged successfully:', { loginId, email, userType, roleId, logoutReason });
+    } catch (logError) {
+      console.error('Error logging logout:', logError);
+      // Don't fail the logout process if logging fails, but log the error
+    }
+  } else {
+    // If we still don't have user info, log a warning but don't create invalid log entry
+    console.warn('Cannot log logout: Missing user information', {
+      hasLoginId: loginId !== null,
+      hasEmail: !!email,
+      logoutReason,
+      hasBodyUserInfo: !!(bodyUserId && bodyEmail)
+    });
+  }
+
+  // Create response AFTER logging (to ensure log is created before cleanup)
   const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
 
   // Clear session cookie
@@ -355,28 +421,6 @@ export async function DELETE(request: NextRequest) {
   response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   response.headers.set('Pragma', 'no-cache');
   response.headers.set('Expires', '0');
-
-  // Log logout attempt (non-blocking)
-  if (loginId !== null && email) {
-    try {
-      const pool = await connectToDatabase();
-      await logLogout(pool, loginId, email, userType, roleId, logoutReason, ipAddress, userAgent);
-    } catch (logError) {
-      console.error('Error logging logout:', logError);
-      // Don't fail the logout process if logging fails
-    }
-  } else if (logoutReason.includes('Session timeout') || logoutReason.includes('expired')) {
-    // Even if we can't extract user info, try to log session timeout if token is expired
-    // This handles cases where the token is completely invalid/expired
-    try {
-      const pool = await connectToDatabase();
-      // Use 0 and 'unknown' for user info when token is expired/invalid
-      // The stored procedure should handle these gracefully
-      await logLogout(pool, 0, 'unknown', null, null, logoutReason, ipAddress, userAgent);
-    } catch (logError) {
-      console.error('Error logging logout (expired session):', logError);
-    }
-  }
 
   return response;
 }

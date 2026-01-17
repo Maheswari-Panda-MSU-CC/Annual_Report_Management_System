@@ -15,6 +15,7 @@ export function useDropDowns() {
   // Individual state for dynamic dropdowns (departments, userTypes)
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
   const [userTypes, setUserTypes] = useState<UserType[]>([]);
+  const [eventStudentBodyLevelOptions, setEventStudentBodyLevelOptions] = useState<DropdownOption[]>([]);
 
   // Map context data to hook return values (backward compatible - no changes needed in existing files)
   const facultyOptions = dropdownsData.faculties;
@@ -111,6 +112,18 @@ export function useDropDowns() {
   const fetchAwardFellowLevels = useCallback(async () => {}, []);
   const fetchSponserNames = useCallback(async () => {}, []);
 
+  const fetchEventStudentBodyLevels = useCallback(async () => {
+    try {
+      const res = await fetch('/api/shared/dept-dropdowns/event-student-body-level');
+      if (!res.ok) throw new Error('Failed to fetch event student body levels');
+      const data = await res.json();
+      setEventStudentBodyLevelOptions(data.levels || []);
+    } catch (error) {
+      console.error('Error fetching event student body levels:', error);
+      setEventStudentBodyLevelOptions([]);
+    }
+  }, []);
+
   return { 
     facultyOptions, 
     departmentOptions,
@@ -145,6 +158,7 @@ export function useDropDowns() {
     talksParticipantTypeOptions,
     awardFellowLevelOptions,
     sponserNameOptions,
+    eventStudentBodyLevelOptions,
     fetchFaculties, 
     fetchDepartments,
     fetchUserTypes,
@@ -177,6 +191,7 @@ export function useDropDowns() {
     fetchTalksProgrammeTypes,
     fetchTalksParticipantTypes,
     fetchAwardFellowLevels,
-    fetchSponserNames
+    fetchSponserNames,
+    fetchEventStudentBodyLevels
   }
 }

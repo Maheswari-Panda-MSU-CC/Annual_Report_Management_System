@@ -16,6 +16,8 @@ export interface User {
   department?: string;
   faculty?: string;
   profilePicture?: string;
+  dept_id?: number | null;
+  faculty_id?: number | null;
 }
 
 interface LoginResponse {
@@ -167,14 +169,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
 
   const logout = (reason?: string) => {
-    // Call server to clear httpOnly cookies
-    const body = reason ? JSON.stringify({ logoutReason: reason }) : undefined
+    // Extract user info from localStorage BEFORE clearing it
+    // This ensures we can log the logout with proper user info even if session is expired
+    let userInfo: { id?: string; email?: string; role_id?: number; user_type?: number } | null = null;
+    try {
+      const savedUser = localStorage.getItem("user");
+      if (savedUser) {
+        userInfo = JSON.parse(savedUser);
+      }
+    } catch (error) {
+      console.warn("Could not parse user info from localStorage for logout log:", error);
+    }
+
+    // Prepare request body with logout reason and user info
+    const requestBody: { logoutReason?: string; userId?: string; email?: string; roleId?: number; userType?: number } = {};
+    if (reason) {
+      requestBody.logoutReason = reason;
+    }
+    if (userInfo) {
+      requestBody.userId = userInfo.id;
+      requestBody.email = userInfo.email;
+      requestBody.roleId = userInfo.role_id;
+      requestBody.userType = userInfo.user_type;
+    }
+
+    // Call server to clear httpOnly cookies and log logout
+    // Send user info in body so server can use it if JWT is expired
     fetch("/api/auth/login", { 
       method: "DELETE", 
       cache: "no-store", 
       credentials: "include",
-      headers: reason ? { "Content-Type": "application/json" } : undefined,
-      body
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody)
     })
       .catch(() => {})
       .finally(() => {
